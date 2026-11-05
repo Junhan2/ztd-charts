@@ -43,7 +43,8 @@ export interface WaffleChartProps<T = Row> extends BaseChartProps<T> {
 
 /** 가장 큰 나머지 방식으로 칸 나누기: 합이 정확히 cells가 돼요 */
 export function allocateCells(values: readonly number[], cells: number, total?: number): number[] {
-  const t = total ?? sum(values);
+  // A total below the sum would hand out more cells than there are.
+  const t = Math.max(total ?? 0, sum(values));
   if (!(t > 0)) return values.map(() => 0);
   const exact = values.map((v) => (Math.max(0, v) / t) * cells);
   const out = exact.map((x) => Math.floor(x));
@@ -91,7 +92,8 @@ export function WaffleChart<T = Row>(props: WaffleChartProps<T>) {
   }, [model.counts]);
 
   const stagger = c.motion.stagger ?? 7;
-  const hiIdx = [...model.hi][0] ?? 0;
+  // With highlight="none" nothing is featured, so the big figure (which reads as the highlighted share) is left out.
+  const hiIdx = [...model.hi][0] ?? -1;
   const hiRow = model.rows[hiIdx];
   const pct = model.total > 0 && hiRow ? (hiRow.value / model.total) * 100 : 0;
   // 격자와 요약을 한 묶음으로 가운데에 놓아요. 격자를 왼쪽에 붙이면 넓은 카드에서 오른쪽 절반이 비어요
@@ -110,7 +112,7 @@ export function WaffleChart<T = Row>(props: WaffleChartProps<T>) {
   const mn = useMotion(numMarks, { ...c.motion, duration: cellMs + cells * stagger * 0.8 });
   const shown = mn.get("__n")?.[0] ?? pct;
   const { active, via, setActive, click } = c;
-  const enabled = c.motion.enabled;
+  const enabled = c.motion.enabled && c.hydrated; // 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요
   const cellNodes = useMemo(
     () =>
       Array.from({ length: cells }, (_, idx) => {

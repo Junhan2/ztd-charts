@@ -1,4 +1,4 @@
-import { toDate } from "../core/format";
+import { isYear, toDate } from "../core/format";
 import { toNumber, uniq } from "../data/accessor";
 import { localizeDef, withKoLocale } from "./localize";
 import { getChartDef } from "./registry";
@@ -35,6 +35,10 @@ export interface Suggestion {
 const SOURCE_RE = /^(source|from|src|출발|보낸|origin|시작)/i;
 const TARGET_RE = /^(target|to|dst|도착|받은|dest)/i;
 const DATE_NAME = /(date|day|month|week|year|time|날짜|일자|월|주|연도|시간|기간|period)/i;
+const YEAR_NAME = /(year|연도|년도|^년$)/i;
+const MONTH_KO = /^(1[0-2]|[1-9])월$/;
+/** YYYYMMDD 숫자나 글자(20240315) */
+const YMD = /^\d{8}$/;
 const RANK_RE = /(rank|순위|등수)/i;
 const STAGE_RE = /(stage|step|funnel|단계|스텝)/i;
 const BEFORE_RE = /(before|prev|start|이전|전|작년|기존|old)/i;
@@ -51,7 +55,12 @@ export function profileData(rows: readonly Record<string, unknown>[]): DataProfi
     const nums = present.map((v) => toNumber(v));
     const numOk = present.length ? nums.filter(Number.isFinite).length / present.length : 0;
     const distinct = new Set(present.map((v) => String(v))).size;
-    const looksDate = present.length > 0 && present.every((v) => (typeof v === "string" && /^\d{4}[-./]\d{1,2}([-./]\d{1,2})?/.test(v)) || v instanceof Date) && present.filter((v) => toDate(v)).length / present.length > 0.9;
+    // "1월"…"12월"은 순서가 있는 시간이에요 (파이 조각이 아니에요)
+    if (present.length && present.every((v) => typeof v === "string" && MONTH_KO.test(v.trim()))) return { name, kind: "date", distinct, nulls, daily: false };
+    // 연도 열(2019)과 이름이 날짜인 YYYYMMDD 숫자(20240315)도 시간이에요
+    const years = YEAR_NAME.test(name) && nums.every(isYear);
+    const compact = years || (DATE_NAME.test(name) && present.every((v) => YMD.test(String(v).trim()) && toDate(v)));
+    const looksDate = present.length > 0 && (compact || (present.every((v) => (typeof v === "string" && /^\d{4}[-./]\d{1,2}([-./]\d{1,2})?/.test(v)) || v instanceof Date) && present.filter((v) => toDate(v)).length / present.length > 0.9));
     if (looksDate) {
       const ts = present.map((v) => toDate(v)!.getTime()).sort((a, b) => a - b);
       const gaps = ts.slice(1).map((t, i) => t - ts[i]).filter((g) => g > 0);
@@ -116,13 +125,15 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
   if (t0 && v0) {
     const seriesCat = cats.find((c) => c.distinct >= 2 && c.distinct <= 12);
     const span = (t0.max ?? 0) - (t0.min ?? 0);
+    // YYYYMMDD 숫자(20240315)는 그대로 두면 숫자 축이라 날짜로 읽게 해요 (라인, 영역만 xType을 받아요)
+    const xt = rows.slice(0, 50).some((r) => YMD.test(String(r[t0.name] ?? "").trim())) ? { xType: "date" } : undefined;
     if (t0.daily && span > 86400000 * 60 && !seriesCat) out.push(mk("calendar", 0.9, t("Daily values over more than two months show weekday and seasonal patterns in a calendar heatmap", "하루 단위 값이 두 달 넘게 있어 캘린더 히트맵으로 요일, 계절 패턴이 보여요"), rows, { date: t0.name, value: v0.name }));
     if (seriesCat) {
-      out.push(mk("line", 0.93, t(`Compares the ${t0.name} trend by ${seriesCat.name} (one highlighted line, the rest gray)`, `${t0.name} 흐름을 ${seriesCat.name}별로 비교해요(강조 한 줄, 나머지는 회색)`), rows, { x: t0.name, y: v0.name, series: seriesCat.name }));
-      out.push(mk("area", 0.8, t("If the series add up to something meaningful, stacked areas show how the mix changes", "계열 합이 의미 있으면 쌓은 영역으로 구성 변화를 봐요"), rows, { x: t0.name, y: v0.name, series: seriesCat.name }));
+      out.push(mk("line", 0.93, t(`Compares the ${t0.name} trend by ${seriesCat.name} (one highlighted line, the rest gray)`, `${t0.name} 흐름을 ${seriesCat.name}별로 비교해요(강조 한 줄, 나머지는 회색)`), rows, { x: t0.name, y: v0.name, series: seriesCat.name }, xt));
+      out.push(mk("area", 0.8, t("If the series add up to something meaningful, stacked areas show how the mix changes", "계열 합이 의미 있으면 쌓은 영역으로 구성 변화를 봐요"), rows, { x: t0.name, y: v0.name, series: seriesCat.name }, xt));
       if (seriesCat.distinct >= 5) out.push(mk("stream", 0.72, t("With many series, a streamgraph can show the rhythm of the flow", "계열이 많아서 스트림그래프로 흐름의 리듬을 보여 줄 수 있어요"), rows, { x: t0.name, y: v0.name, series: seriesCat.name }));
     } else {
-      out.push(mk("line", 0.9, t(`A line chart shows ${v0.name} over ${t0.name}`, `라인 차트로 ${t0.name}에 따른 ${v0.name} 추이를 봐요`), rows, { x: t0.name, y: nums.length > 1 && nums.length <= 6 ? nums.map((c) => c.name) : v0.name }, nums.length <= 1 ? { area: true } : undefined));
+      out.push(mk("line", 0.9, t(`A line chart shows ${v0.name} over ${t0.name}`, `라인 차트로 ${t0.name}에 따른 ${v0.name} 추이를 봐요`), rows, { x: t0.name, y: nums.length > 1 && nums.length <= 6 ? nums.map((c) => c.name) : v0.name }, nums.length <= 1 ? { ...xt, area: true } : xt));
       out.push(mk("sparkline", 0.6, t("A sparkline fits the trend next to a KPI", "스파크라인으로 KPI 옆에 작은 추세선을 넣어요"), rows, { x: t0.name, y: v0.name }));
     }
   }

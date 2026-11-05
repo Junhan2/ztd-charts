@@ -7,7 +7,7 @@ export type ChartLang = "en" | "ko";
 
 /** 로캘을 글자 언어로. "ko"나 "ko-*"면 "ko", 나머지(없음 포함)는 "en" */
 export function langOf(locale?: string): ChartLang {
-  return locale !== undefined && /^ko(-|$)/i.test(locale) ? "ko" : "en";
+  return locale !== undefined && /^ko([-_]|$)/i.test(locale) ? "ko" : "en";
 }
 
 /** 영어 복수형. plural(3, "item") → "3 items" */
@@ -25,6 +25,8 @@ export const en = {
   more: (n: number) => `and ${n} more`,
   /** 툴팁의 값 이름 */
   value: "Value",
+  /** 데이터가 없을 때 스크린리더 설명 */
+  empty: "No data.",
 };
 
 export type ChartMessages = typeof en;
@@ -34,4 +36,5 @@ export const ko: ChartMessages = {
   table: (label) => `${label} 데이터`,
   more: (n) => `외 ${n}개`,
   value: "값",
+  empty: "데이터가 없어요.",
 };

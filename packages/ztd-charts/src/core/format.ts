@@ -8,7 +8,9 @@ export type FormatSpec = FormatName | ValueFormatter | (Intl.NumberFormatOptions
 export const DEFAULT_LOCALE = "en-US";
 
 const nfCache = new Map<string, Intl.NumberFormat>();
-function nf(locale: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
+/** 최대 자릿수를 주지 않으면 소수 한 자리. 최소 자릿수가 더 크면 그만큼, 통화는 그 통화의 자릿수(USD 2)를 그대로 써요 */
+function nf(locale: string, o: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const opts = o.maximumFractionDigits !== undefined || o.style === "currency" ? o : { ...o, maximumFractionDigits: Math.max(1, o.minimumFractionDigits ?? 0) };
   const key = locale + JSON.stringify(opts);
   let f = nfCache.get(key);
   if (!f) {
@@ -26,11 +28,12 @@ function dropNegativeZero(s: string): string {
 export function formatNumber(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
   if (!Number.isFinite(v)) return "-";
   const { locale = DEFAULT_LOCALE, ...rest } = opts;
-  return dropNegativeZero(nf(locale, { maximumFractionDigits: 1, ...rest }).format(v));
+  return dropNegativeZero(nf(locale, rest).format(v));
 }
 
 /** 0~100 값을 "42%"로. 1% 미만만 소수 한 자리 */
 export function formatPercent(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
+  if (!Number.isFinite(v)) return "-";
   const a = Math.abs(v);
   return `${formatNumber(v, { maximumFractionDigits: a > 0 && a < 1 ? 1 : 0, ...opts })}%`;
 }
@@ -52,18 +55,18 @@ export function formatCompact(v: number, opts: Intl.NumberFormatOptions & { loca
     for (;;) {
       const [u, name] = units[k];
       const q = a / u;
-      const digits = typeof rest.maximumFractionDigits === "number" ? rest.maximumFractionDigits : u === 1 || q < 100 ? 1 : 0;
-      const rounded = Math.round(q * 10 ** digits) / 10 ** digits;
+      const fd = Math.max(rest.minimumFractionDigits ?? 0, rest.maximumFractionDigits ?? (u === 1 || q < 100 ? 1 : 0));
+      const rounded = Math.round(q * 10 ** fd) / 10 ** fd;
       // 반올림해서 윗단위가 되면 올려요 (9,999.96 → 1만, 99,995,000 → 1억)
       if (k > 0 && rounded >= units[k - 1][0] / u) {
         k--;
         continue;
       }
       const sign = v < 0 && rounded !== 0 ? "-" : "";
-      return sign + formatNumber(rounded, { locale, maximumFractionDigits: digits, ...rest }) + name;
+      return sign + formatNumber(rounded, { locale, ...rest, maximumFractionDigits: fd }) + name;
     }
   }
-  return dropNegativeZero(nf(locale, { notation: "compact", maximumFractionDigits: 1, ...rest }).format(v));
+  return dropNegativeZero(nf(locale, { notation: "compact", ...rest }).format(v));
 }
 
 /** 통화 포맷 옵션. 통화가 없으면 한국어는 원화, 나머지는 달러이고 원화만 소수점 없이 써요 */
@@ -83,7 +86,7 @@ export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOC
   };
   if (spec && typeof spec === "object") {
     const { suffix = "", prefix = "", ...o } = spec;
-    return fixed({ maximumFractionDigits: 1, ...o }, suffix, prefix);
+    return fixed(o, suffix, prefix);
   }
   switch (spec ?? fallback) {
     case "integer":
@@ -110,23 +113,32 @@ export function makeTickFormatter(spec: FormatSpec | undefined, locale = DEFAULT
   return (v) => formatNumber(v, { locale });
 }
 
-/** 날짜로 바꿔요. "2024-03", "2024-03-15", 타임스탬프, Date */
+/** 연, 월, 일로 로컬 자정. 없는 날("2024-02-30")은 다음 달로 넘기지 않고 null */
+function ymd(y: string | number, m: string | number, d: string | number = 1): Date | null {
+  const t = new Date(+y, +m - 1, +d);
+  return t.getMonth() === +m - 1 && t.getDate() === +d ? t : null;
+}
+
+/** 4자리 정수라 연도로 읽는 값인지 */
+export const isYear = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1000 && (v as number) <= 9999;
+
+/** 날짜로 바꿔요. "2024-03", "2024-03-15", 20240315(YYYYMMDD), 타임스탬프, Date */
 export function toDate(v: unknown): Date | null {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
   if (typeof v === "number") {
     if (!Number.isFinite(v)) return null;
-    // 4자리 숫자는 연도로
-    if (v >= 1000 && v <= 9999 && Number.isInteger(v)) return new Date(v, 0, 1);
+    if (Number.isInteger(v)) {
+      // 4자리 숫자는 연도로
+      if (isYear(v)) return new Date(v, 0, 1);
+      // 8자리 19000101~21001231은 YYYYMMDD로 (그 범위의 ms는 1970-01-01 새벽이라 실제 타임스탬프와 겹치지 않아요)
+      if (v >= 19000101 && v <= 21001231) return toDate(`${v}`);
+    }
     return new Date(v);
   }
   if (typeof v === "string" && v.trim()) {
     const s = v.trim();
-    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    m = /^(\d{4})-(\d{1,2})$/.exec(s);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, 1);
-    m = /^(\d{4})[./](\d{1,2})[./](\d{1,2})\.?$/.exec(s);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const m = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/.exec(s) ?? /^(\d{4})[./](\d{1,2})[./](\d{1,2})\.?$/.exec(s) ?? /^(19\d\d|20\d\d|2100)(\d\d)(\d\d)$/.exec(s);
+    if (m) return ymd(m[1], m[2], m[3]);
     if (/^\d{4}$/.test(s)) return new Date(Number(s), 0, 1);
     if (!/\d{4}/.test(s)) return null;
     const d = new Date(s);

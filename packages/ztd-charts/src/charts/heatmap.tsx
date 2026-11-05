@@ -71,7 +71,8 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
       if (cx === undefined || cy === undefined) return;
       const idx = cy * xs.length + cx;
       const v = gv(d, i);
-      vals[idx] = Number.isFinite(vals[idx]) ? vals[idx] + v : v;
+      // 값이 없는 겹친 행이 앞에 있던 값을 지우지 않게, 숫자일 때만 더해요
+      if (Number.isFinite(v)) vals[idx] = Number.isFinite(vals[idx]) ? vals[idx] + v : v;
       rows[idx] = d;
     });
     const [mn, mx] = extent(vals);
@@ -162,12 +163,8 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
     [cells, nx, ny, x0, y0, cw, ch, gap, p.theme.accent],
   );
 
-  const xLabelIdx = thinLabels(
-    model.xs.map((_, i) => x0 + i * cw + cw / 2),
-    model.xs,
-    AXIS_FONT,
-    6,
-  );
+  // 호버로 다시 그릴 때마다 글자 폭을 다시 재지 않아요
+  const xLabelIdx = useMemo(() => thinLabels(model.xs.map((_, i) => x0 + i * cw + cw / 2), model.xs, AXIS_FONT, 6), [model.xs, x0, cw]);
   const yLabelIdx = ch >= 11 ? model.ys.map((_, i) => i) : model.ys.map((_, i) => i).filter((i) => i % Math.ceil(12 / Math.max(1, ch)) === 0);
   const msg = MSG[c.lang];
   const desc = props.description ?? `${msg.kind}. ${msg.desc(ny, nx, c.fv(model.mn), c.fv(model.mx))}.`;
@@ -188,6 +185,20 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
       onPointerMove={(px, py, e) => {
         const k = pick(px, py);
         if (k !== c.active) c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer");
+      }}
+      onKey={(e) => {
+        // 위아래 화살표는 같은 열의 윗줄, 아랫줄로 (빈 칸은 건너뛰고, 끝에서는 멈춰요)
+        const d = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+        const cl = c.active === null ? null : cells[c.active];
+        if (!d || !cl) return false;
+        for (let r = cl.row + d; r >= 0 && r < ny; r += d) {
+          const k = evIndex.get(r * nx + cl.col);
+          if (k !== undefined) {
+            c.setActive(k, "keyboard");
+            break;
+          }
+        }
+        return true;
       }}
       underlay={useCanvas ? <CanvasLayer width={W} height={H} draw={draw} progress={prog} version={c.sig} /> : undefined}
     >

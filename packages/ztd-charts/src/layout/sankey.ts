@@ -75,9 +75,22 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   });
   for (const n of nodes) n.value = Math.max(n.inLinks.reduce((a, l) => a + l.value, 0), n.outLinks.reduce((a, l) => a + l.value, 0));
 
-  // 깊이: 시작 노드에서 가장 긴 경로 (순환이 있으면 노드 수에서 멈춰요)
+  // 깊이: 시작 노드에서 가장 긴 경로. 순환을 만드는 되돌아가는 링크는 한 번의 깊이 우선 탐색으로 찾아 빼요
+  // (빼지 않으면 순환 안의 노드 깊이가 노드 수까지 부풀어 링크가 거꾸로 그려져요)
   let frontier = nodes.filter((n) => !n.inLinks.length);
   if (!frontier.length) frontier = nodes.slice(0, 1);
+  const state = new Map<SankeyNode, 1 | 2>();
+  const back = new Set<SankeyLink>();
+  const visit = (n: SankeyNode): void => {
+    state.set(n, 1);
+    for (const l of n.outLinks) {
+      const s = state.get(l.target);
+      if (s === 1) back.add(l);
+      else if (!s) visit(l.target);
+    }
+    state.set(n, 2);
+  };
+  [...frontier, ...nodes].forEach((n) => state.has(n) || visit(n));
   const depthOf = new Map<SankeyNode, number>();
   frontier.forEach((n) => depthOf.set(n, 0));
   let changed = true;
@@ -85,6 +98,7 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   while (changed && guard++ < nodes.length + 1) {
     changed = false;
     for (const l of links) {
+      if (back.has(l)) continue;
       const d = (depthOf.get(l.source) ?? 0) + 1;
       if (d > (depthOf.get(l.target) ?? -1) && d <= nodes.length) {
         depthOf.set(l.target, d);

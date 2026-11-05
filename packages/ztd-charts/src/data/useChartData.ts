@@ -50,7 +50,8 @@ export async function readResponse(res: Response, mode: "auto" | "json" | "csv" 
     throw new Error(langOf(locale) === "ko" ? `데이터 대신 HTML 페이지를 받았어요. 주소를 확인해 주세요${url ? `: ${url}` : "."}` : `Got an HTML page instead of data${url ? ` (${url})` : ""}. Check the URL.`);
   }
   if (mode === "csv") return parseCSV(text);
-  if (mode === "json") return JSON.parse(text);
+  // JSON이라고 알려 준 응답은 주소에 csv가 있어도(/api/csv, ?format=csv) JSON으로 읽어요
+  if (mode === "json" || ct.includes("json")) return JSON.parse(text);
   if (ct.includes("csv") || /[./]csv(\?|#|$)|output=csv|format=csv|tqx=out:csv/i.test(url)) return parseCSV(text);
   const t = text.trim();
   if (t.startsWith("{") || t.startsWith("[")) return JSON.parse(t);
@@ -64,7 +65,8 @@ export async function fetchChartData<T = Record<string, unknown>>(source: Exclud
   if (typeof source === "function") raw = await source(signal);
   else {
     const url = source instanceof Request ? source.url : String(source);
-    const res = await fetch(source instanceof Request ? source : url, { ...options.init, signal });
+    // 본문이 있는 Request는 한 번 읽으면 끝나서, 다시 불러올 때마다 복사본을 보내요
+    const res = await fetch(source instanceof Request ? source.clone() : url, { ...options.init, signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`);
     raw = await readResponse(res, options.parse, url, options.locale);
   }
@@ -97,7 +99,11 @@ export function useChartData<T = Record<string, unknown>>(source: DataSource, op
 
   useEffect(() => {
     const s = src.current;
-    if (!s || !enabled) return undefined;
+    // 가져오는 중에 꺼지거나 소스가 없어지면 앞 요청은 취소됐어요. loading에 머물지 않게 idle로
+    if (!s || !enabled) {
+      setState((prev) => (prev.status === "loading" ? { ...prev, status: "idle" } : prev));
+      return undefined;
+    }
     const ctrl = new AbortController();
     let alive = true;
     setState((prev) => ({ ...prev, data: keepPrevious ? prev.data : [], status: "loading", error: null }));

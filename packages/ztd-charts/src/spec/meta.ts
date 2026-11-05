@@ -123,8 +123,9 @@ export function nameIn(meta: { name: string; nameKo: string }, lang: Lang): stri
 
 /** 스펙을 그릴 로캘: override(프롭, --locale 같은 바깥 값), 그다음 options.locale. 둘 다 없으면 undefined */
 export function specLocale(spec: Pick<ChartSpec, "options">, override?: string): string | undefined {
-  const fromSpec = spec.options?.locale;
-  return override ?? (typeof fromSpec === "string" ? fromSpec : undefined);
+  const l = override ?? spec.options?.locale;
+  // "ko_KR"처럼 밑줄로 쓴 로캘도 받아요 (Intl은 "ko-KR"만 읽어요). 빈 문자열은 없는 것으로
+  return typeof l === "string" && l ? l.replace(/_/g, "-") : undefined;
 }
 
 /** 차트 이름 별칭 (AI가 자주 쓰는 이름) */

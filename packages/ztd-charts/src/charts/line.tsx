@@ -59,6 +59,8 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
   referenceLines?: { y: number; label?: string }[];
   /** y축 제목 (단위 등) */
   yLabel?: string;
+  /** 강조 계열. 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean. 기본 첫 계열 */
+  highlight?: BaseChartProps<T>["highlight"];
 }
 
 /** 모델에서 x 인덱스 a~b(양끝 포함)만 남겨요 */
@@ -127,8 +129,11 @@ function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (
       ticks = thinLabels(centers, model.labels).map((k) => ({ x: centers[k], label: model.labels[k] }));
     }
   } else if (model.type === "number" && model.keys.length > 12) {
-    const sx = scaleLinear(extent(model.xnum), [x0, x1]);
-    ticks = sx.ticks(Math.max(2, Math.floor((x1 - x0) / 70))).map((v) => ({ x: sx(v), label: c.fmt(v) }));
+    // x 눈금은 값 포맷(format, 통화 등)이 아니라 x 숫자 그대로. 연도(1000~9999)는 쉼표 없이
+    const [a, b] = extent(model.xnum);
+    const sx = scaleLinear([a, b], [x0, x1]);
+    const xf = a >= 1000 && b <= 9999 ? String : makeTickFormatter(undefined, c.locale, Math.max(-a, b));
+    ticks = sx.ticks(Math.max(2, Math.floor((x1 - x0) / 70))).map((v) => ({ x: sx(v), label: xf(v) }));
   } else {
     const centers = model.keys.map((_, k) => xs(k));
     ticks = thinLabels(centers, model.labels).map((k) => ({ x: centers[k], label: model.labels[k] }));
@@ -181,11 +186,13 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const allY: number[] = [];
   if (stacked) stacked.y1.forEach((r) => r.forEach((v) => allY.push(v)));
   else model.values.forEach((r) => r.forEach((v) => Number.isFinite(v) && allY.push(v)));
+  // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게
+  props.referenceLines?.forEach((r) => allY.push(r.y));
   const [mn, mx] = extent(allY);
   const dom: [number, number] = props.yDomain ?? (stackMode === "percent" ? [0, 100] : fitDomain(mn, mx, Math.max(2, Math.round(H / 70)), { zero: props.zero ?? isArea }));
   const tickFmt = stackMode === "percent" ? (v: number) => `${v}%` : makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
   const yTicks = scaleLinear(dom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
-  const left = yAxisWidth(yTicks, tickFmt);
+  const left = yAxisWidth(yTicks, tickFmt, c.locale);
   const endLabels = props.endLabels ?? nS > 1;
   const lastIdx = (s: number) => {
     for (let k = model.keys.length - 1; k >= 0; k--) if (Number.isFinite(model.values[s][k])) return k;
@@ -202,7 +209,9 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1]);
   const maxPts = props.maxPoints ?? Math.max(60, Math.round((x1 - x0) * 2));
-  const curve = props.curve ?? (isArea ? "smooth" : "smooth");
+  const curve = props.curve ?? "smooth";
+  // 영역의 바닥: 0을 축 범위 안으로 (값이 모두 음수면 위 끝, 모두 양수면 아래 끝)
+  const base0 = Math.min(dom[1], Math.max(dom[0], 0));
 
   const draws = useMemo<SeriesDraw[]>(() => {
     return model.series.map((name, s) => {
@@ -216,7 +225,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         idx = lttb(pts, maxPts).map((q) => q.k);
       }
       const pts = idx.map((k) => y(stacked ? stacked.y1[s][k] : model.values[s][k]));
-      const base = stacked ? idx.map((k) => y(stacked.y0[s][k])) : isArea ? idx.map(() => y(Math.max(dom[0], 0))) : undefined;
+      const base = stacked ? idx.map((k) => y(stacked.y0[s][k])) : isArea ? idx.map(() => y(base0)) : undefined;
       return { s, name, pts, xs: idx.map((k) => xs(k)), base, sw: colors[s], hi: hi.has(s), idx };
     });
     // xs, y는 아래 값들로 정해져요
@@ -228,7 +237,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const marks = useMemo<Mark<SeriesDraw>[]>(
     () =>
       order.map((d, k) => {
-        const baseLine = y(Math.max(dom[0], 0));
+        const baseLine = y(base0);
         if (isArea) {
           const b = d.base ?? d.pts.map(() => baseLine);
           return { key: `s:${d.name}`, to: [1, ...d.pts, ...b], from: [0, ...d.pts.map(() => baseLine), ...b.map(() => baseLine)], delay: k * stg * 0.5, parts: [1, d.pts.length, b.length], data: d };
@@ -236,7 +245,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         return { key: `s:${d.name}`, to: [1, ...d.pts], from: [0, ...d.pts], enter: [0, ...d.pts], delay: k * stg, parts: [1, d.pts.length], data: d };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [order, stg, isArea, H, dom[0]],
+    [order, stg, isArea, H, base0],
   );
   const m = useMotion(marks, c.motion);
 
@@ -367,12 +376,11 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     const draw = v[0];
     const ys = v.slice(1, 1 + n);
     const pts = d.xs.map((xx, i) => [xx, ys[i] ?? ys[ys.length - 1] ?? 0] as [number, number]);
-    const dimmed = activeK === null ? 1 : 1;
     if (isArea) {
       const bs = v.slice(1 + n, 1 + 2 * n);
-      const bottomPts = d.xs.map((xx, i) => [xx, bs[i] ?? y(0)] as [number, number]);
+      const bottomPts = d.xs.map((xx, i) => [xx, bs[i] ?? y(base0)] as [number, number]);
       pieces.push(
-        <g key={it.key} opacity={it.exiting ? 0.4 : dimmed}>
+        <g key={it.key} opacity={it.exiting ? 0.4 : 1}>
           <path d={areaPath(pts, bottomPts, curve)} fill={d.sw.fill} opacity={stackMode === "none" ? (d.hi ? 0.5 : 0.28) : 1} />
           <path d={linePath(pts, curve)} fill="none" stroke={stackMode === "none" ? d.sw.fill : p.paint("panel")} strokeWidth={stackMode === "none" ? (d.hi ? 2.2 : 1.4) : 1.2} strokeLinejoin="round" opacity={Math.min(1, draw * 1.4)} />
         </g>,
@@ -382,7 +390,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
       const dash = draw < 0.999;
       pieces.push(
         <g key={it.key} opacity={it.exiting ? 0.4 : 1}>
-          {props.area && d.hi ? <path d={areaPath(pts, pts.map(([xx]) => [xx, y(Math.max(dom[0], 0))] as [number, number]), curve)} fill={`url(#${gid}g)`} opacity={draw} /> : null}
+          {props.area && d.hi ? <path d={areaPath(pts, pts.map(([xx]) => [xx, y(base0)] as [number, number]), curve)} fill={`url(#${gid}g)`} opacity={draw} /> : null}
           <path d={linePath(pts, curve)} fill="none" stroke={d.sw.fill} strokeWidth={width} strokeLinejoin="round" strokeLinecap="round" pathLength={dash ? 1 : undefined} strokeDasharray={dash ? "1 1" : undefined} strokeDashoffset={dash ? 1 - draw : undefined} />
           {showDots
             ? pts.map(([xx, yy], i) => {
@@ -430,7 +438,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
           {props.yLabel}
         </Txt>
       ) : null}
-      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} />
+      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} locale={c.locale} />
       {props.referenceLines?.map((r, i) => (
         <line key={i} x1={x0} x2={x1} y1={y(r.y)} y2={y(r.y)} stroke={p.paint("dim")} strokeDasharray="3 3" />
       ))}

@@ -97,17 +97,18 @@ Charts (type, component, English name, Korean name, level):
 - candlestick (<CandlestickChart>, Candlestick chart, 캔들스틱, advanced): Open, high, low and close for each period in one candle. encoding: x, open, high, low, close, volume?. use: Stocks, exchange rates or coins, where the swing within each period matters. avoid: A trend with only one value (a line chart is cleaner).
 - segmented (<SegmentedBar>, Segmented bar, 비율 막대, basic): One whole split into a bar by share, with a list. encoding: label, value. use: Showing the mix in one line inside a card (2 to 6 items). avoid: Comparing similar values, or many items (a bar chart is more accurate).
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 12.99 KB, DonutChart 13.02 KB, FunnelChart 11.77 KB, WaffleChart 11.96 KB, Treemap 12.31 KB, SunburstChart 12.7 KB, WaterfallChart 12.69 KB, ParetoChart 12.96 KB, MarimekkoChart 12.53 KB, Heatmap 13.05 KB, RadarChart 12.43 KB, BubbleChart 13.44 KB, LineChart 18.99 KB, AreaChart 18.99 KB, StreamGraph 14.88 KB, BarChart 15.13 KB, RadialBarChart 11.33 KB, GaugeChart 11.51 KB, BulletChart 12.11 KB, Sparkline 13.14 KB, SlopeChart 12.12 KB, DumbbellChart 11.76 KB, LollipopChart 12.37 KB, BeeswarmChart 13.32 KB, RidgelineChart 12.45 KB, SankeyChart 12.9 KB, ChordChart 12.01 KB, CalendarHeatmap 13.45 KB, BumpChart 13.2 KB, BoxPlot 13.49 KB, ParallelCoordinates 12.84 KB, CandlestickChart 16.25 KB, SegmentedBar 11.93 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.31 KB, DonutChart 13.3 KB, FunnelChart 12.02 KB, WaffleChart 12.19 KB, Treemap 12.56 KB, SunburstChart 12.93 KB, WaterfallChart 12.88 KB, ParetoChart 13.22 KB, MarimekkoChart 12.75 KB, Heatmap 13.4 KB, RadarChart 12.71 KB, BubbleChart 13.71 KB, LineChart 19.37 KB, AreaChart 19.37 KB, StreamGraph 15.19 KB, BarChart 15.5 KB, RadialBarChart 11.58 KB, GaugeChart 11.8 KB, BulletChart 12.45 KB, Sparkline 13.51 KB, SlopeChart 12.32 KB, DumbbellChart 12.01 KB, LollipopChart 12.74 KB, BeeswarmChart 13.57 KB, RidgelineChart 12.67 KB, SankeyChart 13.22 KB, ChordChart 12.2 KB, CalendarHeatmap 13.79 KB, BumpChart 13.39 KB, BoxPlot 13.73 KB, ParallelCoordinates 13.1 KB, CandlestickChart 16.59 KB, SegmentedBar 12.19 KB
 
 ## Docs
 
 - [Full reference](llms-full.txt): this file plus the agent workflow, a chart picking table, and every chart's encoding channels, options and example spec
-- [README](https://github.com/Junhan2/ztd-charts/blob/main/README.md): install, quick start, cards and grid, theme tokens, animation, accessibility, data sources, JSON spec, CLI and MCP setup
+- [README](https://github.com/Junhan2/ztd-charts/blob/main/README.md): what it is, install, quick start, the 33 charts, AI setup and the packages
+- [Guide](https://github.com/Junhan2/ztd-charts/blob/main/docs/guide.md): common props, cards and grid, theme tokens, animation, accessibility, data sources, JSON spec, CLI and MCP setup
 - [Agent skill](https://github.com/Junhan2/ztd-charts/blob/main/skills/ztd-charts/SKILL.md): steps for an agent to pick a chart, write and validate a spec, and preview it
 - [JSON Schema](https://unpkg.com/ztd-charts/schema/chart-spec.schema.json): the spec schema, draft 2020-12
 
 ## Optional
 
 - [Chart catalog](https://github.com/Junhan2/ztd-charts/blob/main/docs/catalog.md): why each chart was chosen
-- [README in Korean](https://github.com/Junhan2/ztd-charts/blob/main/README.ko.md)
+- [README in Korean](https://github.com/Junhan2/ztd-charts/blob/main/README.ko.md) · [Guide in Korean](https://github.com/Junhan2/ztd-charts/blob/main/docs/guide.ko.md)
 - [License](https://github.com/Junhan2/ztd-charts/blob/main/LICENSE): MIT

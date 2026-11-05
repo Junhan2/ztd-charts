@@ -16,9 +16,9 @@ export function parseColor(input: string | undefined | null): RGBA | null {
   if (s.startsWith("#")) {
     let h = s.slice(1);
     if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
-    if (h.length !== 6 && h.length !== 8) return null;
+    // parseInt는 "12345g"를 "12345"까지 읽어서 16진수 글자만인지 먼저 봐요
+    if ((h.length !== 6 && h.length !== 8) || /[^\da-f]/i.test(h)) return null;
     const n = parseInt(h, 16);
-    if (Number.isNaN(n)) return null;
     if (h.length === 6) return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), parseInt(h.slice(6, 8), 16) / 255];
   }

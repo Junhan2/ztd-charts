@@ -5,7 +5,7 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { swatch } from "../core/palette";
 import { textWidth } from "../core/text";
-import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
+import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter, uniq } from "../data/accessor";
@@ -23,7 +23,9 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "코드 다이어그램", sent: "보냄", received: "받음", groups: (n) => `그룹 ${n}개` },
 };
 
-export interface ChordChartProps<T = Row> extends BaseChartProps<T> {
+export interface ChordChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
+  /** 강조할 마디(이름 또는 인덱스). 함수는 마디 이름을 받아요. 기본은 가장 큰 마디 */
+  highlight?: Highlight<string>;
   /** 출발 필드. 기본 "source" (없으면 "from") */
   source?: Accessor<T, string>;
   /** 도착 필드. 기본 "target" (없으면 "to") */

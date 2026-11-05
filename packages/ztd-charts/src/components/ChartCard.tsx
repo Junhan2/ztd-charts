@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { ensureBaseStyles } from "../core/css";
 import { useIsoLayoutEffect } from "../core/env";
 import { langOf, type ChartLang } from "../core/i18n";
@@ -53,8 +53,8 @@ export function Legend(props: { items: LegendItem[]; align?: "start" | "end"; th
       aria-label={text.legend}
       style={{ display: "flex", flexWrap: "wrap", justifyContent: props.align === "start" ? "flex-start" : "flex-end", gap: "4px 12px", margin: 0, padding: 0, listStyle: "none" }}
     >
-      {props.items.map((it) => (
-        <li key={it.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, color: p.paint("muted"), lineHeight: 1.3 }}>
+      {props.items.map((it, i) => (
+        <li key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, color: p.paint("muted"), lineHeight: 1.3 }}>
           <LegendSwatch p={p} item={it} />
           <span>{it.label}</span>
         </li>
@@ -137,10 +137,10 @@ export function ChartCard(props: ChartCardProps) {
   const text = useCardText(props.locale);
   const [replayN, setReplayN] = useState(0);
   useIsoLayoutEffect(() => ensureBaseStyles(), []);
-  const replay = useCallback(() => {
+  const replay = () => {
     setReplayN((n) => n + 1);
     props.onReplay?.();
-  }, [props]);
+  };
   const legend = Array.isArray(props.legend) ? <Legend items={props.legend as LegendItem[]} theme={props.theme} locale={props.locale} /> : props.legend;
   const H = props.as ?? "h3";
   const num = props.number === undefined ? null : typeof props.number === "number" ? String(props.number).padStart(2, "0") : props.number;

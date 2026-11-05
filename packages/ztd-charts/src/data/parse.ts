@@ -45,9 +45,7 @@ export function coerceCell(s: string): Cell {
   // 앞자리 0이 있는 코드(우편번호 등)는 문자열로 둬요
   if (/^-?0\d/.test(t)) return t;
   if (NUMERIC.test(t) || /^[-+]?\.\d+$/.test(t)) {
-    // 1,234 처럼 천 단위 쉼표가 맞을 때만
-    const body = t.replace(/^[-+(]?[₩$€£¥]?\s?/, "").replace(/\)?\s?(%|원|명|건|개|회)?$/, "");
-    if (body.includes(",") && !/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(body)) return t;
+    // 천 단위 쉼표가 틀리면(1,2,3) toNumber가 NaN이라 글자로 남아요
     const n = toNumber(t);
     if (Number.isFinite(n)) return n;
   }
@@ -73,7 +71,11 @@ export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] 
           i++;
         } else q = false;
       } else cell += c;
-    } else if (c === '"' && cell === "") q = true;
+    } else if (c === '"' && !cell.trim()) {
+      // 칸 처음의 따옴표는 앞 공백(a, "b, c")이 있어도 따옴표 칸이에요
+      q = true;
+      cell = "";
+    }
     else if (c === delim) {
       row.push(cell);
       cell = "";
@@ -94,12 +96,13 @@ export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] 
   const conv = (s: string): Cell => (typed ? coerceCell(s) : s);
   if (!header) return clean.map((r) => Object.fromEntries(r.map((v, i) => [String(i), conv(v)])));
   const keys: string[] = [];
-  const used = new Map<string, number>();
+  const used = new Set<string>();
   clean[0].forEach((k, i) => {
-    let name = k.trim() || `col${i + 1}`;
-    const n = used.get(name) ?? 0;
-    used.set(name, n + 1);
-    if (n) name = `${name}_${n + 1}`;
+    const base = k.trim() || `col${i + 1}`;
+    let name = base;
+    // 겹치면 _2, _3 … 중 아직 없는 이름 (a,a,a_2가 a_2 둘이 되어 열을 잃지 않게)
+    for (let n = 2; used.has(name); n++) name = `${base}_${n}`;
+    used.add(name);
     keys.push(name);
   });
   return clean.slice(1).map((r) => Object.fromEntries(keys.map((k, i) => [k, conv(r[i] ?? "")])));

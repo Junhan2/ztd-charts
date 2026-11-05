@@ -113,7 +113,9 @@ function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, 
   const gv = props.volume === undefined ? null : numGetter(props.volume, "volume");
   const raw = data.map((d, i) => {
     const xv = gx(d, i);
-    const dt = toDate(xv);
+    // 숫자 x는 1e10보다 클 때만 시각(ms)으로 봐요. 작은 수(1, 2, 3이나 연도 2024)는 1970년 날짜가 아니라 그대로 이름표로
+    // A four-digit year string ("2020") is a label too, not 1 January of that year.
+    const dt = (typeof xv === "number" && Math.abs(xv) <= 1e10) || (typeof xv === "string" && /^\d{4}$/.test(xv.trim())) ? null : toDate(xv);
     return { d, i, xv, dt, t: dt ? dt.getTime() : i, c: gc(d, i), o: go(d, i), h: gh(d, i), l: gl(d, i), v: gv ? gv(d, i) : NaN };
   });
   const dated = raw.every((r) => r.dt);
@@ -225,7 +227,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   const tickFmt = makeTickFormatter(props.format, c.locale, 0);
   const yTicks = scaleLinear(dom, [0, 1]).ticks(yCount);
   // 축 눈금과 종가 가격표 중 넓은 쪽에 맞춰요
-  const right = Math.max(yAxisWidth(yTicks, tickFmt), textWidth(tickFmt(hi), 10.5, 700) + 14) + 4;
+  const right = Math.max(yAxisWidth(yTicks, tickFmt, c.locale), textWidth(tickFmt(hi), 10.5, 700) + 14) + 4;
   const x0 = 4;
   const x1 = W - right;
   const step = n ? (x1 - x0) / n : 1;
@@ -254,7 +256,13 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   );
   const m = useMotion(marks, c.motion);
 
-  const mas = useMemo(() => maPeriods(props.ma, cs.length).map((d) => ({ d, v: movingAverage(cs.map((q) => q.c), d) })), [props.ma, cs]);
+  // 이동평균은 합치거나 확대하기 전 모든 종가로 구하고, 합친 봉은 그 마지막 원래 봉의 값을 읽어요
+  // (합친 봉끼리 평균을 내면 5일선이 5개 묶음 평균이 되고, 확대하면 앞쪽이 비어요)
+  const maFull = useMemo(() => {
+    const closes = all.candles.map((q) => q.c);
+    return maPeriods(props.ma, closes.length).map((d) => ({ d, v: movingAverage(closes, d) }));
+  }, [props.ma, all]);
+  const mas = useMemo(() => maFull.map((ma) => ({ d: ma.d, v: cs.map((q) => ma.v[q.i + q.span - 1]) })), [maFull, cs]);
   // 이동평균선은 크기와 봉이 바뀔 때만 다시 만들어요 (등장 중에는 투명도만 바뀌어요).
   // geometry의 linePath를 쓰면 곡선 코드까지 묶여 들어와서(약 1KB) 직선만 여기서 이어요
   const maPaths = useMemo(
@@ -420,10 +428,10 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
       {...brushFrame}
       announce={announce}
     >
-      <GridY p={p} ticks={yTicks} y={y} x0={x0} x1={x1} fmt={tickFmt} side="right" zero={false} labels={false} />
+      <GridY p={p} ticks={yTicks} y={y} x0={x0} x1={x1} fmt={tickFmt} locale={c.locale} side="right" zero={false} labels={false} />
       <g aria-hidden="true">
         {/* 가격표에 가려지는 눈금 글자는 그리지 않아요 (겹치면 둘 다 읽기 어려워요) */}
-        {tickLabels(yTicks, tickFmt).map((label, i) =>
+        {tickLabels(yTicks, tickFmt, c.locale).map((label, i) =>
           tagY !== null && Math.abs(y(yTicks[i]) - tagY) < 14 ? null : (
             <Txt key={yTicks[i]} x={x1 + 6} y={Math.round(y(yTicks[i])) + 0.5} size={AXIS_FONT} fill={p.paint("muted")}>
               {label}

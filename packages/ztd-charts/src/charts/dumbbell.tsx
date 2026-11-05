@@ -112,14 +112,18 @@ export function DumbbellChart<T = Row>(props: DumbbellChartProps<T>) {
           {names[1]}
         </Txt>
       </g>
-      {m.items.map((it, k) => {
+      {m.items.map((it) => {
         const r = it.data;
+        // 줄은 지금 순서(r.i)로 정해요. m.items는 처음 생긴 순서라 정렬이 바뀌면 어긋나요.
+        // 빠지는 줄은 옛 자리에 남아 새 줄과 겹치니 그리지 않아요
+        if (it.exiting) return null;
+        const k = r.i;
         const [xa, xb, o] = it.v;
         const cy = yOf(k);
         const endCol = r.hi ? accent.fill : p.paint("ink");
         const right = xb >= xa;
         return (
-          <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : c.dim(r.i)} onPointerEnter={(e) => c.setActive(r.i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(r.i)}>
+          <g key={it.key} className="ztd-mark" opacity={c.dim(k)} onPointerEnter={(e) => c.setActive(r.i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(r.i)}>
             <rect x={0} y={cy - band / 2} width={W} height={band} fill="transparent" />
             <line x1={xa} x2={xb} y1={cy} y2={cy} stroke={r.hi ? accent.fill : p.paint("neutral")} strokeOpacity={r.hi ? 0.55 : 1} strokeWidth={4} strokeLinecap="round" />
             <circle cx={xa} cy={cy} r={4.5} fill={p.paint("neutralStrong")} opacity={Math.min(1, o * 2)} />

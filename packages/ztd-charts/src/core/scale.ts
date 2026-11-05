@@ -33,12 +33,18 @@ export function fitDomain(min: number, max: number, count = 4, opts: { zero?: bo
   if (lo === hi) return lo === 0 ? [0, 1] : lo > 0 ? [0, lo * 1.2] : [lo * 1.2, 0];
   const span = hi - lo;
   const pad = opts.pad ?? 0.07;
-  const step = niceStep(span, count);
-  const nHi = Math.ceil(hi / step - 1e-9) * step;
-  const nLo = Math.floor(lo / step + 1e-9) * step;
-  const top = hi === 0 ? 0 : nHi - hi <= step * 0.3 ? nHi : hi + span * pad;
-  const bottom = lo === 0 ? 0 : lo - nLo <= step * 0.3 ? nLo : lo - span * pad;
-  return [bottom, top];
+  let step = niceStep(span, count);
+  let d: [number, number] = [lo, hi];
+  // 눈금은 넓힌 범위로 다시 만들어요(ticksFor). 여유 때문에 간격이 커지면 그 간격으로 다시 맞춰요. 안 그러면 마지막 눈금 위가 크게 비어요
+  for (let k = 0; k < 4; k++) {
+    const nHi = Math.ceil(hi / step - 1e-9) * step;
+    const nLo = Math.floor(lo / step + 1e-9) * step;
+    d = [lo === 0 ? 0 : lo - nLo <= step * 0.3 ? nLo : lo - span * pad, hi === 0 ? 0 : nHi - hi <= step * 0.3 ? nHi : hi + span * pad];
+    const s = niceStep(d[1] - d[0], count);
+    if (s === step) break;
+    step = s;
+  }
+  return d;
 }
 
 /** 눈금이 깔끔하게 떨어지도록 범위를 넓혀요 */
@@ -154,7 +160,8 @@ export function timeTicks(t0: number, t1: number, maxTicks: number, locale = DEF
       if (d.getTime() >= t0) {
         const y = d.getFullYear();
         const showYear = yearOnChange && !sameYear && y !== lastYear;
-        out.push({ t: d.getTime(), label: formatDate(d, { locale, ...fmt, ...(showYear ? { year: "2-digit" } : {}) }) });
+        // 연도는 네 자리로 ("Nov 23"은 11월 23일로 읽혀요)
+        out.push({ t: d.getTime(), label: formatDate(d, { locale, ...fmt, ...(showYear ? { year: "numeric" } : {}) }) });
         lastYear = y;
       }
       inc(d);

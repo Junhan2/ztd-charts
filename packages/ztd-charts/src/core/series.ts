@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, toDate } from "./format";
+import { DEFAULT_LOCALE, isYear, toDate } from "./format";
 import { lazyArray } from "./lazy";
 import { getter, toNumber, uniq } from "../data/accessor";
 import type { Accessor } from "./types";
@@ -81,7 +81,9 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
   let labels: string[];
   if (type === "band") labels = keys;
   else {
-    const fmt = type === "date" ? new Intl.DateTimeFormat(locale, dfmt) : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+    // 숫자 x는 소수 6자리까지 (0.001과 0.002가 같은 "0"이 되지 않게), 네 자리 정수만이면 연도라 자릿점 없이 ("2,019" 아니고 "2019")
+    const year = xnum.every(isYear);
+    const fmt = type === "date" ? new Intl.DateTimeFormat(locale, dfmt) : new Intl.NumberFormat(locale, year ? { useGrouping: false } : { maximumFractionDigits: 6 });
     labels = xnum.length > 1000 ? lazyArray(xnum.length, (i) => fmt.format(xnum[i])) : xnum.map((n) => fmt.format(n));
   }
   const seriesNames = yKeys ? [...yKeys] : getS ? uniq(data.map((d, i) => String(getS(d, i) ?? ""))) : [""];

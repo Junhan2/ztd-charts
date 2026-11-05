@@ -65,6 +65,11 @@ Examples
   data: (rows: number, cols: string) => `Data: ${plural(rows, "row")}, columns ${cols}\n`,
   noFit: "No chart fits this data. Check the column names and formats",
   score: "score",
+  /** 데이터 주소 가져오기 (render의 data.url, suggest의 URL) */
+  fetchFailed: (url: string, m: string) => `Couldn't load data from ${url}: ${m}`,
+  httpOnly: "only http:// and https:// addresses can be fetched",
+  timeout: (s: number) => `no response within ${s} seconds`,
+  tooLarge: (mb: number) => `the response is larger than ${mb} MB`,
   /** ztd-charts init이 만드는 예시 파일 */
   init: (type: string) => ({
     "charts/sales.csv": "month,channel,revenue\n2025-01,Search,120\n2025-01,Social,64\n2025-02,Search,128\n2025-02,Social,75\n2025-03,Search,131\n2025-03,Social,92\n2025-04,Search,140\n2025-04,Social,104\n",
@@ -137,6 +142,10 @@ const ko: CliText = {
   data: (rows, cols) => `데이터: ${rows}행, 열 ${cols}\n`,
   noFit: "어울리는 차트를 찾지 못했어요. 열 이름과 형식을 확인해 주세요",
   score: "점수",
+  fetchFailed: (url, m) => `${url}에서 데이터를 가져오지 못했어요: ${m}`,
+  httpOnly: "http://, https:// 주소만 가져올 수 있어요",
+  timeout: (s) => `${s}초 안에 응답이 없어요`,
+  tooLarge: (mb) => `응답이 ${mb}MB보다 커요`,
   init: (type) => ({
     "charts/sales.csv": "month,channel,revenue\n2025-01,검색,120\n2025-01,SNS,64\n2025-02,검색,128\n2025-02,SNS,75\n2025-03,검색,131\n2025-03,SNS,92\n2025-04,검색,140\n2025-04,SNS,104\n",
     "charts/Dashboard.tsx": dashboard(type, {

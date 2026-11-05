@@ -45,6 +45,8 @@ export interface RidgelineChartProps<T = Row> extends BaseChartProps<T> {
   bandwidth?: number;
   /** 정렬: "none"(데이터 순) | "median". 기본 "none" */
   sort?: "none" | "median";
+  /** 강조 그룹. 판별 함수는 행이 아니라 그룹 이름을 받아요: (name, index) => boolean. 기본 중앙값이 가장 큰 그룹 */
+  highlight?: BaseChartProps<T>["highlight"];
 }
 
 interface Ridge<T> {
@@ -96,7 +98,8 @@ export function RidgelineChart<T = Row>(props: RidgelineChartProps<T>) {
   const bottom = 20;
   const top = 8;
   const nG = Math.max(1, model.ridges.length);
-  const overlap = props.overlap ?? 1.5;
+  // 0이면 그룹이 하나일 때 0으로 나눠 NaN이 돼요. 아주 작은 수로 막아요 (그룹 하나면 산 높이는 그림 높이 전체)
+  const overlap = Math.max(1e-6, props.overlap ?? 1.5);
   const step = (H - top - bottom) / (nG - 1 + overlap);
   const amp = step * overlap;
   const x = scaleLinear(model.dom, [labelW + 8, W - 8]);

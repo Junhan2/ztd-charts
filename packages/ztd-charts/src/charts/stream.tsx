@@ -34,6 +34,8 @@ export interface StreamGraphProps<T = Row> extends BaseChartProps<T> {
   offset?: "wiggle" | "silhouette";
   /** 계열 순서를 보기 좋게 다시 정렬. 기본 true */
   reorder?: boolean;
+  /** 강조 계열. 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean. 기본 합이 가장 큰 계열 */
+  highlight?: BaseChartProps<T>["highlight"];
 }
 
 interface Layer {
@@ -74,6 +76,9 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const y = scaleLinear([lo, hiV], [H - bottom, top]);
   const xs = xScaleFor(model as SeriesModel<unknown>, x0, x1);
   const mid = y((lo + hiV) / 2);
+  // 포인터가 움직일 때마다 만들지 않아요
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1]);
 
   const layers = useMemo<Layer[]>(() => {
     const rest = order.filter((s) => !hi.has(s));
@@ -119,7 +124,11 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
         key: model.keys[k],
         label: model.labels[k],
         value: model.values.reduce((a, r) => a + (Number.isFinite(r[k]) ? r[k] : 0), 0),
-        formatted: model.series.map((s, si) => `${s} ${fv(model.values[si][k] || 0)}`).join(", "),
+        // 값이 없는 계열은 0이라고 읽지 않게 빼요 (라인 차트와 같아요)
+        formatted: model.series
+          .map((s, si) => (Number.isFinite(model.values[si][k]) ? `${s} ${fv(model.values[si][k])}` : null))
+          .filter(Boolean)
+          .join(", "),
       })),
     [model, fv],
   );
@@ -151,7 +160,7 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
       className={props.className}
       style={props.style}
       theme={props.theme}
-      onPointerMove={(px, _py, e) => c.setActive(nearestIndex(model.keys.map((_, k) => xs(k)), px), e.pointerType === "touch" ? "touch" : "pointer")}
+      onPointerMove={(px, _py, e) => c.setActive(nearestIndex(centers, px), e.pointerType === "touch" ? "touch" : "pointer")}
     >
       <rect x={x0} y={top} width={x1 - x0} height={H - bottom - top} fill="transparent" />
       {m.items.map((it) => {

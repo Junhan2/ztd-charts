@@ -7,7 +7,7 @@ import { swatch } from "../core/palette";
 import { niceDomain } from "../core/scale";
 import { prepSeries } from "../core/series";
 import { textWidth } from "../core/text";
-import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
+import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { plural, type ChartLang } from "../core/i18n";
@@ -21,7 +21,9 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "레이더 차트", desc: (n, axes, nS) => `지표 ${n}개(${axes}), 계열 ${nS}개` },
 };
 
-export interface RadarChartProps<T = Row> extends BaseChartProps<T> {
+export interface RadarChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
+  /** 강조할 계열(이름 또는 인덱스). 함수는 계열 이름을 받아요. 기본 첫 계열 */
+  highlight?: Highlight<string>;
   /** 축(지표) 필드. 기본 "axis" */
   axis?: Accessor<T, string>;
   /** 계열 필드. 넓은 표면 value에 배열로 */
@@ -116,7 +118,7 @@ export function RadarChart<T = Row>(props: RadarChartProps<T>) {
         ))}
         {axes.map((a, k) => {
           const [x, y] = polar(cx, cy, R, ang(k));
-          return <line key={a} x1={cx} y1={cy} x2={x} y2={y} stroke={p.paint(c.active === k ? "dim" : "line")} strokeWidth={1} />;
+          return <line key={k} x1={cx} y1={cy} x2={x} y2={y} stroke={p.paint(c.active === k ? "dim" : "line")} strokeWidth={1} />;
         })}
         {Array.from({ length: levels }, (_, l) => {
           const v = (max * (l + 1)) / levels;
@@ -150,7 +152,7 @@ export function RadarChart<T = Row>(props: RadarChartProps<T>) {
           const dy = Math.cos(t) > 0.9 ? -4 : Math.cos(t) < -0.9 ? 4 : 0;
           const strong = c.active === k;
           return (
-            <Txt key={a} x={x} y={y + dy} anchor={anchor} size={11.5} weight={strong ? 800 : 600} fill={p.paint(strong ? "ink" : "muted")} opacity={m.fade(D * 0.4, 300)}>
+            <Txt key={k} x={x} y={y + dy} anchor={anchor} size={11.5} weight={strong ? 800 : 600} fill={p.paint(strong ? "ink" : "muted")} opacity={m.fade(D * 0.4, 300)}>
               {a}
             </Txt>
           );

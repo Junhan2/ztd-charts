@@ -73,6 +73,8 @@ export function truncate(s: string, maxWidth: number, size: number, weight = 400
     if (textWidth(s.slice(0, mid) + ell, size, weight) <= maxWidth) lo = mid;
     else hi = mid - 1;
   }
+  // 서로게이트 쌍(이모지 등) 가운데서 자르지 않아요
+  if (lo > 0 && (s.charCodeAt(lo - 1) & 0xfc00) === 0xd800) lo--;
   const kept = s.slice(0, lo).trimEnd();
   return kept.length < (isWide(kept.charCodeAt(0)) ? 2 : 3) ? "" : kept + ell;
 }

@@ -59,10 +59,13 @@ export interface ChartCtx<T> {
   /** 호버 중인 다른 항목을 흐리게: i가 active가 아니면 낮은 불투명도 */
   dim: (i: number, base?: number) => number;
   sig: string;
+  /** 사용자가 준 설명. 없으면 데이터가 없을 때 ChartFrame이 "No data."로 바꿔요 */
+  description?: string;
 }
 
 /** 모든 차트가 처음에 부르는 설정 훅 */
-export function useChart<T>(props: BaseChartProps<T>, defaults: ChartSetupDefaults): ChartCtx<T> {
+// highlight는 차트마다 받는 꼴이 달라서(행, 이름, 노드) 여기서는 읽지 않아요
+export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, defaults: ChartSetupDefaults): ChartCtx<T> {
   const p = useChartTheme(props.theme);
   const [node, ref, measuredW] = useMeasuredNode<HTMLDivElement>(props.width);
   const hydrated = useHydrated();
@@ -87,14 +90,15 @@ export function useChart<T>(props: BaseChartProps<T>, defaults: ChartSetupDefaul
   const onClick = useRef(props.onClick);
   onClick.current = props.onClick;
 
+  // 지난 값은 ref로 비교해요. setState 갱신 함수 안에서 부르면 StrictMode가 두 번 돌려 onHover도 두 번 불려요
+  const last = useRef<number | null>(null);
   const setActive = useCallback((i: number | null, how: ActiveVia = "pointer") => {
-    setActiveState((prev) => {
-      if (prev !== i) {
-        const e = i === null ? null : events.current[i] ?? null;
-        queueMicrotask(() => onHover.current?.(e));
-      }
-      return i;
-    });
+    if (last.current !== i) {
+      last.current = i;
+      const e = i === null ? null : events.current[i] ?? null;
+      queueMicrotask(() => onHover.current?.(e));
+    }
+    setActiveState(i);
     setVia(i === null ? null : how);
   }, []);
 
@@ -144,5 +148,6 @@ export function useChart<T>(props: BaseChartProps<T>, defaults: ChartSetupDefaul
     showLabels: props.showLabels !== false,
     dim,
     sig,
+    description: props.description,
   };
 }

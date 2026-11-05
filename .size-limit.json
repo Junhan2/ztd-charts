@@ -141,7 +141,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.8 KB"
   },
   {
     "name": "LineChart",
@@ -153,7 +153,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.3 KB"
+    "limit": "19.4 KB"
   },
   {
     "name": "AreaChart",
@@ -165,7 +165,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.3 KB"
+    "limit": "19.4 KB"
   },
   {
     "name": "StreamGraph",
@@ -177,7 +177,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "15 KB"
+    "limit": "15.3 KB"
   },
   {
     "name": "BarChart",
@@ -189,7 +189,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "15.3 KB"
+    "limit": "15.6 KB"
   },
   {
     "name": "RadialBarChart",
@@ -237,7 +237,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.6 KB"
   },
   {
     "name": "SlopeChart",
@@ -285,7 +285,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.7 KB"
   },
   {
     "name": "RidgelineChart",
@@ -333,7 +333,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.8 KB"
   },
   {
     "name": "BumpChart",
@@ -357,7 +357,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.8 KB"
   },
   {
     "name": "ParallelCoordinates",
@@ -381,7 +381,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.5 KB"
+    "limit": "16.6 KB"
   },
   {
     "name": "SegmentedBar",
@@ -429,7 +429,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "63.5 KB"
+    "limit": "64.9 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -441,7 +441,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "80 KB"
+    "limit": "80.9 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -453,6 +453,6 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19 KB"
+    "limit": "19.1 KB"
   }
 ]

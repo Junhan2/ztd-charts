@@ -98,14 +98,16 @@ export function FunnelChart<T = Row>(props: FunnelChartProps<T>) {
   const n = Math.max(1, rows.length);
   const band = (H - top - 4) / n;
   const barH = Math.max(8, Math.min(34, band * 0.52));
-  const first = rows[0]?.value || 1;
+  // Widths are scaled to the largest stage, so a later stage above the first (or a first stage of 0) stays inside.
+  const first = Math.max(0, ...rows.map((r) => r.value)) || 1;
   const maxW = plotW;
 
   const stages = useMemo<Stage<T>[]>(() => rows.map((r, i) => ({ i, label: r.label, value: r.value, rate: rates[i], w: Math.max(10, (r.value / first) * maxW), hi: hi.has(i), datum: r.d })), [rows, rates, hi, first, maxW]);
   const stg = c.motion.stagger ?? 110;
   const marks = useMemo<Mark<Stage<T>>[]>(() => stages.map((s, i) => ({ key: `f:${s.label}`, to: [s.w, 1], from: [s.w * 0.15, 0], enter: [0, 0], delay: i * stg, data: s })), [stages, stg]);
   const m = useMotion(marks, c.motion);
-  const cur = new Map(m.items.map((it) => [it.key, it]));
+  // By stage index: useMotion renames repeated labels (f:Step#2), so a label lookup would find the first one.
+  const cur = new Map(m.items.filter((it) => !it.exiting).map((it) => [it.data.i, it]));
 
   const yMid = (i: number) => top + band * i + band / 2;
   const neutral = swatch(p, "neutral");
@@ -147,12 +149,12 @@ export function FunnelChart<T = Row>(props: FunnelChartProps<T>) {
         </Txt>
       ) : null}
       {stages.map((s, i) => {
-        const it = cur.get(`f:${s.label}`);
+        const it = cur.get(i);
         if (!it) return null;
         const w = it.v[0];
         const o = it.v[1];
         const y = yMid(i);
-        const next = stages[i + 1] ? cur.get(`f:${stages[i + 1].label}`) : undefined;
+        const next = stages[i + 1] ? cur.get(i + 1) : undefined;
         const nw = next ? next.v[0] : 0;
         const no = next ? next.v[1] : 0;
         const yb = y + barH / 2;
@@ -163,7 +165,7 @@ export function FunnelChart<T = Row>(props: FunnelChartProps<T>) {
             : "";
         const sw = s.hi ? accent : neutral;
         return (
-          <g key={s.label} opacity={c.dim(i)} className="ztd-mark" onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
+          <g key={i} opacity={c.dim(i)} className="ztd-mark" onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
             <rect x={plotX - labelW} y={y - band / 2} width={W - plotX + labelW} height={band} fill="transparent" />
             {conn ? <path d={conn} fill={p.paint("neutral")} opacity={0.55 * Math.min(o, no)} /> : null}
             <path d={roundRectPath(cxm - w / 2, y - barH / 2, w, barH, Math.min(7, barH / 3))} fill={sw.fill} opacity={o} />

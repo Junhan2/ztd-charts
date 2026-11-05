@@ -154,6 +154,11 @@ export function areaPath(top: Pt[], bottom: Pt[], curve: Curve = "smooth"): stri
   return `${up}${down}Z`;
 }
 
+/** x0에서 x1까지 고르게 놓인 n개 가운데 px에 가장 가까운 인덱스 */
+export function evenIndex(px: number, x0: number, x1: number, n: number): number {
+  return Math.max(0, Math.min(n - 1, Math.round(((px - x0) / (x1 - x0 || 1)) * (n - 1))));
+}
+
 /** 정렬된 배열에서 v에 가장 가까운 인덱스 */
 export function nearestIndex(sorted: readonly number[], v: number): number {
   let lo = 0;

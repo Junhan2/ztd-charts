@@ -128,7 +128,7 @@ export function createServer(): McpServer {
         else if (url) {
           // http(s)만 받아요. loadRows는 파일 경로도 읽어서, 그대로 두면 서버가 도는 컴퓨터의 파일을 돌려줄 수 있어요
           if (!isHttpUrl(url)) return { isError: true, content: [text("url must start with http:// or https://. For a local file, pass its text as csv or its rows as rows.")] };
-          data = await loadRows(url);
+          data = await loadRows(url, locale);
         } else return { isError: true, content: [text("Pass one of csv, rows or url.")] };
       } catch (e) {
         return { isError: true, content: [text(`Couldn't read the data: ${(e as Error).message}`)] };

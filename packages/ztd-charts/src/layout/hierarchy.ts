@@ -9,14 +9,8 @@ export interface Rect {
   h: number;
 }
 
-function worst(row: number[], side: number): number {
-  const s = sum(row);
-  let mx = -Infinity;
-  let mn = Infinity;
-  for (const r of row) {
-    if (r > mx) mx = r;
-    if (r < mn) mn = r;
-  }
+/** The worst aspect ratio of a row from its sum, smallest and largest area (the row is never rebuilt) */
+function worst(s: number, mn: number, mx: number, side: number): number {
   if (s <= 0 || mn <= 0) return Infinity;
   return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
 }
@@ -35,16 +29,20 @@ export function squarify(values: readonly number[], box: Rect): Rect[] {
   let i = 0;
   while (i < order.length) {
     const side = Math.min(w, h);
-    const row = [order[i].v];
+    // The row grows while it does not get worse; its sum, min and max are kept as it grows, so a long list
+    // stays linear instead of copying and re-summing the row at every step.
+    let rs = order[i].v;
+    let mn = rs;
+    let mx = rs;
     let j = i + 1;
     while (j < order.length) {
-      const next = [...row, order[j].v];
-      if (worst(next, side) <= worst(row, side)) {
-        row.push(order[j].v);
-        j++;
-      } else break;
+      const v = order[j].v;
+      if (worst(rs + v, Math.min(mn, v), Math.max(mx, v), side) > worst(rs, mn, mx, side)) break;
+      rs += v;
+      mn = Math.min(mn, v);
+      mx = Math.max(mx, v);
+      j++;
     }
-    const rs = sum(row);
     if (w >= h) {
       const cw = h > 0 ? rs / h : 0;
       let yy = y;

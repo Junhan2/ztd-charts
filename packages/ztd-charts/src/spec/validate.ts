@@ -1,5 +1,5 @@
 import { parseCSV } from "../data/parse";
-import { toNumber } from "../data/accessor";
+import { hasField, toNumber } from "../data/accessor";
 import { toDate } from "../core/format";
 import { META } from "./meta";
 import { CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
@@ -51,6 +51,19 @@ export function inlineRows(data: unknown): Record<string, unknown>[] | null {
   return null;
 }
 
+/** 테마 값과 범례 색에 쓰는 글자. CSS 선언이나 SVG 속성을 벗어나는 ; { } < > \ : 는 없어요 */
+const SAFE_VALUE = /^[\p{L}\p{N}_\s#%(),./+'"-]*$/u;
+/** 값에 쓸 수 있는 CSS 함수. url(), image() 같은 바깥 주소를 부르는 함수는 막아요 */
+const CSS_FUNC = /^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|var|calc|min|max|clamp)$/i;
+
+/** 색, 길이, 글꼴 이름으로 안전한 값인지 (#hex, rgb(), oklch(), 이름 색, var(--x), 18). 따옴표는 글꼴 이름에만 */
+function isSafeStyleValue(v: unknown, font = false): boolean {
+  if (typeof v === "number") return Number.isFinite(v);
+  if (typeof v !== "string" || !SAFE_VALUE.test(v) || (!font && /['"]/.test(v))) return false;
+  for (const m of v.matchAll(/([\w-]+)\s*\(/g)) if (!CSS_FUNC.test(m[1])) return false;
+  return true;
+}
+
 function typeOf(v: unknown): string {
   if (Array.isArray(v)) return "array";
   if (v === null) return "null";
@@ -99,15 +112,18 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   const chartName = lang === "ko" ? (META[def.type]?.nameKo ?? def.name) : def.name;
 
   // data
+  /** 행이 모두 객체인지. 아니면 첫 번째 틀린 행을 알려 줘요 */
+  const shaped = (list: unknown[], path: string) => {
+    const bad = list.findIndex((r) => !r || typeof r !== "object" || Array.isArray(r));
+    if (bad >= 0) err(`${path}[${bad}]`, "bad_row", t("Each row of data must be an object. Convert 2D arrays with fromRows() or use { csv }", "data의 각 행은 객체여야 해요. 2차원 배열은 fromRows()로 바꾸거나 { csv }를 써 주세요"));
+    return list as Record<string, unknown>[];
+  };
   let rows: Record<string, unknown>[] | null = opts.rows ?? null;
   if (spec.data === undefined) err("data", "missing_data", t("data is required: an array of objects, { values }, { csv } or { url }", "data가 필요해요: 객체 배열, { values }, { csv }, { url } 중 하나"));
   else if (!rows) {
     const d = spec.data as unknown;
-    if (Array.isArray(d)) {
-      rows = d as Record<string, unknown>[];
-      const bad = rows.findIndex((r) => !r || typeof r !== "object" || Array.isArray(r));
-      if (bad >= 0) err(`data[${bad}]`, "bad_row", t("Each row of data must be an object. Convert 2D arrays with fromRows() or use { csv }", "data의 각 행은 객체여야 해요. 2차원 배열은 fromRows()로 바꾸거나 { csv }를 써 주세요"));
-    } else if (d && typeof d === "object") {
+    if (Array.isArray(d)) rows = shaped(d, "data");
+    else if (d && typeof d === "object") {
       const o = d as Record<string, unknown>;
       if ("url" in o) {
         if (typeof o.url !== "string" || !/^(https?:|\/|\.\/|data:)/.test(o.url)) err("data.url", "bad_url", t("data.url must be an http(s) address or a path", "data.url은 http(s) 주소나 경로여야 해요"));
@@ -117,7 +133,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         else rows = parseCSV(o.csv);
       } else if ("values" in o) {
         if (!Array.isArray(o.values)) err("data.values", "bad_values", t("data.values must be an array", "data.values는 배열이어야 해요"));
-        else rows = o.values as Record<string, unknown>[];
+        else rows = shaped(o.values, "data.values");
       } else err("data", "bad_data", t("data must be an array of objects, { values }, { csv } or { url }", "data는 객체 배열, { values }, { csv }, { url } 중 하나여야 해요"));
     } else err("data", "bad_data", t(`data has the wrong shape (${typeOf(d)})`, `data 형식이 맞지 않아요(${typeOf(d)})`));
   }
@@ -154,7 +170,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       }
       if (!rows || !rows.length) continue;
       const sample = rows.slice(0, 200);
-      const present = sample.filter((r) => r && typeof r === "object" && f in r);
+      const present = sample.filter((r) => r && typeof r === "object" && hasField(r, f));
       if (!present.length) {
         const near = closest(f, fields);
         err(`encoding.${c.name}`, "field_not_found", t(`Field "${f}" is not in the data.${near ? ` Did you mean "${near}"?` : ""} Available fields: ${fields.join(", ")}`, `"${f}" 필드가 데이터에 없어요.${near ? ` "${near}"인가요?` : ""} 있는 필드: ${fields.join(", ")}`));
@@ -194,6 +210,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
           if (o.max !== undefined && (v as number) > o.max) err(`options.${k}`, "out_of_range", t(`options.${k} must be at most ${o.max}`, `options.${k} 값은 ${o.max} 이하여야 해요`));
         }
       } else if (o.type === "string" && vt !== "string") bad("a string", "문자열이어야");
+      // upColor, downColor 같은 색 옵션은 범례에도 들어가서 범례 색과 같은 검사를 거쳐요
+      else if (o.type === "string" && /Color$/.test(k) && !isSafeStyleValue(v)) err(`options.${k}`, "bad_option_color", t(`options.${k} must be a theme token ("accent") or a CSS color`, `options.${k} 값은 테마 토큰("accent")이나 CSS 색이어야 해요`));
       else if (o.type === "boolean" && vt !== "boolean") bad("true or false", "true나 false여야");
       else if (o.type === "array" && vt !== "array") bad("an array", "배열이어야");
       else if (o.type === "object" && vt !== "object") bad("an object", "객체여야");
@@ -201,11 +219,26 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         const choices = (o.enum ?? []).map((e) => `"${e}"`).join(" | ");
         err(`options.${k}`, "bad_enum", t(`options.${k} must be one of ${choices}`, `options.${k} 값은 ${choices} 중 하나여야 해요`));
       } else if (o.type === "format" && !(vt === "object" || ["number", "integer", "percent", "ratio", "compact", "currency", "decimal"].includes(String(v)))) err(`options.${k}`, "bad_format", t('format must be "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" or an Intl options object', 'format 값은 "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" 중 하나이거나 Intl 옵션 객체여야 해요'));
-      else if (o.type === "highlight" && !(vt === "number" || vt === "string" || (vt === "array" && (v as unknown[]).every((x) => typeof x === "number" || typeof x === "string")))) bad("an index, a name or an array of them", "인덱스나 이름, 또는 그 배열이어야");
+      else if (o.type === "format" && vt === "object") {
+        // Intl이 거절하는 옵션(통화 코드 없는 style: "currency" 등)은 그릴 때 던지기 전에 여기서 알려 줘요
+        const { prefix: _p, suffix: _s, ...nfo } = v as Record<string, unknown>;
+        try {
+          new Intl.NumberFormat("en-US", nfo as Intl.NumberFormatOptions);
+        } catch (e) {
+          err(`options.${k}`, "bad_format", t(`options.${k} is not valid Intl.NumberFormat options: ${(e as Error).message}`, `options.${k} 값을 Intl.NumberFormat 옵션으로 쓸 수 없어요: ${(e as Error).message}`));
+        }
+      } else if (o.type === "highlight" && !(vt === "number" || vt === "string" || (vt === "array" && (v as unknown[]).every((x) => typeof x === "number" || typeof x === "string")))) bad("an index, a name or an array of them", "인덱스나 이름, 또는 그 배열이어야");
+    }
+    if (typeof options.locale === "string") {
+      try {
+        Intl.getCanonicalLocales(options.locale.replace(/_/g, "-"));
+      } catch {
+        err("options.locale", "bad_locale", t(`options.locale "${options.locale}" is not a locale. Use a tag such as "en-US" or "ko-KR"`, `options.locale "${options.locale}" 값은 로캘이 아니에요. "en-US", "ko-KR" 같은 값을 써 주세요`));
+      }
     }
     if (rows && rows.length && typeof options.highlight === "string" && !["max", "min", "first", "last", "none"].includes(options.highlight)) {
       const h = options.highlight;
-      const seen = rows.slice(0, 2000).some((r) => Object.values(r).some((x) => String(x) === h));
+      const seen = rows.slice(0, 2000).some((r) => r && typeof r === "object" && Object.values(r).some((x) => String(x) === h));
       if (!seen) warn("options.highlight", "highlight_not_found", t(`Could not find "${h}" to highlight among the data values`, `강조할 "${h}" 값을 데이터에서 찾지 못했어요`));
     }
   }
@@ -219,10 +252,20 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         if (!allowed.includes(k)) warn(`card.${k}`, "unknown_card_key", t(`card has no key "${k}"`, `card에는 "${k}" 키가 없어요`));
         else if (["number", "title", "subtitle", "takeaway", "level"].includes(k) && typeof v !== "string") err(`card.${k}`, "bad_card_value", t(`card.${k} must be a string`, `card.${k} 값은 문자열이어야 해요`));
         else if (k === "legend" && v !== "auto" && !Array.isArray(v)) err("card.legend", "bad_legend", t('card.legend must be "auto" or an array of [{ label, color }]', 'card.legend는 "auto" 또는 [{ label, color }] 배열이어야 해요'));
+        else if (k === "legend" && Array.isArray(v))
+          v.forEach((it, i) => {
+            const c = it && typeof it === "object" ? (it as { color?: unknown }).color : undefined;
+            if (c !== undefined && (typeof c !== "string" || !isSafeStyleValue(c))) err(`card.legend[${i}].color`, "bad_legend_color", t('A legend color must be a theme token ("accent") or a CSS color', '범례 색은 테마 토큰("accent")이나 CSS 색이어야 해요'));
+          });
       }
     }
   }
-  if (spec.theme !== undefined && !(spec.theme === "dark" || spec.theme === "light" || (typeof spec.theme === "object" && spec.theme !== null && !Array.isArray(spec.theme)))) err("theme", "bad_theme", t('theme must be "dark" | "light" or a token object', 'theme은 "dark" | "light" 또는 토큰 객체여야 해요'));
+  if (spec.theme && typeof spec.theme === "object" && !Array.isArray(spec.theme)) {
+    for (const [k, v] of Object.entries(spec.theme)) {
+      // name은 이름표라 글자 제한이 없어요 (React가 이스케이프하고 서버 SVG에는 안 들어가요)
+      if (k === "name" ? typeof v !== "string" : !isSafeStyleValue(v, /family/i.test(k))) err(`theme.${k}`, "bad_theme_value", t(`theme.${k} must be a CSS color, length or font list such as "#0B8FD8", "oklch(…)", "var(--x)" or 18`, `theme.${k} 값은 "#0B8FD8", "oklch(…)", "var(--x)", 18 같은 CSS 색, 길이, 글꼴 목록이어야 해요`));
+    }
+  } else if (spec.theme !== undefined && spec.theme !== "dark" && spec.theme !== "light") err("theme", "bad_theme", t('theme must be "dark" | "light" or a token object', 'theme은 "dark" | "light" 또는 토큰 객체여야 해요'));
 
   return { valid: errors.length === 0, errors, warnings };
 }

@@ -206,7 +206,7 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
     "lines": 0,
     "paths": 13,
     "rects": 1,
-    "sha1": "6e58e6df34af",
+    "sha1": "de2e91fa8f9c",
     "texts": [
       "Design",
       "Engineering",

@@ -65,7 +65,10 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
       if (!dt) return;
       const key = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
       const prev = byDay.get(key);
-      byDay.set(key, { v: (prev?.v ?? 0) + (gv(d, i) || 0), d });
+      // A missing value stays missing (no colour, "-" in the table) unless the day also has a real one.
+      const v = gv(d, i);
+      const pv = prev?.v ?? NaN;
+      byDay.set(key, { v: Number.isFinite(v) ? (Number.isFinite(pv) ? pv : 0) + v : pv, d });
     });
     const keys = [...byDay.keys()].sort((a, b) => a - b);
     const years = keys.length ? [...new Set(keys.map((k) => new Date(k).getFullYear()))].sort() : [];
@@ -146,7 +149,8 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
     () =>
       lazyArray(days.length, (k) => {
         const d = days[k];
-        return { datum: d.datum, index: d.i, key: String(d.t), label: dayFmt.format(d.t), value: d.value, formatted: fv(d.value) };
+        const known = Number.isFinite(d.value);
+        return { datum: d.datum, index: d.i, key: String(d.t), label: dayFmt.format(d.t), value: known ? d.value : null, formatted: known ? fv(d.value) : "-" };
       }),
     [days, dayFmt, fv],
   );
@@ -156,7 +160,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
   if (c.active !== null && days[c.active]) {
     const d = days[c.active];
     const q = pos(d);
-    tip = { x: q.x + cell / 2, y: q.y, title: events[c.active].label, rows: [{ label: c.t.value, value: c.fv(d.value), color: p.paint("accent") }] };
+    tip = { x: q.x + cell / 2, y: q.y, title: events[c.active].label, rows: [{ label: c.t.value, value: Number.isFinite(d.value) ? c.fv(d.value) : "-", color: p.paint("accent") }] };
   }
 
   const pending = c.pending;
@@ -182,7 +186,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
 
   const msg = MSG[c.lang];
   const desc = props.description ?? `${msg.kind}. ${msg.desc(days.length, c.fv(mx))}.`;
-  const enabled = c.motion.enabled;
+  const enabled = c.motion.enabled && c.hydrated; // 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요
   // (연도, 주, 요일) 칸 → 날짜 번호. 문자열 키 1만 개를 만들지 않고 평평한 배열로 (-1은 빈 칸)
   const dayIndex = useMemo(() => {
     const idx = new Int32Array(nYears * weeks * 7).fill(-1);
@@ -204,7 +208,8 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
         <g key={k} style={cssEntrance(enabled, m.waiting, "fade", (w / Math.max(1, weeks - 1)) * D * 0.9, 320)}>
           {list.map((d) => {
             const q = { x: x0 + d.week * step, y: d.year * blockH + topH + d.wd * step };
-            const s = d.value > 0 ? sequential(p, level(d.value), MIN_OPACITY) : null;
+            // 음수도 색으로 (level은 음수까지 이어지는 눈금). 0만 빈 칸 색
+            const s = d.value ? sequential(p, level(d.value), MIN_OPACITY) : null;
             const isHi = hi.has(d.i);
             return <rect key={d.i} x={q.x} y={q.y} width={cell} height={cell} rx={Math.min(2.5, cell / 3)} fill={s ? s.fill : p.paint("neutralSoft")} opacity={s ? s.opacity : undefined} stroke={isHi ? p.paint("ink") : "none"} strokeWidth={1.2} />;
           })}
@@ -259,7 +264,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
       const marked: number[] = [];
       for (let k = 0; k < days.length; k++) {
         const d = days[k];
-        if (d.value > 0) accBins[Math.round((MIN_OPACITY + (1 - MIN_OPACITY) * Math.min(1, (d.value - lo) / span)) * LEVELS)].push(k);
+        if (d.value) accBins[Math.round((MIN_OPACITY + (1 - MIN_OPACITY) * Math.min(1, (d.value - lo) / span)) * LEVELS)].push(k);
         else softBins.push(k);
         if (hi.has(d.i)) marked.push(k);
       }
@@ -355,6 +360,13 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
         const hit = yi >= 0 && yi < nYears && w >= 0 && w < weeks && wd >= 0 && wd < 7 ? dayIndex[(yi * weeks + w) * 7 + wd] : -1;
         const k = hit >= 0 ? hit : null;
         if (k !== c.active) c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer");
+      }}
+      onKey={(e) => {
+        // 열이 주라서 좌우 화살표는 한 주씩 (위아래는 기본대로 하루씩). 끝에서는 멈춰요
+        const d = e.key === "ArrowRight" ? 7 : e.key === "ArrowLeft" ? -7 : 0;
+        if (!d || c.active === null) return false;
+        if (days[c.active + d]) c.setActive(c.active + d, "keyboard");
+        return true;
       }}
       underlay={useCanvas ? <CanvasLayer width={W} height={H} draw={draw} progress={prog} version={c.sig} manualClear /> : undefined}
     >

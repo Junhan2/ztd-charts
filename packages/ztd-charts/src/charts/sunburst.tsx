@@ -107,7 +107,8 @@ export function SunburstChart<T = Row>(props: SunburstChartProps<T>) {
     });
   }, [arcsBase, tree, props.highlight, p]);
 
-  const outer = info.filter((a) => a.depth === levels);
+  // Zero leaves draw nothing, so they get no outside label (and take no dodge slot), as pie does.
+  const outer = info.filter((a) => a.depth === levels && a.node.value > 0);
   const labelW = Math.max(40, ...outer.map((a) => textWidth(`${a.node.label} ${c.pct(a.pct)}`, 11, 600))) + 14;
   const R = Math.max(30, Math.min(H / 2 - 10, (W - 2 * labelW) / 2));
   const cx = W / 2;

@@ -93,12 +93,13 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   const dom = fitDomain(lo, hiV, 3);
   const tickFmt = makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
   const ticks = scaleLinear(dom, [0, 1]).ticks(3);
-  const left = yAxisWidth(ticks, tickFmt);
+  const left = yAxisWidth(ticks, tickFmt, c.locale);
   const top = 20;
   const bottom = 22;
   const y = scaleLinear(dom, [H - bottom, top]);
+  // 칸은 순서로 나눠요. 이름이 같은 단계("Other"가 두 번)도 따로 칸을 받아요
   const x = scaleBand(
-    steps.map((s) => s.label),
+    steps.map((s) => `${s.i}`),
     [left + 4, W - 2],
     0.34,
     0.12,
@@ -132,7 +133,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   if (c.active !== null && steps[c.active]) {
     const s = steps[c.active];
     tip = {
-      x: x(s.label) + bw / 2,
+      x: x(`${s.i}`) + bw / 2,
       y: Math.min(y(s.start), y(s.end)),
       title: s.label,
       rows: s.total ? [{ label: totalLabel, value: c.fv(s.value), color: total.fill }] : [{ label: s.value >= 0 ? msg.up : msg.down, value: `${signFmt(s.value)}${props.unit ?? ""}`, color: s.hi ? accent.fill : s.value >= 0 ? inc.fill : dec.fill }, { label: msg.cum, value: c.fv(s.end) }],
@@ -143,14 +144,18 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
 
   return (
     <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
-      <GridY p={p} ticks={ticks} y={y} x0={left} x1={W} fmt={tickFmt} />
-      {m.items.map((it, k) => {
+      <GridY p={p} ticks={ticks} y={y} x0={left} x1={W} fmt={tickFmt} locale={c.locale} />
+      {m.items.map((it) => {
         const s = it.data;
+        // 칸은 지금 순서(s.i)로 정해요. m.items는 처음 생긴 순서라 데이터 순서가 바뀌면 어긋나요.
+        // 빠지는 막대는 옛 순서 칸에 남아 새 막대와 겹치니 그리지 않아요
+        if (it.exiting) return null;
+        const k = s.i;
         const [ya, yb, o] = it.v;
         const top0 = Math.min(ya, yb);
         const h = Math.abs(yb - ya);
         const sw = s.total ? total : s.hi ? accent : s.value >= 0 ? inc : dec;
-        const bx = x(s.label);
+        const bx = x(`${k}`);
         const next = steps[k + 1];
         const lvl = y(s.end);
         const labelY = (s.total || s.value >= 0 ? top0 : top0 + h) + (s.total || s.value >= 0 ? -9 : 10);
@@ -158,7 +163,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
         return (
           <g key={it.key} className="ztd-mark" opacity={c.dim(s.i)} onPointerEnter={(e) => c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(k)}>
             <rect x={Math.max(0, bx - (x.step - bw) / 2)} y={top} width={Math.max(0, Math.min(W, bx - (x.step - bw) / 2 + x.step) - Math.max(0, bx - (x.step - bw) / 2))} height={H - bottom - top} fill="transparent" />
-            {props.connectors !== false && next ? <line x1={bx + bw} x2={x(next.label)} y1={Math.round(lvl) + 0.5} y2={Math.round(lvl) + 0.5} stroke={p.paint("dim")} strokeWidth={1} strokeDasharray="2 3" opacity={lo2 * 0.9} /> : null}
+            {props.connectors !== false && next ? <line x1={bx + bw} x2={x(`${k + 1}`)} y1={Math.round(lvl) + 0.5} y2={Math.round(lvl) + 0.5} stroke={p.paint("dim")} strokeWidth={1} strokeDasharray="2 3" opacity={lo2 * 0.9} /> : null}
             <path d={roundRectPath(bx, top0, bw, Math.max(h, o > 0 ? 1 : 0), s.value >= 0 || s.total ? { tl: r, tr: r } : { bl: r, br: r })} fill={sw.fill} opacity={Math.max(0.001, o)} />
             {c.active === k && c.via === "keyboard" ? <path d={roundRectPath(bx - 3, top0 - 3, bw + 6, h + 6, 5)} fill="none" stroke={p.paint("ink")} strokeWidth={2} /> : null}
             {c.showLabels ? (
@@ -169,7 +174,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
           </g>
         );
       })}
-      <AxisXBand p={p} labels={steps.map((s) => s.label)} centers={steps.map((s) => x(s.label) + bw / 2)} y={H - bottom + 13} strong={new Set(steps.map((s, k) => (s.total ? k : -1)).filter((k) => k >= 0))} />
+      <AxisXBand p={p} labels={steps.map((s) => s.label)} centers={steps.map((s) => x(`${s.i}`) + bw / 2)} y={H - bottom + 13} strong={new Set(steps.map((s, k) => (s.total ? k : -1)).filter((k) => k >= 0))} />
     </ChartFrame>
   );
 }

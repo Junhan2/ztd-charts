@@ -8,7 +8,6 @@ export const baseCss = `
 .ztd-svg{display:block;overflow:visible;user-select:none;-webkit-user-select:none}
 .ztd-mark{transition:opacity .18s ease,fill .18s ease,stroke .18s ease,stroke-width .18s ease}
 .ztd-tip{transition:opacity .12s ease;will-change:transform}
-.ztd-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .ztd-btn{appearance:none;font:inherit;cursor:pointer;transition:background .14s,color .14s,border-color .14s}
 .ztd-btn:focus{outline:none}
 .ztd-btn:focus-visible{outline:2px solid var(--ztd-accent,${darkTheme.accent});outline-offset:2px}

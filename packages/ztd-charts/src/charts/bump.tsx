@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AxisXBand } from "../core/axis";
 import { ChartFrame, Txt } from "../core/ChartFrame";
-import { monotonePath, nearestIndex } from "../core/geometry";
+import { evenIndex, monotonePath } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { swatch } from "../core/palette";
@@ -108,7 +108,8 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
       className={props.className}
       style={props.style}
       theme={props.theme}
-      onPointerMove={(px, _py, e) => c.setActive(nearestIndex(model.keys.map((_, k) => xs(k)), px), e.pointerType === "touch" ? "touch" : "pointer")}
+      // 열이 고르게 놓여서 가까운 열은 계산으로 찾아요 (움직일 때마다 좌표 배열을 만들지 않아요)
+      onPointerMove={(px, _py, e) => nK && c.setActive(evenIndex(px, x0, x1, nK), e.pointerType === "touch" ? "touch" : "pointer")}
     >
       <rect x={x0} y={0} width={Math.max(0, x1 - x0)} height={H - bottom} fill="transparent" />
       {c.active !== null ? <line x1={xs(c.active)} x2={xs(c.active)} y1={top - 8} y2={H - bottom + 2} stroke={p.paint("line2")} strokeWidth={Math.max(8, (x1 - x0) / Math.max(1, nK - 1) * 0.6)} pointerEvents="none" /> : null}

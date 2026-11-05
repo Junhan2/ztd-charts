@@ -39,6 +39,8 @@ export interface ChartFrameProps<T> {
 }
 
 const MAX_TABLE_ROWS = 60;
+/** 화면에서 숨기고 스크린리더만 읽게. 인라인이라 CSS가 들어오기 전(SSR, JS 없음)에도 숨어요 */
+const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 
 export function ChartFrame<T>(props: ChartFrameProps<T>) {
   const { c, events } = props;
@@ -84,7 +86,8 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   }, [c.width, c.height]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!nav) return;
+    // nav일 때만 달아요. 안쪽 버튼(줌 "전체 보기" 등)에서 올라온 키는 그 버튼 몫이에요
+    if (e.target !== e.currentTarget) return;
     if (props.onKey?.(e)) {
       e.preventDefault();
       return;
@@ -107,6 +110,8 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
         next = count - 1;
         break;
       case "Escape":
+        // 고른 게 없으면 Escape를 삼키지 않아요 (대화상자 닫기 같은 바깥 처리가 받게)
+        if (cur === null) return;
         next = null;
         break;
       case "Enter":
@@ -123,16 +128,16 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
     c.setActive(next, "keyboard");
   };
 
-  // 터치로 고른 항목은 바깥을 누를 때까지 유지
+  // 터치로 고른 항목은 바깥을 누를 때까지 유지. c는 렌더마다 새 객체라 쓰는 값만 의존해요
+  const { via, node, setActive } = c;
   useEffect(() => {
-    if (c.via !== "touch" || !c.node) return undefined;
-    const el = c.node;
+    if (via !== "touch" || !node) return undefined;
     const off = (ev: Event) => {
-      if (!el.contains(ev.target as Node)) c.setActive(null);
+      if (!node.contains(ev.target as Node)) setActive(null);
     };
     document.addEventListener("pointerdown", off);
     return () => document.removeEventListener("pointerdown", off);
-  }, [c.via, c.node, c]);
+  }, [via, node, setActive]);
 
   const activeEvent = c.active !== null ? events[c.active] : null;
   const tip = c.showTooltip && props.renderTip !== false && !c.pending ? props.tip : null;
@@ -212,7 +217,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
       onPointerLeave={onLeave}
       style={{
         width: "100%",
-        maxWidth: props.c.measured ? undefined : "100%",
+        maxWidth: c.measured ? undefined : "100%",
         fontFamily: c.p.cssVars ? `var(--ztd-font, ${c.p.theme.fontFamily})` : c.p.theme.fontFamily,
         color: c.p.paint("ink"),
         ...vars,
@@ -234,7 +239,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
         style={{ fontFamily: "inherit", touchAction: "pan-y", position: props.underlay ? "relative" : undefined }}
       >
         <title id={titleId}>{label}</title>
-        <desc id={descId}>{props.description}</desc>
+        <desc id={descId}>{count || c.description !== undefined ? props.description : c.t.empty}</desc>
         {props.defs && !c.pending ? <defs>{props.defs}</defs> : null}
         {c.pending ? null : props.children}
       </svg>
@@ -257,7 +262,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
           )}
         </div>
       ) : null}
-      <span className="ztd-sr" aria-live="polite" aria-atomic="true">
+      <span className="ztd-sr" style={SR_ONLY} aria-live="polite" aria-atomic="true">
         {live}
       </span>
       {nav && !c.pending ? table : null}
@@ -267,7 +272,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
 
 function DataTable<T>({ label, events, t }: { label: string; events: ChartEvent<T>[]; t: ChartMessages }) {
   return (
-    <div className="ztd-sr">
+    <div className="ztd-sr" style={SR_ONLY}>
       <table>
         <caption>{t.table(label)}</caption>
         <tbody>

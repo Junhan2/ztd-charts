@@ -5,7 +5,7 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { swatch } from "../core/palette";
 import { textWidth, truncate } from "../core/text";
-import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
+import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter } from "../data/accessor";
@@ -37,7 +37,7 @@ const MSG: Record<ChartLang, typeof en> = {
   },
 };
 
-export interface SankeyChartProps<T = Row> extends BaseChartProps<T> {
+export interface SankeyChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
   source?: Accessor<T, string>;
   target?: Accessor<T, string>;
   value?: Accessor<T, number>;
@@ -45,8 +45,8 @@ export interface SankeyChartProps<T = Row> extends BaseChartProps<T> {
   nodeWidth?: number;
   /** 노드 사이 간격(px). 기본 14 */
   nodePadding?: number;
-  /** 강조할 노드 이름. 그 노드로 들어오고 나가는 흐름이 강조돼요. 기본은 마지막 열에서 가장 큰 노드 */
-  highlight?: BaseChartProps<T>["highlight"];
+  /** 강조할 노드 이름(또는 인덱스). 그 노드로 들어오고 나가는 흐름이 강조돼요. 함수는 배치된 노드(name, value 등)를 받아요. 기본은 마지막 열에서 가장 큰 노드 */
+  highlight?: Highlight<SankeyNode>;
 }
 
 /** 생키 다이어그램: 단계 사이 흐름의 양 */
@@ -62,7 +62,8 @@ export function SankeyChart<T = Row>(props: SankeyChartProps<T>) {
     return props.data.map((d, i) => ({ source: gs(d, i), target: gt(d, i), value: gv(d, i) || 0, d }));
   }, [props.data, props.source, props.target, props.value]);
 
-  const pre = useMemo(() => sankeyLayout([], links0, { width: 100, height: 100 }), [links0]);
+  // Only the layers are read here, so the relaxation passes are skipped.
+  const pre = useMemo(() => sankeyLayout([], links0, { width: 100, height: 100, iterations: 0 }), [links0]);
   const firstLabels = pre.nodes.filter((n) => n.layer === 0);
   const maxLayer = Math.max(0, ...pre.nodes.map((n) => n.layer));
   const lastLabels = pre.nodes.filter((n) => n.layer === maxLayer && maxLayer > 0);
@@ -95,10 +96,16 @@ export function SankeyChart<T = Row>(props: SankeyChartProps<T>) {
   const accent = swatch(p, "accent");
   const nodeCount = layout.nodes.length;
 
-  const events: ChartEvent<T>[] = [
-    ...layout.nodes.map((n) => ({ datum: null, index: n.index, key: n.id, label: n.label, value: n.value, formatted: c.fv(n.value) })),
-    ...layout.links.map((l, k) => ({ datum: (links0.find((x) => x.source === l.source.id && x.target === l.target.id)?.d as T) ?? null, index: nodeCount + k, key: `${l.source.id}>${l.target.id}`, label: `${l.source.label} → ${l.target.label}`, value: l.value, formatted: c.fv(l.value) })),
-  ];
+  // Built once per layout, not per animation frame; the link's own row is found through a map, not a scan.
+  const fv = c.fv;
+  const events = useMemo<ChartEvent<T>[]>(() => {
+    const rowOf = new Map<string, T>();
+    for (const x of links0) if (!rowOf.has(`${x.source}>${x.target}`)) rowOf.set(`${x.source}>${x.target}`, x.d as T);
+    return [
+      ...layout.nodes.map((n) => ({ datum: null, index: n.index, key: n.id, label: n.label, value: n.value, formatted: fv(n.value) })),
+      ...layout.links.map((l, k) => ({ datum: rowOf.get(`${l.source.id}>${l.target.id}`) ?? null, index: nodeCount + k, key: `${l.source.id}>${l.target.id}`, label: `${l.source.label} → ${l.target.label}`, value: l.value, formatted: fv(l.value) })),
+    ];
+  }, [layout, links0, nodeCount, fv]);
 
   let tip: TooltipData | null = null;
   const act = c.active;

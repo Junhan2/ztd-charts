@@ -8,7 +8,7 @@ import { dodgeVertical, textWidth, truncateBeside } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
-import { getter, numGetter, strGetter, uniq } from "../data/accessor";
+import { numGetter, strGetter, uniq } from "../data/accessor";
 import type { ChartLang } from "../core/i18n";
 
 const en = {
@@ -60,16 +60,16 @@ export function SlopeChart<T = Row>(props: SlopeChartProps<T>) {
       items = props.data.map((d, i) => ({ i, label: gl(d, i), a: ga(d, i), b: gb(d, i), hi: false, datum: d }));
       periods = props.periodLabels ?? [props.start, props.end];
     } else {
-      const gx = getter(props.x, "x");
+      const gx = strGetter(props.x, "x");
       const gv = numGetter(props.value, "value");
-      const xs = uniq(props.data.map((d, i) => String(gx(d, i))));
+      const xs = uniq(props.data.map((d, i) => gx(d, i)));
       const first = xs[0];
       const last = xs[xs.length - 1];
       periods = props.periodLabels ?? [first ?? "", last ?? ""];
       const map = new Map<string, SlopeItem<T>>();
       props.data.forEach((d, i) => {
         const l = gl(d, i);
-        const xv = String(gx(d, i));
+        const xv = gx(d, i);
         let it = map.get(l);
         if (!it) {
           it = { i: map.size, label: l, a: NaN, b: NaN, hi: false, datum: d };

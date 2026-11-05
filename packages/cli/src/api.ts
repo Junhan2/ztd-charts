@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CHARTS, commonOptionsIn, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, suggestCharts, validateSpec, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
-import { normalizeData, parseCSV } from "ztd-charts/spec";
+import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
 import { langOf, renderSpecToHTML, renderSpecToSVG, resolveSpecData } from "ztd-charts/server";
 import { CLI_TEXT } from "./messages";
 
@@ -89,10 +89,17 @@ export function validate(spec: unknown, locale?: string): ValidationResult {
   return validateSpec(spec, { lang: langOf(locale) });
 }
 
+/**
+ * JSX 속성 값. JSX 따옴표 속성에는 \" 같은 이스케이프가 없고 &amp;는 글자로 풀려서,
+ * 그대로 쓸 수 있는 문자열만 "…"로 두고 나머지는 {"…"} 식으로 넣어요
+ */
 function jsxValue(v: unknown): string {
-  if (typeof v === "string") return JSON.stringify(v);
-  return `{${JSON.stringify(v)}}`;
+  const j = JSON.stringify(v);
+  return typeof v === "string" && j === `"${v}"` && !v.includes("&") ? j : `{${j}}`;
 }
+
+/** JSX 속성 이름으로 쓸 수 있는 옵션 키만 (공백 같은 글자가 있으면 코드가 깨져요) */
+const JSX_NAME = /^[A-Za-z_$][\w$-]*$/;
 
 /** 스펙을 React 코드로 (컴포넌트를 직접 쓰는 방식). locale "ko"면 주석이 한글 */
 export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineData?: boolean; locale?: string } = {}): string {
@@ -106,7 +113,7 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
     const v = spec.encoding?.[c.name];
     if (v !== undefined) props.push(`${c.prop ?? c.name}=${jsxValue(v)}`);
   }
-  for (const [k, v] of Object.entries(spec.options ?? {})) props.push(`${k}=${jsxValue(v)}`);
+  for (const [k, v] of Object.entries(spec.options ?? {})) if (JSX_NAME.test(k)) props.push(`${k}=${jsxValue(v)}`);
   const chartEl = `<${def.component} ${props.join(" ")} />`;
   const card = spec.card;
   const imports = card ? `ChartCard, ${def.component}` : def.component;
@@ -115,12 +122,12 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
   let body = chartEl;
   if (card) {
     const cp: string[] = [];
-    for (const k of ["number", "title", "subtitle", "takeaway", "level"] as const) if (card[k]) cp.push(`${k}=${JSON.stringify(card[k])}`);
-    if (Array.isArray(card.legend)) cp.push(`legend={${JSON.stringify(card.legend)}}`);
+    for (const k of ["number", "title", "subtitle", "takeaway", "level"] as const) if (card[k]) cp.push(`${k}=${jsxValue(card[k])}`);
+    if (Array.isArray(card.legend)) cp.push(`legend=${jsxValue(card.legend)}`);
     cp.push("replay");
     body = `<ChartCard ${cp.join(" ")}>\n      ${chartEl}\n    </ChartCard>`;
   }
-  return `import { ${imports} } from "ztd-charts";\n\n${dataLine}export function ${def.component}Example() {\n  return (\n    ${body}\n  );\n}\n`.replace(/\{"(\w+)":/g, (m) => m);
+  return `import { ${imports} } from "ztd-charts";\n\n${dataLine}export function ${def.component}Example() {\n  return (\n    ${body}\n  );\n}\n`;
 }
 
 /** 스펙 그대로 쓰는 React 코드. ChartSpec 타입을 달아야 card.legend: "auto" 같은 값이 string으로 넓어지지 않아 TS에서 바로 컴파일돼요 */
@@ -185,12 +192,72 @@ function standaloneUrl(): string | null {
   }
 }
 
-/** 스펙을 SVG, PNG, HTML로. { url } 데이터는 먼저 가져와요. 가져오기, 검사, 그리기가 같은 로캘(locale, 그다음 스펙 options.locale)을 써요 */
+/** 데이터 주소를 가져올 때 기다리는 시간과 받는 크기의 한도 */
+export const FETCH_TIMEOUT_MS = 15_000;
+export const MAX_FETCH_BYTES = 20 * 1024 * 1024;
+
+/**
+ * http(s) 주소를 시간(FETCH_TIMEOUT_MS)과 크기(MAX_FETCH_BYTES) 한도 안에서 가져와요.
+ * 실패하면 주소가 들어간 오류를 던져요. 돌려주는 Response는 다 받은 본문과 content-type만 가져요
+ */
+export async function fetchUrl(url: string, locale?: string): Promise<Response> {
+  const t = CLI_TEXT[langOf(locale)];
+  try {
+    if (!isHttpUrl(url)) throw new Error(t.httpOnly);
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`);
+    // 본문을 조각으로 받으면서 크기를 세요 (content-length는 없거나 틀릴 수 있어요)
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    const reader = res.body?.getReader();
+    while (reader) {
+      const r = await reader.read();
+      if (r.done) break;
+      size += r.value.byteLength;
+      if (size > MAX_FETCH_BYTES) {
+        await reader.cancel();
+        throw new Error(t.tooLarge(MAX_FETCH_BYTES / 1024 / 1024));
+      }
+      chunks.push(r.value);
+    }
+    return new Response(Buffer.concat(chunks, size), { headers: { "content-type": res.headers.get("content-type") ?? "" } });
+  } catch (e) {
+    const m = (e as Error).name === "TimeoutError" ? t.timeout(FETCH_TIMEOUT_MS / 1000) : (e as Error).message;
+    throw new Error(t.fetchFailed(url, m), { cause: e });
+  }
+}
+
+/** 스펙 오류를 한 줄씩 */
+function specError(v: ValidationResult): Error {
+  return new Error(v.errors.map((e) => `${e.path}: ${e.message}`).join("\n"));
+}
+
+/**
+ * 스펙을 SVG, PNG, HTML로. 스펙을 먼저 검사하고(주소 데이터는 필드 검사 없이), { url } 데이터를 가져온 뒤 행으로 다시 검사해요.
+ * 가져오기, 검사, 그리기가 같은 로캘(locale, 그다음 스펙 options.locale)을 써요
+ */
 export async function render(input: ChartSpec, opts: RenderOptions = {}): Promise<RenderResult> {
   const locale = specLocale(input, opts.locale);
-  const spec = await resolveSpecData(input, undefined, locale);
-  const v = validateSpec(spec, { lang: langOf(locale) });
-  if (!v.valid) throw new Error(v.errors.map((e) => `${e.path}: ${e.message}`).join("\n"));
+  const lang = langOf(locale);
+  // { csv }는 한 번만 읽어서 검사와 그리기에 같이 써요
+  const csv = typeof (input.data as { csv?: unknown } | undefined)?.csv === "string" ? (inlineRows(input.data) ?? undefined) : undefined;
+  // 틀린 스펙이면 주소를 가져오지 않아요
+  const first = validateSpec(input, { lang, rows: csv });
+  if (!first.valid) throw specError(first);
+  const url = (input.data as { url?: unknown } | undefined)?.url;
+  let spec: ChartSpec;
+  try {
+    spec = csv ? { ...input, data: csv } : await resolveSpecData(input, undefined, locale, (u) => fetchUrl(u, locale));
+  } catch (e) {
+    // fetchUrl 오류에는 이미 주소가 있어요. JSON을 못 읽는 오류 같은 나머지에 주소를 붙여요
+    const m = (e as Error).message;
+    throw typeof url !== "string" || m.includes(url) ? e : new Error(CLI_TEXT[lang].fetchFailed(url, m), { cause: e });
+  }
+  // 가져온 행으로 다시 검사해요 (필드 이름, 숫자 열)
+  if (typeof url === "string") {
+    const v = validateSpec(spec, { lang });
+    if (!v.valid) throw specError(v);
+  }
   const format = opts.format ?? "svg";
   if (format === "html") {
     const lib = opts.interactive ? standaloneUrl() : null;
@@ -215,13 +282,10 @@ export function isHttpUrl(source: string): boolean {
 }
 
 /** 파일 경로나 URL, CSV/JSON 문자열을 행 배열로 */
-export async function loadRows(source: string): Promise<Record<string, unknown>[]> {
+export async function loadRows(source: string, locale?: string): Promise<Record<string, unknown>[]> {
   let text: string;
-  if (isHttpUrl(source)) {
-    const res = await fetch(source);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    text = await res.text();
-  } else if (existsSync(source)) text = readFileSync(source, "utf8");
+  if (isHttpUrl(source)) text = await (await fetchUrl(source, locale)).text();
+  else if (existsSync(source)) text = readFileSync(source, "utf8");
   else text = source;
   const t = text.trim();
   if (t.startsWith("[") || t.startsWith("{")) return normalizeData(JSON.parse(t));

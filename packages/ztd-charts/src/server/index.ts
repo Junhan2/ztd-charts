@@ -2,12 +2,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Chart, autoLegend, resolveDef } from "../charts/Chart";
 import { CARD_TEXT } from "../components/ChartCard";
-import { ThemeProvider, resolveThemeInput } from "../theme/context";
+import { ThemeProvider, makePainter, resolveThemeInput } from "../theme/context";
 import { baseCss } from "../core/css";
 import { DEFAULT_LOCALE } from "../core/format";
 import { langOf, type ChartLang } from "../core/i18n";
 import { textWidth } from "../core/text";
-import { fetchChartData } from "../data/useChartData";
+import { fetchChartData, readResponse } from "../data/useChartData";
 import { themeToCss, type ChartTheme } from "../theme/tokens";
 import { levelBadge } from "../spec/labels";
 import { nameIn, specLocale } from "../spec/meta";
@@ -35,20 +35,30 @@ export interface RenderOptions {
 }
 
 /** 스펙 검사. 틀리면 이유를 모아 던져요 */
-function assertValid(spec: ChartSpec, lang: ChartLang) {
-  const v = validateSpec(spec, { lang });
+/** { csv } 데이터만 미리 읽은 행으로 (검사와 그리기가 같은 행을 써서 CSV를 한 번만 읽어요). 다른 꼴은 검사가 직접 봐요 */
+function csvRows(data: unknown): Record<string, unknown>[] | undefined {
+  return typeof (data as { csv?: unknown } | null)?.csv === "string" ? (inlineRows(data) ?? undefined) : undefined;
+}
+
+function assertValid(spec: ChartSpec, lang: ChartLang, rows?: Record<string, unknown>[]) {
+  const v = validateSpec(spec, { lang, rows });
   if (!v.valid) throw new Error(`${lang === "ko" ? "스펙 오류" : "Invalid spec"}: ${v.errors.map((e) => `${e.path} ${e.message}`).join("; ")}`);
 }
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** { url } 데이터를 가져와 행 배열로 바꾼 스펙을 돌려줘요. locale은 오류 문구 언어예요 */
-export async function resolveSpecData(spec: ChartSpec, init?: RequestInit, locale?: string): Promise<ChartSpec> {
+/**
+ * { url } 데이터를 가져와 행 배열로 바꾼 스펙을 돌려줘요. locale은 오류 문구 언어예요.
+ * fetcher를 주면 fetch 대신 그 함수로 받아요 (CLI는 시간과 크기 한도를 둔 fetch를 넘겨요)
+ */
+export async function resolveSpecData(spec: ChartSpec, init?: RequestInit, locale?: string, fetcher?: (url: string) => Promise<Response>): Promise<ChartSpec> {
   const inline = inlineRows(spec.data);
   if (inline) return { ...spec, data: inline };
   const d = spec.data as { url?: string; format?: "json" | "csv" | "auto"; select?: string };
   if (d && typeof d.url === "string") {
-    const rows = await fetchChartData(d.url, { parse: d.format ?? "auto", select: d.select, init, locale });
+    const url = d.url;
+    const parse = d.format ?? "auto";
+    const rows = await fetchChartData(fetcher ? async () => readResponse(await fetcher(url), parse, url, locale) : url, { parse, select: d.select, init, locale });
     return { ...spec, data: rows as Record<string, unknown>[] };
   }
   return spec;
@@ -70,25 +80,33 @@ function extractSvg(markup: string): { attrs: string; inner: string; vw: number;
 export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): string {
   const locale = specLocale(spec, opts.locale);
   const lang = langOf(locale);
-  assertValid(spec, lang);
+  const csv = csvRows(spec.data);
+  assertValid(spec, lang, csv);
+  // { url } 데이터는 여기서 가져오지 않아요 (동기 함수라서). 그대로 그리면 로딩 화면만 남아요
+  const rows = csv ?? inlineRows(spec.data);
+  if (!rows) throw new Error(lang === "ko" ? "data.url 데이터는 먼저 가져와야 해요. renderSpecToSVG(await resolveSpecData(spec))처럼 resolveSpecData를 먼저 불러 주세요" : "data.url must be fetched first. Call resolveSpecData, as in renderSpecToSVG(await resolveSpecData(spec))");
   const theme = resolveThemeInput((opts.theme ?? (spec.theme as never)) || "dark");
+  // 아래 문자열에 넣는 테마 값은 모두 이스케이프한 것만 써요 (검사를 거치지 않은 opts.theme도 속성을 벗어나지 못해요)
+  const T = Object.fromEntries(Object.entries(theme).map(([k, v]) => [k, esc(v)])) as Record<keyof ChartTheme, string>;
   const W = Math.max(160, Math.round(opts.width ?? 720));
-  const pad = opts.padding ?? 24;
+  // 속성에 들어가는 크기는 숫자로만 (문자열이 오면 그대로 붙지 않게)
+  const pad = Number(opts.padding ?? 24) || 0;
   const frame = opts.frame ?? !!spec.card;
   const card = spec.card ?? {};
   const def = resolveDef(spec.type);
   const inner = frame ? W - pad * 2 - 40 : W - pad * 2;
-  const markup = chartMarkup(spec, inner, opts.height, theme, false, false, locale);
+  // { csv }를 한 번만 읽도록 행으로 바꿔 넘겨요
+  const markup = chartMarkup({ ...spec, data: rows }, inner, opts.height, theme, false, false, locale);
   const svg = extractSvg(markup);
   if (!svg) throw new Error(lang === "ko" ? "차트 SVG를 만들지 못했어요" : "Couldn't build the chart SVG");
-  const chartH = svg.vh || opts.height || 240;
+  const chartH = svg.vh || Number(opts.height) || 240;
   const font = theme.fontFamily.replace(/"/g, "'");
   const mono = theme.monoFamily.replace(/"/g, "'");
   const bodyOpen = (x: number, y: number) => `<svg x="${x}" y="${y}" width="${inner}" height="${chartH}" viewBox="0 0 ${svg.vw || inner} ${chartH}" overflow="visible">`;
 
   if (!frame) {
     const H = Math.round(chartH + pad * 2);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${theme.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${theme.panel}"/>`}${bodyOpen(pad, pad)}${svg.inner}</svg></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${bodyOpen(pad, pad)}${svg.inner}</svg></svg>`;
   }
 
   // 카드 틀
@@ -101,22 +119,23 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const title = card.title ?? (def ? nameIn(def, lang) : spec.type);
   const num = card.number ? `${card.number}` : "";
   const numW = num ? textWidth(num, 17, 700) + 10 : 0;
-  parts.push(`<text x="${cx0 + ip}" y="${y + 18}" font-family="${esc(mono)}" font-size="17" font-weight="700" fill="${theme.accentText}">${esc(num)}</text>`);
-  parts.push(`<text x="${cx0 + ip + numW}" y="${y + 19}" font-size="22" font-weight="800" letter-spacing="-0.5" fill="${theme.ink}">${esc(title)}</text>`);
+  parts.push(`<text x="${cx0 + ip}" y="${y + 18}" font-family="${esc(mono)}" font-size="17" font-weight="700" fill="${T.accentText}">${esc(num)}</text>`);
+  parts.push(`<text x="${cx0 + ip + numW}" y="${y + 19}" font-size="22" font-weight="800" letter-spacing="-0.5" fill="${T.ink}">${esc(title)}</text>`);
   y += 30;
-  const rows = inlineRows(spec.data) ?? [];
   const legend = card.legend === "auto" ? autoLegend(spec, rows, locale ?? DEFAULT_LOCALE) : card.legend ?? [];
   if (card.subtitle || legend.length) {
-    parts.push(`<text x="${cx0 + ip}" y="${y + 12}" font-size="12.5" fill="${theme.muted}">${esc(card.subtitle ?? "")}</text>`);
+    parts.push(`<text x="${cx0 + ip}" y="${y + 12}" font-size="12.5" fill="${T.muted}">${esc(card.subtitle ?? "")}</text>`);
     let lx = cx0 + cw - ip;
+    const paint = makePainter(theme, false);
     for (const it of [...legend].reverse()) {
       const tw = textWidth(it.label, 11.5);
       lx -= tw;
-      parts.push(`<text x="${lx}" y="${y + 12}" font-size="11.5" fill="${theme.muted}">${esc(it.label)}</text>`);
+      parts.push(`<text x="${lx}" y="${y + 12}" font-size="11.5" fill="${T.muted}">${esc(it.label)}</text>`);
       lx -= 15;
-      const col = it.color && it.color in theme ? (theme as unknown as Record<string, string>)[it.color] : it.color ?? theme.neutral;
+      // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게)
+      const col = esc(paint.raw(it.color));
       if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${y + 8}" y2="${y + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${y + 8}" r="2.2" fill="${col}"/>`);
-      else parts.push(`<rect x="${lx}" y="${y + 3.5}" width="9" height="9" rx="2.5" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${theme.line2}"` : ""}/>`);
+      else parts.push(`<rect x="${lx}" y="${y + 3.5}" width="9" height="9" rx="2.5" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
       lx -= 12;
     }
     y += 26;
@@ -126,18 +145,18 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   y += chartH + 14;
   const hasFooter = !!(card.takeaway || card.level || card.sample);
   if (hasFooter) {
-    parts.push(`<text x="${cx0 + ip}" y="${y + 17}" font-size="17" font-weight="800" letter-spacing="-0.3" fill="${theme.ink}">${esc(card.takeaway ?? "")}</text>`);
+    parts.push(`<text x="${cx0 + ip}" y="${y + 17}" font-size="17" font-weight="800" letter-spacing="-0.3" fill="${T.ink}">${esc(card.takeaway ?? "")}</text>`);
     let bx = cx0 + cw - ip;
     if (card.level) {
       const b = levelBadge(card.level, lang);
       const bw = textWidth(b.text, 12.5, 700) + 18;
       bx -= bw;
-      parts.push(`<rect x="${bx}" y="${y + 1}" width="${bw}" height="24" rx="8" fill="${theme[b.bg]}"/><text x="${bx + bw / 2}" y="${y + 17.5}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${theme[b.fg]}">${esc(b.text)}</text>`);
+      parts.push(`<rect x="${bx}" y="${y + 1}" width="${bw}" height="24" rx="8" fill="${T[b.bg]}"/><text x="${bx + bw / 2}" y="${y + 17.5}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${T[b.fg]}">${esc(b.text)}</text>`);
       bx -= 8;
     }
     if (card.sample) {
       const t = typeof card.sample === "string" ? card.sample : CARD_TEXT[lang].sample;
-      parts.push(`<text x="${bx}" y="${y + 17}" text-anchor="end" font-size="11.5" fill="${theme.muted}">${esc(t)}</text>`);
+      parts.push(`<text x="${bx}" y="${y + 17}" text-anchor="end" font-size="11.5" fill="${T.muted}">${esc(t)}</text>`);
     }
     y += 30;
   }
@@ -145,9 +164,9 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const ch = y - cy0;
   const H = Math.round(ch + pad * 2);
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${theme.ink}">` +
-    (opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${theme.bg}"/>`) +
-    `<rect x="${cx0 + 0.5}" y="${cy0 + 0.5}" width="${cw - 1}" height="${ch - 1}" rx="${theme.radius}" fill="${theme.panel}" stroke="${theme.line}"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">` +
+    (opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.bg}"/>`) +
+    `<rect x="${cx0 + 0.5}" y="${cy0 + 0.5}" width="${cw - 1}" height="${ch - 1}" rx="${T.radius}" fill="${T.panel}" stroke="${T.line}"/>` +
     parts.join("") +
     bodyOpen(cx0 + ip, chartY) +
     svg.inner +

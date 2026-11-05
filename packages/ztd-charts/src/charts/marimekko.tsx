@@ -7,7 +7,7 @@ import type { Mark } from "../core/motion";
 import { categorical, type Swatch } from "../core/palette";
 import { scaleLinear } from "../core/scale";
 import { textWidth, truncate } from "../core/text";
-import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
+import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter, uniq } from "../data/accessor";
@@ -24,14 +24,14 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "마리메코 차트", inCol: "열 안 비중", colShare: "열 비중", desc: (cols, series) => `열 ${cols}. 계열 ${series}` },
 };
 
-export interface MarimekkoChartProps<T = Row> extends BaseChartProps<T> {
+export interface MarimekkoChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
   /** 열(가로 구분) 필드. 기본 "x" */
   x?: Accessor<T, string>;
   /** 쌓는 계열 필드. 기본 "series" */
   series?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 강조할 계열(이름 또는 인덱스). 기본 첫 계열 */
-  highlight?: BaseChartProps<T>["highlight"];
+  /** 강조할 계열(이름 또는 인덱스). 함수는 계열 이름을 받아요. 기본 첫 계열 */
+  highlight?: Highlight<string>;
 }
 
 interface Seg<T> {

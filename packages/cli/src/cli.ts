@@ -57,7 +57,8 @@ function takeLocale(argv: string[]): { locale?: string; args: string[] } {
     else if (a.startsWith("--locale=")) locale = a.slice("--locale=".length);
     else args.push(a);
   }
-  return { locale, args };
+  // "ko_KR"도 받아요 (Intl은 "ko-KR"만 읽어요)
+  return { locale: locale?.replace(/_/g, "-"), args };
 }
 
 /** info 표의 타입 칸: getChartInfo의 enum 글('"a" | "b"')을 칸에 맞게 줄여요('a|b'). enum이 아닌 타입은 그대로 */
@@ -219,7 +220,7 @@ async function main(argv0: string[]) {
       if (!isHttpUrl(src) && !isInline && !existsSync(src)) fail(t.noFile(src));
       const limit = numberFlag(f, "limit") ?? 5;
       const outDir = textFlag(f, "out-dir");
-      const rows = await loadRows(src);
+      const rows = await loadRows(src, locale);
       const { profile, suggestions } = suggest(rows, { limit, locale });
       if (f.json) out(JSON.stringify({ profile, suggestions }, null, 2));
       else {

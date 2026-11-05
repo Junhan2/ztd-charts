@@ -309,13 +309,18 @@ export class MotionEngine<M> {
       let finished: boolean;
       if (this.easing === "spring") {
         const e = Math.exp(-w * dt);
+        // 남은 거리와 속도(1/w초에 갈 거리)가 0.15 아래로 줄면 멈춰요. 시간만 보면 먼 거리는 마지막 0.3%를 건너뛰었어요
+        // 8 전에는 멈추지 않아요 (0~1 값의 마지막 0.3%는 보이지 않아요). 20이면 NaN이 있어도 끝내요. 그래서 남은 거리는 그 사이에만 재요
+        const check = w * dt >= 8 && w * dt < 20;
+        let far = 0;
         for (let i = 0; i < n; i++) {
           const A = t.from[i] - t.to[i];
           const B = t.vel[i] + w * A;
           t.cur[i] = t.to[i] + (A + B * dt) * e;
           t.curVel[i] = (t.vel[i] - w * B * dt) * e;
+          if (check && far < 0.15) far = Math.max(far, Math.abs(t.cur[i] - t.to[i]), Math.abs(t.curVel[i] / w));
         }
-        finished = w * dt >= 8;
+        finished = w * dt >= 20 || (check && far < 0.15);
         t.progress = Math.min(1, 1 - (1 + w * dt) * e);
       } else {
         const p = Math.min(1, dt / D);
@@ -359,10 +364,7 @@ export class MotionEngine<M> {
   }
 
   items(): MotionItem<M>[] {
-    const out: MotionItem<M>[] = [];
-    for (const t of this.tracks.values()) out.push({ key: t.key, v: t.cur, data: t.data, exiting: t.exiting, progress: t.progress });
-    out.sort((a, b) => (this.tracks.get(a.key)?.order ?? 0) - (this.tracks.get(b.key)?.order ?? 0));
-    return out;
+    return [...this.tracks.values()].sort((a, b) => a.order - b.order).map((t) => ({ key: t.key, v: t.cur, data: t.data, exiting: t.exiting, progress: t.progress }));
   }
 
   get size(): number {

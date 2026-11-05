@@ -52,7 +52,9 @@ interface BulletRow<T> {
 /** 불릿 차트: 목표와 구간(나쁨, 보통, 좋음) 대비 실적 */
 export function BulletChart<T = Row>(props: BulletChartProps<T>) {
   const rowH = 40;
-  const c = useChart(props, { height: () => Math.max(90, props.data.length * rowH + 8), duration: 800, stagger: 110 });
+  // 함께 쓰는 축(independent={false})이면 아래에 눈금 글자 자리를 둬요
+  const axisH = props.independent === false ? 16 : 0;
+  const c = useChart(props, { height: () => Math.max(90, props.data.length * rowH + 8) + axisH, duration: 800, stagger: 110 });
   const { p, width: W, height: H } = c;
 
   const rows = useMemo<BulletRow<T>[]>(() => {
@@ -65,7 +67,8 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
       const t = gt(d, i);
       const ranges = rkeys.map((k) => numGetter<T>(k, k)(d, i)).filter(Number.isFinite);
       const max = niceDomain(0, Math.max(v || 0, t || 0, ...ranges), 4)[1];
-      return { i, label: gl(d, i), value: v || 0, target: t, ranges, max, hi: false, datum: d };
+      // 값이 없으면 NaN 그대로 둬요. 그림은 0 길이로, 글자는 "-"로 (0이라고 읽히지 않게)
+      return { i, label: gl(d, i), value: v, target: t, ranges, max, hi: false, datum: d };
     });
     const ratios = base.map((r) => (Number.isFinite(r.target) && r.target ? r.value / r.target : Infinity));
     const hi = resolveHighlight(props.highlight, base.map((r) => r.datum), base.map((r) => r.label), ratios, "min");
@@ -74,10 +77,12 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
 
   const globalMax = Math.max(...rows.map((r) => r.max), 1);
   const labelW = Math.min(W * 0.34, Math.max(...rows.map((r) => textWidth(r.label, 11.5, 600)), 30) + 10);
-  const valW = Math.max(...rows.map((r) => textWidth(c.fmt(r.value), 12, 800)), 20) + 12;
+  const fx = (v: number) => (Number.isFinite(v) ? c.fmt(v) : "-");
+  const fvx = (v: number) => (Number.isFinite(v) ? c.fv(v) : "-");
+  const valW = Math.max(...rows.map((r) => textWidth(fx(r.value), 12, 800)), 20) + 12;
   const x0 = labelW + 6;
   const x1 = W - valW;
-  const band = (H - 8) / Math.max(1, rows.length);
+  const band = (H - 8 - axisH) / Math.max(1, rows.length);
   const barH = Math.max(6, Math.min(12, band * 0.26));
   const rangeH = Math.max(12, Math.min(26, band * 0.58));
 
@@ -86,7 +91,7 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
     () =>
       rows.map((r, k) => {
         const sx = scaleLinear([0, props.independent === false ? globalMax : r.max], [x0, x1]);
-        return { key: `b:${r.label}`, to: [sx(r.value), Number.isFinite(r.target) ? sx(r.target) : x0, 1], from: [x0, Number.isFinite(r.target) ? sx(r.target) : x0, 0], enter: [x0, x0, 0], delay: k * stg, data: r };
+        return { key: `b:${r.label}`, to: [sx(r.value || 0), Number.isFinite(r.target) ? sx(r.target) : x0, 1], from: [x0, Number.isFinite(r.target) ? sx(r.target) : x0, 0], enter: [x0, x0, 0], delay: k * stg, data: r };
       }),
     [rows, x0, x1, globalMax, props.independent, stg],
   );
@@ -95,19 +100,23 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
   const shades = [p.paint("neutralSoft"), p.paint("neutral"), p.mix("neutral", "neutralStrong", 0.62)];
 
   const msg = MSG[c.lang];
-  const events: ChartEvent<T>[] = rows.map((r) => ({ datum: r.datum, index: r.i, key: r.label, label: r.label, value: r.value, formatted: `${c.fv(r.value)}${Number.isFinite(r.target) ? ` / ${msg.targetWord} ${c.fv(r.target)} (${c.pct((r.value / (r.target || 1)) * 100)})` : ""}` }));
+  const events: ChartEvent<T>[] = rows.map((r) => ({ datum: r.datum, index: r.i, key: r.label, label: r.label, value: Number.isFinite(r.value) ? r.value : null, formatted: `${fvx(r.value)}${Number.isFinite(r.target) ? ` / ${msg.targetWord} ${c.fv(r.target)}${Number.isFinite(r.value) ? ` (${c.pct((r.value / (r.target || 1)) * 100)})` : ""}` : ""}` }));
   let tip: TooltipData | null = null;
   if (c.active !== null && rows[c.active]) {
     const r = rows[c.active];
     const sx = scaleLinear([0, props.independent === false ? globalMax : r.max], [x0, x1]);
-    tip = { x: sx(r.value), y: 4 + band * c.active + band / 2 - rangeH / 2, title: r.label, rows: [{ label: msg.actual, value: c.fv(r.value), color: r.hi ? accent.fill : p.paint("ink") }, ...(Number.isFinite(r.target) ? [{ label: msg.target, value: c.fv(r.target) }, { label: msg.achieved, value: c.pct((r.value / (r.target || 1)) * 100) }] : [])] };
+    tip = { x: sx(r.value || 0), y: 4 + band * r.i + band / 2 - rangeH / 2, title: r.label, rows: [{ label: msg.actual, value: fvx(r.value), color: r.hi ? accent.fill : p.paint("ink") }, ...(Number.isFinite(r.target) ? [{ label: msg.target, value: c.fv(r.target) }, { label: msg.achieved, value: c.pct((r.value / (r.target || 1)) * 100) }] : [])] };
   }
-  const desc = props.description ?? `${msg.kind}. ${rows.map((r) => `${r.label} ${c.fv(r.value)}${Number.isFinite(r.target) ? msg.withTarget(c.fv(r.target)) : ""}`).join(", ")}.`;
+  const desc = props.description ?? `${msg.kind}. ${rows.map((r) => `${r.label} ${fvx(r.value)}${Number.isFinite(r.target) ? msg.withTarget(c.fv(r.target)) : ""}`).join(", ")}.`;
 
   return (
     <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
-      {m.items.map((it, k) => {
+      {m.items.map((it) => {
         const r = it.data;
+        // 줄은 지금 순서(r.i)로 정해요. m.items는 처음 생긴 순서라 데이터 순서가 바뀌면 어긋나요.
+        // 빠지는 줄은 옛 자리에 남아 새 줄과 겹치니 그리지 않아요
+        if (it.exiting) return null;
+        const k = r.i;
         const sx = scaleLinear([0, props.independent === false ? globalMax : r.max], [x0, x1]);
         const cy = 4 + band * k + band / 2;
         const [vx, tx, o] = it.v;
@@ -131,7 +140,7 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
               </Txt>
             ))}
             <Txt x={W - 2} y={cy} anchor="end" size={12} weight={r.hi ? 800 : 600} fill={p.paint(r.hi ? "ink" : "muted")} opacity={m.fade(k * stg + 300, 260)}>
-              {c.fmt(r.value)}
+              {fx(r.value)}
             </Txt>
           </g>
         );
@@ -141,7 +150,7 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
           {scaleLinear([0, globalMax], [x0, x1])
             .ticks(4)
             .map((t) => (
-              <Txt key={t} x={scaleLinear([0, globalMax], [x0, x1])(t)} y={H - 2} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>
+              <Txt key={t} x={scaleLinear([0, globalMax], [x0, x1])(t)} y={H - 9} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>
                 {c.fmt(t)}
               </Txt>
             ))}

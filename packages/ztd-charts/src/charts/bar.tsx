@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { AXIS_FONT, AxisXBand, GridY, yAxisWidth } from "../core/axis";
+import { AXIS_FONT, AxisXBand, GridY, thinLabels, yAxisWidth } from "../core/axis";
 import { ChartFrame, Txt } from "../core/ChartFrame";
 import { makeTickFormatter } from "../core/format";
 import { roundRectPath } from "../core/geometry";
@@ -37,7 +37,7 @@ export interface BarChartProps<T = Row> extends BaseChartProps<T> {
   orientation?: "vertical" | "horizontal";
   /** 값 순 정렬 (계열 하나일 때). 기본 false */
   sort?: boolean;
-  /** 강조 대상: 계열 하나면 범주, 여러 개면 계열. 기본 "max" / 첫 계열 */
+  /** 강조 대상: 계열 하나면 범주, 여러 개면 계열. 기본 "max" / 첫 계열. 계열이 여러 개일 때 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
@@ -103,13 +103,15 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const catW = horizontal ? Math.min(W * 0.32, Math.max(...model.labels.map((l) => textWidth(l, 11.5, 600)), 24) + 10) : 0;
   const valPad = horizontal && showValues && layout !== "percent" ? Math.max(...segs.map((s) => textWidth(valueText(s), 11, 700)), 0) + 10 : 0;
   const ticks = scaleLinear(dom, [0, 1]).ticks(horizontal ? Math.max(2, Math.round(W / 130)) : Math.max(2, Math.round(H / 70)));
-  const left = horizontal ? catW + 6 : yAxisWidth(ticks, tickFmt);
+  const left = horizontal ? catW + 6 : yAxisWidth(ticks, tickFmt, c.locale);
   const top = horizontal ? 4 : showValues ? 16 : 8;
   const bottom = horizontal ? 18 : 22;
+  // 세로 막대의 음수 값 글자는 막대 끝 아래에 써요. 가장 낮은 막대 아래 글자 자리를 남겨요
+  const negPad = !horizontal && showValues && mn < 0 && (single || layout === "grouped") ? 16 : 0;
   const x0 = horizontal ? left : left + 4;
   const x1 = horizontal ? W - Math.max(8, valPad) : W - 2;
   const band = horizontal ? scaleBand(model.keys, [top, H - bottom], 0.3, 0.12) : scaleBand(model.keys, [x0, x1], nS > 1 && layout === "grouped" ? 0.24 : 0.32, 0.12);
-  const v = horizontal ? scaleLinear(dom, [x0, x1]) : scaleLinear(dom, [H - bottom, top]);
+  const v = horizontal ? scaleLinear(dom, [x0, x1]) : scaleLinear(dom, [H - bottom - negPad, top]);
   const inner = layout === "grouped" && nS > 1 ? scaleBand(model.series, [0, band.bandwidth], 0.12, 0) : null;
   const r = Math.min(p.theme.radiusMark, (inner ? inner.bandwidth : band.bandwidth) / 4);
 
@@ -120,6 +122,14 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     const b = v(sg.v1);
     return { pos, th, a, b };
   };
+
+  // 계열 하나인 세로 막대의 값 글자: 칸 폭보다 넓으면 겹치지 않게 솎아요 (강조 막대 글자는 남겨요)
+  const shownValues = useMemo(
+    () => (single && !horizontal && showValues ? new Set(thinLabels(segs.map((sg) => band(model.keys[sg.k]) + band.bandwidth / 2), segs.map(valueText), band.bandwidth < 26 ? 10 : 11, 4, 500, new Set(segs.flatMap((sg, j) => (sg.hi ? [j] : []))))) : null),
+    // band, valueText는 아래 값들로 정해져요
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [segs, single, horizontal, showValues, layout, W, H, c.fmt],
+  );
 
   const stg = c.motion.stagger ?? 60;
   const marks = useMemo<Mark<BarSeg>[]>(
@@ -162,7 +172,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
           ))}
         </g>
       ) : (
-        <GridY p={p} ticks={ticks} y={v} x0={left} x1={W} fmt={tickFmt} />
+        <GridY p={p} ticks={ticks} y={v} x0={left} x1={W} fmt={tickFmt} locale={c.locale} />
       )}
       {m.items.map((it) => {
         const sg = it.data;
@@ -183,8 +193,8 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
               <Txt x={Math.max(a, b) + 6} y={pos + th / 2} size={11} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
                 {text}
               </Txt>
-            ) : th >= tw * 0.8 || nS === 1 ? (
-              <Txt x={pos + th / 2} y={Math.min(a, b) - 8} anchor="middle" size={th < 26 ? 10 : 11} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
+            ) : (nS === 1 ? !shownValues || shownValues.has(i) : th >= tw * 0.8) ? (
+              <Txt x={pos + th / 2} y={neg ? Math.max(a, b) + 8 : Math.min(a, b) - 8} anchor="middle" size={th < 26 ? 10 : 11} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
                 {text}
               </Txt>
             ) : null;

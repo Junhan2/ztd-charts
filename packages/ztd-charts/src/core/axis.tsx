@@ -5,23 +5,23 @@ import { textWidth } from "./text";
 
 export const AXIS_FONT = 10.5;
 
-/** 눈금 글자. 짧게 줄인 글자가 겹치면(10만, 10만, 10.1만) 그 축만 전체 숫자로 써요 */
-export function tickLabels(ticks: readonly number[], fmt: ValueFormatter): string[] {
+/** 눈금 글자. 짧게 줄인 글자가 겹치면(10만, 10만, 10.1만) 그 축만 전체 숫자로 써요. locale은 그때 쓰는 로캘(차트의 c.locale) */
+export function tickLabels(ticks: readonly number[], fmt: ValueFormatter, locale?: string): string[] {
   const out = ticks.map(fmt);
   if (new Set(out).size === out.length) return out;
-  return ticks.map((t) => formatNumber(t, { maximumFractionDigits: 2 }));
+  return ticks.map((t) => formatNumber(t, { locale, maximumFractionDigits: 2 }));
 }
 
-export function yAxisWidth(ticks: number[], fmt: ValueFormatter, min = 18): number {
-  let w = min;
-  for (const l of tickLabels(ticks, fmt)) w = Math.max(w, textWidth(l, AXIS_FONT));
+export function yAxisWidth(ticks: number[], fmt: ValueFormatter, locale?: string): number {
+  let w = 18;
+  for (const l of tickLabels(ticks, fmt, locale)) w = Math.max(w, textWidth(l, AXIS_FONT));
   return Math.ceil(w + 8);
 }
 
-export function GridY(props: { p: Painter; ticks: number[]; y: (v: number) => number; x0: number; x1: number; fmt: ValueFormatter; labels?: boolean; zero?: boolean; opacity?: number; side?: "left" | "right" }) {
+export function GridY(props: { p: Painter; ticks: number[]; y: (v: number) => number; x0: number; x1: number; fmt: ValueFormatter; labels?: boolean; zero?: boolean; opacity?: number; side?: "left" | "right"; locale?: string }) {
   const { p, ticks, y, x0, x1, fmt } = props;
   const right = props.side === "right";
-  const labels = props.labels === false ? null : tickLabels(ticks, fmt);
+  const labels = props.labels === false ? null : tickLabels(ticks, fmt, props.locale);
   return (
     <g aria-hidden="true" opacity={props.opacity}>
       {ticks.map((t, i) => {

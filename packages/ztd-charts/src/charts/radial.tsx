@@ -92,9 +92,12 @@ export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
 
   return (
     <ChartFrame c={c} kind={msg.radial} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
-      {m.items.map((it, k) => {
+      {m.items.map((it) => {
+        // The ring's place comes from the data order: useMotion keeps its own item order across updates,
+        // and an exiting ring would push the inner ones out until it left.
+        if (it.exiting) return null;
         const r = it.data;
-        const rad = radius(k);
+        const rad = radius(r.i);
         const t = it.v[0];
         const isA = c.active === r.i;
         return (
@@ -112,7 +115,7 @@ export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
             const fs = Math.max(9.5, Math.min(11.5, step * 0.62));
             const text = `${r.label} ${c.fmt(r.value)}${props.unit ?? ""}`;
             return (
-              <Txt key={r.label} x={lx - 8} y={ly} anchor="end" size={fs} weight={r.hi ? 800 : 500} fill={p.paint(r.hi ? "ink" : "muted")} opacity={m.fade(k * stg + D * 0.3, 280)}>
+              <Txt key={k} x={lx - 8} y={ly} anchor="end" size={fs} weight={r.hi ? 800 : 500} fill={p.paint(r.hi ? "ink" : "muted")} opacity={m.fade(k * stg + D * 0.3, 280)}>
                 {truncate(text, labelMax, fs, r.hi ? 800 : 500)}
               </Txt>
             );
@@ -198,8 +201,9 @@ export function GaugeChart<T = Row>(props: GaugeChartProps<T>) {
   const msg = MSG[c.lang];
   const name = props.label ?? c.t.value;
   const range = msg.span(c.fmt(min), c.fmt(max));
-  const events: ChartEvent<T>[] = [{ datum: data[0] ?? null, index: 0, key: "value", label: name, value, formatted: `${c.fv(value)}${Number.isFinite(target) ? ` / ${msg.targetWord} ${c.fv(target)}` : ""}` }];
-  const tip: TooltipData | null = c.active === 0 ? { x: cx, y: cy - R, title: name, rows: [{ label: msg.current, value: c.fv(value), color: accent.fill }, ...(Number.isFinite(target) ? [{ label: msg.target, value: c.fv(target) }, { label: msg.achieved, value: c.pct((value / (target || 1)) * 100) }] : []), { label: msg.range, value: range }] } : null;
+  // No rows and no value prop: no event, so the frame describes the chart as empty instead of as a 0.
+  const events: ChartEvent<T>[] = props.value === undefined && !data.length ? [] : [{ datum: data[0] ?? null, index: 0, key: "value", label: name, value, formatted: `${c.fv(value)}${Number.isFinite(target) ? ` / ${msg.targetWord} ${c.fv(target)}` : ""}` }];
+  const tip: TooltipData | null = c.active === 0 ? { x: cx, y: cy - R, title: name, rows: [{ label: msg.current, value: c.fv(value), color: accent.fill }, ...(Number.isFinite(target) ? [{ label: msg.target, value: c.fv(target) }, ...(target ? [{ label: msg.achieved, value: c.pct((value / target) * 100) }] : [])] : []), { label: msg.range, value: range }] } : null;
   const big = Math.max(18, Math.min(42, R * 0.42));
   const desc = props.description ?? `${msg.gauge}. ${name} ${c.fv(value)}, ${msg.rangeWord} ${range}${Number.isFinite(target) ? `, ${msg.targetWord} ${c.fv(target)}` : ""}.`;
 

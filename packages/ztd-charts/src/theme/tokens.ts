@@ -152,12 +152,12 @@ export function themeToCssVars(theme: Partial<ChartTheme>): Record<string, strin
   return out;
 }
 
-/** `:root { --ztd-...: ... }` 같은 CSS 문자열 */
+/** `:root { --ztd-...: ... }` 같은 CSS 문자열. `<`는 CSS 이스케이프(\3c)로 바꿔서 <style> 안에 넣어도 태그를 닫지 못해요 */
 export function themeToCss(theme: ChartTheme, selector = ":root"): string {
   const vars = themeToCssVars(theme);
   return `${selector} {\n${Object.entries(vars)
     .map(([k, v]) => `  ${k}: ${v};`)
-    .join("\n")}\n}`;
+    .join("\n")}\n}`.replace(/</g, "\\3c ");
 }
 
 export function mergeTheme(base: ChartTheme, over?: Partial<ChartTheme> | null): ChartTheme {

@@ -77,16 +77,20 @@ function useSlices<T>(props: PieChartProps<T>) {
 
 function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
   const isDonut = props.inner > 0;
+  const { rows, total, hi } = useSlices(props);
+  const modeAt = (w: number) => (isDonut ? (props.legend === undefined || props.legend === "auto" ? (w >= 300 ? "right" : "bottom") : props.legend) : "none");
+  const bottomH = Math.ceil(rows.length / 2) * 20 + 8;
+  // The default height grows by the bottom legend, so many slices do not squeeze the donut.
   const c = useChart(props, {
-    height: (w) => (isDonut ? Math.max(170, Math.min(240, w * 0.5)) : Math.max(180, Math.min(260, w * 0.62))),
+    height: (w) => (isDonut ? Math.max(170, Math.min(240, w * 0.5)) + (modeAt(w) === "bottom" ? bottomH : 0) : Math.max(180, Math.min(260, w * 0.62))),
     duration: 1000,
   });
   const { p, width: W, height: H } = c;
-  const { rows, total, hi } = useSlices(props);
-  const legendMode = isDonut ? (props.legend === undefined || props.legend === "auto" ? (W >= 300 ? "right" : "bottom") : props.legend) : "none";
-  const legendRowH = 26;
-  const legendH = legendMode === "bottom" ? Math.ceil(rows.length / 2) * 20 + 8 : 0;
+  const legendMode = modeAt(W);
+  const legendH = legendMode === "bottom" ? bottomH : 0;
   const plotH = H - legendH;
+  // Right-hand legend rows shrink to fit, so a long legend is not cut at the top and bottom.
+  const legendRowH = Math.min(26, (plotH - 8) / Math.max(1, rows.length));
   const legendW = legendMode === "right" ? Math.min(220, Math.max(140, W * 0.44)) : 0;
   const plotW = W - legendW;
   const outsidePad = isDonut ? 4 : 20;
@@ -242,14 +246,14 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
             const out = outside.get(s.i);
             if (out) {
               return (
-                <Txt key={s.label} x={out.x} y={out.y} anchor={out.anchor} size={12} weight={700} fill={p.paint("ink")} opacity={o}>
-                  {text}
+                <Txt key={s.i} x={out.x} y={out.y} anchor={out.anchor} size={12} weight={700} fill={p.paint("ink")} opacity={o}>
+                  {truncate(text, out.anchor === "start" ? W - out.x - 4 : out.anchor === "end" ? out.x - 4 : W, 12, 700)}
                 </Txt>
               );
             }
             const [x, y] = polar(cx, cy, labelR, mid);
             return (
-              <Txt key={s.label} x={x} y={y} anchor="middle" size={13} weight={700} fill={s.sw.text} opacity={o}>
+              <Txt key={s.i} x={x} y={y} anchor="middle" size={13} weight={700} fill={s.sw.text} opacity={o}>
                 {text}
               </Txt>
             );
@@ -280,7 +284,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
             const pct = c.pct(s.pct);
             const nameMax = colW - 14 - textWidth(pct, 12, 700) - 10;
             return (
-              <g key={s.label} opacity={o} onPointerEnter={() => c.setActive(s.i)} style={{ cursor: "default" }}>
+              <g key={s.i} opacity={o} onPointerEnter={() => c.setActive(s.i)} style={{ cursor: "default" }}>
                 <rect x={lx} y={ly - 5} width={10} height={10} rx={2.5} fill={s.sw.fill} stroke={s.sw.role === "soft" || s.sw.role === "neutral" ? p.paint("line2") : "none"} />
                 <Txt x={lx + 16} y={ly} size={12} weight={s.hi ? 700 : 500} fill={p.paint(s.hi ? "ink" : "muted")}>
                   {truncate(s.label, nameMax, 12, s.hi ? 700 : 500)}

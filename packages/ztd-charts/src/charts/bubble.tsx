@@ -100,7 +100,7 @@ export function BubbleChart<T = Row>(props: BubbleChartProps<T>) {
   const yFmt = useMemo(() => makeTickFormatter(props.format, c.locale, yMaxAbs), [props.format, c.locale, yMaxAbs]);
   const xFmt = useMemo(() => makeTickFormatter(props.xFormat, c.locale, xMaxAbs), [props.xFormat, c.locale, xMaxAbs]);
   const yTicks = scaleLinear(yDom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
-  const left = yAxisWidth(yTicks, yFmt);
+  const left = yAxisWidth(yTicks, yFmt, c.locale);
   const top = props.yLabel ? 20 : 10;
   const bottom = 24;
   const [rMin, rMax] = props.sizeRange ?? (hasSize ? [4, Math.max(10, Math.min(28, W / 22))] : [n > 2000 ? 1.6 : n > 300 ? 2.6 : 4, 0]);
@@ -193,14 +193,16 @@ export function BubbleChart<T = Row>(props: BubbleChartProps<T>) {
 
   const accent = swatch(p, "accent");
   const fmt = c.fmt;
+  const fv = c.fv;
   const msg = MSG[c.lang];
   const events: ChartEvent<T>[] = useMemo(
     () =>
       lazyArray(dots.length, (k) => {
         const d = dots[k];
-        return { datum: d.datum, index: d.i, key: `${d.i}`, label: d.label || msg.nth(d.i + 1), value: hasSize ? d.vs : d.vy, formatted: `x ${xFmt(d.vx)}, y ${yFmt(d.vy)}${hasSize ? `, ${msg.sizeWord} ${fmt(d.vs)}` : ""}` };
+        return { datum: d.datum, index: d.i, key: `${d.i}`, label: d.label || msg.nth(d.i + 1), value: hasSize ? d.vs : d.vy, formatted: `x ${xFmt(d.vx)}, y ${fv(d.vy)}${hasSize ? `, ${msg.sizeWord} ${fmt(d.vs)}` : ""}` };
       }),
-    [dots, hasSize, xFmt, yFmt, fmt, msg],
+    // 표는 툴팁과 같은 포맷: y는 단위까지 (축 눈금처럼 줄이지 않아요)
+    [dots, hasSize, xFmt, fv, fmt, msg],
   );
 
   let tip: TooltipData | null = null;
@@ -263,7 +265,7 @@ export function BubbleChart<T = Row>(props: BubbleChartProps<T>) {
           {props.yLabel}
         </Txt>
       ) : null}
-      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={W} fmt={yFmt} zero={false} />
+      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={W} fmt={yFmt} locale={c.locale} zero={false} />
       <g aria-hidden="true">
         {xTicks.map((t) => (
           <Txt key={t} x={x(t)} y={H - bottom + 13} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>

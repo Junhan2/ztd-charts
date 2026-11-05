@@ -93,9 +93,10 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
   const right = 30;
   const y = scaleLinear([0, 100], [H - bottom, top]);
   const labels = bars.map((b, k) => (props.rankLabels ? msg.rank(k + 1) : b.label));
-  const x = scaleBand(labels, [left + 4, W - right], 0.28, 0.1);
+  // 칸은 순서로 나눠요. 이름이 같은 항목도 따로 칸을 받아요
+  const x = scaleBand(labels.map((_, k) => `${k}`), [left + 4, W - right], 0.28, 0.1);
   const bw = x.bandwidth;
-  const cxs = labels.map((l) => x(l) + bw / 2);
+  const cxs = labels.map((_, k) => x(`${k}`) + bw / 2);
 
   const stg = c.motion.stagger ?? 55;
   const D = c.motion.duration ?? 650;
@@ -111,9 +112,10 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
 
   const accent = swatch(p, "accent");
   const neutral = swatch(p, "neutral");
+  // 누적선 점은 막대 순서(b.i) 자리에 둬요. m.items는 처음 생긴 순서라 정렬이 바뀌면 선이 엉켜요
   const pts: [number, number][] = [];
   m.items.forEach((it) => {
-    if (it.data && !it.exiting) pts.push([cxs[it.data.i] ?? 0, it.v[1]]);
+    if (it.data && !it.exiting) pts[it.data.i] = [cxs[it.data.i] ?? 0, it.v[1]];
   });
   const lastHi = [...bars].reverse().find((b) => b.hi);
 
@@ -138,15 +140,16 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
       </Txt>
       {m.items.map((it) => {
         const b = it.data;
-        if (!b) return null;
+        // 빠지는 막대는 옛 순서 칸에 남아 새 막대와 겹치니 그리지 않아요
+        if (!b || it.exiting) return null;
         const yy = it.v[0];
         const h = y(0) - yy;
         const k = b.i;
         return (
           <g key={it.key} className="ztd-mark" opacity={c.dim(k)} onPointerEnter={(e) => c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(k)}>
-            <rect x={x(labels[k]) - (x.step - bw) / 2} y={top} width={x.step} height={H - bottom - top} fill="transparent" />
-            <path d={roundRectPath(x(labels[k]), yy, bw, Math.max(0, h), { tl: r, tr: r })} fill={b.hi ? accent.fill : neutral.fill} />
-            {c.active === k && c.via === "keyboard" ? <path d={roundRectPath(x(labels[k]) - 3, yy - 3, bw + 6, h + 6, 5)} fill="none" stroke={p.paint("ink")} strokeWidth={2} /> : null}
+            <rect x={x(`${k}`) - (x.step - bw) / 2} y={top} width={x.step} height={H - bottom - top} fill="transparent" />
+            <path d={roundRectPath(x(`${k}`), yy, bw, Math.max(0, h), { tl: r, tr: r })} fill={b.hi ? accent.fill : neutral.fill} />
+            {c.active === k && c.via === "keyboard" ? <path d={roundRectPath(x(`${k}`) - 3, yy - 3, bw + 6, h + 6, 5)} fill="none" stroke={p.paint("ink")} strokeWidth={2} /> : null}
           </g>
         );
       })}

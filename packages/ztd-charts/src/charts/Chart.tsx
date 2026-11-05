@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useMemo, type ComponentType } from "react";
 import { ChartCard, ChartState, type LegendItem } from "../components/ChartCard";
 import { resolveHighlight } from "../core/highlight";
 import { langOf } from "../core/i18n";
@@ -115,12 +115,11 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const t = CANDLE_TEXT[langOf(locale)];
     return [{ label: t.up, color: (opt.upColor as string | undefined) ?? "accent" }, { label: t.down, color: (opt.downColor as string | undefined) ?? "neutralStrong" }, ...ma.map((d, i) => ({ label: t.maLegend(d), color: MA_TOKENS[i], shape: "line" as const }))];
   }
-  const seriesField = def.type === "marimekko" ? enc.series : enc.series;
   if (["marimekko", "area", "bar", "line", "stream", "radar"].includes(def.type)) {
     let series: string[] = [];
     if (Array.isArray(enc.y)) series = enc.y as string[];
-    else if (typeof seriesField === "string") {
-      const g = strGetter(seriesField, "series");
+    else if (typeof enc.series === "string") {
+      const g = strGetter(enc.series, "series");
       series = uniq(rows.map((r, i) => g(r, i)));
     }
     if (series.length < 2) return [];
@@ -153,7 +152,8 @@ export interface ChartProps {
 export function Chart(props: ChartProps) {
   const { spec } = props;
   const def = resolveDef(spec.type);
-  const inline = inlineRows(spec.data);
+  // { csv }는 렌더마다 다시 읽지 않아요
+  const inline = useMemo(() => inlineRows(spec.data), [spec.data]);
   const remote = !inline && spec.data && typeof spec.data === "object" && "url" in spec.data ? (spec.data as { url: string; format?: "json" | "csv" | "auto"; select?: string }) : null;
   // 프롭, 스펙 options.locale 순서. 둘 다 없으면 카드와 차트가 ThemeProvider를 따라요
   const explicit = specLocale(spec, props.locale);
@@ -176,11 +176,12 @@ export function Chart(props: ChartProps) {
     ...(props.replayKey !== undefined ? { replayKey: props.replayKey } : {}),
     ...(props.onHover ? { onHover: props.onHover } : {}),
     ...(props.onClick ? { onClick: props.onClick } : {}),
-    ...(props.locale !== undefined ? { locale: props.locale } : {}),
+    // 프롭, options.locale 순서로 고친 값("ko_KR" → "ko-KR"). 둘 다 없으면 ThemeProvider를 따라요
+    locale: explicit,
   };
   const h = (chartProps.height as number | undefined) ?? 220;
-  // 데이터를 가진 채 다시 불러올 때(refreshMs)는 차트를 그대로 둬요
-  let body = remote && ((st.loading && !rows.length) || st.error || st.empty) ? <ChartState loading={st.loading && !rows.length} error={st.error} empty={st.empty} onRetry={st.reload} height={h} locale={explicit} /> : <Comp {...chartProps} />;
+  // 데이터를 가진 채 다시 불러올 때(refreshMs)는 차트를 그대로 둬요. 다시 불러오기가 한 번 실패해도 이전 데이터가 있으면 차트를 보여 줘요
+  let body = remote && !rows.length && (st.loading || st.error || st.empty) ? <ChartState loading={st.loading} error={st.error} empty={st.empty} onRetry={st.reload} height={h} locale={explicit} /> : <Comp {...chartProps} />;
   if (spec.card) {
     const c = spec.card;
     const legend = c.legend === "auto" ? autoLegend(spec, rows, locale) : c.legend;

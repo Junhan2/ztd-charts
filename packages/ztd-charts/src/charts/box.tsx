@@ -53,6 +53,8 @@ export interface BoxPlotProps<T = Row> extends BaseChartProps<T> {
   outliers?: boolean;
   /** 축에 0 포함. 기본 false */
   zero?: boolean;
+  /** 강조 그룹. 판별 함수는 행이 아니라 그룹 이름을 받아요: (name, index) => boolean. 기본 중앙값이 가장 큰 그룹 */
+  highlight?: BaseChartProps<T>["highlight"];
 }
 
 interface BoxInfo {
@@ -96,7 +98,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
 
   const tickFmt = makeTickFormatter(props.format, c.locale, Math.max(Math.abs(model.dom[0]), Math.abs(model.dom[1])));
   const ticks = scaleLinear(model.dom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
-  const left = yAxisWidth(ticks, tickFmt);
+  const left = yAxisWidth(ticks, tickFmt, c.locale);
   const top = 10;
   const bottom = 22;
   const y = scaleLinear(model.dom, [H - bottom, top]);
@@ -118,7 +120,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
   const accent = swatch(p, "accent");
 
   const msg = MSG[c.lang];
-  const events: ChartEvent<T>[] = model.boxes.map((b) => ({ datum: null, index: b.g, key: b.name, label: b.name, value: b.st.median, formatted: msg.summary(c.fv(b.st.median), c.fmt(b.st.q1), c.fmt(b.st.q3)) }));
+  const events: ChartEvent<T>[] = model.boxes.map((b) => ({ datum: null, index: b.g, key: b.name, label: b.name, value: b.st.median, formatted: msg.summary(c.fv(b.st.median), c.fv(b.st.q1), c.fv(b.st.q3)) }));
   let tip: TooltipData | null = null;
   if (c.active !== null && model.boxes[c.active]) {
     const b = model.boxes[c.active];
@@ -141,7 +143,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
 
   return (
     <ChartFrame c={c} kind={kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
-      <GridY p={p} ticks={ticks} y={y} x0={left} x1={W} fmt={tickFmt} zero={false} />
+      <GridY p={p} ticks={ticks} y={y} x0={left} x1={W} fmt={tickFmt} locale={c.locale} zero={false} />
       {m.items.map((it) => {
         const b = it.data;
         const [q1, q3, lo, hi, med, o] = it.v;
