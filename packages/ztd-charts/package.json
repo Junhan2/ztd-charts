@@ -1,6 +1,6 @@
 {
   "name": "ztd-charts",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "33 animated, interactive React charts in pure SVG with zero runtime dependencies, a JSON spec, and CLI and MCP tools for AI agents",
   "license": "MIT",
   "author": "Junhan2",

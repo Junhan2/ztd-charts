@@ -2,7 +2,7 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
