@@ -9,7 +9,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.2 KB"
   },
   {
     "name": "DonutChart",
@@ -21,7 +21,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.2 KB"
   },
   {
     "name": "FunnelChart",
@@ -33,7 +33,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "11.9 KB"
   },
   {
     "name": "WaffleChart",
@@ -45,7 +45,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.1 KB"
   },
   {
     "name": "Treemap",
@@ -57,7 +57,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.4 KB"
   },
   {
     "name": "SunburstChart",
@@ -69,7 +69,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.8 KB"
   },
   {
     "name": "WaterfallChart",
@@ -81,7 +81,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.8 KB"
   },
   {
     "name": "ParetoChart",
@@ -93,7 +93,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13 KB"
   },
   {
     "name": "MarimekkoChart",
@@ -105,7 +105,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.6 KB"
   },
   {
     "name": "Heatmap",
@@ -117,7 +117,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.3 KB"
   },
   {
     "name": "RadarChart",
@@ -129,7 +129,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.6 KB"
   },
   {
     "name": "BubbleChart",
@@ -141,7 +141,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.8 KB"
+    "limit": "13.5 KB"
   },
   {
     "name": "LineChart",
@@ -153,7 +153,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.4 KB"
+    "limit": "19.3 KB"
   },
   {
     "name": "AreaChart",
@@ -165,7 +165,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.4 KB"
+    "limit": "19.3 KB"
   },
   {
     "name": "StreamGraph",
@@ -177,7 +177,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "15.3 KB"
+    "limit": "15.1 KB"
   },
   {
     "name": "BarChart",
@@ -189,7 +189,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "15.6 KB"
+    "limit": "15.5 KB"
   },
   {
     "name": "RadialBarChart",
@@ -201,7 +201,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "11.5 KB"
   },
   {
     "name": "GaugeChart",
@@ -213,7 +213,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "11.6 KB"
   },
   {
     "name": "BulletChart",
@@ -225,7 +225,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.3 KB"
   },
   {
     "name": "Sparkline",
@@ -237,7 +237,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.6 KB"
+    "limit": "13.4 KB"
   },
   {
     "name": "SlopeChart",
@@ -249,7 +249,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.2 KB"
   },
   {
     "name": "DumbbellChart",
@@ -261,7 +261,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "11.9 KB"
   },
   {
     "name": "LollipopChart",
@@ -273,7 +273,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.6 KB"
   },
   {
     "name": "BeeswarmChart",
@@ -285,7 +285,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.7 KB"
+    "limit": "13.5 KB"
   },
   {
     "name": "RidgelineChart",
@@ -297,7 +297,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.6 KB"
   },
   {
     "name": "SankeyChart",
@@ -309,7 +309,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.1 KB"
   },
   {
     "name": "ChordChart",
@@ -321,7 +321,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12.1 KB"
   },
   {
     "name": "CalendarHeatmap",
@@ -333,7 +333,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.8 KB"
+    "limit": "13.7 KB"
   },
   {
     "name": "BumpChart",
@@ -345,7 +345,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13.3 KB"
   },
   {
     "name": "BoxPlot",
@@ -357,7 +357,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.8 KB"
+    "limit": "13.7 KB"
   },
   {
     "name": "ParallelCoordinates",
@@ -369,7 +369,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "13 KB"
   },
   {
     "name": "CandlestickChart",
@@ -381,7 +381,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.6 KB"
+    "limit": "16.4 KB"
   },
   {
     "name": "SegmentedBar",
@@ -393,7 +393,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.5 KB"
+    "limit": "12 KB"
   },
   {
     "name": "ChartCard + ChartGrid + ThemeProvider",
@@ -405,7 +405,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "5 KB"
+    "limit": "4.7 KB"
   },
   {
     "name": "useChartData + parseCSV",
@@ -417,7 +417,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "3 KB"
+    "limit": "2.7 KB"
   },
   {
     "name": "Chart (spec renderer, all 33)",
@@ -429,7 +429,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "64.9 KB"
+    "limit": "64.7 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -441,7 +441,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "80.9 KB"
+    "limit": "80.6 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -453,6 +453,6 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.1 KB"
+    "limit": "18.7 KB"
   }
 ]

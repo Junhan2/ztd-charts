@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { CHARTS, commonOptionsIn, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, suggestCharts, validateSpec, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
 import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
 import { langOf, renderSpecToHTML, renderSpecToSVG, resolveSpecData } from "ztd-charts/server";
-import { CLI_TEXT } from "./messages";
+import { CLI_TEXT, type CliText } from "./messages";
 
 const require = createRequire(import.meta.url);
 
@@ -156,7 +157,12 @@ export function findFonts(extra: string[] = []): string[] {
   return out;
 }
 
-export interface RenderOptions {
+export interface FetchOptions {
+  /** false면 데이터 주소가 내부망이나 이 컴퓨터(127.0.0.1, 10.x, 192.168.x, 169.254.169.254 같은 주소)를 가리킬 때 막아요. 기본 true, MCP 서버는 false로 써요 */
+  allowPrivate?: boolean;
+}
+
+export interface RenderOptions extends FetchOptions {
   format?: "svg" | "png" | "html";
   width?: number;
   height?: number;
@@ -196,34 +202,48 @@ function standaloneUrl(): string | null {
 export const FETCH_TIMEOUT_MS = 15_000;
 export const MAX_FETCH_BYTES = 20 * 1024 * 1024;
 
+const httpError = (status: number, text?: string) => new Error(`HTTP ${status}${text ? ` ${text}` : ""}`);
+
+/** 본문을 조각으로 받으면서 크기를 세요 (content-length는 없거나 틀릴 수 있어요). 한도를 넘으면 받기를 멈추고, 다 받으면 본문과 content-type만 든 Response를 돌려줘요 */
+async function readCapped(body: AsyncIterable<Uint8Array> | Iterable<Uint8Array>, contentType: string | null | undefined, t: CliText): Promise<Response> {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const c of body) {
+    size += c.byteLength;
+    if (size > MAX_FETCH_BYTES) throw new Error(t.tooLarge(MAX_FETCH_BYTES / 1024 / 1024));
+    chunks.push(c);
+  }
+  return new Response(Buffer.concat(chunks, size), { headers: { "content-type": contentType ?? "" } });
+}
+
 /**
  * http(s) 주소를 시간(FETCH_TIMEOUT_MS)과 크기(MAX_FETCH_BYTES) 한도 안에서 가져와요.
- * 실패하면 주소가 들어간 오류를 던져요. 돌려주는 Response는 다 받은 본문과 content-type만 가져요
+ * allowPrivate가 false면 내부망과 이 컴퓨터를 가리키는 주소를 막아요(MCP 서버). 실패하면 주소가 들어간 오류를 던져요.
+ * 돌려주는 Response는 다 받은 본문과 content-type만 가져요
  */
-export async function fetchUrl(url: string, locale?: string): Promise<Response> {
+export async function fetchUrl(url: string, locale?: string, opts: FetchOptions = {}): Promise<Response> {
   const t = CLI_TEXT[langOf(locale)];
+  const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   try {
     if (!isHttpUrl(url)) throw new Error(t.httpOnly);
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`);
-    // 본문을 조각으로 받으면서 크기를 세요 (content-length는 없거나 틀릴 수 있어요)
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    const reader = res.body?.getReader();
-    while (reader) {
-      const r = await reader.read();
-      if (r.done) break;
-      size += r.value.byteLength;
-      if (size > MAX_FETCH_BYTES) {
-        await reader.cancel();
-        throw new Error(t.tooLarge(MAX_FETCH_BYTES / 1024 / 1024));
+    if (opts.allowPrivate === false) {
+      const { getPublic, decoded } = await import("./guard");
+      const res = await getPublic(new URL(url), signal, t);
+      const status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        // 오류 응답의 본문은 읽지 않고 연결을 끊어요
+        res.destroy();
+        throw httpError(status, res.statusMessage);
       }
-      chunks.push(r.value);
+      return await readCapped(decoded(res), res.headers["content-type"], t);
     }
-    return new Response(Buffer.concat(chunks, size), { headers: { "content-type": res.headers.get("content-type") ?? "" } });
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw httpError(res.status, res.statusText);
+    return await readCapped((res.body as WebReadableStream<Uint8Array> | null) ?? [], res.headers.get("content-type"), t);
   } catch (e) {
-    const m = (e as Error).name === "TimeoutError" ? t.timeout(FETCH_TIMEOUT_MS / 1000) : (e as Error).message;
-    throw new Error(t.fetchFailed(url, m), { cause: e });
+    // signal을 멈추는 건 시간 한도뿐이에요. fetch는 TimeoutError로, http.request는 AbortError로 알려요
+    const timedOut = (e as Error).name === "TimeoutError" || signal.aborted;
+    throw new Error(t.fetchFailed(url, timedOut ? t.timeout(FETCH_TIMEOUT_MS / 1000) : (e as Error).message), { cause: e });
   }
 }
 
@@ -247,7 +267,7 @@ export async function render(input: ChartSpec, opts: RenderOptions = {}): Promis
   const url = (input.data as { url?: unknown } | undefined)?.url;
   let spec: ChartSpec;
   try {
-    spec = csv ? { ...input, data: csv } : await resolveSpecData(input, undefined, locale, (u) => fetchUrl(u, locale));
+    spec = csv ? { ...input, data: csv } : await resolveSpecData(input, undefined, locale, (u) => fetchUrl(u, locale, opts));
   } catch (e) {
     // fetchUrl 오류에는 이미 주소가 있어요. JSON을 못 읽는 오류 같은 나머지에 주소를 붙여요
     const m = (e as Error).message;
@@ -282,9 +302,9 @@ export function isHttpUrl(source: string): boolean {
 }
 
 /** 파일 경로나 URL, CSV/JSON 문자열을 행 배열로 */
-export async function loadRows(source: string, locale?: string): Promise<Record<string, unknown>[]> {
+export async function loadRows(source: string, locale?: string, opts: FetchOptions = {}): Promise<Record<string, unknown>[]> {
   let text: string;
-  if (isHttpUrl(source)) text = await (await fetchUrl(source, locale)).text();
+  if (isHttpUrl(source)) text = await (await fetchUrl(source, locale, opts)).text();
   else if (existsSync(source)) text = readFileSync(source, "utf8");
   else text = source;
   const t = text.trim();

@@ -112,7 +112,7 @@ export function SlopeChart<T = Row>(props: SlopeChartProps<T>) {
   let tip: TooltipData | null = null;
   if (c.active !== null && items[c.active]) {
     const it = items[c.active];
-    tip = { x: (xa + xb) / 2, y: (y(it.a) + y(it.b)) / 2, title: it.label, rows: [{ label: model.periods[0], value: c.fv(it.a) }, { label: model.periods[1], value: c.fv(it.b), color: it.hi ? accent.fill : p.paint("dim") }, { label: msg.change, value: `${it.b - it.a >= 0 ? "+" : "\u2212"}${c.fmt(Math.abs(it.b - it.a))}${props.unit ?? ""}` }] };
+    tip = { x: (xa + xb) / 2, y: (y(it.a) + y(it.b)) / 2, title: it.label, rows: [{ label: model.periods[0], value: c.fv(it.a) }, { label: model.periods[1], value: c.fv(it.b), color: it.hi ? accent.fill : p.paint("dim") }, { label: msg.change, value: `${it.b - it.a >= 0 ? "+" : "\u2212"}${c.fv(Math.abs(it.b - it.a))}` }] };
   }
   const D = c.motion.duration ?? 900;
   const desc = props.description ?? `${msg.kind}. ${msg.span(model.periods[0], model.periods[1])}: ${items.map((it) => `${it.label} ${c.fv(it.a)}→${c.fv(it.b)}`).join(", ")}.`;

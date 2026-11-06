@@ -110,6 +110,13 @@ describe("통계", () => {
     expect(st.outliers).toEqual([100]);
     expect(st.hi).toBe(9);
   });
+  it("boxStats는 whiskers를 주면 그 백분위가 수염 끝이고, 밖의 값이 이상값이에요", () => {
+    const st = boxStats(Array.from({ length: 100 }, (_, i) => i + 1), [5, 95]);
+    expect(st.lo).toBeCloseTo(5.95, 10);
+    expect(st.hi).toBeCloseTo(95.05, 10);
+    expect(st.outliers).toEqual([1, 2, 3, 4, 5, 96, 97, 98, 99, 100]);
+    expect(st.q1).toBe(boxStats(Array.from({ length: 100 }, (_, i) => i + 1)).q1);
+  });
   it("kde는 넓이가 1에 가까워요", () => {
     const vals = Array.from({ length: 400 }, (_, i) => Math.sin(i) * 10 + 50);
     const xs = Array.from({ length: 400 }, (_, i) => i * 0.25);

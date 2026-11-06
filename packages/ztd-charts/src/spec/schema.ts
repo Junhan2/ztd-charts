@@ -101,9 +101,11 @@ function sharedDefs(t: SchemaText): Record<"data" | "card" | "theme", JSONSchema
 export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSONSchema {
   const base: JSONSchema = { description: o.description };
   if (o.default !== undefined) base.default = o.default;
+  // 숫자 옵션과 숫자 배열의 항목이 같이 써요
+  const range = { ...(o.min !== undefined ? { minimum: o.min } : {}), ...(o.max !== undefined ? { maximum: o.max } : {}) };
   switch (o.type) {
     case "number":
-      return { ...base, type: "number", ...(o.min !== undefined ? { minimum: o.min } : {}), ...(o.max !== undefined ? { maximum: o.max } : {}) };
+      return { ...base, type: "number", ...range };
     case "string":
       return { ...base, type: "string" };
     case "boolean":
@@ -111,7 +113,12 @@ export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSON
     case "enum":
       return { ...base, enum: [...(o.enum ?? [])] };
     case "array":
-      return { ...base, type: "array", ...(o.items ? { items: { type: o.items } } : {}) };
+      return {
+        ...base,
+        type: "array",
+        ...(o.items ? { items: { type: o.items, ...range } } : {}),
+        ...(o.length !== undefined ? { minItems: o.length, maxItems: o.length } : {}),
+      };
     case "object":
       return { ...base, type: "object" };
     case "highlight":

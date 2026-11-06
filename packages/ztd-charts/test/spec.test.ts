@@ -202,6 +202,12 @@ describe("validateSpec 메시지", () => {
     const r = validateSpec({ ...base, options: { hilight: "a" } });
     expect(r.warnings[0].message).toContain('"highlight"');
   });
+  it("상자 그림 whiskers는 0~100 사이 숫자 두 개를 받아요(순서는 그릴 때 맞춰요)", () => {
+    const box = (whiskers: unknown) => codes({ type: "box", data: [{ group: "a", value: 1 }], options: { whiskers } });
+    for (const ok of [[5, 95], [0, 100], [95, 5]]) expect(box(ok)).not.toContain("bad_option_items");
+    for (const bad of [[5], [5, 50, 95], [-1, 95], [5, 101], [5, "95"]]) expect(box(bad)).toContain("bad_option_items");
+    expect(box("5-95")).toContain("bad_option_type");
+  });
   it("data 모양", () => {
     expect(codes({ type: "pie", data: [[1, 2]] })).toContain("bad_row");
     expect(codes({ type: "pie", data: { url: "ftp://x" } })).toContain("bad_url");

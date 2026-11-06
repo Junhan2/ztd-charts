@@ -22,6 +22,7 @@ const en = {
   med: "Median",
   q1: "Q1",
   min: "Min (whisker)",
+  pct: (p: number) => `P${p} (whisker)`,
   n: "Sample size",
   count: (n: number, outliers: number) => `${n}${outliers ? ` · ${plural(outliers, "outlier")}` : ""}`,
   summary: (median: string, q1: string, q3: string) => `median ${median}, IQR ${q1} to ${q3}`,
@@ -37,6 +38,7 @@ const MSG: Record<ChartLang, typeof en> = {
     med: "중앙값",
     q1: "1사분위",
     min: "최소(수염)",
+    pct: (p) => `${p}백분위(수염)`,
     n: "표본",
     count: (n, outliers) => `${n}개${outliers ? ` · 이상값 ${outliers}` : ""}`,
     summary: (median, q1, q3) => `중앙값 ${median}, 사분위 ${q1}~${q3}`,
@@ -53,6 +55,8 @@ export interface BoxPlotProps<T = Row> extends BaseChartProps<T> {
   outliers?: boolean;
   /** 축에 0 포함. 기본 false */
   zero?: boolean;
+  /** 수염 끝 백분위 [낮은 쪽, 높은 쪽](0~100). 예: [5, 95]. 없으면 사분위 범위의 1.5배 안에서 가장 먼 값(Tukey) */
+  whiskers?: readonly [number, number];
   /** 강조 그룹. 판별 함수는 행이 아니라 그룹 이름을 받아요: (name, index) => boolean. 기본 중앙값이 가장 큰 그룹 */
   highlight?: BaseChartProps<T>["highlight"];
 }
@@ -72,6 +76,12 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.55)), duration: 850, stagger: 90 });
   const { p, width: W, height: H } = c;
   const variant = props.variant ?? "box";
+  // 배열을 그때그때 새로 넘겨도 값이 같으면 다시 계산하지 않게 두 숫자로 풀어요.
+  // 0~100 안의 두 숫자일 때만 백분위 수염이고(거꾸로 줘도 작은 쪽이 아래), 아니면 Tukey 수염이에요. 스펙 검사를 거치지 않은 값도 NaN을 그리지 않아요
+  const [wa = NaN, wb = NaN] = props.whiskers ?? [];
+  const isPct = wa >= 0 && wa <= 100 && wb >= 0 && wb <= 100;
+  const wLo = isPct ? Math.min(wa, wb) : undefined;
+  const wHi = isPct ? Math.max(wa, wb) : undefined;
 
   const model = useMemo(() => {
     const gg = strGetter(props.group, "group");
@@ -84,7 +94,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
     });
     // 값이 하나도 없는 그룹은 빼요 (사분위가 NaN이 되어 SVG에 NaN이 남아요)
     const names = allNames.filter((n) => by.get(n)!.length > 0);
-    const stats = names.map((n) => boxStats(by.get(n)!));
+    const stats = names.map((n) => boxStats(by.get(n)!, wLo !== undefined && wHi !== undefined ? [wLo, wHi] : undefined));
     const all = [...by.values()].flat();
     const [mn, mx] = extent(all);
     const dom = fitDomain(mn, mx, 4, { zero: props.zero ?? false, pad: 0.06 });
@@ -94,7 +104,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
     const boxes: BoxInfo[] = names.map((n, g) => ({ g, name: n, st: stats[g], dens: dens[g], hi: hi.has(g) }));
     const peak = Math.max(1e-9, ...dens.flat());
     return { boxes, dom, ys, peak };
-  }, [props.data, props.group, props.value, props.highlight, props.zero, variant]);
+  }, [props.data, props.group, props.value, props.highlight, props.zero, variant, wLo, wHi]);
 
   const tickFmt = makeTickFormatter(props.format, c.locale, Math.max(Math.abs(model.dom[0]), Math.abs(model.dom[1])));
   const ticks = scaleLinear(model.dom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
@@ -129,11 +139,11 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
       y: y(b.st.hi),
       title: b.name,
       rows: [
-        { label: msg.max, value: c.fv(b.st.hi) },
+        { label: wHi !== undefined ? msg.pct(wHi) : msg.max, value: c.fv(b.st.hi) },
         { label: msg.q3, value: c.fv(b.st.q3) },
         { label: msg.med, value: c.fv(b.st.median), color: b.hi ? accent.fill : p.paint("neutral"), strong: true },
         { label: msg.q1, value: c.fv(b.st.q1) },
-        { label: msg.min, value: c.fv(b.st.lo) },
+        { label: wLo !== undefined ? msg.pct(wLo) : msg.min, value: c.fv(b.st.lo) },
         { label: msg.n, value: msg.count(b.st.n, b.st.outliers.length) },
       ],
     };

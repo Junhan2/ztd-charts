@@ -13,6 +13,8 @@ import { Heatmap } from "../src/charts/heatmap";
 import { AreaChart, LineChart } from "../src/charts/line";
 import { LollipopChart } from "../src/charts/lollipop";
 import { ParetoChart } from "../src/charts/pareto";
+import { RadarChart } from "../src/charts/radar";
+import { GaugeChart } from "../src/charts/radial";
 import { RidgelineChart } from "../src/charts/ridgeline";
 import { Sparkline } from "../src/charts/sparkline";
 import { StreamGraph } from "../src/charts/stream";
@@ -379,6 +381,29 @@ describe("14: accessible text keeps the unit", () => {
     const x = r(<BoxPlot data={[1, 2, 3, 4, 5].map((value) => ({ group: "g", value }))} unit="원" width={400} animate={false} />);
     expect(tds(x)[0]).toBe("g=median 3원, IQR 2원 to 4원");
   });
+
+  it("a missing value shows the dash without the unit", () => {
+    const data = [
+      { axis: "Speed", p: 3, q: 4 },
+      { axis: "Stability", p: null, q: 5 },
+    ];
+    const h = r(<RadarChart data={data} value={["p", "q"]} unit="원" width={400} animate={false} />);
+    expect(tds(h).join(" | ")).not.toContain("-원");
+    expect(tds(h)).toContain("Stability=p -, q 5원");
+    // 게이지 가운데 큰 숫자도 fv를 거쳐요
+    const g = texts(r(<GaugeChart data={[{ value: null, target: 85 }]} unit="%" width={300} animate={false} />)).map((t) => t.text);
+    expect(g).toContain("-");
+    expect(g).not.toContain("-%");
+  });
+
+  it("box plot whiskers: reversed values draw the same, invalid ones fall back to Tukey without NaN", () => {
+    const data = Array.from({ length: 100 }, (_, i) => ({ group: "g", value: i + 1 }));
+    const draw = (whiskers?: readonly [number, number]) => r(<BoxPlot data={data} whiskers={whiskers} width={400} animate={false} />);
+    expect(draw([95, 5])).toBe(draw([5, 95]));
+    expect(draw([5, 150])).toBe(draw());
+    expect(draw([5, 150])).not.toContain("NaN");
+    expect(draw([5, 95])).not.toBe(draw());
+  });
 });
 
 describe("15: bar value labels", () => {
@@ -407,6 +432,16 @@ describe("15: bar value labels", () => {
 });
 
 describe("16: edge layouts", () => {
+  it("calendar keeps a year of days inside the chart width, down to 160px", () => {
+    const data = Array.from({ length: 365 }, (_, i) => ({ date: new Date(2025, 0, 1 + i), value: i % 7 }));
+    for (const w of [160, 240, 260, 600]) {
+      const h = r(<CalendarHeatmap data={data} width={w} animate={false} />);
+      const edges = [...h.matchAll(/<rect x="([\d.-]+)" y="[\d.-]+" width="([\d.]+)" height="[\d.]+" rx=/g)].map((m) => Number(m[1]) + Number(m[2]));
+      expect(edges.length).toBe(365);
+      expect(Math.max(...edges)).toBeLessThanOrEqual(w);
+    }
+  });
+
   it("ridgeline with overlap 0 and one group has no NaN", () => {
     const h = r(<RidgelineChart data={[1, 2, 3].map((value) => ({ group: "a", value }))} overlap={0} width={400} animate={false} />);
     expect(h).not.toContain("NaN");

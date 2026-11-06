@@ -116,6 +116,7 @@ export function Revenue() {
 | 2D arrays, SQL rows + fields | `fromRows(rows, columns)` |
 | Key-value maps, column sets | `fromObjects({ Mobile: 72 })`, `fromObjects({ month: [...], revenue: [...] })` |
 | Wide table → long table | `melt(rows, ["month"])` or `y={["Search", "Social"]}` |
+| Raw samples → percentiles (p95) | `percentiles(rows, { by: "minute", value: "ms" })` gives `p50`, `p95`, `p99` per group, then `y={["p50", "p95", "p99"]}` |
 
 `loading` is true while any fetch runs, including `refreshMs` and `reload()`. The previous rows stay in `data` meanwhile, so `loading={r.loading && !r.data.length}` (as above) shows the skeleton only on the first load and keeps the chart in place during a refresh.
 
@@ -172,6 +173,8 @@ A stdio MCP server with five tools.
 | `validate_spec` | Errors and warnings with paths and suggestions |
 | `render_chart` | PNG image + SVG + React code. `locale: "ko"` for Korean chart text and number formats |
 | `suggest_chart` | Chart suggestions and ready-to-use specs from CSV, rows or a URL |
+
+Data URLs on a private or local network (localhost, 10.x, 192.168.x, 169.254.169.254) are refused. To load from a local dev server, add `ZTD_CHARTS_ALLOW_PRIVATE_URLS=1` to the server's environment: `-e` in `claude mcp add`, or the `env` field in a JSON config.
 
 Claude Desktop (`claude_desktop_config.json`):
 

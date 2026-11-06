@@ -420,8 +420,8 @@ function bumpRows(apps: readonly string[], months: readonly string[]) {
   return apps.flatMap((a, ai) => months.map((m, mi) => ({ month: m, app: a, rank: ranks[ai][mi] })));
 }
 /** 월별 앱스토어 순위 */
-export const bumpSample = /* @__PURE__ */ bumpRows(["Our app", "App A", "App B", "App C", "App D", "App E"], MONTHS_EN.slice(0, 7));
-export const bumpSampleKo = /* @__PURE__ */ bumpRows(["우리 앱", "A앱", "B앱", "C앱", "D앱", "E앱"], MONTHS_KO.slice(0, 7));
+export const bumpSample = /* @__PURE__ */ bumpRows(["Our app", "App A", "App B", "App C", "App D", "App E"], /* @__PURE__ */ MONTHS_EN.slice(0, 7));
+export const bumpSampleKo = /* @__PURE__ */ bumpRows(["우리 앱", "A앱", "B앱", "C앱", "D앱", "E앱"], /* @__PURE__ */ MONTHS_KO.slice(0, 7));
 
 /** 지점별 응답 시간 (ms) */
 export const boxSample = /* @__PURE__ */ (() => {

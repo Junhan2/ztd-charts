@@ -2,7 +2,7 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.2.1";
+export const VERSION = "0.3.0";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
@@ -70,6 +70,8 @@ Examples
   httpOnly: "only http:// and https:// addresses can be fetched",
   timeout: (s: number) => `no response within ${s} seconds`,
   tooLarge: (mb: number) => `the response is larger than ${mb} MB`,
+  privateUrl: "the address points to a private or local network, which is blocked. To allow it, run the MCP server with ZTD_CHARTS_ALLOW_PRIVATE_URLS=1",
+  tooManyRedirects: "too many redirects",
   /** ztd-charts init이 만드는 예시 파일 */
   init: (type: string) => ({
     "charts/sales.csv": "month,channel,revenue\n2025-01,Search,120\n2025-01,Social,64\n2025-02,Search,128\n2025-02,Social,75\n2025-03,Search,131\n2025-03,Social,92\n2025-04,Search,140\n2025-04,Social,104\n",
@@ -146,6 +148,8 @@ const ko: CliText = {
   httpOnly: "http://, https:// 주소만 가져올 수 있어요",
   timeout: (s) => `${s}초 안에 응답이 없어요`,
   tooLarge: (mb) => `응답이 ${mb}MB보다 커요`,
+  privateUrl: "내부망이나 이 컴퓨터를 가리키는 주소라 막았어요. 허용하려면 MCP 서버를 ZTD_CHARTS_ALLOW_PRIVATE_URLS=1로 실행해 주세요",
+  tooManyRedirects: "리디렉트가 너무 많아요",
   init: (type) => ({
     "charts/sales.csv": "month,channel,revenue\n2025-01,검색,120\n2025-01,SNS,64\n2025-02,검색,128\n2025-02,SNS,75\n2025-03,검색,131\n2025-03,SNS,92\n2025-04,검색,140\n2025-04,SNS,104\n",
     "charts/Dashboard.tsx": dashboard(type, {

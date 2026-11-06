@@ -5569,6 +5569,17 @@
               "default": false,
               "type": "boolean"
             },
+            "whiskers": {
+              "description": "Whisker ends as percentiles [low, high], such as [5, 95]. Without it, whiskers reach the farthest values within 1.5 × IQR",
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",

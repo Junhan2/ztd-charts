@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fetchChartData, readResponse } from "../src/data/useChartData";
 import { dataSignature, fromObjects, fromRows, lttb, melt, normalizeData, parseCSV, pluck, toCSV } from "../src/data/parse";
 import { toNumber } from "../src/data/accessor";
+import { percentile, percentiles } from "../src/data/percentile";
 import { formatCompact, formatCurrency, formatPercent, makeFormatter, toDate } from "../src/core/format";
 import { fitDomain, niceStep, robustMax, ticksFor, timeTicks } from "../src/core/scale";
 import { dodgeVertical, textWidth, truncate, wrapLines } from "../src/core/text";
@@ -295,5 +296,32 @@ describe("lazyArray", () => {
   it("지연 라벨로도 문자열 강조가 돼요", () => {
     const labels = lazyArray(3, (i) => ["a", "b", "c"][i]);
     expect([...resolveHighlight("b", labels, labels, [1, 2, 3])]).toEqual([1]);
+  });
+});
+
+describe("percentile, percentiles", () => {
+  it("percentile은 두 값 사이를 선형 보간하고, 숫자가 아닌 값은 빼요", () => {
+    const xs = Array.from({ length: 10 }, (_, i) => i + 1);
+    expect(percentile(xs, 95)).toBeCloseTo(9.55, 10);
+    expect(percentile(xs, 50)).toBe(5.5);
+    expect(percentile([3, "x", null, "2", 1], 50)).toBe(2);
+    expect(percentile([], 50)).toBeNaN();
+    expect(percentile(xs, 101)).toBeNaN();
+  });
+  it("percentiles는 묶음이 처음 나온 순서대로 p50, p95, p99 행을 돌려줘요", () => {
+    const rows = [
+      ...Array.from({ length: 100 }, (_, i) => ({ minute: "10:01", api: "pay", ms: i + 1 })),
+      ...Array.from({ length: 10 }, (_, i) => ({ minute: "10:00", api: "pay", ms: (i + 1) * 10 })),
+      { minute: "10:00", api: "search", ms: "7" },
+    ];
+    const byMinute = percentiles(rows, { by: "minute", value: "ms" });
+    expect(byMinute.map((r) => r.minute)).toEqual(["10:01", "10:00"]);
+    expect(byMinute[0]).toEqual({ minute: "10:01", p50: 50.5, p95: expect.closeTo(95.05, 10), p99: expect.closeTo(99.01, 10) });
+    const both = percentiles(rows, { by: ["minute", "api"], value: "ms", p: [90] });
+    expect(both).toEqual([
+      { minute: "10:01", api: "pay", p90: expect.closeTo(90.1, 10) },
+      { minute: "10:00", api: "pay", p90: expect.closeTo(91, 10) },
+      { minute: "10:00", api: "search", p90: 7 },
+    ]);
   });
 });

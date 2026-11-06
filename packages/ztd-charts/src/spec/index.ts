@@ -15,3 +15,4 @@ export { suggestCharts, profileData, type ColumnProfile, type DataProfile, type 
 /** 예시 데이터: pieSample, lineSample … (네임스페이스 객체는 트리 셰이킹을 막아서 이름으로 내보내요) */
 export * from "./samples";
 export { parseCSV, toCSV, fromRows, fromObjects, melt, normalizeData } from "../data/parse";
+export { percentile, percentiles, type PercentilesOptions } from "../data/percentile";

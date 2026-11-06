@@ -12,6 +12,7 @@ export { textWidth } from "./core/text";
 
 export { parseCSV, toCSV, fromRows, fromObjects, melt, normalizeData, lttb, pluck, dataSignature, type ParseCSVOptions, type CsvRow } from "./data/parse";
 export { toNumber } from "./data/accessor";
+export { percentile, percentiles, type PercentilesOptions } from "./data/percentile";
 export { useChartData, fetchChartData, readResponse, type UseChartDataOptions, type ChartDataState, type DataSource } from "./data/useChartData";
 
 export { ChartCard, ChartGrid, ChartState, Legend, Badge, type ChartCardProps, type ChartGridProps, type ChartStateProps, type LegendItem, type Level } from "./components/ChartCard";

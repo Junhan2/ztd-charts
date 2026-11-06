@@ -113,7 +113,7 @@ export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
             const rad = radius(k);
             const [lx, ly] = polar(cx, cy, rad, start);
             const fs = Math.max(9.5, Math.min(11.5, step * 0.62));
-            const text = `${r.label} ${c.fmt(r.value)}${props.unit ?? ""}`;
+            const text = `${r.label} ${c.fv(r.value)}`;
             return (
               <Txt key={k} x={lx - 8} y={ly} anchor="end" size={fs} weight={r.hi ? 800 : 500} fill={p.paint(r.hi ? "ink" : "muted")} opacity={m.fade(k * stg + D * 0.3, 280)}>
                 {truncate(text, labelMax, fs, r.hi ? 800 : 500)}
@@ -233,7 +233,7 @@ export function GaugeChart<T = Row>(props: GaugeChartProps<T>) {
         ) : null}
       </g>
       <Txt x={cx} y={variant === "semi" ? cy - big * 0.55 : cy - (props.label ? big * 0.18 : 0)} anchor="middle" size={big} weight={800} fill={p.paint("ink")} letterSpacing={-1}>
-        {`${c.fmt(cur[1])}${props.unit ?? ""}`}
+        {c.fv(cur[1])}
       </Txt>
       {props.label ? (
         <Txt x={cx} y={variant === "semi" ? cy - 6 : cy + big * 0.5} anchor="middle" size={11.5} fill={p.paint("muted")}>

@@ -1,6 +1,6 @@
 import * as S from "../samples";
 import type { SchemaText } from "../schema";
-import type { ChartSpec } from "../types";
+import type { EntryExample } from "../registry";
 
 /**
  * 레지스트리의 한글 글과 예시. 영어 원문과 같은 내용을 한국어 화면 문구 기준(해요체, 괄호는 앞말에 붙임)으로 써요.
@@ -15,7 +15,8 @@ export interface ChartTextKo {
   channels: Record<string, string>;
   /** 전용 옵션 이름 -> 설명 */
   options: Record<string, string>;
-  example: ChartSpec;
+  /** 예시의 type, 카드 번호, 제목, 수준은 localizeDef가 영어 레지스트리와 같은 규칙으로 채워요 */
+  example: EntryExample;
 }
 
 export const KO_CHARTS: Record<string, ChartTextKo> = {
@@ -26,7 +27,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조 조각(기본은 가장 큰 조각)만 강조색으로, 나머지는 무채색으로 칠해서 메시지가 분명해요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { colorMode: "항목마다 다른 무채색(categorical) 또는 강조 조각만 색(emphasis)", sort: "큰 값부터 정렬", startAngle: "시작 각도(도). 0이 12시", labelMode: "조각 라벨에 보일 내용" },
-    example: { type: "pie", data: S.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { number: "01", title: "파이 차트", subtitle: "기기별 매출 비중", takeaway: "2~4개 항목만", level: "기본", legend: "auto" } },
+    example: { data: S.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { subtitle: "기기별 매출 비중", takeaway: "2~4개 항목만", legend: "auto" } },
   },
   donut: {
     summary: "가운데에 합계를 둔 비중 차트",
@@ -35,7 +36,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "등장할 때 가운데 숫자가 0부터 올라가서 합계가 먼저 눈에 들어와요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { innerRadius: "안쪽 반지름 비율", centerValue: '가운데 숫자: "total" | "highlight" | 숫자 | null(없음)', centerLabel: "가운데 숫자 아래 설명", legend: "범례 위치", sort: "큰 값부터 정렬" },
-    example: { type: "donut", data: S.donutSampleKo, encoding: { label: "type", value: "count" }, options: { centerLabel: "전환(건)" }, card: { number: "02", title: "도넛 차트", subtitle: "전환 유형별 비중", takeaway: "가운데에 총합", level: "기본" } },
+    example: { data: S.donutSampleKo, encoding: { label: "type", value: "count" }, options: { centerLabel: "전환(건)" }, card: { subtitle: "전환 유형별 비중", takeaway: "가운데에 총합" } },
   },
   funnel: {
     summary: "단계를 지날 때마다 줄어드는 양과 전환율",
@@ -44,7 +45,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "전환율이 가장 낮은 단계를 자동으로 강조해서 어디서 이탈하는지 바로 보여요.",
     channels: { label: "단계 이름", value: "단계 인원" },
     options: { showRates: "오른쪽에 전환율 표시", rateBase: "전환율 기준", rateLabel: '전환율 열 제목. 한국어 로캘의 기본값은 "전 단계 대비"' },
-    example: { type: "funnel", data: S.funnelSampleKo, encoding: { label: "stage", value: "users" }, card: { number: "03", title: "퍼널 차트", subtitle: "단계별 사용자(명)", takeaway: "단계별 이탈", level: "기본" } },
+    example: { data: S.funnelSampleKo, encoding: { label: "stage", value: "users" }, card: { subtitle: "단계별 사용자(명)", takeaway: "단계별 이탈" } },
   },
   waffle: {
     summary: "100칸 격자로 보는 비율",
@@ -53,7 +54,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "칸이 한 줄씩 채워지며 등장해서 숫자를 읽기 전에 감이 와요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { cells: "칸 수", columns: "한 줄 칸 수", total: "전체 값. 없으면 합계", summary: "오른쪽에 큰 숫자 표시", summaryLabel: "큰 숫자 아래 설명", summaryNote: "둘째 줄 설명" },
-    example: { type: "waffle", data: S.waffleSampleKo, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "신규 고객", summaryNote: "재구매 62명" }, card: { number: "04", title: "와플 차트", subtitle: "고객 100명 중", takeaway: "100칸으로 보는 비율", level: "중급", legend: "auto" } },
+    example: { data: S.waffleSampleKo, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "신규 고객", summaryNote: "재구매 62명" }, card: { subtitle: "고객 100명 중", takeaway: "100칸으로 보는 비율", legend: "auto" } },
   },
   treemap: {
     summary: "넓이로 보는 계층 구조의 비율",
@@ -62,7 +63,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "squarified 배치로 칸이 정사각형에 가까워서 라벨이 잘 들어가요.",
     channels: { label: "잎(가장 아래 단계) 이름", value: "값 필드", group: "상위 그룹 필드" },
     options: { path: "여러 단계 경로 필드 목록", labelMode: "칸 라벨에 보일 내용", sort: "큰 값부터 정렬" },
-    example: { type: "treemap", data: S.treemapSampleKo, encoding: { group: "category", label: "product", value: "share" }, card: { number: "05", title: "트리맵", subtitle: "카테고리별 상품 매출 비중", takeaway: "계층의 비율", level: "중급" } },
+    example: { data: S.treemapSampleKo, encoding: { group: "category", label: "product", value: "share" }, card: { subtitle: "카테고리별 상품 매출 비중", takeaway: "계층의 비율" } },
   },
   sunburst: {
     summary: "원형으로 그린 계층",
@@ -71,7 +72,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "안쪽 고리부터 차례로 펼쳐지며 등장해서 계층을 단계별로 읽을 수 있어요.",
     channels: { label: "잎 이름", value: "값 필드", group: "상위 그룹 필드" },
     options: { path: "여러 단계 경로 필드 목록", sort: "큰 값부터 정렬", hole: "가운데 구멍 비율" },
-    example: { type: "sunburst", data: S.sunburstSampleKo, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "전체 상품" }, card: { number: "06", title: "선버스트", subtitle: "채널별, 캠페인별 광고비 비중", takeaway: "원형으로 그린 계층", level: "중급" } },
+    example: { data: S.sunburstSampleKo, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "전체 상품" }, card: { subtitle: "채널별, 캠페인별 광고비 비중", takeaway: "원형으로 그린 계층" } },
   },
   waterfall: {
     summary: "시작값에서 끝값까지 증감 요인 분해",
@@ -80,7 +81,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "막대가 왼쪽부터 차례로 이어져서 어디서 늘고 줄었는지 보여요.",
     channels: { label: "항목 이름 필드", value: "증감 값(합계 행은 생략 가능)", type: '"total"이면 합계 막대' },
     options: { startTotal: "첫 행을 시작 합계로", endTotal: "끝에 누적 합계 막대. 문자열이면 이름", connectors: "막대 사이 연결선" },
-    example: { type: "waterfall", data: S.waterfallSampleKo, encoding: { label: "item", value: "amount", type: "kind" }, card: { number: "07", title: "폭포 차트", subtitle: "9~10월 매출 변화(만 원)", takeaway: "증감 요인 분해", level: "중급", legend: [{ label: "증가", color: "neutral" }, { label: "감소", color: "neutralStrong" }] } },
+    example: { data: S.waterfallSampleKo, encoding: { label: "item", value: "amount", type: "kind" }, card: { subtitle: "9~10월 매출 변화(만 원)", takeaway: "증감 요인 분해", legend: [{ label: "증가", color: "neutral" }, { label: "감소", color: "neutralStrong" }] } },
   },
   pareto: {
     summary: "큰 값부터 놓은 막대와 누적 비율 선",
@@ -89,7 +90,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "막대가 나온 뒤 누적선이 그려지고, 기준선(기본 80%)과 만나는 점을 표시해요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { threshold: "기준선(%)", sort: "큰 값부터 정렬", rankLabels: 'x 라벨을 "1위, 2위…"로' },
-    example: { type: "pareto", data: S.paretoSampleKo, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { number: "08", title: "파레토 차트", subtitle: "키워드별 광고비 비중(%)", takeaway: "상위 20%가 80%?", level: "중급", legend: [{ label: "비중", color: "neutral" }, { label: "누적", color: "ink", shape: "line" }] } },
+    example: { data: S.paretoSampleKo, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { subtitle: "키워드별 광고비 비중(%)", takeaway: "상위 20%가 80%?", legend: [{ label: "비중", color: "neutral" }, { label: "누적", color: "ink", shape: "line" }] } },
   },
   marimekko: {
     summary: "폭(열 비중)과 높이(열 안 비중)로 함께 보는 두 비율",
@@ -98,7 +99,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "열이 아래에서 차올라서 두 비율을 한 번에 읽을 수 있어요.",
     channels: { x: "열(가로 구분) 필드", series: "쌓는 계열 필드", value: "값 필드" },
     options: {},
-    example: { type: "marimekko", data: S.marimekkoSampleKo, encoding: { x: "channel", series: "device", value: "sales" }, card: { number: "09", title: "마리메코 차트", subtitle: "채널 매출, 기기 구성(%)", takeaway: "폭과 높이로 두 비율", level: "심화", legend: "auto" } },
+    example: { data: S.marimekkoSampleKo, encoding: { x: "channel", series: "device", value: "sales" }, card: { subtitle: "채널 매출, 기기 구성(%)", takeaway: "폭과 높이로 두 비율", legend: "auto" } },
   },
   heatmap: {
     summary: "두 범주가 만나는 칸의 값을 색 진하기로 나타낸 격자",
@@ -107,7 +108,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조색 하나의 진하기만 써서 테마가 바뀌어도 일관돼요. 칸이 많으면 캔버스로 바꿔 1만 칸도 가볍게 그려요.",
     channels: { x: "열 필드", y: "행 필드", value: "값 필드" },
     options: { showValues: '칸 안 숫자. "auto"면 들어갈 때만 보여요', legend: "색 범례 표시", legendLabels: "범례 양끝 이름", canvasThreshold: "칸이 이보다 많으면 캔버스로 그려요" },
-    example: { type: "heatmap", data: S.heatmapSampleKo, encoding: { x: "hour", y: "day", value: "orders" }, card: { number: "10", title: "히트맵", subtitle: "요일 × 시간대 주문 수", takeaway: "금요일 밤이 가장 붐벼요", level: "중급" } },
+    example: { data: S.heatmapSampleKo, encoding: { x: "hour", y: "day", value: "orders" }, card: { subtitle: "요일 × 시간대 주문 수", takeaway: "금요일 밤이 가장 붐벼요" } },
   },
   radar: {
     summary: "여러 지표를 한 번에 비교",
@@ -116,7 +117,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조 계열 하나만 채우고 나머지는 선으로 그려서 겹쳐도 읽을 수 있어요.",
     channels: { axis: "지표(축) 필드", value: "값 필드", series: "계열 필드" },
     options: { max: "바깥 고리 값", levels: "고리 수", circular: "다각형 대신 원 격자" },
-    example: { type: "radar", data: S.radarSampleKo, encoding: { axis: "metric", series: "product", value: "score" }, card: { number: "11", title: "레이더 차트", subtitle: "제품 평가(100점 만점)", takeaway: "디자인은 앞서고 가격은 뒤져요", level: "중급", legend: [{ label: "우리 앱", color: "accent" }, { label: "업계 평균", color: "neutralStrong" }] } },
+    example: { data: S.radarSampleKo, encoding: { axis: "metric", series: "product", value: "score" }, card: { subtitle: "제품 평가(100점 만점)", takeaway: "디자인은 앞서고 가격은 뒤져요", legend: [{ label: "우리 앱", color: "accent" }, { label: "업계 평균", color: "neutralStrong" }] } },
   },
   bubble: {
     summary: "x, y, 크기 세 값을 한 번에 보는 차트. 크기가 없으면 산점도예요",
@@ -125,7 +126,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "점이 많으면 캔버스로 전환하고 격자 색인으로 가장 가까운 점을 바로 찾아 1만 점에서도 호버가 부드러워요.",
     channels: { x: "x 값", y: "y 값", size: "원 크기", label: "이름" },
     options: { sizeRange: "반지름 범위(px)", xLabel: "x축 이름", yLabel: "y축 이름", zero: "축에 0 포함", maxLabels: "점 라벨 최대 개수", canvasThreshold: "점이 이보다 많으면 캔버스로 그려요", xFormat: "x 값 포맷" },
-    example: { type: "bubble", data: S.bubbleSampleKo, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC(원)", yLabel: "ROAS(%)" }, card: { number: "12", title: "버블 차트", subtitle: "캠페인별 CPC, ROAS, 광고비", takeaway: "큰 원이 효율도 좋을까요?", level: "중급" } },
+    example: { data: S.bubbleSampleKo, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC(원)", yLabel: "ROAS(%)" }, card: { subtitle: "캠페인별 CPC, ROAS, 광고비", takeaway: "큰 원이 효율도 좋을까요?" } },
   },
   line: {
     summary: "시간에 따른 변화",
@@ -134,7 +135,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조 계열만 색으로, 나머지는 회색으로 칠하고 오른쪽에 이름표를 붙여요. 1만 점도 LTTB로 줄여 path 하나로 그려요.",
     channels: { x: "x 필드(날짜, 숫자, 범주)", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드(긴 표)" },
     options: { curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", dots: '점 표시. "auto" | true | false', area: "강조 계열 아래 그라데이션", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", colorMode: "강조 계열만 색 또는 계열마다 색", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", referenceLines: "가로 기준선 [{ y, label }]", yLabel: "y축 이름", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)' },
-    example: { type: "line", data: S.lineSampleKo, encoding: { x: "month", y: "mau", series: "app" }, options: { unit: "만", area: true }, card: { number: "13", title: "라인 차트", subtitle: "월간 활성 사용자(만 명)", takeaway: "우리 앱만 꾸준히 올라요", level: "기본" } },
+    example: { data: S.lineSampleKo, encoding: { x: "month", y: "mau", series: "app" }, options: { unit: "만", area: true }, card: { subtitle: "월간 활성 사용자(만 명)", takeaway: "우리 앱만 꾸준히 올라요" } },
   },
   area: {
     summary: "누적 합과 구성 변화(쌓기, 100% 쌓기)",
@@ -143,7 +144,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "바닥에서 차오르며 등장해서 쌓이는 구성을 한눈에 볼 수 있어요.",
     channels: { x: "x 필드", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드" },
     options: { stack: "쌓기 방식", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)' },
-    example: { type: "area", data: S.areaSampleKo, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "SNS" }, card: { number: "14", title: "영역 차트", subtitle: "채널별 월 유입(천 명)", takeaway: "SNS 몫이 가장 빨리 커져요", level: "기본", legend: "auto" } },
+    example: { data: S.areaSampleKo, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "SNS" }, card: { subtitle: "채널별 월 유입(천 명)", takeaway: "SNS 몫이 가장 빨리 커져요", legend: "auto" } },
   },
   stream: {
     summary: "여러 계열의 크기와 변화를 나타낸 흐르는 띠",
@@ -152,7 +153,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "wiggle 기준선과 inside-out 정렬로 띠가 덜 출렁여요. 가장 두꺼운 곳에 이름을 넣어요.",
     channels: { x: "x 필드", y: "y 필드", series: "계열 필드" },
     options: { offset: "기준선 모양", reorder: "모양이 깔끔해지게 계열 순서 바꾸기", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동" },
-    example: { type: "stream", data: S.streamSampleKo, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "예능" }, card: { number: "15", title: "스트림그래프", subtitle: "주별 장르 시청 시간(만 시간)", takeaway: "예능이 여름을 지배했어요", level: "심화" } },
+    example: { data: S.streamSampleKo, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "예능" }, card: { subtitle: "주별 장르 시청 시간(만 시간)", takeaway: "예능이 여름을 지배했어요" } },
   },
   bar: {
     summary: "묶은, 쌓은, 100% 막대와 가로 막대",
@@ -161,7 +162,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "계열이 하나면 가장 큰 막대만, 여럿이면 강조 계열만 색으로 칠해요.",
     channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드" },
     options: { layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)" },
-    example: { type: "bar", data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { number: "16", title: "막대 차트", subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", level: "기본", legend: "auto" } },
+    example: { data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", legend: "auto" } },
   },
   radialBar: {
     summary: "목표 대비 달성률 같은 비율을 나타낸 고리",
@@ -170,7 +171,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: '진행률 고리가 하나뿐이면 게이지(variant "ring")가 맞아요.',
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { max: "한 바퀴의 값", sweep: "호 길이(도)" },
-    example: { type: "radialBar", data: S.radialBarSampleKo, encoding: { label: "goal", value: "rate" }, options: { unit: "%", format: "integer" }, card: { number: "17", title: "방사형 막대", subtitle: "분기 목표 달성률", takeaway: "재구매만 목표에 가까워요", level: "중급" } },
+    example: { data: S.radialBarSampleKo, encoding: { label: "goal", value: "rate" }, options: { unit: "%", format: "integer" }, card: { subtitle: "분기 목표 달성률", takeaway: "재구매만 목표에 가까워요" } },
   },
   gauge: {
     summary: "KPI 하나의 현재값과 목표",
@@ -179,7 +180,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "호가 차오르는 동안 숫자가 올라가요. variant로 호, 반원(semi), 진행률 고리(ring), 눈금(ticks) 모양을 골라요.",
     channels: { value: "값 필드", target: "목표 필드" },
     options: { min: "최솟값", max: "최댓값", label: "가운데 설명", variant: "모양. ticks는 눈금이 값까지 켜져요", bands: "구간 경계값(arc, semi)", ticks: "variant=ticks일 때 눈금 개수. 기본은 크기에 맞춰요" },
-    example: { type: "gauge", data: S.gaugeSampleKo, encoding: { value: "value", target: "target" }, options: { label: "목표 달성률", unit: "%" }, card: { number: "18", title: "게이지", subtitle: "분기 매출 목표(%)", takeaway: "목표까지 12%p 남았어요", level: "기본" } },
+    example: { data: S.gaugeSampleKo, encoding: { value: "value", target: "target" }, options: { label: "목표 달성률", unit: "%" }, card: { subtitle: "분기 매출 목표(%)", takeaway: "목표까지 12%p 남았어요" } },
   },
   bullet: {
     summary: "목표와 구간(나쁨, 보통, 좋음) 대비 실적",
@@ -188,7 +189,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "게이지 대신 쓰는 작은 형태예요. 목표 대비 실적 비율이 가장 낮은 KPI를 강조해요.",
     channels: { label: "항목 이름 필드", value: "실적 필드", target: "목표 필드" },
     options: { ranges: "구간 경계 필드(작은 것부터)", independent: "행마다 축 범위 따로" },
-    example: { type: "bullet", data: S.bulletSampleKo, encoding: { label: "kpi", value: "actual", target: "target" }, options: { ranges: ["poor", "ok", "good"] }, card: { number: "19", title: "불릿 차트", subtitle: "상반기 KPI(목표: 세로선)", takeaway: "신규 고객이 가장 뒤처져요", level: "중급" } },
+    example: { data: S.bulletSampleKo, encoding: { label: "kpi", value: "actual", target: "target" }, options: { ranges: ["poor", "ok", "good"] }, card: { subtitle: "상반기 KPI(목표: 세로선)", takeaway: "신규 고객이 가장 뒤처져요" } },
   },
   sparkline: {
     summary: "표나 KPI 옆에 넣는 작은 추세선",
@@ -197,7 +198,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "글 사이에 넣는 작은 그래프예요. 축 없이 마지막 값을 글자로 보여 줘요.",
     channels: { x: "x 필드", y: "y 필드" },
     options: { variant: "모양", showValue: "마지막 값을 글자로 표시", showExtremes: "최고점과 최저점 표시", mark: "강조 점을 찍을 위치" },
-    example: { type: "sparkline", data: S.sparklineSample, encoding: { x: "day", y: "revenue" }, options: { unit: "만", height: 120, showExtremes: true }, card: { number: "20", title: "스파크라인", subtitle: "6월 일 매출(만 원)", takeaway: "주말마다 튀어요", level: "기본" } },
+    example: { data: S.sparklineSample, encoding: { x: "day", y: "revenue" }, options: { unit: "만", height: 120, showExtremes: true }, card: { subtitle: "6월 일 매출(만 원)", takeaway: "주말마다 튀어요" } },
   },
   slope: {
     summary: "두 시점 사이 크기와 순위 변화",
@@ -206,7 +207,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "선 기울기로 오르내림을 바로 알 수 있어요. 가장 많이 오른 항목을 강조해요.",
     channels: { label: "항목 이름 필드", x: "시점 필드(긴 표)", value: "값 필드(긴 표)" },
     options: { start: "넓은 표: 시작 값 필드", end: "넓은 표: 끝 값 필드", periodLabels: "양쪽 축 위 제목" },
-    example: { type: "slope", data: S.slopeSampleKo, encoding: { label: "brand", x: "period", value: "share" }, options: { unit: "%" }, card: { number: "21", title: "슬로프 차트", subtitle: "브랜드 점유율(%)", takeaway: "우리만 크게 올랐어요", level: "중급" } },
+    example: { data: S.slopeSampleKo, encoding: { label: "brand", x: "period", value: "share" }, options: { unit: "%" }, card: { subtitle: "브랜드 점유율(%)", takeaway: "우리만 크게 올랐어요" } },
   },
   dumbbell: {
     summary: "항목마다 두 값의 차이(전후, 목표와 실제)",
@@ -215,7 +216,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "막대 두 개보다 잉크가 적고 차이 자체가 선 길이로 보여요.",
     channels: { label: "항목 이름 필드", start: "이전 값", end: "이후 값" },
     options: { labels: "범례 이름 [이전, 이후]", sort: "이후 값 순 정렬", zero: "축에 0 포함" },
-    example: { type: "dumbbell", data: S.dumbbellSampleKo, encoding: { label: "region", start: "before", end: "after" }, options: { labels: ["2024", "2025"], unit: "%" }, card: { number: "22", title: "덤벨 차트", subtitle: "지역별 구매 전환율(%)", takeaway: "서울이 가장 크게 올랐어요", level: "중급" } },
+    example: { data: S.dumbbellSampleKo, encoding: { label: "region", start: "before", end: "after" }, options: { labels: ["2024", "2025"], unit: "%" }, card: { subtitle: "지역별 구매 전환율(%)", takeaway: "서울이 가장 크게 올랐어요" } },
   },
   lollipop: {
     summary: "막대 대신 선과 점. 항목이 많아도 가벼워요",
@@ -224,7 +225,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "기본으로 큰 값부터 정렬해서 순위표처럼 읽을 수 있어요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { orientation: "방향", sort: "큰 값부터 정렬" },
-    example: { type: "lollipop", data: S.lollipopSampleKo, encoding: { label: "feature", value: "usage" }, options: { unit: "%" }, card: { number: "23", title: "롤리팝 차트", subtitle: "기능별 주간 사용률(%)", takeaway: "검색이 압도적이에요", level: "기본" } },
+    example: { data: S.lollipopSampleKo, encoding: { label: "feature", value: "usage" }, options: { unit: "%" }, card: { subtitle: "기능별 주간 사용률(%)", takeaway: "검색이 압도적이에요" } },
   },
   beeswarm: {
     summary: "점 하나하나를 겹치지 않게 늘어놓은 분포",
@@ -233,7 +234,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "평균에 가려진 값 하나하나를 보여 주고, 그룹마다 중앙값을 표시해요.",
     channels: { value: "값 필드", group: "그룹(행) 필드", label: "점 이름" },
     options: { radius: "점 반지름", showMedian: "그룹 중앙값 표시", canvasThreshold: "점이 이보다 많으면 캔버스로 그려요" },
-    example: { type: "beeswarm", data: S.beeswarmSampleKo, encoding: { value: "minutes", group: "plan", label: "id" }, options: { unit: "분" }, card: { number: "24", title: "비스웜", subtitle: "플랜별 하루 사용 시간(분)", takeaway: "프로 플랜은 퍼짐도 커요", level: "심화" } },
+    example: { data: S.beeswarmSampleKo, encoding: { value: "minutes", group: "plan", label: "id" }, options: { unit: "분" }, card: { subtitle: "플랜별 하루 사용 시간(분)", takeaway: "프로 플랜은 퍼짐도 커요" } },
   },
   ridgeline: {
     summary: "그룹별 분포를 겹쳐 쌓은 곡선",
@@ -242,7 +243,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "KDE 곡선이 위에서부터 차례로 솟아오르며 등장해요.",
     channels: { group: "그룹 필드", value: "값 필드" },
     options: { overlap: "겹치는 정도", bandwidth: "KDE 대역폭", sort: "정렬" },
-    example: { type: "ridgeline", data: S.ridgelineSampleKo, encoding: { group: "region", value: "hours" }, options: { unit: "시간" }, card: { number: "25", title: "릿지라인", subtitle: "지역별 배송 소요 시간", takeaway: "제주만 꼬리가 길어요", level: "심화" } },
+    example: { data: S.ridgelineSampleKo, encoding: { group: "region", value: "hours" }, options: { unit: "시간" }, card: { subtitle: "지역별 배송 소요 시간", takeaway: "제주만 꼬리가 길어요" } },
   },
   sankey: {
     summary: "단계 사이 흐름의 양",
@@ -251,7 +252,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "노드 위치를 여러 번 고쳐 겹침을 줄이는 배치(relaxation)를 의존성 없이 구현했어요. 띠가 왼쪽에서 오른쪽으로 흘러가며 등장해요.",
     channels: { source: "출발 노드", target: "도착 노드", value: "값 필드" },
     options: { nodeWidth: "노드 폭(px)", nodePadding: "노드 간격(px)" },
-    example: { type: "sankey", data: S.sankeySampleKo, encoding: { source: "source", target: "target", value: "value" }, options: { highlight: "구매", unit: "명" }, card: { number: "26", title: "생키 다이어그램", subtitle: "유입에서 구매까지(명)", takeaway: "상품 상세에서 절반이 떠나요", level: "심화" } },
+    example: { data: S.sankeySampleKo, encoding: { source: "source", target: "target", value: "value" }, options: { highlight: "구매", unit: "명" }, card: { subtitle: "유입에서 구매까지(명)", takeaway: "상품 상세에서 절반이 떠나요" } },
   },
   chord: {
     summary: "그룹 사이 주고받는 양",
@@ -260,7 +261,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "합계가 가장 큰 그룹을 기본으로 강조해서, 복잡한 다이어그램도 '이 팀이 누구와 일하나'로 읽을 수 있어요.",
     channels: { source: "보내는 그룹", target: "받는 그룹", value: "값 필드" },
     options: { padAngle: "그룹 사이 틈(라디안)" },
-    example: { type: "chord", data: S.chordSampleKo, encoding: { source: "from", target: "to", value: "value" }, options: { highlight: "기획" }, card: { number: "27", title: "코드 다이어그램", subtitle: "팀 사이 협업 요청(건)", takeaway: "기획이 허브예요", level: "심화" } },
+    example: { data: S.chordSampleKo, encoding: { source: "from", target: "to", value: "value" }, options: { highlight: "기획" }, card: { subtitle: "팀 사이 협업 요청(건)", takeaway: "기획이 허브예요" } },
   },
   calendar: {
     summary: "하루하루의 양을 주 단위로 늘어놓은 격자",
@@ -269,7 +270,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "하루를 칸 하나로 그려요. 주 단위로 왼쪽부터 채워지고, 여러 해면 연도마다 줄을 나눠요.",
     channels: { date: "날짜 필드", value: "값 필드" },
     options: { weekStart: "주 시작 요일(0 일요일, 1 월요일)", gap: "칸 간격(px)", canvasThreshold: "날짜가 이보다 많으면 캔버스로 그려요" },
-    example: { type: "calendar", data: S.calendarSample, encoding: { date: "date", value: "commits" }, options: { unit: "회" }, card: { number: "28", title: "캘린더 히트맵", subtitle: "2025년 하루 커밋 수", takeaway: "주말은 조용해요", level: "중급" } },
+    example: { data: S.calendarSample, encoding: { date: "date", value: "commits" }, options: { unit: "회" }, card: { subtitle: "2025년 하루 커밋 수", takeaway: "주말은 조용해요" } },
   },
   bump: {
     summary: "시간에 따른 순위 변화",
@@ -278,7 +279,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "순위만 남겨 교차가 잘 보여요. 가장 많이 오른 항목을 자동으로 강조해요.",
     channels: { x: "시점 필드", series: "항목 필드", rank: "순위 필드(1이 1등)", value: "값 필드(rank 대신, 큰 값이 1등)" },
     options: {},
-    example: { type: "bump", data: S.bumpSampleKo, encoding: { x: "month", series: "app", rank: "rank" }, card: { number: "29", title: "범프 차트", subtitle: "월별 앱스토어 순위", takeaway: "5위에서 1위까지", level: "중급" } },
+    example: { data: S.bumpSampleKo, encoding: { x: "month", series: "app", rank: "rank" }, card: { subtitle: "월별 앱스토어 순위", takeaway: "5위에서 1위까지" } },
   },
   box: {
     summary: "그룹별 분포 요약(사분위, 중앙값, 이상값)",
@@ -286,8 +287,8 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "청중이 사분위에 익숙하지 않을 때(비스웜이 쉬워요)",
     why: "variant 하나로 박스, 바이올린, 둘 다 중에서 골라요. 중앙값에서 위아래로 펼쳐지며 등장해요.",
     channels: { group: "그룹 필드", value: "값 필드" },
-    options: { variant: "모양", outliers: "이상값 점 표시", zero: "축에 0 포함" },
-    example: { type: "box", data: S.boxSample, encoding: { group: "api", value: "ms" }, options: { unit: "ms", variant: "box" }, card: { number: "30", title: "박스 플롯", subtitle: "API별 응답 시간(ms)", takeaway: "결제 API가 가장 느려요", level: "심화" } },
+    options: { variant: "모양", outliers: "이상값 점 표시", zero: "축에 0 포함", whiskers: "수염 끝 백분위 [낮은 쪽, 높은 쪽]. 예: [5, 95]. 없으면 사분위 범위의 1.5배 안에서 가장 먼 값" },
+    example: { data: S.boxSample, encoding: { group: "api", value: "ms" }, options: { unit: "ms", variant: "box" }, card: { subtitle: "API별 응답 시간(ms)", takeaway: "결제 API가 가장 느려요" } },
   },
   parallel: {
     summary: "여러 숫자 지표를 축마다 세워 한 줄로 비교",
@@ -296,7 +297,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조 한 줄과 회색 다수로 읽기 어려운 형태를 이야기로 바꿔요. 행이 많으면 캔버스로 1만 줄도 그려요.",
     channels: { label: "행 이름 필드" },
     options: { dimensions: "축으로 쓸 숫자 필드", dimensionLabels: "축 이름 바꾸기", invert: "작을수록 좋은 축", canvasThreshold: "행이 이보다 많으면 캔버스로 그려요" },
-    example: { type: "parallel", data: S.parallelSampleKo, encoding: { label: "model" }, options: { dimensions: ["price", "weight", "battery", "perf", "screen"], dimensionLabels: { price: "가격(만 원)", weight: "무게(kg)", battery: "배터리(시간)", perf: "성능", screen: "화면(인치)" }, invert: ["price", "weight"], highlight: "에어 13" }, card: { number: "31", title: "평행 좌표", subtitle: "노트북 모델 비교", takeaway: "에어 13은 가볍고 싸요", level: "심화" } },
+    example: { data: S.parallelSampleKo, encoding: { label: "model" }, options: { dimensions: ["price", "weight", "battery", "perf", "screen"], dimensionLabels: { price: "가격(만 원)", weight: "무게(kg)", battery: "배터리(시간)", perf: "성능", screen: "화면(인치)" }, invert: ["price", "weight"], highlight: "에어 13" }, card: { subtitle: "노트북 모델 비교", takeaway: "에어 13은 가볍고 싸요" } },
   },
   candlestick: {
     summary: "기간마다 시가, 고가, 저가, 종가를 담은 봉",
@@ -305,7 +306,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "상승 봉은 강조색, 하락 봉은 회색으로 칠해요. 끌어서 기간을 고르면 그 기간의 등락과 최고가, 최저가를 보여 줘요.",
     channels: { x: "날짜(시점) 필드", open: "시가 필드", high: "고가 필드", low: "저가 필드", close: "종가 필드", volume: "거래량 필드" },
     options: { ma: "종가 이동평균선 기간. 예: [5, 20]", upColor: "오르는 봉 색(토큰 이름이나 CSS 색)", downColor: "내리는 봉 색", maxCandles: "봉이 이보다 많으면 이웃 봉을 합쳐요. 기본값은 그래프 폭 / 4", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', yDomain: "가격 축 범위 고정" },
-    example: { type: "candlestick", data: S.candlestickSample, encoding: { x: "date", open: "open", high: "high", low: "low", close: "close", volume: "volume" }, options: { unit: "원", ma: [5, 20], brush: true }, card: { number: "32", title: "캔들스틱", subtitle: "가상 종목 일봉(원)", takeaway: "10월 중순부터 고점을 높여요", level: "심화", legend: "auto" } },
+    example: { data: S.candlestickSample, encoding: { x: "date", open: "open", high: "high", low: "low", close: "close", volume: "volume" }, options: { unit: "원", ma: [5, 20], brush: true }, card: { subtitle: "가상 종목 일봉(원)", takeaway: "10월 중순부터 고점을 높여요", legend: "auto" } },
   },
   segmented: {
     summary: "전체 하나를 비중대로 나눈 막대와 목록",
@@ -314,7 +315,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "파이보다 공간을 적게 쓰고, 아래 목록에 값과 비중을 함께 보여 줘요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { variant: "tall은 28px에 비중 글자, thin은 8px", sort: "큰 값부터 정렬", list: "아래에 이름, 값, 비중 목록 표시" },
-    example: { type: "segmented", data: S.segmentedSampleKo, encoding: { label: "method", value: "amount" }, options: { unit: "억", highlight: "간편결제" }, card: { number: "33", title: "비율 막대", subtitle: "결제 수단별 거래액(억 원)", takeaway: "간편결제가 셋 중 하나", level: "기본" } },
+    example: { data: S.segmentedSampleKo, encoding: { label: "method", value: "amount" }, options: { unit: "억", highlight: "간편결제" }, card: { subtitle: "결제 수단별 거래액(억 원)", takeaway: "간편결제가 셋 중 하나" } },
   },
 };
 

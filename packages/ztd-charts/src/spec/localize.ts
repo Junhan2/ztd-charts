@@ -1,3 +1,4 @@
+import { findLevel } from "./labels";
 import { KO_CHARTS, KO_COMMON_OPTIONS, SCHEMA_TEXT_KO } from "./locales/ko";
 import { META } from "./meta";
 import { CHARTS, COMMON_OPTIONS, getChartDef } from "./registry";
@@ -20,16 +21,20 @@ export function withKoLocale(spec: ChartSpec): ChartSpec {
 export function localizeDef(def: ChartDef, lang: Lang): ChartDef {
   const ko = lang === "ko" ? KO_CHARTS[def.type] : undefined;
   if (!ko) return def;
+  const name = META[def.type]?.nameKo ?? def.name;
+  // 예시의 type, 카드 번호, 제목, 수준은 registry.ts의 fill()과 같은 규칙으로 채워요. 키 순서도 영어 예시와 같아요
+  const { card, ...spec } = ko.example;
+  const { legend, ...text } = card;
   return {
     ...def,
-    name: META[def.type]?.nameKo ?? def.name,
+    name,
     summary: ko.summary,
     useWhen: ko.useWhen,
     avoidWhen: ko.avoidWhen,
     why: ko.why,
     encoding: def.encoding.map((c) => ({ ...c, description: ko.channels[c.name] ?? c.description })),
     options: def.options.map((o) => ({ ...o, description: ko.options[o.name] ?? o.description })),
-    example: withKoLocale(ko.example),
+    example: withKoLocale({ type: def.type, ...spec, card: { number: def.example.card?.number, title: name, ...text, level: findLevel(def.level)?.ko, ...(legend && { legend }) } }),
   };
 }
 

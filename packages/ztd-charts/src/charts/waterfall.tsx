@@ -125,9 +125,11 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   const accent = swatch(p, "accent");
   const inc = swatch(p, "neutral");
   const dec = swatch(p, "strong");
-  const signFmt = (v: number) => (v > 0 ? `+${c.fmt(v)}` : v < 0 ? `\u2212${c.fmt(-v)}` : c.fmt(0));
+  // 늘거나 준 양에 부호를 붙여요. 단위가 붙는 곳은 c.fv, 막대 위 라벨처럼 단위 없는 곳은 c.fmt
+  const signed = (v: number, f: (n: number) => string) => (v > 0 ? `+${f(v)}` : v < 0 ? `\u2212${f(-v)}` : f(0));
+  const signFmt = (v: number) => signed(v, c.fmt);
 
-  const events: ChartEvent<T>[] = steps.map((s, k) => ({ datum: s.datum, index: k, key: s.label, label: s.label, value: s.value, formatted: s.total ? c.fv(s.value) : `${signFmt(s.value)}${props.unit ?? ""}` }));
+  const events: ChartEvent<T>[] = steps.map((s, k) => ({ datum: s.datum, index: k, key: s.label, label: s.label, value: s.value, formatted: s.total ? c.fv(s.value) : signed(s.value, c.fv) }));
 
   let tip: TooltipData | null = null;
   if (c.active !== null && steps[c.active]) {
@@ -136,7 +138,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
       x: x(`${s.i}`) + bw / 2,
       y: Math.min(y(s.start), y(s.end)),
       title: s.label,
-      rows: s.total ? [{ label: totalLabel, value: c.fv(s.value), color: total.fill }] : [{ label: s.value >= 0 ? msg.up : msg.down, value: `${signFmt(s.value)}${props.unit ?? ""}`, color: s.hi ? accent.fill : s.value >= 0 ? inc.fill : dec.fill }, { label: msg.cum, value: c.fv(s.end) }],
+      rows: s.total ? [{ label: totalLabel, value: c.fv(s.value), color: total.fill }] : [{ label: s.value >= 0 ? msg.up : msg.down, value: signed(s.value, c.fv), color: s.hi ? accent.fill : s.value >= 0 ? inc.fill : dec.fill }, { label: msg.cum, value: c.fv(s.end) }],
     };
   }
 

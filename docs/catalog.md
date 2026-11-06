@@ -18,39 +18,39 @@ There were two criteria.
 <!-- TABLE:START -->
 | # | type | Name | Group | Level | Why we chose it | Brotli |
 |---|---|---|---|---|---|---|
-| 01 | `pie` | Pie chart | Proportion | Basic | Only the highlighted slice (the largest by default) gets the accent color and the rest stay neutral, so one share carries the message. | 13.31 KB |
-| 02 | `donut` | Donut chart | Proportion | Basic | The center number counts up as the chart enters, so the total reads first. | 13.3 KB |
-| 03 | `funnel` | Funnel chart | Flow | Basic | Highlights the stage with the lowest conversion rate, so you see where users drop off. | 12.02 KB |
-| 04 | `waffle` | Waffle chart | Proportion | Intermediate | Cells fill row by row, which gives a feel for the number before you read it. | 12.19 KB |
-| 05 | `treemap` | Treemap | Hierarchy | Intermediate | The squarified layout keeps cells close to square, so labels fit. | 12.56 KB |
-| 06 | `sunburst` | Sunburst | Hierarchy | Intermediate | Rings open from the inside out as the chart enters, so the hierarchy reads level by level. | 12.93 KB |
-| 07 | `waterfall` | Waterfall chart | Comparison | Intermediate | Bars connect one by one from the left, showing where the value rose and fell. | 12.88 KB |
-| 08 | `pareto` | Pareto chart | Comparison | Intermediate | After the bars, the cumulative line draws in and marks where it crosses the threshold (80% by default). | 13.22 KB |
-| 09 | `marimekko` | Marimekko chart | Proportion | Advanced | Columns fill from the bottom, so both shares read at once. | 12.75 KB |
-| 10 | `heatmap` | Heatmap | Relationship | Intermediate | Uses shades of one accent color, so it follows the theme. With many cells it switches to canvas, so even 10k cells stay fast. | 13.4 KB |
-| 11 | `radar` | Radar chart | Comparison | Intermediate | Only the highlighted series is filled and the rest are outlines, which keeps overlaps readable. | 12.71 KB |
-| 12 | `bubble` | Bubble chart | Relationship | Intermediate | With many dots it switches to canvas and finds the nearest dot through a grid index, so hover stays smooth even at 10k dots. | 13.71 KB |
-| 13 | `line` | Line chart | Trend | Basic | Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path. | 19.37 KB |
-| 14 | `area` | Area chart | Trend | Basic | Areas rise from the baseline as the chart enters, which shows the stacking at a glance. | 19.37 KB |
-| 15 | `stream` | Streamgraph | Trend | Advanced | A wiggle baseline and inside-out ordering keep the bands calm. Names go where each band is thickest. | 15.19 KB |
-| 16 | `bar` | Bar chart | Comparison | Basic | With one series only the largest bar gets color; with several, only the highlighted series. | 15.5 KB |
-| 17 | `radialBar` | Radial bar chart | KPI | Intermediate | For a single progress ring, use the gauge with variant "ring". | 11.58 KB |
-| 18 | `gauge` | Gauge | KPI | Basic | The number counts up as the arc fills. The variant option picks an arc, a half circle (semi), a progress ring (ring) or lit tick marks (ticks). | 11.8 KB |
-| 19 | `bullet` | Bullet chart | KPI | Intermediate | A compact alternative to gauges. Highlights the KPI with the lowest actual-to-target ratio. | 12.45 KB |
-| 20 | `sparkline` | Sparkline | Trend | Basic | A word-sized graphic: no axes, and the last value shows as text. | 13.51 KB |
-| 21 | `slope` | Slope chart | Comparison | Intermediate | Each slope shows at a glance whether an item went up or down. The item that rose the most is highlighted. | 12.32 KB |
-| 22 | `dumbbell` | Dumbbell chart | Comparison | Intermediate | Less ink than two bars, and the difference itself shows as line length. | 12.01 KB |
-| 23 | `lollipop` | Lollipop chart | Comparison | Basic | Sorted largest first by default, so it reads as a ranking. | 12.74 KB |
-| 24 | `beeswarm` | Beeswarm | Distribution | Advanced | Shows the individual values an average hides, with each group's median marked. | 13.57 KB |
-| 25 | `ridgeline` | Ridgeline | Distribution | Advanced | KDE curves rise one after another from the top as the chart enters. | 12.67 KB |
-| 26 | `sankey` | Sankey diagram | Flow | Advanced | A relaxation layout, written with no dependencies, moves nodes step by step to reduce overlaps. Bands flow in from left to right as they enter. | 13.22 KB |
-| 27 | `chord` | Chord diagram | Flow | Advanced | The group with the largest total is highlighted by default, so even a dense diagram reads as 'who this team works with'. | 12.2 KB |
-| 28 | `calendar` | Calendar heatmap | Trend | Intermediate | One square per day, filled week by week from left to right, with one row per year for multiple years. | 13.79 KB |
-| 29 | `bump` | Bump chart | Trend | Intermediate | Keeps only the ranks, so crossings stand out. Highlights the item that climbed the most automatically. | 13.39 KB |
-| 30 | `box` | Box / violin plot | Distribution | Advanced | The variant option picks box, violin or both. Shapes spread up and down from the median as the chart enters. | 13.73 KB |
-| 31 | `parallel` | Parallel coordinates | Relationship | Advanced | One highlighted line over many gray ones turns a hard-to-read form into a story. With many rows it draws 10k lines on canvas. | 13.1 KB |
-| 32 | `candlestick` | Candlestick chart | Trend | Advanced | Rising candles take the accent color and falling ones are gray. Drag over a period to see its change, high and low. | 16.59 KB |
-| 33 | `segmented` | Segmented bar | Proportion | Basic | Takes less space than a pie, and the list below gives each value and share. | 12.19 KB |
+| 01 | `pie` | Pie chart | Proportion | Basic | Only the highlighted slice (the largest by default) gets the accent color and the rest stay neutral, so one share carries the message. | 13.11 KB |
+| 02 | `donut` | Donut chart | Proportion | Basic | The center number counts up as the chart enters, so the total reads first. | 13.11 KB |
+| 03 | `funnel` | Funnel chart | Flow | Basic | Highlights the stage with the lowest conversion rate, so you see where users drop off. | 11.86 KB |
+| 04 | `waffle` | Waffle chart | Proportion | Intermediate | Cells fill row by row, which gives a feel for the number before you read it. | 12.02 KB |
+| 05 | `treemap` | Treemap | Hierarchy | Intermediate | The squarified layout keeps cells close to square, so labels fit. | 12.37 KB |
+| 06 | `sunburst` | Sunburst | Hierarchy | Intermediate | Rings open from the inside out as the chart enters, so the hierarchy reads level by level. | 12.73 KB |
+| 07 | `waterfall` | Waterfall chart | Comparison | Intermediate | Bars connect one by one from the left, showing where the value rose and fell. | 12.76 KB |
+| 08 | `pareto` | Pareto chart | Comparison | Intermediate | After the bars, the cumulative line draws in and marks where it crosses the threshold (80% by default). | 12.98 KB |
+| 09 | `marimekko` | Marimekko chart | Proportion | Advanced | Columns fill from the bottom, so both shares read at once. | 12.58 KB |
+| 10 | `heatmap` | Heatmap | Relationship | Intermediate | Uses shades of one accent color, so it follows the theme. With many cells it switches to canvas, so even 10k cells stay fast. | 13.24 KB |
+| 11 | `radar` | Radar chart | Comparison | Intermediate | Only the highlighted series is filled and the rest are outlines, which keeps overlaps readable. | 12.57 KB |
+| 12 | `bubble` | Bubble chart | Relationship | Intermediate | With many dots it switches to canvas and finds the nearest dot through a grid index, so hover stays smooth even at 10k dots. | 13.49 KB |
+| 13 | `line` | Line chart | Trend | Basic | Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path. | 19.22 KB |
+| 14 | `area` | Area chart | Trend | Basic | Areas rise from the baseline as the chart enters, which shows the stacking at a glance. | 19.22 KB |
+| 15 | `stream` | Streamgraph | Trend | Advanced | A wiggle baseline and inside-out ordering keep the bands calm. Names go where each band is thickest. | 15.02 KB |
+| 16 | `bar` | Bar chart | Comparison | Basic | With one series only the largest bar gets color; with several, only the highlighted series. | 15.41 KB |
+| 17 | `radialBar` | Radial bar chart | KPI | Intermediate | For a single progress ring, use the gauge with variant "ring". | 11.41 KB |
+| 18 | `gauge` | Gauge | KPI | Basic | The number counts up as the arc fills. The variant option picks an arc, a half circle (semi), a progress ring (ring) or lit tick marks (ticks). | 11.56 KB |
+| 19 | `bullet` | Bullet chart | KPI | Intermediate | A compact alternative to gauges. Highlights the KPI with the lowest actual-to-target ratio. | 12.23 KB |
+| 20 | `sparkline` | Sparkline | Trend | Basic | A word-sized graphic: no axes, and the last value shows as text. | 13.33 KB |
+| 21 | `slope` | Slope chart | Comparison | Intermediate | Each slope shows at a glance whether an item went up or down. The item that rose the most is highlighted. | 12.15 KB |
+| 22 | `dumbbell` | Dumbbell chart | Comparison | Intermediate | Less ink than two bars, and the difference itself shows as line length. | 11.82 KB |
+| 23 | `lollipop` | Lollipop chart | Comparison | Basic | Sorted largest first by default, so it reads as a ranking. | 12.54 KB |
+| 24 | `beeswarm` | Beeswarm | Distribution | Advanced | Shows the individual values an average hides, with each group's median marked. | 13.42 KB |
+| 25 | `ridgeline` | Ridgeline | Distribution | Advanced | KDE curves rise one after another from the top as the chart enters. | 12.52 KB |
+| 26 | `sankey` | Sankey diagram | Flow | Advanced | A relaxation layout, written with no dependencies, moves nodes step by step to reduce overlaps. Bands flow in from left to right as they enter. | 13.06 KB |
+| 27 | `chord` | Chord diagram | Flow | Advanced | The group with the largest total is highlighted by default, so even a dense diagram reads as 'who this team works with'. | 12.05 KB |
+| 28 | `calendar` | Calendar heatmap | Trend | Intermediate | One square per day, filled week by week from left to right, with one row per year for multiple years. | 13.63 KB |
+| 29 | `bump` | Bump chart | Trend | Intermediate | Keeps only the ranks, so crossings stand out. Highlights the item that climbed the most automatically. | 13.28 KB |
+| 30 | `box` | Box / violin plot | Distribution | Advanced | The variant option picks box, violin or both. Shapes spread up and down from the median as the chart enters. | 13.69 KB |
+| 31 | `parallel` | Parallel coordinates | Relationship | Advanced | One highlighted line over many gray ones turns a hard-to-read form into a story. With many rows it draws 10k lines on canvas. | 12.97 KB |
+| 32 | `candlestick` | Candlestick chart | Trend | Advanced | Rising candles take the accent color and falling ones are gray. Drag over a period to see its change, high and low. | 16.4 KB |
+| 33 | `segmented` | Segmented bar | Proportion | Basic | Takes less space than a pie, and the list below gives each value and share. | 11.98 KB |
 <!-- TABLE:END -->
 
 Size is the Brotli size of a single chart import such as `import { BarChart } from "ztd-charts"`, measured with size-limit (rolldown, react excluded). It includes the shared core (theme, motion engine, frame, formatting, axes) of about 9 KB. With several charts, the core is included only once.

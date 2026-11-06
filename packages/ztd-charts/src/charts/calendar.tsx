@@ -87,7 +87,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
   }, [c.locale]);
   const leftW = Math.max(22, Math.ceil(Math.max(...[1, 3, 5].map((r) => textWidth(wd[(r + ws) % 7], 9.5)))) + 10);
   const topH = 16;
-  const gap = props.gap ?? 2.5;
+  const maxGap = props.gap ?? 2.5;
 
   const days = useMemo<Day<T>[]>(() => {
     const out: Day<T>[] = [];
@@ -120,7 +120,10 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
   const [mn, mx] = stats.ext;
   const useCanvas = c.hydrated && days.length > (props.canvasThreshold ?? 4000);
   const blockH = (H - (multi ? 4 : 0)) / nYears;
-  const cell = Math.max(2, Math.min((W - leftW - 2) / weeks - gap, (blockH - topH - 4) / 7 - gap));
+  // 한 칸과 간격이 쓸 수 있는 자리. 칸이 2px보다 작아질 만큼 좁으면 간격도 같은 비율로 줄여서 격자가 폭을 넘지 않아요
+  const room = Math.max(0, Math.min((W - leftW - 2) / weeks, (blockH - topH - 4) / 7));
+  const gap = room - maxGap >= 2 ? maxGap : (room * maxGap) / (maxGap + 2);
+  const cell = room - gap;
   const step = cell + gap;
   const gridW = weeks * step;
   const x0 = leftW + Math.max(0, (W - leftW - gridW) / 2);

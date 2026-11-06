@@ -385,7 +385,7 @@
 - Use when: Distribution and outliers together, such as response time by API
 - Avoid when: The audience is not used to quartiles (a beeswarm is easier)
 - encoding: group, value
-- Chart options: variant: box|violin|both, outliers, zero
+- Chart options: variant: box|violin|both, outliers, zero, whiskers
 - Default highlight: the largest value
 
 ```json

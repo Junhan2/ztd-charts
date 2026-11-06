@@ -6,7 +6,7 @@ export interface BoxStats {
   median: number;
   q3: number;
   max: number;
-  /** 수염 끝 (1.5 IQR) */
+  /** 수염 끝. 기본은 사분위 범위의 1.5배 안에서 가장 먼 값(Tukey), whiskers를 주면 그 백분위 */
   lo: number;
   hi: number;
   mean: number;
@@ -14,7 +14,8 @@ export interface BoxStats {
   n: number;
 }
 
-export function boxStats(values: readonly number[]): BoxStats {
+/** 사분위, 수염, 이상값. whiskers는 수염 끝 백분위 [낮은 쪽, 높은 쪽](0~100)이고, 없으면 Tukey 방식이에요 */
+export function boxStats(values: readonly number[], whiskers?: readonly [number, number]): BoxStats {
   const s = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   const n = s.length;
   if (!n) return { min: NaN, q1: NaN, median: NaN, q3: NaN, max: NaN, lo: NaN, hi: NaN, mean: NaN, outliers: [], n: 0 };
@@ -22,8 +23,8 @@ export function boxStats(values: readonly number[]): BoxStats {
   const median = quantileSorted(s, 0.5);
   const q3 = quantileSorted(s, 0.75);
   const iqr = q3 - q1;
-  const loF = q1 - 1.5 * iqr;
-  const hiF = q3 + 1.5 * iqr;
+  const loF = whiskers ? quantileSorted(s, whiskers[0] / 100) : q1 - 1.5 * iqr;
+  const hiF = whiskers ? quantileSorted(s, whiskers[1] / 100) : q3 + 1.5 * iqr;
   let lo = s[0];
   let hi = s[n - 1];
   for (const v of s)
@@ -38,7 +39,8 @@ export function boxStats(values: readonly number[]): BoxStats {
     }
   let total = 0;
   for (const v of s) total += v;
-  return { min: s[0], q1, median, q3, max: s[n - 1], lo, hi, mean: total / n, outliers: s.filter((v) => v < loF || v > hiF), n };
+  // 백분위 수염은 그 값까지, Tukey 수염은 울타리 안에서 가장 먼 실제 값까지 그려요
+  return { min: s[0], q1, median, q3, max: s[n - 1], lo: whiskers ? loF : lo, hi: whiskers ? hiF : hi, mean: total / n, outliers: s.filter((v) => v < loF || v > hiF), n };
 }
 
 /** 가우시안 커널 밀도 추정 (Silverman 대역폭) */

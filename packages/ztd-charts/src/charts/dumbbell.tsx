@@ -86,7 +86,7 @@ export function DumbbellChart<T = Row>(props: DumbbellChartProps<T>) {
   let tip: TooltipData | null = null;
   if (c.active !== null && rows[c.active]) {
     const r = rows[c.active];
-    tip = { x: x(Math.max(r.a, r.b)), y: yOf(c.active) - 6, title: r.label, rows: [{ label: names[0], value: c.fv(r.a), color: p.paint("neutralStrong") }, { label: names[1], value: c.fv(r.b), color: r.hi ? accent.fill : p.paint("ink") }, { label: msg.diff, value: `${r.b - r.a >= 0 ? "+" : "\u2212"}${c.fmt(Math.abs(r.b - r.a))}${props.unit ?? ""}` }] };
+    tip = { x: x(Math.max(r.a, r.b)), y: yOf(c.active) - 6, title: r.label, rows: [{ label: names[0], value: c.fv(r.a), color: p.paint("neutralStrong") }, { label: names[1], value: c.fv(r.b), color: r.hi ? accent.fill : p.paint("ink") }, { label: msg.diff, value: `${r.b - r.a >= 0 ? "+" : "\u2212"}${c.fv(Math.abs(r.b - r.a))}` }] };
   }
   const ticks = x.ticks(Math.max(2, Math.round(W / 120)));
   const D = c.motion.duration ?? 800;

@@ -58,10 +58,11 @@ Data helpers:
 
 - useChartData(url | async fn, { select, parse, refreshMs, init }) -> { data, loading, error, empty, reload }
 - parseCSV, fromRows (2D arrays, SQL rows + columns, Sheets values), fromObjects (key-value maps, column maps), melt, normalizeData
+- percentile(values, 95) and percentiles(rows, { by, value, p: [50, 95, 99] }) -> rows with p50, p95, p99 per group, for p95 latency charts. BoxPlot whiskers: [5, 95] sets whisker ends to percentiles.
 - Accessors accept a field name (dot paths ok) or a function (d, i) => value. Strings like "1,234", "12%", "₩5,000" are read as numbers.
 - <ChartState loading error empty onRetry> shows matching states at chart height.
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.31 KB, DonutChart 13.3 KB, FunnelChart 12.02 KB, WaffleChart 12.19 KB, Treemap 12.56 KB, SunburstChart 12.93 KB, WaterfallChart 12.88 KB, ParetoChart 13.22 KB, MarimekkoChart 12.75 KB, Heatmap 13.4 KB, RadarChart 12.71 KB, BubbleChart 13.71 KB, LineChart 19.37 KB, AreaChart 19.37 KB, StreamGraph 15.19 KB, BarChart 15.5 KB, RadialBarChart 11.58 KB, GaugeChart 11.8 KB, BulletChart 12.45 KB, Sparkline 13.51 KB, SlopeChart 12.32 KB, DumbbellChart 12.01 KB, LollipopChart 12.74 KB, BeeswarmChart 13.57 KB, RidgelineChart 12.67 KB, SankeyChart 13.22 KB, ChordChart 12.2 KB, CalendarHeatmap 13.79 KB, BumpChart 13.39 KB, BoxPlot 13.73 KB, ParallelCoordinates 13.1 KB, CandlestickChart 16.59 KB, SegmentedBar 12.19 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.11 KB, DonutChart 13.11 KB, FunnelChart 11.86 KB, WaffleChart 12.02 KB, Treemap 12.37 KB, SunburstChart 12.73 KB, WaterfallChart 12.76 KB, ParetoChart 12.98 KB, MarimekkoChart 12.58 KB, Heatmap 13.24 KB, RadarChart 12.57 KB, BubbleChart 13.49 KB, LineChart 19.22 KB, AreaChart 19.22 KB, StreamGraph 15.02 KB, BarChart 15.41 KB, RadialBarChart 11.41 KB, GaugeChart 11.56 KB, BulletChart 12.23 KB, Sparkline 13.33 KB, SlopeChart 12.15 KB, DumbbellChart 11.82 KB, LollipopChart 12.54 KB, BeeswarmChart 13.42 KB, RidgelineChart 12.52 KB, SankeyChart 13.06 KB, ChordChart 12.05 KB, CalendarHeatmap 13.63 KB, BumpChart 13.28 KB, BoxPlot 13.69 KB, ParallelCoordinates 12.97 KB, CandlestickChart 16.4 KB, SegmentedBar 11.98 KB
 
 Source: https://github.com/Junhan2/ztd-charts (MIT license). The two sections below are the agent skill (skills/ztd-charts/SKILL.md) and the reference for every chart, both from the repository.
 
@@ -569,7 +570,7 @@ export function Revenue() {
 - Use when: Distribution and outliers together, such as response time by API
 - Avoid when: The audience is not used to quartiles (a beeswarm is easier)
 - encoding: group, value
-- Chart options: variant: box|violin|both, outliers, zero
+- Chart options: variant: box|violin|both, outliers, zero, whiskers
 - Default highlight: the largest value
 
 ```json

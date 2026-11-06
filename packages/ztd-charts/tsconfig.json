@@ -2,6 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
+    // 빌드 대상이 ES2020이라 클래스 필드를 생성자 대입으로 내보내요 (TypeScript의 ES2020 기본값). true면 모든 차트 번들에 __publicField 도우미가 붙어요
+    "useDefineForClassFields": false,
     "types": ["node"]
   },
   "include": ["src", "test", "scripts"]

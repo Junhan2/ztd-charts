@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { fetchUrl, loadRows, MAX_FETCH_BYTES, reactSnippet, render } from "../src/api";
+import { isPrivateAddress } from "../src/guard";
 
 const exec = promisify(execFile);
 const CLI = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
@@ -108,6 +109,30 @@ describe("render: 검사 먼저, 주소가 든 오류", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("보안: allowPrivate: false는 내부망 주소를 요청 없이 막아요 (MCP 서버가 이렇게 써요)", () => {
+  it("IP 그대로, localhost, ::ffff: 꼴, 숫자 꼴 모두 막고 서버에는 요청이 가지 않아요", async () => {
+    const port = new URL(base).port;
+    const before = hits;
+    for (const url of [`${base}/ok.csv`, `http://localhost:${port}/ok.csv`, `http://[::ffff:127.0.0.1]:${port}/ok.csv`, `http://2130706433:${port}/ok.csv`]) {
+      await expect(fetchUrl(url, undefined, { allowPrivate: false })).rejects.toThrow("private or local network");
+    }
+    await expect(loadRows(`${base}/ok.csv`, "ko", { allowPrivate: false })).rejects.toThrow("내부망이나 이 컴퓨터를 가리키는 주소라 막았어요");
+    await expect(render({ type: "pie", data: { url: `${base}/ok.csv` } } as never, { allowPrivate: false })).rejects.toThrow("private or local network");
+    expect(hits).toBe(before);
+  });
+  it("IPv4를 품는 IPv6 꼴(NAT64, 6to4, 옛 호환)은 안의 IPv4로 판단해요", () => {
+    // 127.0.0.1, 169.254.169.254, 192.168.1.1 을 품은 꼴과 지역용 NAT64, 옛 사이트 로컬
+    for (const a of ["::ffff:7f00:1", "::7f00:1", "64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "2002:7f00:1::", "2002:c0a8:101::", "64:ff9b:1::1", "fec0::1"]) expect(isPrivateAddress(a), a).toBe(true);
+    // 8.8.8.8 을 품은 꼴과 공용 IPv6는 그대로 가져와요 (IPv6 전용 망은 IPv4 사이트를 64:ff9b:: 꼴로 받아요)
+    for (const a of ["8.8.8.8", "::ffff:808:808", "64:ff9b::808:808", "2002:808:808::", "2606:4700:4700::1111"]) expect(isPrivateAddress(a), a).toBe(false);
+  });
+  it("기본값은 지금처럼 가져와요", async () => {
+    const before = hits;
+    expect(await (await fetchUrl(`${base}/ok.csv`)).text()).toContain("2025-01,120");
+    expect(hits).toBe(before + 1);
   });
 });
 

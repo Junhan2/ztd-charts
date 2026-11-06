@@ -1,5 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createServer as createHttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../src/server";
 
@@ -34,5 +36,38 @@ describe("MCP: 스펙의 테마, 범례 색, 로캘", () => {
     const r = await call("render_chart", { spec: spec("ko_KR"), format: "svg" });
     expect(r.isError).toBe(false);
     expect(r.content[0].text).toContain("막대 차트");
+  });
+});
+
+describe("MCP: 데이터 주소가 내부망이면 막아요", () => {
+  it("suggest_chart와 render_chart는 기본으로 127.0.0.1을 요청 없이 막고, ZTD_CHARTS_ALLOW_PRIVATE_URLS=1이면 가져와요", async () => {
+    let hits = 0;
+    const http = createHttpServer((_req, res) => {
+      hits++;
+      res.writeHead(200, { "content-type": "text/csv" });
+      res.end("month,revenue\n2025-01,120\n2025-02,135\n");
+    });
+    await new Promise<void>((r) => http.listen(0, "127.0.0.1", () => r()));
+    const url = `http://127.0.0.1:${(http.address() as AddressInfo).port}/data.csv`;
+    try {
+      const s = await call("suggest_chart", { url });
+      expect(s.isError).toBe(true);
+      expect(s.content[0].text).toContain("private or local network");
+      const r = await call("render_chart", { spec: { type: "line", data: { url }, encoding: { x: "month", y: "revenue" } }, format: "svg" });
+      expect(r.isError).toBe(true);
+      expect(hits).toBe(0);
+      process.env.ZTD_CHARTS_ALLOW_PRIVATE_URLS = "1";
+      const server = createServer();
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      const open = new Client({ name: "test", version: "0.0.0" });
+      await Promise.all([server.connect(b), open.connect(a)]);
+      const ok = await open.callTool({ name: "suggest_chart", arguments: { url } });
+      expect(ok.isError).toBeFalsy();
+      expect(hits).toBe(1);
+      await open.close();
+    } finally {
+      delete process.env.ZTD_CHARTS_ALLOW_PRIVATE_URLS;
+      http.close();
+    }
   });
 });

@@ -3,7 +3,7 @@ import { hasField, toNumber } from "../data/accessor";
 import { toDate } from "../core/format";
 import { META } from "./meta";
 import { CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
-import type { ChartSpec, Lang, SpecIssue, ValidationResult } from "./types";
+import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
 export function levenshtein(a: string, b: string): number {
   const m = a.length;
@@ -68,6 +68,11 @@ function typeOf(v: unknown): string {
   if (Array.isArray(v)) return "array";
   if (v === null) return "null";
   return typeof v;
+}
+
+/** 숫자 o.length개가 모두 o.min~o.max 안인지. 스키마의 minItems, maxItems, minimum, maximum과 같은 규칙이에요 */
+function isNumberTuple(a: number[], o: OptionDef): boolean {
+  return a.length === o.length && a.every((x) => Number.isFinite(x) && x >= (o.min ?? -Infinity) && x <= (o.max ?? Infinity));
 }
 
 /**
@@ -214,6 +219,9 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       else if (o.type === "string" && /Color$/.test(k) && !isSafeStyleValue(v)) err(`options.${k}`, "bad_option_color", t(`options.${k} must be a theme token ("accent") or a CSS color`, `options.${k} 값은 테마 토큰("accent")이나 CSS 색이어야 해요`));
       else if (o.type === "boolean" && vt !== "boolean") bad("true or false", "true나 false여야");
       else if (o.type === "array" && vt !== "array") bad("an array", "배열이어야");
+      // 항목 수가 정해진 숫자 배열(상자 그림 whiskers 등)은 개수와 범위를 봐요. 순서는 쓰는 쪽에서 맞춰요
+      else if (o.type === "array" && o.length !== undefined && !isNumberTuple(v as number[], o))
+        err(`options.${k}`, "bad_option_items", t(`options.${k} must be ${o.length} numbers from ${o.min} to ${o.max}`, `options.${k} 값은 ${o.min}~${o.max} 사이 숫자 ${o.length}개여야 해요`));
       else if (o.type === "object" && vt !== "object") bad("an object", "객체여야");
       else if (o.type === "enum" && !(o.enum ?? []).includes(String(v))) {
         const choices = (o.enum ?? []).map((e) => `"${e}"`).join(" | ");

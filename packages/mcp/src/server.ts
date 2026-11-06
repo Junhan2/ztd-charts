@@ -4,7 +4,7 @@ import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSni
 import { GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.2.1";
+export const SERVER_VERSION = "0.3.0";
 
 const GROUP_IDS = GROUPS.map((g) => g.id) as [ChartGroup, ...ChartGroup[]];
 const LEVEL_IDS = LEVELS.map((l) => l.id) as [ChartLevel, ...ChartLevel[]];
@@ -19,6 +19,8 @@ function trimSpec(spec: ChartSpec, rows = 20): ChartSpec {
 }
 
 export function createServer(): McpServer {
+  // 에이전트가 넘기는 주소로 사내망, 이 컴퓨터, 클라우드 메타데이터를 읽지 못하게 기본으로 막아요. 로컬 개발 서버의 데이터가 필요하면 이 값을 1로 켜요
+  const allowPrivate = process.env.ZTD_CHARTS_ALLOW_PRIVATE_URLS === "1";
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, resources: {} }, instructions: 'ztd-charts: 33 animated React chart types driven by a JSON spec { type, data, encoding, options, card }. Typical flow: suggest_chart (or list_charts) -> get_chart_schema -> write a spec -> validate_spec -> render_chart to preview -> use the returned React snippet. Built-in chart text (tooltips, screen reader text, badges) and number formats are English by default. For Korean, pass locale "ko" to render_chart or set options.locale in the spec, and write card text in Korean. validate_spec and suggest_chart take locale too.' });
 
   server.registerTool(
@@ -76,7 +78,7 @@ export function createServer(): McpServer {
     "render_chart",
     {
       title: "Render chart",
-      description: "Server-render a chart spec to PNG (returned as an image) and/or SVG text, with the card frame (number, title, legend, takeaway, level badge) when spec.card is set. Also returns ready-to-paste React code. data may be inline rows, { csv }, or { url } (fetched). Set locale for the language of built-in chart text and number formats.",
+      description: "Server-render a chart spec to PNG (returned as an image) and/or SVG text, with the card frame (number, title, legend, takeaway, level badge) when spec.card is set. Also returns ready-to-paste React code. data may be inline rows, { csv }, or { url } (fetched; private and local network addresses are refused unless the server runs with ZTD_CHARTS_ALLOW_PRIVATE_URLS=1). Set locale for the language of built-in chart text and number formats.",
       inputSchema: {
         spec: z.record(z.string(), z.unknown()).describe("Chart spec"),
         format: z.enum(["png", "svg", "both"]).optional().describe("Default png"),
@@ -93,7 +95,7 @@ export function createServer(): McpServer {
       const v = validate(s, specLocale(s, locale));
       if (!v.valid) return { isError: true, content: [text("Invalid spec. Fix the errors below (the same result validate_spec returns)."), json(v)] };
       try {
-        const res = await render(s, { format: format === "svg" ? "svg" : "png", width, theme, scale, locale });
+        const res = await render(s, { format: format === "svg" ? "svg" : "png", width, theme, scale, locale, allowPrivate });
         const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [];
         if (format !== "svg" && res.png) content.push({ type: "image", data: res.png.toString("base64"), mimeType: "image/png" });
         if ((format === "svg" || format === "both") && res.svg) content.push(text(res.svg));
@@ -110,7 +112,7 @@ export function createServer(): McpServer {
     "suggest_chart",
     {
       title: "Suggest charts for data",
-      description: "Profile tabular data (column kinds, cardinality, hierarchy, source/target pairs, dates) and recommend chart types ranked by fit, each with a reason and a ready spec. Pass csv text, rows (array of objects), or a url to CSV/JSON (Google Sheets CSV export, REST). Set locale for the language of the reasons and the suggested specs.",
+      description: "Profile tabular data (column kinds, cardinality, hierarchy, source/target pairs, dates) and recommend chart types ranked by fit, each with a reason and a ready spec. Pass csv text, rows (array of objects), or a url to CSV/JSON (Google Sheets CSV export, REST; private and local network addresses are refused unless the server runs with ZTD_CHARTS_ALLOW_PRIVATE_URLS=1). Set locale for the language of the reasons and the suggested specs.",
       inputSchema: {
         csv: z.string().optional().describe("CSV text with header row"),
         rows: z.array(z.record(z.string(), z.unknown())).optional().describe("Array of row objects"),
@@ -128,7 +130,7 @@ export function createServer(): McpServer {
         else if (url) {
           // http(s)만 받아요. loadRows는 파일 경로도 읽어서, 그대로 두면 서버가 도는 컴퓨터의 파일을 돌려줄 수 있어요
           if (!isHttpUrl(url)) return { isError: true, content: [text("url must start with http:// or https://. For a local file, pass its text as csv or its rows as rows.")] };
-          data = await loadRows(url, locale);
+          data = await loadRows(url, locale, { allowPrivate });
         } else return { isError: true, content: [text("Pass one of csv, rows or url.")] };
       } catch (e) {
         return { isError: true, content: [text(`Couldn't read the data: ${(e as Error).message}`)] };

@@ -236,7 +236,7 @@ export function BeeswarmChart<T = Row>(props: BeeswarmChartProps<T>) {
         ? groups.map((g, gi) => {
             const mx0 = x(medians[gi]);
             const y0 = top + band * gi + 2;
-            const text = `${msg.med} ${c.fmt(medians[gi])}${props.unit ?? ""}`;
+            const text = `${msg.med} ${c.fv(medians[gi])}`;
             const tw = textWidth(text, 10, 700) + 10;
             return (
               <g key={g} opacity={m.fade(D * 0.7, 300)} pointerEvents="none">

@@ -80,7 +80,8 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
   const fmt = useMemo(() => makeFormatter(props.format, locale, defaults.format), [props.format, locale, defaults.format]);
   const pct = useCallback((v: number) => formatPercent(v, { locale }), [locale]);
   const unit = props.unit ?? "";
-  const fv = useCallback((v: number) => `${fmt(v)}${unit}`, [fmt, unit]);
+  // 값이 없으면 "-"만 보여요. 단위를 붙이면 "-원"처럼 읽혀요
+  const fv = useCallback((v: number) => (Number.isFinite(v) ? `${fmt(v)}${unit}` : fmt(v)), [fmt, unit]);
   const sig = useMemo(() => dataSignature(props.data), [props.data]);
   const [active, setActiveState] = useState<number | null>(null);
   const [via, setVia] = useState<ActiveVia | null>(null);

@@ -116,6 +116,7 @@ export function Revenue() {
 | 2차원 배열, SQL rows + fields | `fromRows(rows, columns)` |
 | 키-값 맵, 열 모음 | `fromObjects({ 모바일: 72 })`, `fromObjects({ 월: [...], 매출: [...] })` |
 | 넓은 표 → 긴 표 | `melt(rows, ["월"])` 또는 `y={["검색", "SNS"]}` |
+| 측정값 → 백분위(p95) | `percentiles(rows, { by: "분", value: "ms" })`로 묶음마다 `p50`, `p95`, `p99`를 구한 뒤 `y={["p50", "p95", "p99"]}` |
 
 `loading`은 `refreshMs`나 `reload()`로 다시 불러올 때도 true예요. 그동안 `data`에는 이전 행이 남아 있어요. 위처럼 `loading={r.loading && !r.data.length}`로 넘기면 처음 불러올 때만 스켈레톤을 보여 주고, 다시 불러오는 동안에는 차트를 그대로 둬요.
 
@@ -172,6 +173,8 @@ stdio MCP 서버예요. 도구는 다섯 개.
 | `validate_spec` | 경로와 제안이 있는 오류, 경고 |
 | `render_chart` | PNG 이미지 + SVG + React 코드. `locale: "ko"`면 한국어 차트 글자와 숫자 형식 |
 | `suggest_chart` | CSV, 행 배열, URL로 차트 추천과 바로 쓰는 스펙 |
+
+내부망이나 이 컴퓨터를 가리키는 데이터 주소(localhost, 10.x, 192.168.x, 169.254.169.254)는 막아요. 로컬 개발 서버의 데이터를 쓰려면 서버 환경 변수에 `ZTD_CHARTS_ALLOW_PRIVATE_URLS=1`을 넣어요. `claude mcp add`는 `-e`, JSON 설정은 `env` 필드에 적어요.
 
 Claude Desktop(`claude_desktop_config.json`):
 

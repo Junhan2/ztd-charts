@@ -61,8 +61,11 @@ export interface OptionDef {
   items?: "number" | "string";
   default?: unknown;
   description: string;
+  /** 숫자 옵션의 범위. items가 "number"인 배열이면 항목마다의 범위예요 */
   min?: number;
   max?: number;
+  /** 배열 항목 수가 정해진 경우(예: whiskers의 [낮은 쪽, 높은 쪽]). 숫자 배열이면 min, max와 함께 써요 */
+  length?: number;
 }
 
 /** 레지스트리 글의 언어. 기본은 "en". 차트 글자의 언어(ChartLang)와 같아요 */
