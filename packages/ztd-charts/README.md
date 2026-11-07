@@ -45,7 +45,7 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 
 ## What's in the package
 
-- `ztd-charts`: 33 chart components, `ChartCard`, `ChartGrid`, `ThemeProvider` and the data helpers.
+- `ztd-charts`: 33 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `StatCard`, `ThemeProvider` and the data helpers.
 - `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React.
 - `ztd-charts/server`: server rendering to SVG and HTML.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
