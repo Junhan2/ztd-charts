@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
-import { CHARTS, commonOptionsIn, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, suggestCharts, validateSpec, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
+import { CHARTS, commonOptionsIn, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
 import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
 import { langOf, renderSpecToHTML, renderSpecToSVG, resolveSpecData } from "ztd-charts/server";
 import { CLI_TEXT, type CliText } from "./messages";
@@ -82,6 +82,8 @@ export function getChartInfo(type: string, locale?: string) {
     schema: schemaForIn(def.type, lang),
     example: def.example,
     react: reactSnippet(def.example, { locale }),
+    /** 이름 붙은 꼴: 예시 options 위에 덮어쓰는 옵션 (ztd-charts example <type> --variant <id>) */
+    variants: variantsIn(def.type, lang),
   };
 }
 

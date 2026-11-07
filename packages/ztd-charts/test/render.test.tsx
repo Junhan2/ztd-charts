@@ -5,7 +5,7 @@ import { BarChart, type BarChartProps } from "../src/charts/bar";
 import { Chart } from "../src/charts/Chart";
 import { ChartCard, ChartGrid, ChartState } from "../src/components/ChartCard";
 import { renderSpecToHTML, renderSpecToSVG } from "../src/server";
-import { CHARTS } from "../src/spec";
+import { CHARTS, VARIANTS, variantSpec } from "../src/spec";
 import { ThemeProvider } from "../src/theme/context";
 import { lightTheme } from "../src/theme/tokens";
 
@@ -157,5 +157,18 @@ describe("로캘", () => {
     for (const s of [">막대 차트<", ">기본<"]) expect(ko).toContain(s);
     expect(ko).toMatch(/>[1-9]0만</);
     expect(renderSpecToHTML(spec, { locale: "ko" })).toContain('<html lang="ko">');
+  });
+});
+
+describe("variants render", () => {
+  it("every variant draws without NaN", () => {
+    for (const [type, list] of Object.entries(VARIANTS)) {
+      const def = CHARTS.find((d) => d.type === type)!;
+      for (const x of list) {
+        const h = ssr(<Chart spec={variantSpec(def, x.id)!} width={480} animate={false} />);
+        expect(h, `${type}/${x.id}`).toContain("<svg");
+        expect(h, `${type}/${x.id}`).not.toMatch(/NaN|Infinity/);
+      }
+    }
   });
 });

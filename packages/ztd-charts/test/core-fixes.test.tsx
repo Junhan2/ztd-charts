@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Chart } from "../src/charts/Chart";
 import { BarChart } from "../src/charts/bar";
 import { Legend } from "../src/components/ChartCard";
-import { GridY, tickLabels, yAxisWidth } from "../src/core/axis";
+import { StatCard } from "../src/components/StatCard";
+import { AxisPill, GridY, tickLabels, yAxisWidth } from "../src/core/axis";
 import { ChartFrame, type ChartFrameProps } from "../src/core/ChartFrame";
 import { makeFormatter } from "../src/core/format";
 import { MotionEngine } from "../src/core/motion";
@@ -23,6 +24,7 @@ afterEach(() => {
   vi.doUnmock("react");
   vi.doUnmock("../src/core/env");
   vi.doUnmock("../src/core/hooks");
+  vi.doUnmock("../src/charts/sparkline");
   vi.resetModules();
   vi.unstubAllGlobals();
 });
@@ -197,6 +199,51 @@ describe("useChart setActive (StrictMode)", () => {
   });
 });
 
+describe("호버 맞추기(syncId)와 호버 표시", () => {
+  it("짚은 x를 같은 syncId로 보내고, 받는 쪽은 키가 없으면 이름표로 찾아요", async () => {
+    const { joinSync, syncIndex, useSync } = await import("../src/core/sync");
+    const { useChart } = await import("../src/core/useChart");
+    const got: unknown[] = [];
+    const leave = joinSync("g", (at) => got.push(at));
+    let ctx: ChartCtx<Row> | null = null;
+    function Probe() {
+      ctx = useChart<Row>({ data: [] }, { height: 100 });
+      ctx.events.current = [ev(0), ev(1)];
+      useSync(ctx, "g", ["k0", "k1"], ["Jan", "Feb"]);
+      return null;
+    }
+    renderToStaticMarkup(<Probe />);
+    const c = ctx as unknown as ChartCtx<Row>;
+    c.setActive(1);
+    c.setActive(1);
+    c.setActive(null);
+    leave();
+    expect(got).toEqual([{ key: "k1", label: "Feb" }, null]);
+    // 날짜 x(타임스탬프 키)와 글자 범주처럼 키 꼴이 달라도 이름표가 같으면 맞춰요. 긴 이름표 목록은 훑지 않아요
+    expect(syncIndex(["2025-01", "2025-02"], ["Jan", "Feb"], { key: "1738368000000", label: "Feb" })).toBe(1);
+    const many = Array.from({ length: 1001 }, (_, i) => `L${i}`);
+    expect(syncIndex(many.map((_, i) => `k${i}`), many, { key: "none", label: "L5" })).toBe(-1);
+  });
+
+  it("묶인 차트에서 온 자리(sync)는 툴팁 없이 그리고, 동작 줄이기면 ztd-still이 붙어요", () => {
+    const { c } = fakeCtx(0);
+    const tip = { x: 100, y: 80, title: "L0", rows: [{ value: "1" }] };
+    const m = c as unknown as { via: string; reduced: boolean };
+    m.via = "sync";
+    expect(frameRoot(ChartFrame, { c, tip }).html).not.toContain("ztd-tip");
+    m.via = "pointer";
+    expect(frameRoot(ChartFrame, { c, tip }).html).toContain("ztd-tip");
+    m.reduced = true;
+    expect(frameRoot(ChartFrame, { c, tip }).html).toContain('class="ztd-root ztd-still"');
+  });
+
+  it("x축 알약은 차트 폭 안에 머물러요", () => {
+    const html = renderToStaticMarkup(<svg>{AxisPill({ p: darkPainter, x: 2, y: 190, label: "Jan 2025", width: 400 })}</svg>);
+    expect(Number(/translate\(([\d.]+)px/.exec(html)?.[1])).toBeGreaterThan(20);
+    expect(html).toContain("Jan 2025");
+  });
+});
+
 describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () => {
   async function renderInBrowser(hydrated: boolean) {
     vi.resetModules();
@@ -321,5 +368,50 @@ describe("Legend", () => {
     renderToStaticMarkup(<Probe />);
     const keys = (el as unknown as ReactElement<{ children: ReactElement[] }>).props.children.map((li) => li.key);
     expect(new Set(keys).size).toBe(3);
+  });
+});
+
+describe("StatCard", () => {
+  const data = [452, 460, 455, 471, 480].map((v, i) => ({ day: `2025-06-0${i + 1}`, v }));
+
+  /** +6.2% 배지의 배경색 */
+  const badgeBg = (h: string) => /<span style="[^"]*background:([^;"]+)[^"]*">\+6\.2%<\/span>/.exec(h)?.[1];
+
+  it("shows the last value, a change badge from first to last, and tints the badge only when the move is good", () => {
+    const up = renderToStaticMarkup(<StatCard label="MRR" data={data} x="day" y="v" unit="K" note="Last 5 days" />);
+    expect(up).toContain(">480K<");
+    expect(up).toContain(">+6.2%<");
+    expect(up).toContain(">Last 5 days<");
+    const good = badgeBg(up);
+    const down = badgeBg(renderToStaticMarkup(<StatCard label="Churn" data={data} x="day" y="v" better="down" />));
+    expect(good).toBeTruthy();
+    expect(down).toBeTruthy();
+    expect(good).not.toBe(down);
+  });
+
+  it("swaps the number and the note to the point under the pointer or keyboard", async () => {
+    const at = { datum: null, index: 2, key: "k", label: "Jun 3", value: 455, formatted: "455K" };
+    let spark: Record<string, unknown> = {};
+    vi.doMock("../src/charts/sparkline", () => ({ Sparkline: (p: Record<string, unknown>) => ((spark = p), null) }));
+    vi.doMock("react", async (orig) => {
+      const R = await orig<typeof import("react")>();
+      return {
+        ...R,
+        useState: (init: unknown) => {
+          const st = R.useState(init);
+          return init === null ? [at, () => {}] : st;
+        },
+      };
+    });
+    const { StatCard } = await import("../src/components/StatCard");
+    const h = renderToStaticMarkup(<StatCard label="MRR" data={data} x="day" y="v" unit="K" note="Last 5 days" />);
+    expect(h).toContain(">455K<");
+    expect(h).toContain(">Jun 3<");
+    expect(h).not.toContain("Last 5 days");
+    // 추세선이 짚은 점을 알려 주고, 값은 추세선이 읽어 줘요 (툴팁, 오른쪽 값 글자는 끔)
+    expect(typeof spark.onHover).toBe("function");
+    expect(spark.tooltip).toBe(false);
+    expect(spark.showValue).toBe(false);
+    expect(spark.ariaLabel).toBe("MRR, trend");
   });
 });

@@ -5,6 +5,9 @@ import type { Accessor } from "./types";
 
 export type XType = "number" | "date" | "band";
 
+/** 날짜, 숫자 x 값을 숫자로 (날짜는 ms, 못 읽으면 NaN). 데이터와 주석이 같은 규칙으로 읽어요 */
+export const xNum = (type: XType, v: unknown): number => (type === "date" ? toDate(v)?.getTime() ?? NaN : toNumber(v));
+
 export interface SeriesModel<T> {
   type: XType;
   /** x 순서대로 정렬된 고유 키 */
@@ -20,6 +23,13 @@ export interface SeriesModel<T> {
 }
 
 const DATE_RE = /^\d{4}-\d{1,2}(-\d{1,2})?([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/** 묶어 보기(syncId)용 키. 날짜처럼 생긴 글자 범주("2025-01")는 날짜 x와 같은 꼴(타임스탬프 글자)로 맞춰요 */
+export function syncKeyOf(raw: string): string {
+  if (!DATE_RE.test(raw.trim())) return raw;
+  const t = toDate(raw)?.getTime();
+  return t === undefined || !Number.isFinite(t) ? raw : String(t);
+}
 
 export function detectXType(raw: readonly unknown[]): XType {
   const vals = raw.filter((v) => v !== null && v !== undefined && v !== "");
@@ -64,7 +74,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
     xnum = keys.map((_, i) => i);
     rowKey = Int32Array.from(strs, (k) => kIndex.get(k) ?? -1);
   } else {
-    const nums = rawX.map((v) => (type === "date" ? toDate(v)?.getTime() ?? NaN : toNumber(v)));
+    const nums = rawX.map((v) => xNum(type, v));
     const uniqNums = Array.from(new Set(nums.filter((n) => Number.isFinite(n)))).sort((a, b) => a - b);
     const kIndex = new Map(uniqNums.map((n, i) => [n, i]));
     xnum = uniqNums;

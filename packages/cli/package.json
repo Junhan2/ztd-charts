@@ -1,6 +1,6 @@
 {
   "name": "ztd-charts-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "ztd-charts CLI: list charts, get JSON Schemas, validate specs, render SVG/PNG/HTML, start a project, and get chart suggestions from data",
   "license": "MIT",
   "author": "Junhan2",

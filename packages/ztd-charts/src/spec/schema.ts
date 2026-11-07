@@ -1,4 +1,4 @@
-import { CHARTS, COMMON_OPTIONS, getChartDef } from "./registry";
+import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef } from "./registry";
 import type { ChartDef, OptionDef } from "./types";
 
 export type JSONSchema = Record<string, unknown>;
@@ -29,6 +29,8 @@ export interface SchemaText {
   theme: string;
   /** format 옵션의 Intl 객체 설명 */
   formatObject: string;
+  /** annotations 항목의 필드 설명 */
+  annotation: { type: string; x: string; y: string; from: string };
 }
 
 export const SCHEMA_TEXT_EN: SchemaText = {
@@ -46,6 +48,12 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   sample: "Marks the data as sample data",
   theme: 'Token overrides. For example { accent: "#00C2FF" }',
   formatObject: "Intl.NumberFormat options plus suffix and prefix",
+  annotation: {
+    type: '"band" shaded range | "line" reference line | "event" marker | "forecast" dashed from here on | "trend" least-squares line | "weekends" shading (date x)',
+    x: "event: the x value. band: [from, to] on x",
+    y: "line: the y value. band: [low, high] on y",
+    from: "forecast: the x value where the forecast starts",
+  },
 };
 
 /** data, card, theme 정의 */
@@ -125,6 +133,23 @@ export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSON
       return { ...base, anyOf: [{ type: "number" }, { type: "string" }, { type: "array", items: { type: ["number", "string"] } }] };
     case "format":
       return { ...base, anyOf: [{ enum: FORMAT_NAMES }, { type: "object", description: t.formatObject }] };
+    case "annotations":
+      return {
+        ...base,
+        type: "array",
+        items: {
+          type: "object",
+          required: ["type"],
+          properties: {
+            type: { enum: [...ANNOTATION_TYPES], description: t.annotation.type },
+            x: { description: t.annotation.x },
+            y: { description: t.annotation.y, anyOf: [{ type: "number" }, { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }] },
+            from: { description: t.annotation.from },
+            label: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      };
     default:
       return base;
   }

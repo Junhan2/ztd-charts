@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { COMMON_OPTIONS, findGroup, findLevel, formatIssues, GROUPS, LEVELS, localizeDef } from "ztd-charts/spec";
+import { COMMON_OPTIONS, findGroup, findLevel, formatIssues, GROUPS, LEVELS, localizeDef, variantSpec, variantsIn } from "ztd-charts/spec";
 import { langOf } from "ztd-charts/server";
 import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, resolveType, suggest, validate, type ChartSpec } from "./api";
 import { CLI_TEXT, SCHEMA_URL, VERSION } from "./messages";
@@ -104,6 +104,7 @@ async function main(argv0: string[]) {
       level: { type: "string" },
       limit: { type: "string" },
       force: { type: "boolean" },
+      variant: { type: "string" },
     },
   });
   const out = (s: string) => process.stdout.write(s.endsWith("\n") ? s : `${s}\n`);
@@ -144,6 +145,7 @@ async function main(argv0: string[]) {
       const common = COMMON_OPTIONS.map((o) => o.name);
       for (const o of info.options.filter((x) => !common.includes(x.name))) out(`  ${pad(o.name, 16)}${pad(compactType(o.type), 24)}${o.description}${o.default !== undefined ? t.defaultValue(JSON.stringify(o.default)) : ""}`);
       out(`\n${t.commonOptions}: ${common.join(", ")}`);
+      if (info.variants.length) out(`\n${t.variants}: ${info.variants.map((x) => `${x.id} (${x.name})`).join(", ")}\n  ztd-charts example ${info.type} --variant ${info.variants[0].id}`);
       out(`\n${t.exampleSpec}: ztd-charts example ${info.type}\n\nReact\n${info.react}`);
       return;
     }
@@ -153,7 +155,11 @@ async function main(argv0: string[]) {
     case "example": {
       const type = pos[0] ?? fail(t.needType("example"));
       const def = resolveType(type) ?? fail(t.unknownChart(type));
-      return saveOrPrint(JSON.stringify({ $schema: SCHEMA_URL, ...localizeDef(def, lang).example }, null, 2));
+      const local = localizeDef(def, lang);
+      const id = textFlag(f, "variant");
+      const ids = variantsIn(def.type, lang).map((x) => x.id);
+      const spec = id ? (variantSpec(local, id) ?? fail(ids.length ? t.unknownFilter("variant", id, ids) : t.noVariants(def.type))) : local.example;
+      return saveOrPrint(JSON.stringify({ $schema: SCHEMA_URL, ...spec }, null, 2));
     }
     case "validate": {
       const spec = readSpec(pos[0]);

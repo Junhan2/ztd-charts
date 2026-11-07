@@ -1,6 +1,7 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import { ensureBaseStyles } from "../core/css";
 import { useIsoLayoutEffect } from "../core/env";
+import { SyncContext } from "../core/sync";
 import { langOf, type ChartLang } from "../core/i18n";
 import { levelBadge } from "../spec/labels";
 import type { ChartLevel } from "../spec/types";
@@ -220,6 +221,8 @@ export interface ChartGridProps {
   gap?: number;
   /** 한 칸의 최소 폭(px). 이보다 좁아지면 칸 수가 줄어요. 기본 320 */
   minColumnWidth?: number;
+  /** 안의 차트들이 짚은 x를 함께 보여 줘요(같은 날짜 맞춰 보기). 문자열이면 그 이름으로 묶어요(다른 그리드의 차트와도). 기본 false */
+  sync?: boolean | string;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
@@ -231,11 +234,14 @@ export function ChartGrid(props: ChartGridProps) {
   const gap = props.gap ?? 16;
   const min = props.minColumnWidth ?? 320;
   const track = n === 1 ? "minmax(0, 1fr)" : `repeat(auto-fill, minmax(min(100%, max(${min}px, calc((100% - ${(n - 1) * gap}px) / ${n} - 0.5px))), 1fr))`;
-  return (
+  const auto = useId();
+  const sync = props.sync === true ? auto : props.sync || undefined;
+  const grid = (
     <div className={props.className} style={{ display: "grid", gridTemplateColumns: track, gap, alignItems: "stretch", ...props.style }}>
       {props.children}
     </div>
   );
+  return sync ? <SyncContext.Provider value={sync}>{grid}</SyncContext.Provider> : grid;
 }
 
 export interface ChartStateProps {

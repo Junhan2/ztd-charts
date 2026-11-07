@@ -34,8 +34,13 @@ const rows = [{ stage: "방문", users: 10000 }, { stage: "구매", users: 760 }
 ```
 
 - `ChartCard`: `number`, `title`, `subtitle`, `legend`(배열이나 노드), `replay`(다시 재생 버튼, 안쪽 차트가 알아서 다시 재생), `takeaway`, `level`, `sample`("예시 데이터"), `actions`.
-- `ChartGrid`: `columns`(기본 2), `gap`, `minColumnWidth`(기본 320). 미디어 쿼리 없이 CSS만으로 접혀요.
+- `ChartGrid`: `columns`(기본 2), `gap`, `minColumnWidth`(기본 320). 미디어 쿼리 없이 CSS만으로 접혀요. `sync`를 켜면 안의 라인, 영역, 막대, 캔들스틱 차트가 묶여요. 하나를 짚으면 나머지도 같은 x를 짚어요(키로 맞추고, 키 꼴이 다르면 축 이름표로 맞춰요). 그리드 밖의 차트는 같은 `syncId`로 묶어요.
 - `ChartState`: `loading`, `error`, `empty`, `onRetry`. 차트와 같은 높이로 스켈레톤, 오류와 다시 시도, 빈 상태를 보여줘요.
+- `StatCard`: 큰 숫자, 변화 배지, 추세선을 담은 지표 카드예요. `label`, `data`, `x`, `y`, `format`, `unit`, `note`를 받아요. `value`와 `delta`를 주지 않으면 마지막 값과 첫 값 대비 변화율을 보여 줘요. 이탈률처럼 줄어야 좋은 지표는 `better="down"`을 써요. 추세선에 마우스를 올리거나 Tab으로 들어가 화살표로 옮기면 큰 숫자와 아래 글이 그 점의 값과 날짜로 바뀌어요.
+
+```tsx
+<StatCard label="MRR" data={daily} x="day" y="mrr" format={{ prefix: "$" }} unit="K" note="최근 30일" />
+```
 
 ## 테마
 
@@ -81,6 +86,38 @@ import { ThemeProvider } from "ztd-charts";
 ```tsx
 <LineChart data={rows} x="t" y="p95" series="api" brush="zoom" onBrush={(r) => r && setRange([r.fromKey, r.toKey])} />
 <CandlestickChart data={daily} x="date" open="open" high="high" low="low" close="close" volume="volume" ma={[5, 20]} brush />
+```
+
+## 주석
+
+라인, 영역, 세로 막대, 캔들스틱 차트에서 읽는 사람이 봐야 할 곳을 `annotations`로 표시해요. 화면 낭독 설명에도 함께 읽혀요.
+
+- `{ type: "band", y: [아래, 위], label }`은 목표 구간을, `{ type: "band", x: [시작, 끝], label }`은 기간을 칠해요.
+- `{ type: "line", y, label }`은 기준선을 그려요.
+- `{ type: "event", x, label }`은 출시 같은 사건을 표시해요. 이름표가 겹치면 아랫줄로 내려요.
+- `{ type: "forecast", from }`은 그 x부터 선을 점선으로 그려요. 막대는 뒤쪽 막대를 옅게 칠하고 점선 테두리를 둘러요.
+- `{ type: "trend" }`는 강조 계열에 맞춘 추세선(최소제곱)을 그려요. 캔들스틱은 종가에 맞춰요.
+- `{ type: "weekends" }`는 날짜 x축에서 토요일과 일요일을 칠해요(400일까지).
+- `signColors`(라인, 영역)는 강조 계열을 `baseline`(기본 0) 위아래 색으로 나눠요. 아래 색은 `downColor`(기본 `"neutralStrong"`)예요.
+
+```tsx
+<LineChart data={daily} x="date" y="signups" annotations={[{ type: "band", y: [25, 32], label: "목표 구간" }, { type: "event", x: "2025-03-12", label: "앱 출시" }, { type: "forecast", from: "2025-03-24" }, { type: "trend" }, { type: "weekends" }]} />
+<LineChart data={monthly} x="month" y="profit" area signColors />
+```
+
+JSON 스펙에서는 `options.annotations`에 적어요. 검사(`validate`)는 틀린 항목을 `options.annotations[2]`처럼 짚어 줘요.
+
+## 실시간 데이터
+
+`LiveLineChart`는 흘러오는 값을 그려요. 가진 행을 넘기고(`x`는 시각: Date, ms, ISO 문자열) 새 행이 오면 뒤에 붙여 주세요. 최근 `window`(기본 1분)만 보여 줘요. 그보다 오래된 행은 그때그때 버려 주세요. 넘긴 행을 모두 정렬하고 훑어요.
+- 점과 점 사이에는 차트가 데이터 시각을 따라가는 자기 시계로 선을 왼쪽으로 미끄러뜨려요. 그래서 다음 점이 오기 전에 선 끝이 비지 않아요. 점이 한꺼번에 몰려오면 조금 빨리 따라잡아요.
+- 마우스를 올리거나 Tab으로 들어가 화살표로 옮기면 멈춰서 값을 읽을 수 있어요. 벗어나면 다시 흘러요.
+- 동작 줄이기에서는 점이 들어올 때만 움직여요.
+- 컴포넌트로만 써요. JSON 스펙과 CLI는 멈춘 그림을 그려서 `live` 스펙 종류는 없어요.
+
+```tsx
+// rows: [{ t: 1717383600000, v: 1204 }, ...], 새 행이 오면 뒤에 붙여요
+<LiveLineChart data={rows} x="t" y="v" window={60_000} format="integer" />
 ```
 
 ## 접근성
@@ -150,6 +187,7 @@ npx ztd-charts-cli list                         # 전체 목록 (--json, --group
 npx ztd-charts-cli info sankey                  # 채널, 옵션, 예시, React 코드
 npx ztd-charts-cli schema line --out line.schema.json
 npx ztd-charts-cli example donut --out donut.json
+npx ztd-charts-cli example bar --variant horizontal   # 이름 붙은 변형 (info가 목록을 보여 줘요)
 npx ztd-charts-cli validate donut.json          # 성공 0, 실패 1
 npx ztd-charts-cli render donut.json --out donut.png --theme light --scale 2
 npx ztd-charts-cli render donut.json --out donut.svg
@@ -169,7 +207,7 @@ stdio MCP 서버예요. 도구는 다섯 개.
 | 도구 | 기능 |
 |---|---|
 | `list_charts` | 전체 차트 목록(묶음, 수준으로 거르기) |
-| `get_chart_schema` | 차트 하나의 스키마, 예시 스펙, React 코드 |
+| `get_chart_schema` | 차트 하나의 스키마, 예시 스펙, 이름 붙은 변형, React 코드 |
 | `validate_spec` | 경로와 제안이 있는 오류, 경고 |
 | `render_chart` | PNG 이미지 + SVG + React 코드. `locale: "ko"`면 한국어 차트 글자와 숫자 형식 |
 | `suggest_chart` | CSV, 행 배열, URL로 차트 추천과 바로 쓰는 스펙 |

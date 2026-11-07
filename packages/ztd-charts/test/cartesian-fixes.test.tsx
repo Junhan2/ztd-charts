@@ -11,6 +11,7 @@ import { CandlestickChart } from "../src/charts/candlestick";
 import { DumbbellChart } from "../src/charts/dumbbell";
 import { Heatmap } from "../src/charts/heatmap";
 import { AreaChart, LineChart } from "../src/charts/line";
+import { LiveLineChart } from "../src/charts/live";
 import { LollipopChart } from "../src/charts/lollipop";
 import { ParetoChart } from "../src/charts/pareto";
 import { RadarChart } from "../src/charts/radar";
@@ -476,5 +477,97 @@ describe("16: edge layouts", () => {
     expect(frame().onKey!(keyEvent("ArrowLeft"))).toBe(true);
     expect(state.calls).toEqual([[10, "keyboard"]]);
     expect(frame().onKey!(keyEvent("ArrowDown"))).toBe(false);
+  });
+});
+
+describe("17: annotations", () => {
+  const months = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06"].map((m, i) => ({ m, v: 10 + i * 2 }));
+
+  it("line draws a target band, a reference line and an event, and widens the y axis to fit them", () => {
+    const h = r(<LineChart data={months} x="m" y="v" width={480} animate={false} annotations={[{ type: "band", y: [30, 40], label: "Target" }, { type: "line", y: 5, label: "Floor" }, { type: "event", x: "2025-03", label: "Launch" }]} />);
+    for (const s of ["Target", "Floor", "Launch"]) expect(textOf(h, s).length).toBe(1);
+    // 데이터는 10~20이지만 축이 40까지 넓어지고, 5의 기준선도 x축 글자 위 그림 안에 와요 (이름표는 선 10px 위)
+    const ticks = texts(h).filter((t) => t.anchor === "end").map((t) => Number(t.text.replace(/,/g, "")));
+    expect(Math.max(...ticks)).toBeGreaterThanOrEqual(40);
+    const axisY = Math.min(...texts(h).filter((t) => t.anchor === "middle").map((t) => t.y));
+    expect(textOf(h, "Floor")[0].y + 10).toBeLessThan(axisY - 8);
+    expect(desc(h)).toContain("Annotations: band 30 to 40 (Target); reference line at 5 (Floor); Launch at Mar.");
+  });
+
+  it("forecast keeps the line solid before its x and dashes it after", () => {
+    const h = r(<LineChart data={months} x="m" y="v" width={480} animate={false} locale="ko-KR" annotations={[{ type: "forecast", from: "2025-04" }]} />);
+    expect(h).toMatch(/<clipPath id="[^"]*pre">/);
+    expect(h).toMatch(/<clipPath id="[^"]*post">/);
+    expect(h).toContain('stroke-dasharray="5 4"');
+    expect(textOf(h, "예측").length).toBe(1);
+    expect(desc(h)).toContain("주석: 4월부터 예측.");
+  });
+
+  it("signColors paints the highlighted series below the baseline in downColor", () => {
+    const data = [5, -3, 4, -2, 6].map((v, i) => ({ m: i, v }));
+    const h = r(<LineChart data={data} x="m" y="v" width={480} animate={false} signColors downColor="#d00000" />);
+    expect(h).toMatch(/<path[^>]*stroke="#d00000"[^>]*clip-path="url\(#[^"]*dn\)"/);
+    // 기준값 아래 점도 같은 색이에요
+    expect(h).toMatch(/<circle[^>]*fill="#d00000"/);
+    // 없으면 예전처럼 한 색
+    expect(r(<LineChart data={data} x="m" y="v" width={480} animate={false} downColor="#d00000" />)).not.toContain("#d00000");
+  });
+
+  it("weekends shade Saturday and Sunday on a daily date axis", () => {
+    const days = Array.from({ length: 14 }, (_, k) => ({ d: new Date(2025, 0, 6 + k), v: k }));
+    const h = r(<LineChart data={days} x="d" y="v" width={480} animate={false} annotations={[{ type: "weekends" }]} />);
+    expect([...h.matchAll(/<rect [^>]*opacity="0.045"/g)].length).toBe(2);
+  });
+
+  it("bar forecast fades later bars with a dashed outline, and horizontal bars draw no annotations", () => {
+    const data = ["Q1", "Q2", "Q3", "Q4"].map((x, i) => ({ x, y: 40 + i * 5 }));
+    const notes = [{ type: "forecast" as const, from: "Q3" }, { type: "line" as const, y: 50, label: "Goal" }];
+    const h = r(<BarChart data={data} width={480} animate={false} annotations={notes} />);
+    const faded = markGroups(h).map((g) => g.includes('fill-opacity="0.42"') && g.includes('stroke-dasharray="3 2"'));
+    expect(faded).toEqual([false, false, true, true]);
+    expect(textOf(h, "Goal").length).toBe(1);
+    const flat = r(<BarChart data={data} width={480} animate={false} orientation="horizontal" annotations={notes} />);
+    expect(textOf(flat, "Goal").length).toBe(0);
+    expect(flat).not.toContain('fill-opacity="0.42"');
+  });
+
+  it("candlestick fits a trend on the closes and places an event by time", () => {
+    const data = Array.from({ length: 10 }, (_, k) => ({ date: `2025-01-${String(k + 1).padStart(2, "0")}`, open: 100 + k, high: 104 + k, low: 98 + k, close: 102 + k }));
+    const h = r(<CandlestickChart data={data} width={480} animate={false} annotations={[{ type: "trend" }, { type: "event", x: "2025-01-05", label: "Earnings" }]} />);
+    expect(textOf(h, "Trend").length).toBe(1);
+    expect(textOf(h, "Earnings").length).toBe(1);
+    expect(h).toContain('stroke-dasharray="6 4"');
+    expect(desc(h)).toContain("Annotations: trend line; Earnings at Jan 5, 2025.");
+  });
+});
+
+describe("18: live line", () => {
+  const T0 = Date.UTC(2025, 5, 3, 3, 0, 0);
+  const data = Array.from({ length: 200 }, (_, i) => ({ t: T0 + i * 1000, v: 100 + (i % 7) }));
+
+  it("keeps the window, puts the newest value at the right edge and labels time from now", () => {
+    const h = r(<LiveLineChart data={data} width={480} animate={false} />);
+    // 1분 창 + 왼쪽 밖 몇 점만 그려요 (200점을 다 그리지 않아요)
+    const d = /<path d="(M[^"]+)" fill="none"/.exec(h)![1];
+    const n = d.split("L").length;
+    expect(n).toBeGreaterThanOrEqual(61);
+    expect(n).toBeLessThan(70);
+    for (const s of ["now", "1m ago", "30s ago", "103"]) expect(textOf(h, s).length).toBe(1);
+    expect(desc(h)).toContain("Last 1m, 61 points. Latest 103");
+    expect(h).not.toContain("<animate");
+    const ko = r(<LiveLineChart data={data} width={480} animate={false} locale="ko-KR" />);
+    for (const s of ["지금", "1분 전", "30초 전"]) expect(textOf(ko, s).length).toBe(1);
+  });
+
+  it("points at the nearest point by time", () => {
+    state.spy = true;
+    r(<LiveLineChart data={data} width={480} animate={false} />);
+    frame().onPointerMove!(479, 50, pointer);
+    frame().onPointerMove!(0, 50, pointer);
+    const n = frame().events.length;
+    expect(state.calls).toEqual([
+      [n - 1, "pointer"],
+      [0, "pointer"],
+    ]);
   });
 });

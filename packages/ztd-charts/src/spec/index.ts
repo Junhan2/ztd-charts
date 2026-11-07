@@ -9,6 +9,7 @@ export { CHARTS, CHART_TYPES, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "
 export { GROUPS, LEVELS, findGroup, findLevel, type LabelDef } from "./labels";
 export { specLocale } from "./meta";
 export { localizeDef, chartsIn, commonOptionsIn, specSchemaIn, schemaForIn } from "./localize";
+export { VARIANTS, variantSpec, variantsIn, type ChartVariant } from "./variants";
 export { specSchema, schemaFor, chartSchema, optionSchema, SCHEMA_ID, type JSONSchema, type SchemaText } from "./schema";
 export { validateSpec, formatIssues, inlineRows, levenshtein, closest } from "./validate";
 export { suggestCharts, profileData, type ColumnProfile, type DataProfile, type Suggestion, type ColumnKind } from "./suggest";

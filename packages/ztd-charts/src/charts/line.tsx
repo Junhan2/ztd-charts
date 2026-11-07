@@ -1,18 +1,20 @@
 import { useId, useMemo, type ReactNode } from "react";
-import { AXIS_FONT, fitTickLabels, GridY, thinLabels, yAxisWidth } from "../core/axis";
+import { AXIS_FONT, AxisPill, fitTickLabels, GridY, HoverLine, thinLabels, yAxisWidth } from "../core/axis";
 import { BrushBand, changeRatio, ExtremeTags, signedPercent, useChartBrush, useZoom, type BrushProps } from "../core/brush";
 import { ChartFrame, Txt } from "../core/ChartFrame";
 import { makeTickFormatter } from "../core/format";
-import { areaPath, linePath, nearestIndex, type Curve } from "../core/geometry";
+import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, forecastFrom, forecastX, type Annotation, type AnnotationGeom } from "../core/annotations";
+import { areaPath, linePath, nearestIndex, r2, type Curve } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { categorical, ramp, swatch, type Swatch } from "../core/palette";
 import { extent, fitDomain, scaleLinear, timeTicks } from "../core/scale";
-import { bucketSeries, prepSeries, type SeriesModel, type XType } from "../core/series";
+import { bucketSeries, prepSeries, xNum, type SeriesModel, type XType } from "../core/series";
 import { dodgeVertical, textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { lazyArray } from "../core/lazy";
 import { useChart, type ChartCtx } from "../core/useChart";
+import { useSync } from "../core/sync";
 import { useMotion } from "../core/useMotion";
 import { lttb } from "../data/parse";
 import { stack } from "../layout/stack";
@@ -61,6 +63,14 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
   yLabel?: string;
   /** 강조 계열. 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean. 기본 첫 계열 */
   highlight?: BaseChartProps<T>["highlight"];
+  /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. 화면 낭독 설명에도 들어가요 */
+  annotations?: Annotation[];
+  /** 강조 계열을 baseline 위아래 색으로 나눠요 (손익, 증감). 영역은 겹치기(stack "none")일 때만. 기본 false */
+  signColors?: boolean;
+  /** signColors의 기준값. 기본 0 */
+  baseline?: number;
+  /** signColors에서 기준값 아래 색. 테마 토큰이나 CSS 색. 기본 "neutralStrong" */
+  downColor?: string;
 }
 
 /** 모델에서 x 인덱스 a~b(양끝 포함)만 남겨요 */
@@ -102,7 +112,7 @@ interface SeriesDraw {
   idx: number[];
 }
 
-function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number) {
+function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number): ((k: number) => number) & { v?: (t: number) => number } {
   const n = model.keys.length;
   if (model.type === "band") {
     const step = n > 1 ? (x1 - x0) / (n - 1) : 0;
@@ -110,7 +120,8 @@ function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number) {
   }
   const [lo, hi] = extent(model.xnum);
   const s = scaleLinear([lo, hi === lo ? lo + 1 : hi], [x0, x1]);
-  return (k: number) => s(model.xnum[k]);
+  // v: x 값(날짜 ms, 숫자) → 픽셀. 주석이 데이터와 같은 자로 재요
+  return Object.assign((k: number) => s(model.xnum[k]), { v: s });
 }
 
 function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (k: number) => number; x0: number; x1: number; y: number }) {
@@ -188,6 +199,10 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   else model.values.forEach((r) => r.forEach((v) => Number.isFinite(v) && allY.push(v)));
   // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게
   props.referenceLines?.forEach((r) => allY.push(r.y));
+  allY.push(...annotationYs(props.annotations));
+  const signOn = !!props.signColors && stackMode === "none";
+  const baseline = props.baseline ?? 0;
+  if (signOn) allY.push(baseline);
   const [mn, mx] = extent(allY);
   const dom: [number, number] = props.yDomain ?? (stackMode === "percent" ? [0, 100] : fitDomain(mn, mx, Math.max(2, Math.round(H / 70)), { zero: props.zero ?? isArea }));
   const tickFmt = stackMode === "percent" ? (v: number) => `${v}%` : makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
@@ -212,6 +227,42 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const curve = props.curve ?? "smooth";
   // 영역의 바닥: 0을 축 범위 안으로 (값이 모두 음수면 위 끝, 모두 양수면 아래 끝)
   const base0 = Math.min(dom[1], Math.max(dom[0], 0));
+  const down = p.color(props.downColor, "neutralStrong");
+  const yb = y(baseline);
+
+  // 주석의 x 값: 범주는 칸 순서, 날짜와 숫자는 데이터와 같은 규칙으로 읽은 값 (xv가 픽셀로)
+  const xv = xs.v;
+  const xn = (v: unknown) => (xv ? xNum(model.type, v) : model.keys.indexOf(String(v)));
+  const xAt = (v: unknown): number | null => {
+    const n = xn(v);
+    return xv ? (Number.isFinite(n) ? xv(n) : null) : n < 0 ? null : xs(n);
+  };
+  const last = model.xnum.length - 1;
+  const geom: AnnotationGeom = {
+    p,
+    lang: c.lang,
+    xAt,
+    y,
+    x0,
+    x1,
+    top,
+    bottom: H - bottom,
+    half: xv || last < 1 ? 0 : (xs(1) - xs(0)) / 2,
+    time: model.type === "date" && xv && last > 0 ? { t0: model.xnum[0], t1: model.xnum[last], n: last + 1, xt: xv } : undefined,
+    points: () => {
+      const hs = [...hi][0] ?? 0;
+      return centers.map((x, k) => ({ x, y: y(stacked ? stacked.y1[hs][k] : model.values[hs][k]) }));
+    },
+  };
+  // 예측 구간: 이 x부터 선을 점선으로 (데이터 밖이면 없어요)
+  const xf = forecastX(geom, forecastFrom(props.annotations));
+  // 주석 설명의 x: 데이터에 있는 x면 화면 이름표("Mar")로
+  const xText = (v: unknown) => {
+    const n = xn(v);
+    const k = xv ? model.xnum.indexOf(n) : n;
+    return k >= 0 ? model.labels[k] : String(v ?? "");
+  };
+  const toneOf = (si: number, v: number) => (signOn && hi.has(si) && v < baseline ? down : colors[si].fill);
 
   const draws = useMemo<SeriesDraw[]>(() => {
     return model.series.map((name, s) => {
@@ -288,6 +339,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   });
 
   const activeK = c.active;
+  useSync(c, props.syncId, model.keys, model.labels);
   let tip: TooltipData | null = null;
   if (activeK !== null && model.keys[activeK] !== undefined && !brush.dragging) {
     const rows = model.series
@@ -295,7 +347,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
       .filter((r) => Number.isFinite(r.v))
       .sort((a, b) => b.v - a.v)
       .slice(0, 8)
-      .map((r) => ({ label: r.s || c.t.value, value: stackMode === "percent" && stacked ? `${Math.round(stacked.y1[r.si][activeK] - stacked.y0[r.si][activeK])}% · ${c.fv(r.v)}` : c.fv(r.v), color: colors[r.si].fill, strong: hi.has(r.si) }));
+      .map((r) => ({ label: r.s || c.t.value, value: stackMode === "percent" && stacked ? `${Math.round(stacked.y1[r.si][activeK] - stacked.y0[r.si][activeK])}% · ${c.fv(r.v)}` : c.fv(r.v), color: toneOf(r.si, r.v), strong: hi.has(r.si) }));
     const yy = Math.min(...model.series.map((_, si) => (stacked ? y(stacked.y1[si][activeK]) : Number.isFinite(model.values[si][activeK]) ? y(model.values[si][activeK]) : H)));
     tip = { x: xs(activeK), y: Math.max(top, yy), title: model.labels[activeK], rows };
   }
@@ -366,7 +418,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const dots = props.dots ?? "auto";
   const showDots = dots === true || (dots === "auto" && !isArea && model.keys.length <= 16);
   const kindName = isArea ? msg.area : msg.line;
-  const desc = props.description ?? `${kindName}. ${msg.desc(nS, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.`;
+  const desc = props.description ?? `${kindName}. ${msg.desc(nS, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.${describeAnnotations(props.annotations, c.lang, c.fv, xText)}`;
 
   const pieces: ReactNode[] = [];
   for (const it of m.items) {
@@ -376,27 +428,57 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     const draw = v[0];
     const ys = v.slice(1, 1 + n);
     const pts = d.xs.map((xx, i) => [xx, ys[i] ?? ys[ys.length - 1] ?? 0] as [number, number]);
+    const sign = signOn && d.hi;
+    const lp = linePath(pts, curve);
+    // 손익 색: 선에서 기준값까지 칠한 영역 하나를 위아래 자르기 영역으로 나눠 칠해요 (바닥이 평평해서 V, H로 닫아요)
+    const signArea = sign && n ? `${lp}V${r2(yb)}H${r2(pts[0][0])}Z` : "";
     if (isArea) {
       const bs = v.slice(1 + n, 1 + 2 * n);
       const bottomPts = d.xs.map((xx, i) => [xx, bs[i] ?? y(base0)] as [number, number]);
+      const fills = sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.5} clipPath={`url(#${gid}${t})`} />) : <path d={areaPath(pts, bottomPts, curve)} fill={d.sw.fill} opacity={stackMode === "none" ? (d.hi ? 0.5 : 0.28) : 1} />;
+      const stroke = (dashed: boolean) =>
+        (sign ? (["up", "dn"] as const) : ([null] as const)).map((t) => (
+          <path key={t ?? "s"} d={lp} fill="none" stroke={t === "dn" ? down : stackMode === "none" ? d.sw.fill : p.paint("panel")} strokeWidth={stackMode === "none" ? (d.hi ? 2.2 : 1.4) : 1.2} strokeLinejoin="round" strokeDasharray={dashed ? "5 4" : undefined} opacity={Math.min(1, draw * 1.4)} clipPath={t ? `url(#${gid}${t})` : undefined} />
+        ));
       pieces.push(
         <g key={it.key} opacity={it.exiting ? 0.4 : 1}>
-          <path d={areaPath(pts, bottomPts, curve)} fill={d.sw.fill} opacity={stackMode === "none" ? (d.hi ? 0.5 : 0.28) : 1} />
-          <path d={linePath(pts, curve)} fill="none" stroke={stackMode === "none" ? d.sw.fill : p.paint("panel")} strokeWidth={stackMode === "none" ? (d.hi ? 2.2 : 1.4) : 1.2} strokeLinejoin="round" opacity={Math.min(1, draw * 1.4)} />
+          {fills}
+          {xf !== null ? (
+            <>
+              <g clipPath={`url(#${gid}pre)`}>{stroke(false)}</g>
+              <g clipPath={`url(#${gid}post)`}>{stroke(true)}</g>
+            </>
+          ) : (
+            stroke(false)
+          )}
         </g>,
       );
     } else {
       const width = d.hi ? 2.6 : 1.7;
       const dash = draw < 0.999;
+      // 그려지는 중에는 그리기 점선(1 1), 다 그린 뒤 예측 구간은 5 4 점선. 손익 색은 기준값 위아래를 자르기 영역으로 나눠 칠해요
+      const stroke = (dashed: boolean) =>
+        (sign ? (["up", "dn"] as const) : ([null] as const)).map((t) => (
+          <path key={t ?? "s"} d={lp} fill="none" stroke={t === "dn" ? down : d.sw.fill} strokeWidth={width} strokeLinejoin="round" strokeLinecap="round" pathLength={dash ? 1 : undefined} strokeDasharray={dash ? "1 1" : dashed ? "5 4" : undefined} strokeDashoffset={dash ? 1 - draw : undefined} clipPath={t ? `url(#${gid}${t})` : undefined} />
+        ));
+      const under = props.area && d.hi ? (sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.16 * draw} clipPath={`url(#${gid}${t})`} />) : <path d={areaPath(pts, pts.map(([xx]) => [xx, y(base0)] as [number, number]), curve)} fill={`url(#${gid}g)`} opacity={draw} />) : null;
       pieces.push(
         <g key={it.key} opacity={it.exiting ? 0.4 : 1}>
-          {props.area && d.hi ? <path d={areaPath(pts, pts.map(([xx]) => [xx, y(base0)] as [number, number]), curve)} fill={`url(#${gid}g)`} opacity={draw} /> : null}
-          <path d={linePath(pts, curve)} fill="none" stroke={d.sw.fill} strokeWidth={width} strokeLinejoin="round" strokeLinecap="round" pathLength={dash ? 1 : undefined} strokeDasharray={dash ? "1 1" : undefined} strokeDashoffset={dash ? 1 - draw : undefined} />
+          {under}
+          {xf !== null ? (
+            <>
+              <g clipPath={`url(#${gid}pre)`}>{stroke(false)}</g>
+              <g clipPath={`url(#${gid}post)`}>{stroke(true)}</g>
+            </>
+          ) : (
+            stroke(false)
+          )}
           {showDots
             ? pts.map(([xx, yy], i) => {
                 const f = n > 1 ? i / (n - 1) : 1;
                 const o = Math.max(0, Math.min(1, (draw - f) * 8 + (draw >= 0.999 ? 1 : 0)));
-                return <circle key={i} cx={xx} cy={yy} r={d.hi ? 3 : 2.2} fill={d.hi ? d.sw.fill : p.paint("panel")} stroke={d.sw.fill} strokeWidth={d.hi ? 0 : 1.4} opacity={Math.min(1, o)} />;
+                const col = sign && yy > yb ? down : d.sw.fill;
+                return <circle key={i} cx={xx} cy={yy} r={d.hi ? 3 : 2.2} fill={d.hi ? col : p.paint("panel")} stroke={col} strokeWidth={d.hi ? 0 : 1.4} opacity={Math.min(1, o)} />;
               })
             : null}
         </g>,
@@ -425,11 +507,35 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
       {...brushFrame}
       announce={announce}
       defs={
-        props.area ? (
-          <linearGradient id={`${gid}g`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={p.paint("accent")} stopOpacity={0.28} />
-            <stop offset="100%" stopColor={p.paint("accent")} stopOpacity={0} />
-          </linearGradient>
+        props.area || xf !== null || signOn ? (
+          <>
+            {props.area ? (
+              <linearGradient id={`${gid}g`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={p.paint("accent")} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={p.paint("accent")} stopOpacity={0} />
+              </linearGradient>
+            ) : null}
+            {xf !== null ? (
+              <>
+                <clipPath id={`${gid}pre`}>
+                  <rect x={-W} y={-H} width={W + xf} height={H * 3} />
+                </clipPath>
+                <clipPath id={`${gid}post`}>
+                  <rect x={xf} y={-H} width={W * 2} height={H * 3} />
+                </clipPath>
+              </>
+            ) : null}
+            {signOn ? (
+              <>
+                <clipPath id={`${gid}up`}>
+                  <rect x={-W} y={-H} width={W * 3} height={H + yb} />
+                </clipPath>
+                <clipPath id={`${gid}dn`}>
+                  <rect x={-W} y={yb} width={W * 3} height={H * 2} />
+                </clipPath>
+              </>
+            ) : null}
+          </>
         ) : null
       }
     >
@@ -439,20 +545,25 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         </Txt>
       ) : null}
       <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} locale={c.locale} />
+      <AnnotationsUnder list={props.annotations} g={geom} />
+      {signOn ? <line x1={x0} x2={x1} y1={yb} y2={yb} stroke={p.paint("dim")} pointerEvents="none" /> : null}
       {props.referenceLines?.map((r, i) => (
         <line key={i} x1={x0} x2={x1} y1={y(r.y)} y2={y(r.y)} stroke={p.paint("dim")} strokeDasharray="3 3" />
       ))}
       <rect x={x0} y={top} width={Math.max(0, x1 - x0)} height={Math.max(0, H - bottom - top)} fill="transparent" />
       {pieces}
+      <AnnotationsOver list={props.annotations} g={geom} />
       {activeK !== null && model.keys[activeK] !== undefined ? (
-        <g pointerEvents="none">
-          <line x1={xs(activeK)} x2={xs(activeK)} y1={top} y2={H - bottom} stroke={p.paint("dim")} strokeWidth={1} />
-          {model.series.map((_, si) => {
+        <HoverLine
+          p={p}
+          x={xs(activeK)}
+          top={top}
+          bottom={H - bottom}
+          dots={model.series.flatMap((_, si) => {
             const v = stacked ? stacked.y1[si][activeK] : model.values[si][activeK];
-            if (!Number.isFinite(v)) return null;
-            return <circle key={si} cx={xs(activeK)} cy={y(v)} r={hi.has(si) ? 4.2 : 3.2} fill={colors[si].fill} stroke={p.paint("panel")} strokeWidth={2} />;
+            return Number.isFinite(v) ? [{ k: si, y: y(v), color: toneOf(si, v), strong: hi.has(si) }] : [];
           })}
-        </g>
+        />
       ) : null}
       {props.referenceLines?.map((r, i) =>
         r.label ? (
@@ -472,6 +583,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
       ))}
       {brushLayer}
       <XAxis c={c as ChartCtx<unknown>} model={model as SeriesModel<unknown>} xs={xs} x0={x0} x1={x1} y={H - bottom + 13} />
+      {activeK !== null && model.keys[activeK] !== undefined && !brush.dragging ? <AxisPill p={p} x={xs(activeK)} y={H - bottom + 13} label={model.labels[activeK]} width={W} /> : null}
     </ChartFrame>
   );
 }

@@ -88,6 +88,8 @@ export interface BaseChartProps<T = Record<string, unknown>> extends AnimationPr
   locale?: string;
   /** 이 차트만 테마 토큰 바꾸기 */
   theme?: Partial<ChartTheme>;
+  /** 같은 이름의 차트끼리 짚은 x를 함께 보여 줘요(대시보드에서 같은 날짜 맞춰 보기). ChartGrid의 sync로도 묶여요 */
+  syncId?: string;
   className?: string;
   style?: CSSProperties;
 }

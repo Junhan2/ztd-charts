@@ -7,13 +7,15 @@ export const baseCss = `
 .ztd-root:focus-visible{outline:2px solid var(--ztd-accent,${darkTheme.accent});outline-offset:3px;border-radius:6px}
 .ztd-svg{display:block;overflow:visible;user-select:none;-webkit-user-select:none}
 .ztd-mark{transition:opacity .18s ease,fill .18s ease,stroke .18s ease,stroke-width .18s ease}
-.ztd-tip{transition:opacity .12s ease;will-change:transform}
+.ztd-tip{animation:ztd-fade .14s ease-out;transition:left .2s cubic-bezier(.22,1,.36,1),top .2s cubic-bezier(.22,1,.36,1)}
+.ztd-guide{transition:transform .2s cubic-bezier(.22,1,.36,1)}
+.ztd-still .ztd-tip,.ztd-still .ztd-guide{transition:none;animation:none}
 .ztd-btn{appearance:none;font:inherit;cursor:pointer;transition:background .14s,color .14s,border-color .14s}
 .ztd-btn:focus{outline:none}
 .ztd-btn:focus-visible{outline:2px solid var(--ztd-accent,${darkTheme.accent});outline-offset:2px}
 .ztd-card{transition:border-color .16s ease}
 .ztd-card:hover{border-color:var(--ztd-dim,${darkTheme.dim})}
-@media (prefers-reduced-motion: reduce){.ztd-mark,.ztd-tip,.ztd-btn,.ztd-card{transition:none}}
+@media (prefers-reduced-motion: reduce){.ztd-mark,.ztd-tip,.ztd-guide,.ztd-btn,.ztd-card{transition:none;animation:none}}
 @keyframes ztd-pop{from{opacity:0;transform:scale(.45)}to{opacity:1;transform:none}}
 @keyframes ztd-fade{from{opacity:0}to{opacity:1}}
 .ztd-pop{transform-box:fill-box;transform-origin:center}

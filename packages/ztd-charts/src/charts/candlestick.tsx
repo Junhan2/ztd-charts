@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
-import { AXIS_FONT, fitTickLabels, GridY, tickLabels, yAxisWidth } from "../core/axis";
+import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, type Annotation, type AnnotationGeom } from "../core/annotations";
+import { AXIS_FONT, AxisPill, fitTickLabels, GridY, HoverLine, tickLabels, yAxisWidth } from "../core/axis";
 import { BrushBand, changeRatio, ExtremeTags, signedPercent, useChartBrush, useZoom, type BrushProps } from "../core/brush";
 import { ChartFrame, Txt } from "../core/ChartFrame";
 import { formatDate, makeTickFormatter, toDate } from "../core/format";
@@ -10,6 +11,7 @@ import { fitDomain, scaleLinear, timeTicks } from "../core/scale";
 import { textWidth } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
+import { useSync } from "../core/sync";
 import { useMotion } from "../core/useMotion";
 import { getter, numGetter } from "../data/accessor";
 import type { ColorToken } from "../theme/tokens";
@@ -77,6 +79,8 @@ export interface CandlestickChartProps<T = Row> extends BaseChartProps<T>, Brush
   maxCandles?: number;
   /** 가격 축 범위 고정 */
   yDomain?: [number, number];
+  /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선(종가), 주말 음영 */
+  annotations?: Annotation[];
 }
 
 interface Candle<T> {
@@ -222,7 +226,9 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   const volH = hasVolume ? Math.max(28, (H - top - bottom) * 0.18) : 0;
   const priceBottom = H - bottom - (hasVolume ? volH + 8 : 0);
   const yCount = Math.max(2, Math.round((priceBottom - top) / 60));
-  const dom: [number, number] = props.yDomain ?? fitDomain(lo, hi, yCount, { zero: false });
+  // 주석의 기준선과 구간도 축 안에 들어오게 (lo, hi는 데이터 값 그대로 설명과 가격표에 써요)
+  const noteYs = annotationYs(props.annotations);
+  const dom: [number, number] = props.yDomain ?? fitDomain(Math.min(lo, ...noteYs), Math.max(hi, ...noteYs), yCount, { zero: false });
   // 가격 축은 금융 화면 관례대로 줄이지 않은 전체 숫자 (format을 주면 그걸 써요)
   const tickFmt = makeTickFormatter(props.format, c.locale, 0);
   const yTicks = scaleLinear(dom, [0, 1]).ticks(yCount);
@@ -303,6 +309,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     },
   });
 
+  useSync(c, props.syncId, cs.map((q) => q.key), cs.map((q) => q.label));
   let tip: TooltipData | null = null;
   if (c.active !== null && cs[c.active] && !brush.dragging) {
     const q = cs[c.active];
@@ -394,6 +401,51 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   }, [cs, n, lo, hi, fv, c.locale, msg, brushText]);
   const maColors = MA_TOKENS.map((t) => p.paint(t));
 
+  // 주석의 x 값을 픽셀로. 날짜는 봉 사이를 시간 비율로 잇고, 보이는 범위 밖은 평균 봉 간격으로 늘려요
+  const per = n > 1 ? (cs[n - 1].t - cs[0].t) / (n - 1) || 1 : 1;
+  const xAtTime = (t: number) => {
+    if (t <= cs[0].t) return cx(0) - ((cs[0].t - t) / per) * step;
+    if (t >= cs[n - 1].t) return cx(n - 1) + ((t - cs[n - 1].t) / per) * step;
+    let a = 0;
+    let b = n - 1;
+    while (b - a > 1) {
+      const mid = (a + b) >> 1;
+      if (cs[mid].t <= t) a = mid;
+      else b = mid;
+    }
+    return cx(a) + ((t - cs[a].t) / (cs[b].t - cs[a].t || 1)) * step;
+  };
+  // 같은 시점(날짜)이나 같은 키, 이름표인 봉. 없으면 -1
+  const kOf = (val: unknown) => {
+    const t = dated ? toDate(val)?.getTime() : undefined;
+    return cs.findIndex((q) => (dated ? q.t === t : q.key === String(val) || q.label === String(val)));
+  };
+  const xAt = (val: unknown): number | null => {
+    if (!n) return null;
+    if (dated) {
+      const d = toDate(val);
+      return d ? xAtTime(d.getTime()) : null;
+    }
+    const k = kOf(val);
+    return k < 0 ? null : cx(k);
+  };
+  // 주석 설명의 x: 봉이 있는 시점이면 봉 이름표("2025년 9월 25일")로
+  const xText = (val: unknown) => cs[kOf(val)]?.label ?? String(val ?? "");
+  const ag: AnnotationGeom = {
+    p,
+    lang: c.lang,
+    xAt,
+    half: step / 2,
+    y,
+    x0,
+    x1,
+    // 이동평균 값 글자가 맨 위 줄에 있어서 그 아래부터
+    top: top + (mas.length ? 14 : 0),
+    bottom: priceBottom,
+    time: dated && n > 1 ? { t0: cs[0].t, t1: cs[n - 1].t, n, xt: xAtTime } : undefined,
+    points: () => cs.map((q, k) => ({ x: cx(k), y: y(q.c) })),
+  };
+
   // 이동평균 값: 가리킨 봉(없으면 마지막 봉) 기준. 이름은 카드 범례가 알려줘요
   const maK = c.active !== null && cs[c.active] ? c.active : n - 1;
   let maX = x0 + 2;
@@ -413,7 +465,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
       c={c}
       kind={msg.name}
       ariaLabel={props.ariaLabel}
-      description={props.description ?? autoDesc}
+      description={props.description ?? `${autoDesc}${describeAnnotations(props.annotations, c.lang, c.fv, xText)}`}
       events={events}
       tip={tip}
       renderTip={props.tooltip}
@@ -440,6 +492,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
         )}
       </g>
       <rect x={x0} y={top} width={Math.max(0, x1 - x0)} height={Math.max(0, H - bottom - top)} fill="transparent" />
+      <AnnotationsUnder list={props.annotations} g={ag} />
       {hasVolume ? <line x1={x0} x2={x1} y1={H - bottom + 0.5} y2={H - bottom + 0.5} stroke={p.paint("line")} /> : null}
       {m.items.map((it) => {
         const k = it.data;
@@ -468,9 +521,10 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
           {maLabels}
         </g>
       ) : null}
+      <AnnotationsOver list={props.annotations} g={ag} />
       {lastTag}
       {c.active !== null && cs[c.active] && !brush.dragging ? (
-        <line x1={cx(c.active)} x2={cx(c.active)} y1={top} y2={H - bottom} stroke={p.paint("dim")} strokeWidth={1} pointerEvents="none" />
+        <HoverLine p={p} x={cx(c.active)} top={top} bottom={H - bottom} dots={[{ k: 0, y: y(cs[c.active].c), color: cs[c.active].c >= cs[c.active].o ? up.fill : down.fill, strong: true }]} />
       ) : null}
       {brushLayer}
       <g aria-hidden="true">
@@ -480,6 +534,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
           </Txt>
         ))}
       </g>
+      {c.active !== null && cs[c.active] && !brush.dragging ? <AxisPill p={p} x={cx(c.active)} y={H - bottom + 13} label={cs[c.active].label} width={W} /> : null}
     </ChartFrame>
   );
 }

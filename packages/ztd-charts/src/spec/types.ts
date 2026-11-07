@@ -52,7 +52,7 @@ export interface ChannelDef {
   description: string;
 }
 
-export type OptionType = "number" | "string" | "boolean" | "enum" | "array" | "object" | "highlight" | "format" | "any";
+export type OptionType = "number" | "string" | "boolean" | "enum" | "array" | "object" | "highlight" | "format" | "annotations" | "any";
 
 export interface OptionDef {
   name: string;

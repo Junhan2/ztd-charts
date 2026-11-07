@@ -164,7 +164,7 @@
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
 - encoding: x, y[], series?
-- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush
+- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor
 - Default highlight: the first series or item
 
 ```json
@@ -177,7 +177,7 @@
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
 - encoding: x, y[], series?
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor
 - Default highlight: the first series or item
 
 ```json
@@ -203,7 +203,7 @@
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
 - encoding: x, y[], series?
-- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort
+- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, annotations
 - Default highlight: the first series or item
 
 ```json
@@ -411,7 +411,7 @@
 - Use when: Stocks, exchange rates or coins, where the swing within each period matters
 - Avoid when: A trend with only one value (a line chart is cleaner)
 - encoding: x, open, high, low, close, volume?
-- Chart options: ma, upColor, downColor, maxCandles, brush, yDomain
+- Chart options: ma, upColor, downColor, maxCandles, brush, yDomain, annotations
 - Default highlight: the largest value
 
 ```json
@@ -447,5 +447,6 @@
 - `animateOnView` (boolean, default true): Play when the chart scrolls into view
 - `showLabels` (boolean, default true): Labels drawn on the chart (values and names)
 - `tooltip` (boolean, default true): Show tooltips
+- `syncId` (string): Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it
 - `ariaLabel` (string): Name for screen readers
 - `description` (string): Description for screen readers. Built from the data when omitted

@@ -2,7 +2,7 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
@@ -13,7 +13,8 @@ Usage
   ztd-charts list [--group proportion] [--level basic] [--json]
   ztd-charts info <type> [--json]          Chart description, options, example spec, React code
   ztd-charts schema [type] [--out file]    JSON Schema (all charts or one)
-  ztd-charts example <type> [--out file]   Example spec JSON
+  ztd-charts example <type> [--variant id] [--out file]
+                                           Example spec JSON (a named variant with --variant)
   ztd-charts validate <spec.json> [--json]
   ztd-charts render <spec.json> --out chart.svg|chart.png|chart.html
          [--width 720] [--height 240] [--theme dark|light] [--scale 2]
@@ -55,6 +56,8 @@ Examples
   defaultValue: (v: string) => ` (default ${v})`,
   commonOptions: "Common options",
   exampleSpec: "Example spec",
+  variants: "Variants",
+  noVariants: (type: string) => `${type} has no named variants`,
   saved: (p: string) => `Saved: ${p}`,
   valid: (file: string, type: string, warnings: number) => `✓ ${file}: valid ${type} spec${warnings ? ` (${plural(warnings, "warning")})` : ""}`,
   skipped: (p: string) => `Skipped (already exists): ${p}`,
@@ -94,7 +97,8 @@ const ko: CliText = {
   ztd-charts list [--group 비율] [--level 기본] [--json]
   ztd-charts info <type> [--json]          차트 설명, 옵션, 예시 스펙, React 코드
   ztd-charts schema [type] [--out file]    JSON Schema (전체 또는 차트 하나)
-  ztd-charts example <type> [--out file]   예시 스펙 JSON
+  ztd-charts example <type> [--variant id] [--out file]
+                                           예시 스펙 JSON (--variant로 이름 붙은 변형)
   ztd-charts validate <spec.json> [--json]
   ztd-charts render <spec.json> --out chart.svg|chart.png|chart.html
          [--width 720] [--height 240] [--theme dark|light] [--scale 2]
@@ -134,6 +138,8 @@ const ko: CliText = {
   defaultValue: (v) => `, 기본 ${v}`,
   commonOptions: "공통 옵션",
   exampleSpec: "예시 스펙",
+  variants: "변형",
+  noVariants: (type) => `${type}에는 이름 붙은 변형이 없어요`,
   saved: (p) => `저장: ${p}`,
   valid: (file, type, warnings) => `✓ ${file}: 올바른 ${type} 스펙${warnings ? `(경고 ${warnings}개)` : ""}`,
   skipped: (p) => `건너뜀(이미 있음): ${p}`,

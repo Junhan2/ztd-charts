@@ -2,7 +2,7 @@ import { parseCSV } from "../data/parse";
 import { hasField, toNumber } from "../data/accessor";
 import { toDate } from "../core/format";
 import { META } from "./meta";
-import { CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
+import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
 export function levenshtein(a: string, b: string): number {
@@ -73,6 +73,21 @@ function typeOf(v: unknown): string {
 /** 숫자 o.length개가 모두 o.min~o.max 안인지. 스키마의 minItems, maxItems, minimum, maximum과 같은 규칙이에요 */
 function isNumberTuple(a: number[], o: OptionDef): boolean {
   return a.length === o.length && a.every((x) => Number.isFinite(x) && x >= (o.min ?? -Infinity) && x <= (o.max ?? Infinity));
+}
+
+/** 주석 한 칸의 문제를 [영어, 한글]로. 문제가 없으면 null */
+function annotationIssue(a: unknown): [string, string] | null {
+  if (typeof a !== "object" || a === null || Array.isArray(a)) return ['must be an object such as { type: "line", y: 100 }', '{ type: "line", y: 100 } 같은 객체여야 해요'];
+  const { type, x, y, from, label } = a as Record<string, unknown>;
+  const pair = (q: unknown): q is unknown[] => Array.isArray(q) && q.length === 2;
+  const list = ANNOTATION_TYPES.map((n) => `"${n}"`).join(" | ");
+  if (!ANNOTATION_TYPES.includes(type as never)) return [`type must be one of ${list}`, `type 값은 ${list} 중 하나여야 해요`];
+  if (label !== undefined && typeof label !== "string") return ["label must be a string", "label은 문자열이어야 해요"];
+  if (type === "line" && !(typeof y === "number" && Number.isFinite(y))) return ['"line" needs a number y', '"line"에는 숫자 y가 있어야 해요'];
+  if (type === "band" && !(pair(y) && y.every((n) => typeof n === "number" && Number.isFinite(n))) && !pair(x)) return ['"band" needs y: [low, high] or x: [from, to]', '"band"에는 y: [아래, 위]나 x: [시작, 끝]이 있어야 해요'];
+  if (type === "event" && (x === undefined || !label)) return ['"event" needs x and label', '"event"에는 x와 label이 있어야 해요'];
+  if (type === "forecast" && from === undefined) return ['"forecast" needs from (the x where the forecast starts)', '"forecast"에는 from(예측이 시작하는 x)이 있어야 해요'];
+  return null;
 }
 
 /**
@@ -223,6 +238,12 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       else if (o.type === "array" && o.length !== undefined && !isNumberTuple(v as number[], o))
         err(`options.${k}`, "bad_option_items", t(`options.${k} must be ${o.length} numbers from ${o.min} to ${o.max}`, `options.${k} 값은 ${o.min}~${o.max} 사이 숫자 ${o.length}개여야 해요`));
       else if (o.type === "object" && vt !== "object") bad("an object", "객체여야");
+      else if (o.type === "annotations" && vt !== "array") bad("an array", "배열이어야");
+      else if (o.type === "annotations")
+        (v as unknown[]).forEach((a, i) => {
+          const issue = annotationIssue(a);
+          if (issue) err(`options.${k}[${i}]`, "bad_annotation", t(...issue));
+        });
       else if (o.type === "enum" && !(o.enum ?? []).includes(String(v))) {
         const choices = (o.enum ?? []).map((e) => `"${e}"`).join(" | ");
         err(`options.${k}`, "bad_enum", t(`options.${k} must be one of ${choices}`, `options.${k} 값은 ${choices} 중 하나여야 해요`));
@@ -237,6 +258,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         }
       } else if (o.type === "highlight" && !(vt === "number" || vt === "string" || (vt === "array" && (v as unknown[]).every((x) => typeof x === "number" || typeof x === "string")))) bad("an index, a name or an array of them", "인덱스나 이름, 또는 그 배열이어야");
     }
+    if (def.type === "bar" && options.orientation === "horizontal" && Array.isArray(options.annotations) && options.annotations.length)
+      warn("options.annotations", "annotations_ignored", t("Annotations are drawn on vertical bars only", "주석은 세로 막대에서만 그려요"));
     if (typeof options.locale === "string") {
       try {
         Intl.getCanonicalLocales(options.locale.replace(/_/g, "-"));

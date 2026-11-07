@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useChartLocale, useChartTheme, type Painter } from "../theme/context";
 import { dataSignature } from "../data/parse";
-import { formatPercent, makeFormatter, type FormatName, type ValueFormatter } from "./format";
+import { formatPercent, makeFormatter, withUnit, type FormatName, type ValueFormatter } from "./format";
 import { en, ko, langOf, type ChartLang, type ChartMessages } from "./i18n";
 import { useHydrated, useMeasuredNode, useReducedMotion, useViewport } from "./hooks";
 import type { UseMotionOptions } from "./useMotion";
@@ -18,7 +18,8 @@ export interface ChartSetupDefaults {
   ssrWidth?: number;
 }
 
-export type ActiveVia = "pointer" | "keyboard" | "touch";
+/** "sync"는 같은 syncId로 묶인 다른 차트에서 짚은 자리예요 (툴팁은 짚은 차트에만 떠요) */
+export type ActiveVia = "pointer" | "keyboard" | "touch" | "sync";
 
 export interface ChartCtx<T> {
   p: Painter;
@@ -61,6 +62,12 @@ export interface ChartCtx<T> {
   sig: string;
   /** 사용자가 준 설명. 없으면 데이터가 없을 때 ChartFrame이 "No data."로 바꿔요 */
   description?: string;
+  /** 동작 줄이기가 켜졌어요. 호버 전환도 미끄러지지 않고 바로 옮겨요 */
+  reduced: boolean;
+  /** 짚은 자리가 바뀔 때 묶인 차트에 알리는 함수. useSync(라인, 영역, 막대, 캔들스틱)가 채워요 */
+  publish: { current: ((i: number | null) => void) | null };
+  /** 묶인 다른 차트가 짚은 자리를 받아요. 키보드로 고르는 중이면 그대로 둬요 */
+  applySync: (i: number | null) => void;
 }
 
 /** 모든 차트가 처음에 부르는 설정 훅 */
@@ -79,9 +86,7 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
   const lang = langOf(locale);
   const fmt = useMemo(() => makeFormatter(props.format, locale, defaults.format), [props.format, locale, defaults.format]);
   const pct = useCallback((v: number) => formatPercent(v, { locale }), [locale]);
-  const unit = props.unit ?? "";
-  // 값이 없으면 "-"만 보여요. 단위를 붙이면 "-원"처럼 읽혀요
-  const fv = useCallback((v: number) => (Number.isFinite(v) ? `${fmt(v)}${unit}` : fmt(v)), [fmt, unit]);
+  const fv = useMemo(() => withUnit(fmt, props.unit), [fmt, props.unit]);
   const sig = useMemo(() => dataSignature(props.data), [props.data]);
   const [active, setActiveState] = useState<number | null>(null);
   const [via, setVia] = useState<ActiveVia | null>(null);
@@ -91,16 +96,32 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
   const onClick = useRef(props.onClick);
   onClick.current = props.onClick;
 
+  const viaRef = useRef<ActiveVia | null>(null);
+  const publish = useRef<((i: number | null) => void) | null>(null);
+
   // 지난 값은 ref로 비교해요. setState 갱신 함수 안에서 부르면 StrictMode가 두 번 돌려 onHover도 두 번 불려요
   const last = useRef<number | null>(null);
-  const setActive = useCallback((i: number | null, how: ActiveVia = "pointer") => {
-    if (last.current !== i) {
-      last.current = i;
-      const e = i === null ? null : events.current[i] ?? null;
-      queueMicrotask(() => onHover.current?.(e));
-    }
+  const setActive = useCallback(
+    (i: number | null, how: ActiveVia = "pointer") => {
+      if (last.current !== i) {
+        last.current = i;
+        const e = i === null ? null : events.current[i] ?? null;
+        queueMicrotask(() => onHover.current?.(e));
+        publish.current?.(i);
+      }
+      viaRef.current = i === null ? null : how;
+      setActiveState(i);
+      setVia(viaRef.current);
+    },
+    [],
+  );
+
+  // 이 차트를 직접 만진 게 아니라서 onHover는 부르지 않아요
+  const applySync = useCallback((i: number | null) => {
+    if (viaRef.current === "keyboard") return;
+    viaRef.current = i === null ? null : "sync";
     setActiveState(i);
-    setVia(i === null ? null : how);
+    setVia(viaRef.current);
   }, []);
 
   const click = useCallback((i: number) => {
@@ -150,5 +171,8 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
     dim,
     sig,
     description: props.description,
+    reduced,
+    publish,
+    applySync,
   };
 }

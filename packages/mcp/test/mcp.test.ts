@@ -44,6 +44,7 @@ describe("MCP 도구", () => {
     expect(j.schema.properties.type.const).toBe("line");
     expect(j.example.type).toBe("line");
     expect(r.content[1].text).toContain("<LineChart");
+    expect(j.variants.map((v: { id: string }) => v.id)).toContain("forecast");
     expect(firstJson((await call("get_chart_schema", { type: "doughnut" })).content).type).toBe("donut");
     expect((await call("get_chart_schema", { type: "pyramid" })).isError).toBe(true);
     expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(33);

@@ -76,6 +76,55 @@
           "default": false,
           "type": "boolean"
         },
+        "annotations": {
+          "description": "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "band",
+                  "line",
+                  "event",
+                  "forecast",
+                  "trend",
+                  "weekends"
+                ],
+                "description": "\"band\" shaded range | \"line\" reference line | \"event\" marker | \"forecast\" dashed from here on | \"trend\" least-squares line | \"weekends\" shading (date x)"
+              },
+              "x": {
+                "description": "event: the x value. band: [from, to] on x"
+              },
+              "y": {
+                "description": "line: the y value. band: [low, high] on y",
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                ]
+              },
+              "from": {
+                "description": "forecast: the x value where the forecast starts"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
@@ -178,6 +227,10 @@
           "description": "Show tooltips",
           "default": true,
           "type": "boolean"
+        },
+        "syncId": {
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "type": "string"
         },
         "ariaLabel": {
           "description": "Name for screen readers",

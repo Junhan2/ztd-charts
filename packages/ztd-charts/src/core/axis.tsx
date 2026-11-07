@@ -1,7 +1,7 @@
 import type { Painter } from "../theme/context";
 import { Txt } from "./ChartFrame";
 import { formatNumber, type ValueFormatter } from "./format";
-import { textWidth } from "./text";
+import { textWidth, truncate } from "./text";
 
 export const AXIS_FONT = 10.5;
 
@@ -109,6 +109,40 @@ export function AxisXBand(props: {
           </g>
         );
       })}
+    </g>
+  );
+}
+
+const r1 = (v: number) => Math.round(v * 10) / 10;
+
+/** 짚은 x의 세로선과 계열마다 후광 점. CSS transform으로 옮겨서 다음 자리로 미끄러져요 (동작 줄이기면 바로) */
+export function HoverLine(props: { p: Painter; x: number; top: number; bottom: number; dots?: { k: number | string; y: number; color: string; strong?: boolean }[] }) {
+  const { p } = props;
+  return (
+    <g className="ztd-guide" aria-hidden="true" pointerEvents="none" style={{ transform: `translate(${r1(props.x)}px,0px)` }}>
+      <line x1={0} x2={0} y1={props.top} y2={props.bottom} stroke={p.paint("dim")} strokeWidth={1} />
+      {props.dots?.map((d) => (
+        <g key={d.k} className="ztd-guide" style={{ transform: `translate(0px,${r1(d.y)}px)` }}>
+          <circle r={d.strong ? 9 : 7} fill={d.color} opacity={0.2} />
+          <circle r={d.strong ? 4.2 : 3.2} fill={d.color} stroke={p.paint("panel")} strokeWidth={2} />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** x축 위에 짚은 값을 알약으로. 아래 눈금 글자는 카드 바탕 테두리로 가리고, 차트 폭 안에 가둬요 */
+export function AxisPill(props: { p: Painter; x: number; y: number; label: string; width: number }) {
+  const { p } = props;
+  const label = truncate(props.label, 160, AXIS_FONT, 700);
+  const w = textWidth(label, AXIS_FONT, 700) + 14;
+  const x = Math.max(w / 2 + 1, Math.min(props.width - w / 2 - 1, props.x));
+  return (
+    <g className="ztd-guide" aria-hidden="true" pointerEvents="none" style={{ transform: `translate(${r1(x)}px,${r1(props.y)}px)` }}>
+      <rect x={-w / 2} y={-9} width={w} height={18} rx={9} fill={p.paint("ink")} stroke={p.paint("panel")} strokeWidth={3} paintOrder="stroke" />
+      <Txt x={0} y={0} anchor="middle" size={AXIS_FONT} weight={700} fill={p.paint("onInk")}>
+        {label}
+      </Txt>
     </g>
   );
 }

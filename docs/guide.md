@@ -34,8 +34,13 @@ const rows = [{ stage: "Visit", users: 10000 }, { stage: "Purchase", users: 760 
 ```
 
 - `ChartCard`: `number`, `title`, `subtitle`, `legend` (an array or a node), `replay` (a replay button; the chart inside replays on its own), `takeaway`, `level`, `sample` ("Sample data"), `actions`.
-- `ChartGrid`: `columns` (default 2), `gap`, `minColumnWidth` (default 320). Folds with CSS alone, no media queries.
+- `ChartGrid`: `columns` (default 2), `gap`, `minColumnWidth` (default 320). Folds with CSS alone, no media queries. `sync` links the line, area, bar and candlestick charts inside it: hover one and the others mark the same x (matched by key, or by axis label when the keys differ). Charts outside a grid link with the same `syncId` prop.
 - `ChartState`: `loading`, `error`, `empty`, `onRetry`. Shows a skeleton, an error with retry, or an empty state at the chart's height.
+- `StatCard`: a KPI card with a big number, a change badge and a sparkline. It takes `label`, `data`, `x`, `y`, `format`, `unit` and `note`. Without `value` and `delta` it shows the last value and the change from the first. Use `better="down"` for metrics that should fall, such as churn. Point at the sparkline, or Tab into it and move with the arrows, and the number and the note switch to that point.
+
+```tsx
+<StatCard label="MRR" data={daily} x="day" y="mrr" format={{ prefix: "$" }} unit="K" note="Last 30 days" />
+```
 
 ## Theme
 
@@ -81,6 +86,38 @@ On the card background `dim` is 2.95:1 in dark and 1.97:1 in light, below WCAG A
 ```tsx
 <LineChart data={rows} x="t" y="p95" series="api" brush="zoom" onBrush={(r) => r && setRange([r.fromKey, r.toKey])} />
 <CandlestickChart data={daily} x="date" open="open" high="high" low="low" close="close" volume="volume" ma={[5, 20]} brush />
+```
+
+## Annotations
+
+Mark what the reader should notice with `annotations` on line, area, vertical bar and candlestick charts. The screen reader description reads them too.
+
+- `{ type: "band", y: [low, high], label }` shades a target range. `{ type: "band", x: [from, to], label }` shades a period.
+- `{ type: "line", y, label }` draws a reference line.
+- `{ type: "event", x, label }` marks a moment such as a launch. Labels that would overlap move down a row.
+- `{ type: "forecast", from }` dashes the line from that x on. On bars, the later bars turn pale with a dashed outline.
+- `{ type: "trend" }` draws a least-squares line through the highlighted series (on candlesticks, through the closes).
+- `{ type: "weekends" }` shades Saturdays and Sundays on a date x axis, up to 400 days.
+- `signColors` (line, area) colors the highlighted series differently above and below `baseline` (default 0). The color below is `downColor` (default `"neutralStrong"`).
+
+```tsx
+<LineChart data={daily} x="date" y="signups" annotations={[{ type: "band", y: [25, 32], label: "Target" }, { type: "event", x: "2025-03-12", label: "Launch" }, { type: "forecast", from: "2025-03-24" }, { type: "trend" }, { type: "weekends" }]} />
+<LineChart data={monthly} x="month" y="profit" area signColors />
+```
+
+In a JSON spec they go in `options.annotations`, and `validate` points at the item that is wrong (`options.annotations[2]`).
+
+## Live data
+
+`LiveLineChart` draws a stream. Pass the rows you have (`x` is a time: a Date, ms or an ISO string) and append new rows as they arrive. It shows the last `window` (default one minute). Drop rows older than that as you go: the chart sorts and scans every row you pass.
+- Between points the line glides left on the chart's own clock, which follows your timestamps, so the end does not go blank before the next point arrives. If points arrive in a burst, it catches up a little faster.
+- Point at it, or Tab in and move with the arrows, and it pauses so you can read a value. It resumes when you leave.
+- With reduced motion it moves only when a point arrives.
+- It is a component only: JSON specs and the CLI draw still pictures, so there is no `live` spec type.
+
+```tsx
+// rows: [{ t: 1717383600000, v: 1204 }, ...], append each new row as it arrives
+<LiveLineChart data={rows} x="t" y="v" window={60_000} format="integer" />
 ```
 
 ## Accessibility
@@ -150,6 +187,7 @@ npx ztd-charts-cli list                         # full list (--json, --group, --
 npx ztd-charts-cli info sankey                  # channels, options, example, React code
 npx ztd-charts-cli schema line --out line.schema.json
 npx ztd-charts-cli example donut --out donut.json
+npx ztd-charts-cli example bar --variant horizontal   # a named variant (info lists them)
 npx ztd-charts-cli validate donut.json          # exit 0 on success, 1 on failure
 npx ztd-charts-cli render donut.json --out donut.png --theme light --scale 2
 npx ztd-charts-cli render donut.json --out donut.svg
@@ -169,7 +207,7 @@ A stdio MCP server with five tools.
 | Tool | What it does |
 |---|---|
 | `list_charts` | Full chart list (filter by group or level) |
-| `get_chart_schema` | One chart's schema, example spec and React code |
+| `get_chart_schema` | One chart's schema, example spec, named variants and React code |
 | `validate_spec` | Errors and warnings with paths and suggestions |
 | `render_chart` | PNG image + SVG + React code. `locale: "ko"` for Korean chart text and number formats |
 | `suggest_chart` | Chart suggestions and ready-to-use specs from CSV, rows or a URL |

@@ -1,7 +1,8 @@
 import { createRequire } from "node:module";
 import Ajv2020 from "ajv/dist/2020";
 import { describe, expect, it } from "vitest";
-import { CHARTS, chartsIn, COMMON_OPTIONS, commonOptionsIn, findGroup, findLevel, GROUPS, LEVELS, localizeDef, schemaFor, schemaForIn, specSchema, specSchemaIn, suggestCharts, validateSpec, type ChartSpec } from "../src/spec";
+import { CHARTS, chartsIn, COMMON_OPTIONS, commonOptionsIn, findGroup, findLevel, GROUPS, LEVELS, localizeDef, schemaFor, schemaForIn, specSchema, specSchemaIn, suggestCharts, validateSpec, VARIANTS, variantsIn, variantSpec, type ChartSpec } from "../src/spec";
+import { VARIANT_NAMES_KO } from "../src/spec/locales/variants-ko";
 import { CHANNELS, META, resolveMeta } from "../src/spec/meta";
 import * as samples from "../src/spec/samples";
 
@@ -250,5 +251,55 @@ describe("suggestCharts", () => {
     // 한글 추천 스펙만 options.locale "ko-KR"을 적어요
     for (const s of en) expect(s.spec.options?.locale, s.type).toBeUndefined();
     for (const s of ko) expect(s.spec.options?.locale, s.type).toBe("ko-KR");
+  });
+});
+
+describe("options.annotations", () => {
+  const base = { type: "line", data: [{ m: "a", v: 1 }, { m: "b", v: 2 }], encoding: { x: "m", y: "v" } };
+
+  it("checks each annotation and points at the bad one", () => {
+    const r = validateSpec({ ...base, options: { annotations: [{ type: "line" }, { type: "nope" }, { type: "event", x: "a" }, { type: "band", y: [1, 2] }, { type: "forecast", from: "b" }] } });
+    expect(r.errors.filter((e) => e.code === "bad_annotation").map((e) => e.path)).toEqual(["options.annotations[0]", "options.annotations[1]", "options.annotations[2]"]);
+    const ko = validateSpec({ ...base, options: { annotations: [{ type: "line" }] } }, { lang: "ko" });
+    expect(ko.errors[0].message).toBe('"line"에는 숫자 y가 있어야 해요');
+  });
+
+  it("warns that horizontal bars do not draw annotations", () => {
+    const r = validateSpec({ type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { orientation: "horizontal", annotations: [{ type: "line", y: 1 }] } });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.map((w) => w.code)).toContain("annotations_ignored");
+  });
+
+  it("puts the annotation types in the JSON Schema", () => {
+    expect(JSON.stringify(schemaFor("line"))).toContain('"enum":["band","line","event","forecast","trend","weekends"]');
+    expect(JSON.stringify(schemaFor("candlestick"))).toContain('"annotations"');
+  });
+});
+
+describe("variants", () => {
+  it("every variant is a valid spec in both languages, changes its example, and has a unique id and a Korean name", () => {
+    expect(Object.values(VARIANTS).flat().length).toBeGreaterThan(60);
+    for (const [type, list] of Object.entries(VARIANTS)) {
+      const def = CHARTS.find((d) => d.type === type);
+      expect(def, type).toBeTruthy();
+      expect(new Set(list.map((x) => x.id)).size).toBe(list.length);
+      const ko = variantsIn(type, "ko");
+      // 한국어 이름표에 남은 id가 없어요 (변형을 지우면 이름도 지워요)
+      expect(Object.keys(VARIANT_NAMES_KO[type] ?? {}).sort()).toEqual(list.map((x) => x.id).sort());
+      const defaults = Object.fromEntries([...def!.options, ...COMMON_OPTIONS].map((o) => [o.name, o.default]));
+      const koDef = localizeDef(def!, "ko");
+      for (const x of list) {
+        for (const [lang, d] of [["en", def!], ["ko", koDef]] as const) {
+          const r = validateSpec(variantSpec(d, x.id), { lang });
+          expect([...r.errors, ...r.warnings].map((i) => `${type}/${x.id}: ${i.message}`)).toEqual([]);
+          // 예시가 이미 그 값이면 변형이 예시와 같아져요 (예시를 바꾸면 변형도 다시 봐요)
+          const ex = (d.example.options ?? {}) as Record<string, unknown>;
+          const changed = Object.entries(x.options).some(([k, val]) => JSON.stringify(val) !== JSON.stringify(ex[k] ?? defaults[k] ?? (Array.isArray(val) ? [] : undefined)));
+          expect(changed, `${type}/${x.id} (${lang})`).toBe(true);
+        }
+        expect(ko.find((k) => k.id === x.id)?.name, `${type}/${x.id}`).not.toBe(x.name);
+      }
+    }
+    expect(variantSpec(CHARTS[0], "nope")).toBeNull();
   });
 });

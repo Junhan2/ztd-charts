@@ -46,7 +46,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.3.0");
+    expect((await run("--version")).out.trim()).toBe("0.4.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
@@ -71,6 +71,11 @@ describe("ztd-charts CLI", () => {
     expect(JSON.parse(readFileSync(join(dir, "pie.schema.json"), "utf8")).properties.type.const).toBe("pie");
     await run("example", "donut", "--out", "donut.json");
     expect(JSON.parse(readFileSync(join(dir, "donut.json"), "utf8")).type).toBe("donut");
+    // 이름 붙은 변형: 예시 options 위에 덮어쓰고, 모르는 이름은 있는 이름을 알려 줘요
+    expect(JSON.parse((await run("example", "bar", "--variant", "horizontal")).out).options.orientation).toBe("horizontal");
+    const bad = await run("example", "bar", "--variant", "nope");
+    expect(bad.code).toBe(1);
+    expect(bad.err).toContain("grouped, percent, horizontal");
   });
   it("validate: 성공 0, 실패 1과 메시지", async () => {
     expect((await run("validate", "donut.json")).code).toBe(0);

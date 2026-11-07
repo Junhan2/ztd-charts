@@ -7,6 +7,7 @@ export { formatNumber, formatPercent, formatCompact, formatCurrency, formatDate,
 export { langOf, type ChartLang } from "./core/i18n";
 export { useReplay, useInView, useReducedMotion } from "./core/hooks";
 export { type EasingName, type Mark } from "./core/motion";
+export type { Annotation } from "./core/annotations";
 export { baseCss, ensureBaseStyles } from "./core/css";
 export { textWidth } from "./core/text";
 
@@ -16,6 +17,7 @@ export { percentile, percentiles, type PercentilesOptions } from "./data/percent
 export { useChartData, fetchChartData, readResponse, type UseChartDataOptions, type ChartDataState, type DataSource } from "./data/useChartData";
 
 export { ChartCard, ChartGrid, ChartState, Legend, Badge, type ChartCardProps, type ChartGridProps, type ChartStateProps, type LegendItem, type Level } from "./components/ChartCard";
+export { StatCard, type StatCardProps } from "./components/StatCard";
 export { ReplayContext } from "./components/replay";
 
 export { PieChart, DonutChart, type PieChartProps, type DonutChartProps } from "./charts/pie";
@@ -35,6 +37,7 @@ export { BarChart, type BarChartProps } from "./charts/bar";
 export { RadialBarChart, GaugeChart, type RadialBarChartProps, type GaugeChartProps } from "./charts/radial";
 export { BulletChart, type BulletChartProps } from "./charts/bullet";
 export { Sparkline, type SparklineProps } from "./charts/sparkline";
+export { LiveLineChart, type LiveLineChartProps } from "./charts/live";
 export { SlopeChart, type SlopeChartProps } from "./charts/slope";
 export { DumbbellChart, type DumbbellChartProps } from "./charts/dumbbell";
 export { LollipopChart, type LollipopChartProps } from "./charts/lollipop";

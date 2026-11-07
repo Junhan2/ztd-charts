@@ -147,6 +147,10 @@
           "default": true,
           "type": "boolean"
         },
+        "syncId": {
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "type": "string"
+        },
         "ariaLabel": {
           "description": "Name for screen readers",
           "type": "string"

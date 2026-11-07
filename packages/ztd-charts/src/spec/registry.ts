@@ -1,3 +1,4 @@
+import type { Annotation } from "../core/annotations";
 import type { ChartDef, ChartSpec, OptionDef, SpecCard } from "./types";
 import { CHANNELS, META } from "./meta";
 import * as S from "./samples";
@@ -18,6 +19,7 @@ export const COMMON_OPTIONS: OptionDef[] = [
   { name: "animateOnView", type: "boolean", default: true, description: "Play when the chart scrolls into view" },
   { name: "showLabels", type: "boolean", default: true, description: "Labels drawn on the chart (values and names)" },
   { name: "tooltip", type: "boolean", default: true, description: "Show tooltips" },
+  { name: "syncId", type: "string", description: "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it" },
   { name: "ariaLabel", type: "string", description: "Name for screen readers" },
   { name: "description", type: "string", description: "Description for screen readers. Built from the data when omitted" },
 ];
@@ -28,6 +30,16 @@ const op = (name: string, type: OptionDef["type"], description: string, extra: P
 const CURVE = op("curve", "enum", "Line shape", { enum: ["smooth", "linear", "step"], default: "smooth" });
 const XTYPE = op("xType", "enum", "Sets the x type yourself. Automatic when omitted", { enum: ["number", "date", "band"] });
 const BRUSH = op("brush", "any", 'Drag to select a range. true shows the change and the high and low, "zoom" zooms into the range (keyboard: Shift+arrows, Enter)', { default: false });
+
+/** options.annotations 항목의 종류. 차트 쪽 Annotation 타입(core/annotations.tsx)과 맞는지 컴파일러가 봐요 */
+export const ANNOTATION_TYPES = ["band", "line", "event", "forecast", "trend", "weekends"] as const satisfies readonly Annotation["type"][];
+const ANNOTATIONS = op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line, weekend shading. [{ type, x, y, from, label }]");
+/** 강조 계열을 기준값 위아래 색으로 (라인, 영역) */
+const SIGN = [
+  op("signColors", "boolean", "Colors the highlighted series differently above and below baseline (profit and loss)", { default: false }),
+  op("baseline", "number", "Value that splits signColors", { default: 0 }),
+  op("downColor", "string", "Color below the baseline (token name or CSS color)", { default: "neutralStrong" }),
+];
 
 /** 레지스트리와 한글 글(locales/ko.ts)에 적는 예시 꼴. type, 카드 번호(목록 순서), 제목(이름), 수준은 채워 넣어요 (같은 값을 두 번 적지 않게) */
 export type EntryExample = Omit<ChartSpec, "type" | "card"> & { card: Omit<SpecCard, "number" | "title" | "level"> };
@@ -180,7 +192,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "A metric over time, such as monthly users, alone or against other series",
     avoidWhen: "x is a category with no order",
     why: "Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path.",
-    options: [CURVE, XTYPE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH],
+    options: [CURVE, XTYPE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN],
     example: { data: S.lineSample, encoding: { x: "month", y: "mau", series: "app" }, options: { area: true }, card: { subtitle: "Monthly active users (10k)", takeaway: "Only our app keeps climbing" } },
     scalable: true,
   },
@@ -192,7 +204,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Seeing how each channel's traffic changes within the total",
     avoidWhen: "The exact value of each series matters",
     why: "Areas rise from the baseline as the chart enters, which shows the stacking at a glance.",
-    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH],
+    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o))],
     example: { data: S.areaSample, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "Social" }, card: { subtitle: "Monthly visits by channel (thousands)", takeaway: "Social's share grows the fastest", legend: "auto" } },
     scalable: true,
   },
@@ -215,7 +227,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Comparing sizes across categories precisely",
     avoidWhen: "The flow over time is the point (a line works better)",
     why: "With one series only the largest bar gets color; with several, only the highlighted series.",
-    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false })],
+    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]")],
     example: { data: S.barSample, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "Overseas" }, card: { subtitle: "Revenue by quarter (100M KRW)", takeaway: "Overseas grows its share every quarter", legend: "auto" } },
   },
   {
@@ -398,7 +410,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Stocks, exchange rates or coins, where the swing within each period matters",
     avoidWhen: "A trend with only one value (a line chart is cleaner)",
     why: "Rising candles take the accent color and falling ones are gray. Drag over a period to see its change, high and low.",
-    options: [op("ma", "array", "Moving average periods on the close. For example [5, 20]", { items: "number" }), op("upColor", "string", "Rising candle color (token name or CSS color)", { default: "accent" }), op("downColor", "string", "Falling candle color", { default: "neutralStrong" }), op("maxCandles", "number", "Above this count, neighboring candles merge. Defaults to plot width / 4"), BRUSH, op("yDomain", "array", "Fixed price axis range", { items: "number" })],
+    options: [op("ma", "array", "Moving average periods on the close. For example [5, 20]", { items: "number" }), op("upColor", "string", "Rising candle color (token name or CSS color)", { default: "accent" }), op("downColor", "string", "Falling candle color", { default: "neutralStrong" }), op("maxCandles", "number", "Above this count, neighboring candles merge. Defaults to plot width / 4"), BRUSH, op("yDomain", "array", "Fixed price axis range", { items: "number" }), op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line on the close, weekend shading. [{ type, x, y, from, label }]")],
     example: { data: S.candlestickSample, encoding: { x: "date", open: "open", high: "high", low: "low", close: "close", volume: "volume" }, options: { ma: [5, 20], brush: true }, card: { subtitle: "Daily candles of a sample stock (KRW)", takeaway: "Higher highs since mid-October", legend: "auto" } },
     scalable: true,
   },

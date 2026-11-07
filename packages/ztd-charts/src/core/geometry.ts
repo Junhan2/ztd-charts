@@ -137,6 +137,12 @@ export function linePath(pts: Pt[], curve: Curve = "smooth"): string {
     }
     return d;
   }
+  return polyline(pts);
+}
+
+/** 점을 직선으로 잇는 path. 곡선 코드가 필요 없는 차트(실시간 선)는 이것만 가져가요 */
+export function polyline(pts: Pt[]): string {
+  if (!pts.length) return "";
   let d = `M${r2(pts[0][0])},${r2(pts[0][1])}`;
   for (let i = 1; i < pts.length; i++) d += `L${r2(pts[i][0])},${r2(pts[i][1])}`;
   return d;

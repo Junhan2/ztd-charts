@@ -140,7 +140,8 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   }, [via, node, setActive]);
 
   const activeEvent = c.active !== null ? events[c.active] : null;
-  const tip = c.showTooltip && props.renderTip !== false && !c.pending ? props.tip : null;
+  // 묶인 다른 차트에서 짚은 자리(sync)는 세로선만 보여 주고 툴팁은 짚은 차트에만 띄워요
+  const tip = c.showTooltip && props.renderTip !== false && !c.pending && c.via !== "sync" ? props.tip : null;
   // 반응형이면 viewBox 폭이 곧 잰 폭이라 배율이 1이에요. 고정 폭일 때만 재요 (재면 레이아웃을 강제해요)
   const scale = tip && !c.responsive && c.node && c.width ? c.node.getBoundingClientRect().width / c.width || 1 : 1;
   const custom = typeof props.renderTip === "function" && activeEvent ? props.renderTip(activeEvent) : null;
@@ -153,22 +154,25 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
     // 점 가운데에 두되 차트 양끝 4px 안으로 가둬요 (translate의 %는 툴팁 자기 폭 기준이라 폭을 재지 않아도 돼요)
     const shiftX = `clamp(${(4 - px).toFixed(1)}px, -50%, calc(${(boxW - px - 4).toFixed(1)}px - 100%))`;
     const below = tip.y < 64;
+    // 카드 바탕 위에 뜨는 작은 카드: 테두리와 그림자로 차트와 갈라요. left, top은 CSS 전환으로 다음 점까지 미끄러져요
     tipStyle = {
       position: "absolute",
       left: px,
       top: tip.y * scale,
-      transform: `translate(${shiftX}, ${below ? "14px" : "calc(-100% - 12px)"})`,
-      background: c.p.paint("ink"),
-      color: c.p.paint("onInk"),
-      borderRadius: 10,
-      padding: "7px 10px",
+      transform: `translate(${shiftX}, ${below ? "16px" : "calc(-100% - 14px)"})`,
+      background: c.p.paint("panel"),
+      color: c.p.paint("ink"),
+      border: `1px solid ${c.p.paint("line")}`,
+      borderRadius: 12,
+      padding: "8px 11px",
       pointerEvents: "none",
       whiteSpace: "nowrap",
       fontSize: 12,
-      lineHeight: "17px",
+      lineHeight: "18px",
       zIndex: 5,
-      boxShadow: "0 6px 20px rgba(0,0,0,0.28)",
+      boxShadow: "0 10px 28px -8px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.08)",
       fontVariantNumeric: "tabular-nums",
+      minWidth: 112,
       maxWidth: Math.max(160, c.width * scale - 8),
     };
   }
@@ -204,7 +208,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   return (
     <div
       ref={c.ref}
-      className={`ztd-root${props.className ? ` ${props.className}` : ""}`}
+      className={`ztd-root${c.reduced ? " ztd-still" : ""}${props.className ? ` ${props.className}` : ""}`}
       role="group"
       aria-roledescription={c.t.chart}
       aria-label={label}
@@ -248,14 +252,14 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
         <div className="ztd-tip" aria-hidden="true" style={tipStyle}>
           {custom ?? (
             <>
-              <div style={{ fontWeight: 700, marginBottom: tip.rows.length ? 2 : 0, overflow: "hidden", textOverflow: "ellipsis" }}>{tip.title}</div>
+              <div style={{ fontWeight: 600, fontSize: 11.5, color: c.p.paint("muted"), marginBottom: tip.rows.length ? 4 : 0, overflow: "hidden", textOverflow: "ellipsis" }}>{tip.title}</div>
               {tip.rows.map((r, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "space-between" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, opacity: r.label ? 0.78 : 1 }}>
-                    {r.color ? <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, display: "inline-block", boxShadow: "inset 0 0 0 1px rgba(127,127,127,0.35)" }} /> : null}
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: c.p.paint(r.strong ? "ink" : "muted") }}>
+                    {r.color ? <span style={{ width: 8, height: 8, borderRadius: 999, background: r.color, display: "inline-block", boxShadow: "inset 0 0 0 1px rgba(127,127,127,0.3)" }} /> : null}
                     {r.label}
                   </span>
-                  <span style={{ fontWeight: r.strong === false ? 400 : 700 }}>{r.value}</span>
+                  <span style={{ fontWeight: r.strong === false ? 500 : 700 }}>{r.value}</span>
                 </div>
               ))}
             </>

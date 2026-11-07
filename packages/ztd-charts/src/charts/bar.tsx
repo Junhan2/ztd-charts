@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
-import { AXIS_FONT, AxisXBand, GridY, thinLabels, yAxisWidth } from "../core/axis";
+import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, forecastFrom, type Annotation, type AnnotationGeom } from "../core/annotations";
+import { AXIS_FONT, AxisPill, AxisXBand, GridY, thinLabels, yAxisWidth } from "../core/axis";
 import { ChartFrame, Txt } from "../core/ChartFrame";
 import { makeTickFormatter } from "../core/format";
 import { roundRectPath } from "../core/geometry";
@@ -7,10 +8,11 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { categorical, emphasis, type Swatch } from "../core/palette";
 import { extent, fitDomain, scaleBand, scaleLinear } from "../core/scale";
-import { prepSeries } from "../core/series";
+import { prepSeries, syncKeyOf } from "../core/series";
 import { textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
+import { useSync } from "../core/sync";
 import { useMotion } from "../core/useMotion";
 import { stack } from "../layout/stack";
 import { plural, type ChartLang } from "../core/i18n";
@@ -39,6 +41,8 @@ export interface BarChartProps<T = Row> extends BaseChartProps<T> {
   sort?: boolean;
   /** 강조 대상: 계열 하나면 범주, 여러 개면 계열. 기본 "max" / 첫 계열. 계열이 여러 개일 때 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean */
   highlight?: BaseChartProps<T>["highlight"];
+  /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선. 세로 막대에서만 그려요. 예측 뒤 막대는 옅게 점선 테두리로 */
+  annotations?: Annotation[];
 }
 
 interface BarSeg {
@@ -93,6 +97,9 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   }, [model, layout, colors, single, hi]);
 
   const vals = segs.flatMap((s) => [s.v0, s.v1]);
+  // 주석은 세로 막대에만 그려요. 0~100%로 고정된 100% 막대는 주석 값으로 범위를 넓히지 않아요
+  const notes = horizontal ? undefined : props.annotations;
+  if (layout !== "percent") vals.push(...annotationYs(notes));
   const [mn, mx] = extent(vals.length ? vals : [0, 1]);
   const dom: [number, number] = layout === "percent" ? [0, 100] : fitDomain(mn, mx, horizontal ? Math.max(2, Math.round(W / 120)) : Math.max(2, Math.round(H / 70)));
   const tickFmt = layout === "percent" ? (v: number) => `${v}%` : makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
@@ -114,6 +121,34 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const v = horizontal ? scaleLinear(dom, [x0, x1]) : scaleLinear(dom, [H - bottom - negPad, top]);
   const inner = layout === "grouped" && nS > 1 ? scaleBand(model.series, [0, band.bandwidth], 0.12, 0) : null;
   const r = Math.min(p.theme.radiusMark, (inner ? inner.bandwidth : band.bandwidth) / 4);
+
+  // 주석의 x 값: 범주 키로 칸 가운데를 찾아요. 구간과 예측은 칸 가장자리(칸 폭의 절반)까지 덮어요
+  const fFrom = forecastFrom(notes);
+  const fk = fFrom === undefined ? -1 : band.index(String(fFrom));
+  const ag: AnnotationGeom = {
+    p,
+    lang: c.lang,
+    xAt: (val) => {
+      const k = band.index(String(val));
+      return k < 0 ? null : band(model.keys[k]) + band.bandwidth / 2;
+    },
+    half: band.step / 2,
+    edge: true,
+    y: v,
+    x0,
+    x1,
+    top,
+    bottom: H - bottom,
+    // 추세선: 계열 하나면 그 값, 묶은 막대는 강조 계열, 쌓은 막대는 범주 합계. 100% 막대는 없어요
+    points: () => {
+      if (layout === "percent") return [];
+      const hs = [...hi][0] ?? 0;
+      return model.keys.map((key, k) => {
+        const val = single ? model.values[0][k] : layout === "grouped" ? model.values[hs][k] : model.values.reduce((s, row) => s + (Number.isFinite(row[k]) ? row[k] : 0), 0);
+        return { x: band(key) + (inner ? inner(model.series[hs]) + inner.bandwidth / 2 : band.bandwidth / 2), y: v(val) };
+      });
+    },
+  };
 
   const geom = (sg: BarSeg) => {
     const pos = band(model.keys[sg.k]) + (inner ? inner(sg.series) : 0);
@@ -146,6 +181,10 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
 
   const events: ChartEvent<T>[] = segs.map((sg, i) => ({ datum: (model.rows[sg.s]?.[sg.k] as T) ?? null, index: i, key: sg.key, label: sg.cat, series: sg.series || undefined, value: sg.value, formatted: `${c.fv(sg.value)}${layout === "percent" ? ` (${c.pct(sg.v1 - sg.v0)})` : ""}` }));
   const segIndex = new Map(segs.map((sg, i) => [sg.key, i]));
+  const syncKeys = useMemo(() => ({ keys: segs.map((sg) => syncKeyOf(model.keys[sg.k])), labels: segs.map((sg) => sg.cat) }), [segs, model]);
+  useSync(c, props.syncId, syncKeys.keys, syncKeys.labels);
+  // 짚은 범주. 계열이 여러 개면 그 범주의 막대를 모두 밝게 두고 다른 범주를 흐려요 (툴팁도 범주의 모든 계열을 보여 줘요)
+  const activeCat = c.active !== null ? segs[c.active]?.k ?? null : null;
 
   let tip: TooltipData | null = null;
   if (c.active !== null && segs[c.active]) {
@@ -156,7 +195,8 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   }
 
   const msg = MSG[c.lang];
-  const desc = props.description ?? `${msg.kind}. ${msg.desc(model.keys.length, nS, model.series.join(", "))}. ${single ? model.labels.map((l, k) => `${l} ${c.fv(model.values[0][k])}`).slice(0, 8).join(", ") : ""}`;
+  const auto = `${msg.kind}. ${msg.desc(model.keys.length, nS, model.series.join(", "))}. ${single ? model.labels.map((l, k) => `${l} ${c.fv(model.values[0][k])}`).slice(0, 8).join(", ") : ""}`;
+  const desc = props.description ?? (notes?.length ? `${auto.trimEnd().replace(/\.?$/, ".")}${describeAnnotations(notes, c.lang, c.fv)}` : auto);
 
   return (
     <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
@@ -174,6 +214,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
       ) : (
         <GridY p={p} ticks={ticks} y={v} x0={left} x1={W} fmt={tickFmt} locale={c.locale} />
       )}
+      <AnnotationsUnder list={notes} g={ag} />
       {m.items.map((it) => {
         const sg = it.data;
         const [pos, th, a, b] = it.v;
@@ -183,6 +224,10 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         const corners = horizontal ? (stackedTop ? (neg ? { tl: r, bl: r } : { tr: r, br: r }) : {}) : stackedTop ? (neg ? { bl: r, br: r } : { tl: r, tr: r }) : {};
         const d = horizontal ? roundRectPath(Math.min(a, b), pos, Math.abs(b - a), th, corners) : roundRectPath(pos, Math.min(a, b), th, Math.abs(b - a), corners);
         const lo = m.fade(sg.k * stg + 320, 260);
+        // 예측 구간의 막대: 옅게 칠하고 점선 테두리 (쌓은 막대는 구분선을 그대로 둬요)
+        const projected = fk >= 0 && sg.k >= fk;
+        const solo = layout === "grouped" || nS === 1;
+        const outline = projected && solo;
         let label: ReactNode = null;
         if (showValues) {
           const text = valueText(sg);
@@ -207,17 +252,18 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
           }
         }
         return (
-          <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : c.dim(i)} onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
+          <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : activeCat === null || activeCat === sg.k ? 1 : 0.38} onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
             {layout === "grouped" || nS === 1 ? (
               // 막대가 0이거나 아주 짧아도 칸 전체를 호버 영역으로 (칠한 부분만 받으면 0 막대는 잡을 수 없어요)
               horizontal ? <rect x={x0} y={pos} width={Math.max(0, x1 - x0)} height={th} fill="transparent" /> : <rect x={pos} y={top} width={th} height={Math.max(0, H - bottom - top)} fill="transparent" />
             ) : null}
-            <path d={d} fill={sg.sw.fill} stroke={layout !== "grouped" && nS > 1 ? p.paint("panel") : "none"} strokeWidth={1} />
+            <path d={d} fill={sg.sw.fill} fillOpacity={projected ? 0.42 : undefined} stroke={outline ? sg.sw.fill : solo ? "none" : p.paint("panel")} strokeWidth={outline ? 1.2 : 1} strokeDasharray={outline ? "3 2" : undefined} />
             {c.active === i && c.via === "keyboard" ? <path d={horizontal ? roundRectPath(Math.min(a, b) - 2, pos - 2, Math.abs(b - a) + 4, th + 4, 4) : roundRectPath(pos - 2, Math.min(a, b) - 2, th + 4, Math.abs(b - a) + 4, 4)} fill="none" stroke={p.paint("ink")} strokeWidth={2} /> : null}
             {label}
           </g>
         );
       })}
+      <AnnotationsOver list={notes} g={ag} />
       {horizontal ? (
         <g aria-hidden="true">
           {model.keys.map((key, k) => {
@@ -232,6 +278,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
       ) : (
         <AxisXBand p={p} labels={model.labels} centers={model.keys.map((key) => band(key) + band.bandwidth / 2)} y={H - bottom + 13} strong={single ? hi : undefined} />
       )}
+      {!horizontal && activeCat !== null ? <AxisPill p={p} x={band(model.keys[activeCat]) + band.bandwidth / 2} y={H - bottom + 13} label={model.labels[activeCat]} width={W} /> : null}
     </ChartFrame>
   );
 }

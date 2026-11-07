@@ -3,6 +3,9 @@ import { langOf } from "./i18n";
 /** 숫자, 날짜 포맷. 기본 로캘은 en-US이고 "ko"면 만, 억 단위와 원화를 써요 */
 export type FormatName = "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal";
 export type ValueFormatter = (v: number) => string;
+
+/** 값 뒤에 단위. 값이 없으면 "-"만 보여요 (단위를 붙이면 "-원"처럼 읽혀요). 차트와 StatCard가 같은 규칙을 써요 */
+export const withUnit = (fmt: ValueFormatter, unit = ""): ValueFormatter => (v) => (Number.isFinite(v) ? `${fmt(v)}${unit}` : fmt(v));
 export type FormatSpec = FormatName | ValueFormatter | (Intl.NumberFormatOptions & { suffix?: string; prefix?: string });
 
 export const DEFAULT_LOCALE = "en-US";
