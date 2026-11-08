@@ -1,6 +1,6 @@
 # ztd charts 최종 보고
 
-2026-10-29 기준이에요. 자세한 숫자와 고친 과정은 [QA-report.md](QA-report.md)에 있어요.
+> **옛 기록이에요.** 2026-10-29에 쓴 뒤로 고치지 않았어요. 그 뒤 차트가 33종이 됐고, npm에 `ztd-charts`로 게시했고, 실시간 선 차트(`LiveLineChart`)와 지표 카드(`StatCard`)가 생겼어요. 지금 숫자는 [QA-report.md](QA-report.md)에 있어요.
 
 ## 무엇을 만들었나
 

@@ -4,7 +4,7 @@ export default defineConfig({
   entry: { index: "src/index.ts", server: "src/server.ts" },
   format: ["esm"],
   dts: { entry: { server: "src/server.ts" } },
-  sourcemap: true,
+  sourcemap: false,
   clean: false,
   target: "node18",
   platform: "node",

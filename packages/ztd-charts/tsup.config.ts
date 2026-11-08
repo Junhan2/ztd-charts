@@ -5,13 +5,14 @@ const external = ["react", "react-dom", "react-dom/server", "react/jsx-runtime"]
 const esbuildOptions = (o: { charset?: string }) => {
   o.charset = "utf8";
 };
+// 소스 맵은 싣지 않아요: npm 묶음 크기의 60% 였고, 배포 JS 는 압축하지 않아 그대로 읽혀요
 
 export default defineConfig([
   {
     entry: { index: "src/index.ts", spec: "src/spec/index.ts" },
     format: ["esm", "cjs"],
     dts: true,
-    sourcemap: true,
+    sourcemap: false,
     clean: false,
     treeshake: false,
     splitting: true,
@@ -24,7 +25,7 @@ export default defineConfig([
     entry: { server: "src/server/index.ts" },
     format: ["esm", "cjs"],
     dts: true,
-    sourcemap: true,
+    sourcemap: false,
     clean: false,
     treeshake: true,
     target: "node18",
