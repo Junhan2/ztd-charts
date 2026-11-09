@@ -106,7 +106,7 @@ Bundle size per chart (Brotli by size-limit, one import including the shared cor
 ## Docs
 
 - [Full reference](llms-full.txt): this file plus the agent workflow, a chart picking table, and every chart's encoding channels, options and example spec
-- [README](https://github.com/Junhan2/ztd-charts/blob/main/README.md): what it is, install, quick start, the 33 charts, AI setup and the packages
+- [README](https://github.com/Junhan2/ztd-charts/blob/main/README.md): what it is, install, quick start, the 36 charts, AI setup and the packages
 - [Guide](https://github.com/Junhan2/ztd-charts/blob/main/docs/guide.md): common props, cards and grid, theme tokens, animation, accessibility, data sources, JSON spec, CLI and MCP setup
 - [Agent skill](https://github.com/Junhan2/ztd-charts/blob/main/skills/ztd-charts/SKILL.md): steps for an agent to pick a chart, write and validate a spec, and preview it
 - [JSON Schema](https://unpkg.com/ztd-charts/schema/chart-spec.schema.json): the spec schema, draft 2020-12
