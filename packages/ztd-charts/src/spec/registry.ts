@@ -34,6 +34,11 @@ const BRUSH = op("brush", "any", 'Drag to select a range. true shows the change 
 /** options.annotations 항목의 종류. 차트 쪽 Annotation 타입(core/annotations.tsx)과 맞는지 컴파일러가 봐요 */
 export const ANNOTATION_TYPES = ["band", "line", "event", "forecast", "trend", "weekends"] as const satisfies readonly Annotation["type"][];
 const ANNOTATIONS = op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line, weekend shading. [{ type, x, y, from, label }]");
+/** 범위 띠 옵션 (라인, 영역). 띠는 encoding.lower, encoding.upper로 켜요. 배열로 펼치면 번들에서 빠지지 않아서 하나씩 둬요 */
+const BAND_FROM = op("bandFrom", "enum", 'Where the range band starts. "forecast" starts it at the forecast annotation', { enum: ["start", "forecast"], default: "start" });
+const OUTSIDE = op("outside", "boolean", "Mark points outside the range band and count them in the description", { default: false });
+/** 빠진 값에서 선을 끊을지 (라인, 영역) */
+const CONNECT_NULLS = op("connectNulls", "boolean", "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it", { default: false });
 /** 강조 계열을 기준값 위아래 색으로 (라인, 영역) */
 const SIGN = [
   op("signColors", "boolean", "Colors the highlighted series differently above and below baseline (profit and loss)", { default: false }),
@@ -192,7 +197,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "A metric over time, such as monthly users, alone or against other series",
     avoidWhen: "x is a category with no order",
     why: "Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path.",
-    options: [CURVE, XTYPE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN],
+    options: [CURVE, XTYPE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN, BAND_FROM, OUTSIDE, CONNECT_NULLS],
     example: { data: S.lineSample, encoding: { x: "month", y: "mau", series: "app" }, options: { area: true }, card: { subtitle: "Monthly active users (10k)", takeaway: "Only our app keeps climbing" } },
     scalable: true,
   },
@@ -204,7 +209,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Seeing how each channel's traffic changes within the total",
     avoidWhen: "The exact value of each series matters",
     why: "Areas rise from the baseline as the chart enters, which shows the stacking at a glance.",
-    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o))],
+    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS],
     example: { data: S.areaSample, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "Social" }, card: { subtitle: "Monthly visits by channel (thousands)", takeaway: "Social's share grows the fastest", legend: "auto" } },
     scalable: true,
   },
@@ -425,6 +430,72 @@ const ENTRIES: ChartEntry[] = [
     options: [op("variant", "enum", "tall is 28px with share text, thin is 8px", { enum: ["tall", "thin"], default: "tall" }), op("sort", "boolean", "Sort largest first", { default: true }), op("list", "boolean", "Show a list of name, value and share below", { default: true })],
     example: { data: S.segmentedSample, encoding: { label: "method", value: "amount" }, options: { highlight: "Mobile pay" }, card: { subtitle: "Payment volume by method (100M KRW)", takeaway: "Mobile pay is one in three" } },
   },
+  {
+    type: "skyline",
+    level: "intermediate",
+    group: "trend",
+    summary: "Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front",
+    useWhen: "7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard",
+    avoidWhen: "Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)",
+    why: "Volume per period as blocks on a level floor, so a taller block always means more. Only the highlighted series gets the accent, and a smaller outcome in the same unit (failures, rework) stands in its own front row on the same scale.",
+    options: [
+      op("depth", "number", "Back row depth as a share of the period slot, from 0.1 to 0.32. Values outside are pulled into the range", { default: 0.32 }),
+      op("wall", "boolean", "Value grid on the back wall, with its labels on the right", { default: true }),
+      op("texture", "enum", "Rows that get the hatch pattern, for print and for readers who cannot tell the grays apart", { enum: ["front", "all", "none"], default: "front" }),
+      op("frontRate", "any", 'Front row total as a share of the back row: "label" in a label and the tooltip, "strip" as a rate strip under the floor, false hides it', { default: "label" }),
+    ],
+    example: { data: S.skylineSample, encoding: { x: "day", y: ["Input", "Cached", "Output", "Reasoning"], front: ["Failed", "Retried"] }, options: { format: "compact" }, card: { subtitle: "Daily tokens, last 14 days", takeaway: "Nov 5 was the busiest day" } },
+  },
+  {
+    type: "histogram",
+    level: "intermediate",
+    group: "distribution",
+    summary: "Distribution of raw samples with its tail and the share past a limit",
+    useWhen: "30 or more raw samples, such as request latency, where the tail and the share past a limit matter",
+    avoidWhen: "Comparing categories (use bars), or fewer than 10 samples (a beeswarm fits better)",
+    why: "Only the bins on the bad side of the threshold take the accent color, and the p50 and p95 lines carry their values, so the tail reads without a legend. Two groups share one set of bin edges.",
+    options: [
+      op("variant", "enum", "Shape. dots stacks one dot per N samples, step draws an outline that overlays well", { enum: ["bars", "dots", "step"], default: "bars" }),
+      op("marks", "array", 'Percentile lines with labels, such as ["p50", "p95", "p99"]. p50 is solid, the rest dashed. From pre-binned rows they are estimated inside the bins', { items: "string", default: ["p50", "p95"] }),
+      op("threshold", "object", 'Limit line { value, label, side }. side "above" (default) or "below" is the bad side: its bins take the accent color and the description counts the samples past it'),
+      op("edges", "array", "Bin edges, smallest first. Samples outside them are counted and reported, not drawn. Bins come from edges, then binWidth, then bins, then the Freedman-Diaconis rule (Sturges under 30 samples)", { items: "number" }),
+      op("binWidth", "number", "Bin width. Edges fall on multiples of it. Not used with log"),
+      op("bins", "number", "About this many bins. Widths snap to a readable step", { min: 1, max: 200 }),
+      op("log", "boolean", "Log bins and axis. Every value must be above 0", { default: false }),
+      op("kde", "boolean", "Density curve over the bins (raw rows only)", { default: false }),
+    ],
+    example: { data: S.histogramSample, encoding: { value: "ms" }, options: { unit: "ms", marks: ["p50", "p95"], threshold: { value: 400, label: "SLO", side: "above" } }, card: { subtitle: "API request latency (ms)", takeaway: "1 in 16 requests misses the SLO", legend: [{ label: "Over the SLO", color: "accent" }, { label: "Within", color: "neutral" }] } },
+  },
+  {
+    type: "scatter",
+    level: "basic",
+    group: "relationship",
+    summary: "How two numbers relate, one dot per item, colored by series",
+    useWhen: "How two numeric values relate, such as cost and latency per request, with up to 4 series",
+    avoidWhen: "x is time (a line works better), or there are more than 50,000 dots",
+    why: "Series colors are set once over every series, so hiding one never repaints the rest. Arrow keys move to the nearest dot in that direction, and jitter uses a fixed seed, so the server and the browser draw the same picture.",
+    options: [
+      op("xLabel", "string", "x axis title"),
+      op("yLabel", "string", "y axis title"),
+      op("zero", "boolean", "Include 0 on the axes", { default: false }),
+      op("maxLabels", "number", "Maximum number of dot labels. With a series channel the series names are labeled instead, and this defaults to 0", { default: 6 }),
+      op("canvasThreshold", "number", "Dot count that switches to canvas", { default: 1500 }),
+      op("xFormat", "format", "x value format"),
+      op("hidden", "array", "Series to hide. Colors stay as if every series were shown", { items: "string" }),
+      op("fit", "enum", "Trend line over the visible dots (least squares). The tooltip shows its slope and R²", { enum: ["linear"] }),
+      op("refLines", "object", "Reference lines { x, y }. With both, they split the plot into four quadrants"),
+      op("quadrants", "array", "Quadrant names, drawn when refLines has both x and y. In reading order: top left, top right, bottom left, bottom right", { items: "string" }),
+      op("jitter", "object", "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render"),
+    ],
+    example: {
+      data: S.scatterSample,
+      encoding: { x: "cost", y: "ms", series: "model", label: "id" },
+      options: { highlight: "Large", xLabel: "Cost (¢)", yLabel: "Latency (ms)", unit: "ms", refLines: { y: 2000 }, quadrants: ["Slow and cheap", "Slow and costly", "Fast and cheap", "Fast and costly"] },
+      card: { subtitle: "Cost and latency per request by model", takeaway: "Only the large model goes over 2 s", legend: "auto" },
+    },
+    canvasAbove: 1500,
+    scalable: true,
+  },
 ];
 
 /** 키 순서는 ChartDef 그대로예요 (CLI, MCP, 스키마 파일이 이 순서로 써요) */
@@ -450,7 +521,7 @@ function fill({ type, level, group, summary, useWhen, avoidWhen, why, options, e
   };
 }
 
-/** 차트 33종. 글과 예시는 영어, 한글은 localizeDef(def, "ko") 또는 chartsIn("ko") */
+/** 차트 34종. 글과 예시는 영어, 한글은 localizeDef(def, "ko") 또는 chartsIn("ko") */
 export const CHARTS: ChartDef[] = /* @__PURE__ */ ENTRIES.map(fill);
 
 export const CHART_TYPES = /* @__PURE__ */ CHARTS.map((c) => c.type);

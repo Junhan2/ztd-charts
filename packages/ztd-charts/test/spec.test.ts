@@ -14,10 +14,10 @@ const KO = chartsIn("ko");
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
 describe("레지스트리", () => {
-  it("33종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
-    expect(CHARTS).toHaveLength(33);
-    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(33);
-    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(33);
+  it("36종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
+    expect(CHARTS).toHaveLength(36);
+    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(36);
+    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(36);
   });
   it("차트별 스키마 파일을 패키지 이름으로 불러와요 (README에 적은 경로)", () => {
     const req = createRequire(import.meta.url);
@@ -101,11 +101,13 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
   it("예시 데이터: 한글판은 영어판과 숫자, 필드, 행 수가 같아요", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
-    expect(koNames.length).toBe(29);
-    const shape = (rows: Record<string, unknown>[]) => JSON.stringify(rows, (_k, v) => (typeof v === "string" ? "" : v));
+    expect(koNames.length).toBe(31);
+    // 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름까지 한글이에요. 그 표는 값만 같은 순서로 견줘요
+    const WIDE = new Set(["skylineSampleKo"]);
+    const shape = (rows: Record<string, unknown>[], wide: boolean) => JSON.stringify(wide ? rows.map((r) => Object.values(r)) : rows, (_k, v) => (typeof v === "string" ? "" : v));
     for (const k of koNames) {
       const en = all[k.slice(0, -2)];
-      expect(shape(all[k]), k).toBe(shape(en));
+      expect(shape(all[k], WIDE.has(k)), k).toBe(shape(en, WIDE.has(k)));
       expect(JSON.stringify(all[k]), k).toMatch(HANGUL);
       expect(JSON.stringify(en), k).not.toMatch(HANGUL);
     }
@@ -183,7 +185,7 @@ describe("validateSpec 메시지", () => {
     expect(ko.errors.map((e) => e.message)).toEqual(["options.centerLabel 값은 문자열이어야 해요(지금 number)", "options.sort 값은 true나 false여야 해요(지금 string)"]);
   });
   it("별칭은 경고와 함께 통과", () => {
-    expect(codes({ type: "scatter", data: [{ x: 1, y: 2 }], encoding: { x: "x", y: "y" } })).toEqual(["!alias"]);
+    expect(codes({ type: "doughnut", data: [{ label: "a", value: 1 }] })).toEqual(["!alias"]);
   });
   it("없는 필드, 숫자 아님, 필수 채널", () => {
     const data = [{ name: "a", v: "많음" }];
@@ -251,6 +253,62 @@ describe("suggestCharts", () => {
     // 한글 추천 스펙만 options.locale "ko-KR"을 적어요
     for (const s of en) expect(s.spec.options?.locale, s.type).toBeUndefined();
     for (const s of ko) expect(s.spec.options?.locale, s.type).toBe("ko-KR");
+  });
+});
+
+describe("range band (encoding.lower, encoding.upper)", () => {
+  const rows = [
+    { d: "a", app: "A", v: 5, lo: 4, hi: 6 },
+    { d: "b", app: "A", v: 6, lo: 7, hi: 5 },
+    { d: "a", app: "B", v: 2, lo: 1, hi: 3 },
+  ];
+  const band = (type: string, extra: object = {}) => validateSpec({ type, data: rows, encoding: { x: "d", y: "v", lower: "lo", upper: "hi" }, ...extra });
+  const codes = (r: ReturnType<typeof validateSpec>) => [...r.errors.map((e) => e.code), ...r.warnings.map((w) => `!${w.code}`)];
+
+  it("crossed bounds pass with a warning that they are swapped", () => {
+    const r = band("line");
+    expect(r.valid).toBe(true);
+    expect(r.warnings.map((w) => `${w.path} ${w.message}`)).toEqual(["encoding.lower lower is above upper in 1 row. They are swapped when drawn"]);
+    expect(validateSpec({ type: "line", data: rows, encoding: { x: "d", y: "v", lower: "lo", upper: "hi" } }, { lang: "ko" }).warnings[0].message).toBe("1개 행에서 lower가 upper보다 커요. 바꿔서 그려요");
+  });
+
+  it('a band on stacked areas is an error; stack "none" or one series passes', () => {
+    const stacked = band("area", { encoding: { x: "d", y: "v", series: "app", lower: "lo", upper: "hi" } });
+    expect(stacked.valid).toBe(false);
+    expect(stacked.errors.map((e) => `${e.path}:${e.code}`)).toEqual(["options.stack:band_stacked"]);
+    expect(codes(band("area", { encoding: { x: "d", y: "v", series: "app", lower: "lo", upper: "hi" }, options: { stack: "percent" } }))).toContain("band_stacked");
+    expect(band("area", { encoding: { x: "d", y: "v", series: "app", lower: "lo", upper: "hi" }, options: { stack: "none" } }).valid).toBe(true);
+    expect(band("area").valid).toBe(true);
+  });
+
+  it("warns when a band cannot be drawn: one bound, a field per y missing, bandFrom without a forecast", () => {
+    expect(codes(validateSpec({ type: "line", data: rows, encoding: { x: "d", y: "v", lower: "lo" } }))).toEqual(["!band_half"]);
+    expect(codes(validateSpec({ type: "line", data: [{ d: "a", p: 1, q: 2, lo: 0, hi: 3 }], encoding: { x: "d", y: ["p", "q"], lower: ["lo"], upper: ["hi"] } }))).toEqual(["!band_fields"]);
+    expect(codes(band("line", { options: { bandFrom: "forecast" } }))).toContain("!band_no_forecast");
+    expect(codes(band("line", { options: { bandFrom: "forecast", annotations: [{ type: "forecast", from: "b" }] } }))).not.toContain("!band_no_forecast");
+  });
+
+  it("the JSON Schema takes the band channels and options", () => {
+    const line = CHARTS.find((c) => c.type === "line")!;
+    for (const id of ["band", "forecast-band"]) expect(validateAll(variantSpec(line, id)), id).toBe(true);
+    expect(validateAll({ type: "area", data: rows, encoding: { x: "d", y: "v", lower: ["lo"], upper: ["hi"] }, options: { outside: true, bandFrom: "start" } })).toBe(true);
+    expect(validateAll({ type: "line", data: rows, options: { bandFrom: "later" } })).toBe(false);
+  });
+});
+
+describe("options.connectNulls (line, area)", () => {
+  it("is a boolean option, default false, on line and area, described in both languages and taken by the JSON Schema", () => {
+    const owners = CHARTS.filter((c) => c.options.some((o) => o.name === "connectNulls"));
+    expect(owners.map((c) => c.type)).toEqual(["line", "area"]);
+    for (const c of owners) {
+      expect(c.options.find((o) => o.name === "connectNulls"), c.type).toMatchObject({ type: "boolean", default: false });
+      expect(KO.find((k) => k.type === c.type)!.options.find((o) => o.name === "connectNulls")!.description, c.type).toMatch(HANGUL);
+    }
+    const spec = { type: "line", data: [{ m: "a", v: 1 }, { m: "b", v: null }, { m: "c", v: 3 }], encoding: { x: "m", y: "v" } };
+    expect(validateAll({ ...spec, options: { connectNulls: true } })).toBe(true);
+    expect(validateAll({ ...spec, options: { connectNulls: "yes" } })).toBe(false);
+    expect(validateSpec({ ...spec, options: { connectNulls: true } }).warnings).toEqual([]);
+    expect(validateSpec({ ...spec, options: { connectNulls: "yes" } }).errors.map((e) => e.code)).toEqual(["bad_option_type"]);
   });
 });
 

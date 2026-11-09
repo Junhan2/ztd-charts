@@ -1,4 +1,5 @@
 import { quantileSorted } from "../core/geometry";
+import { hasField } from "../data/accessor";
 
 export interface BoxStats {
   min: number;
@@ -168,6 +169,167 @@ export function beeswarm(xs: readonly number[], radius: number, opts: { maxSprea
     count++;
   }
   return ys;
+}
+
+/** 히스토그램 구간 나누기. 정하는 순서는 edges → binWidth → bins → 자동(Freedman-Diaconis, 표본 30개 미만은 Sturges)이에요 */
+export interface BinOptions {
+  /** 경계를 직접 정해요. 작은 것부터 두 개 이상 */
+  edges?: readonly number[];
+  /** 구간 폭. 경계는 폭의 배수에 놓여요. log면 쓰지 않아요 */
+  binWidth?: number;
+  /** 대략의 구간 수. 폭은 읽기 쉬운 값(1, 2, 2.5, 5 × 10ⁿ)으로 맞춰요 */
+  bins?: number;
+  /** 로그 구간. 0 이하 값은 빼고 나눠요 */
+  log?: boolean;
+}
+
+/** 히스토그램이 겹쳐 그리는 그룹 수. 더 많으면 앞의 둘만 그리고 스펙 검사가 경고해요 */
+export const HISTOGRAM_MAX_GROUPS = 2;
+
+/**
+ * 미리 나눈 행 { x0, x1, count }인지: count 채널을 주거나, value 채널 없이 첫 행에 x0, x1, count 필드가 있고 value 필드가 없을 때예요.
+ * 차트와 스펙 검사가 같은 규칙을 써요
+ */
+export function isPreBinned(first: object | undefined, value: unknown, count: unknown): boolean {
+  if (count !== undefined) return true;
+  if (value !== undefined || !first) return false;
+  return ["x0", "x1", "count"].every((k) => hasField(first, k)) && !hasField(first, "value");
+}
+
+/** 자동으로 나눌 때의 구간 수 상한. 숨긴 표(60행)와 좁은 화면에서도 읽히게 둬요 */
+const MAX_AUTO_BINS = 50;
+/** binWidth, bins로 직접 정해도 넘지 않는 구간 수 */
+const MAX_BINS = 200;
+const NICE = [1, 2, 2.5, 5, 10];
+/** 로그 구간의 한 자리(10배)마다 경계. 표준수(R5, R10)라 화면에서 폭이 거의 같아요 */
+const LOG_STEPS = [[1], [1, 3], [1, 2, 5], [1, 1.6, 2.5, 4, 6.3], [1, 1.25, 1.6, 2, 2.5, 3.15, 4, 5, 6.3, 8]];
+
+const tidy = (v: number) => Number(v.toPrecision(12));
+
+/** 읽기 쉬운 폭. up이면 w 이상에서 가장 작은 값, 아니면 가장 가까운 값 */
+function niceWidth(w: number, up = false): number {
+  const p = 10 ** Math.floor(Math.log10(w));
+  const list = NICE.map((m) => tidy(m * p));
+  if (up) return list.find((c) => c >= w * (1 - 1e-9)) ?? tidy(10 * p);
+  return list.reduce((best, c) => (Math.abs(Math.log(c / w)) < Math.abs(Math.log(best / w)) ? c : best));
+}
+
+/** 폭 w의 배수로 lo부터 hi까지 덮는 경계 */
+function linearEdges(lo: number, hi: number, w: number): number[] {
+  const start = Math.floor(lo / w + 1e-9) * w;
+  const n = Math.max(1, Math.ceil((hi - start) / w - 1e-9));
+  const out = Array.from({ length: n + 1 }, (_, i) => tidy(start + i * w));
+  // 반올림 오차로 끝값이 경계 밖에 남지 않게 한 칸씩 더해요
+  if (out[0] > lo) out.unshift(tidy(out[0] - w));
+  if (out[out.length - 1] < hi) out.push(tidy(out[out.length - 1] + w));
+  return out;
+}
+
+/** 한 자리(10배)마다 steps를 곱한 값. lo가 든 자리보다 pad자리 아래부터 hi가 든 자리보다 pad자리 위까지예요(로그 구간 경계와 로그 축 눈금) */
+export function decadeGrid(lo: number, hi: number, steps: readonly number[], pad = 0): number[] {
+  const out: number[] = [];
+  for (let d = Math.floor(Math.log10(lo)) - pad; d <= Math.ceil(Math.log10(hi)) + pad; d++) for (const m of steps) out.push(tidy(m * 10 ** d));
+  return out;
+}
+
+/** 한 자리마다 steps의 경계로 lo부터 hi까지 덮어요 */
+function logEdges(lo: number, hi: number, steps: readonly number[]): number[] {
+  const all = decadeGrid(lo, hi, steps, 1);
+  let a = all.length - 1;
+  while (a > 0 && all[a] > lo * (1 + 1e-9)) a--;
+  let b = a + 1;
+  while (b < all.length - 1 && all[b] < hi * (1 - 1e-9)) b++;
+  return all.slice(a, b + 1);
+}
+
+/** 자동 폭: 표본 30개 이상이고 사분위 범위가 있으면 Freedman-Diaconis(2 × IQR / ∛n), 아니면 Sturges(⌈log₂ n⌉ + 1개) */
+function autoWidth(sorted: Float64Array): number {
+  const n = sorted.length;
+  const iqr = quantileSorted(sorted, 0.75) - quantileSorted(sorted, 0.25);
+  if (n >= 30 && iqr > 0) return (2 * iqr) / Math.cbrt(n);
+  return (sorted[n - 1] - sorted[0]) / (Math.ceil(Math.log2(n)) + 1);
+}
+
+/** 직접 준 경계를 정리해요: 숫자만, 작은 것부터, 겹치지 않게 (log면 0보다 큰 것만). 두 개가 안 되면 null */
+function cleanEdges(edges: readonly number[], log: boolean): number[] | null {
+  const out = [...new Set(edges.filter((e) => Number.isFinite(e) && (!log || e > 0)))].sort((a, b) => a - b);
+  return out.length >= 2 ? out : null;
+}
+
+/**
+ * 구간 경계. 길이는 구간 수 + 1이고, 경계를 직접 주지 않으면 모든 값을 덮어요.
+ * 값이 모두 같으면 그 값을 가운데 둔 구간 하나예요(폭은 binWidth, 없으면 1. log면 v/2 ~ 2v). 값이 없으면 빈 배열
+ */
+export function binEdges(values: readonly number[], opts: BinOptions = {}): number[] {
+  const log = opts.log === true;
+  const given = opts.edges ? cleanEdges(opts.edges, log) : null;
+  if (given) return given;
+  const raw = Float64Array.from(values.filter((x) => Number.isFinite(x) && (!log || x > 0))).sort();
+  if (!raw.length) return [];
+  const lo = raw[0];
+  const hi = raw[raw.length - 1];
+  const width = opts.binWidth !== undefined && opts.binWidth > 0 && !log ? opts.binWidth : undefined;
+  if (lo === hi) {
+    if (log) return [tidy(lo / 2), tidy(lo * 2)];
+    const w = width ?? 1;
+    return [lo - w / 2, lo + w / 2];
+  }
+  const count = opts.bins !== undefined && opts.bins >= 1 ? Math.round(opts.bins) : undefined;
+  const cap = width !== undefined || count !== undefined ? MAX_BINS : MAX_AUTO_BINS;
+  if (log) {
+    // 로그 단위 목표 폭에 가장 가까운, 한 자리에 들어가는 구간 수(1, 2, 3, 5, 10). 많으면 성기게
+    const target = count !== undefined ? Math.log10(hi / lo) / count : autoWidth(raw.map(Math.log10));
+    const miss = (st: readonly number[]) => Math.abs(Math.log(1 / st.length / target));
+    let k = LOG_STEPS.reduce((best, st, i) => (miss(st) < miss(LOG_STEPS[best]) ? i : best), 0);
+    let out = logEdges(lo, hi, LOG_STEPS[k]);
+    while (out.length - 1 > cap && k > 0) out = logEdges(lo, hi, LOG_STEPS[--k]);
+    return out;
+  }
+  let w = width ?? niceWidth(count !== undefined ? (hi - lo) / count : autoWidth(raw));
+  if ((hi - lo) / w > cap) w = niceWidth((hi - lo) / cap, true);
+  let out = linearEdges(lo, hi, w);
+  while (out.length - 1 > cap) out = linearEdges(lo, hi, (w = niceWidth(w * 1.01, true)));
+  return out;
+}
+
+/** v가 든 구간 번호. 구간은 [시작, 끝)이고 마지막 구간만 끝값을 넣어요. 경계 밖이거나 숫자가 아니면 -1 */
+export function binIndex(edges: readonly number[], v: number): number {
+  const n = edges.length - 1;
+  if (n < 1 || !(v >= edges[0] && v <= edges[n])) return -1;
+  // edges[a] <= v 인 가장 큰 a (마지막 경계값은 마지막 구간)
+  let a = 0;
+  let b = n;
+  while (b - a > 1) {
+    const m = (a + b) >> 1;
+    if (edges[m] <= v) a = m;
+    else b = m;
+  }
+  return a;
+}
+
+/** 구간마다 개수. 경계 밖의 값은 세지 않고 outside로 돌려줘요. 숫자가 아닌 값은 어디에도 세지 않아요 */
+export function binCounts(values: readonly number[], edges: readonly number[]): { counts: number[]; outside: number } {
+  const counts = new Array<number>(Math.max(0, edges.length - 1)).fill(0);
+  let outside = 0;
+  for (const v of values) {
+    if (!Number.isFinite(v)) continue;
+    const k = binIndex(edges, v);
+    if (k < 0) outside++;
+    else counts[k]++;
+  }
+  return { counts, outside };
+}
+
+/**
+ * 점 그림의 묶음 크기: 1, 2, 5, 10, 20 … 가운데 가장 높은 열(maxCount)이 capacity개 자리에 들어가는 가장 작은 값.
+ * 위 한도가 없어서 개수가 아무리 커도 한 열의 점은 capacity개를 넘지 않아요
+ */
+export function dotUnit(maxCount: number, capacity: number): number {
+  const cap = Math.max(1, Math.floor(capacity));
+  if (!(maxCount > cap)) return 1;
+  if (!Number.isFinite(maxCount)) return Infinity;
+  // 필요한 크기(maxCount / cap)보다 한 자릿수 아래부터 찾아요. 로그의 반올림 오차로 답을 건너뛰지 않게요
+  for (let p = 10 ** Math.max(0, Math.floor(Math.log10(maxCount / cap)) - 1); ; p *= 10) for (const m of [1, 2, 5]) if (Math.ceil(maxCount / (m * p)) <= cap) return m * p;
 }
 
 /** 순위 (1이 가장 큼). 같은 값은 같은 순위 */

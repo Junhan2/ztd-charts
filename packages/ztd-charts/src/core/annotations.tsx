@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import type { Painter } from "../theme/context";
 import { Txt } from "./ChartFrame";
 import type { ChartLang } from "./i18n";
-import { textWidth, truncate } from "./text";
+import { linearFit } from "./geometry";
+import { textWidth, truncate, type Box } from "./text";
 
 /** 차트 위 주석 한 칸 (options.annotations) */
 export interface Annotation {
@@ -130,14 +131,19 @@ export function AnnotationsUnder({ list, g }: { list?: readonly Annotation[]; g:
 /** 이름표 폭: 글자 + 양옆 4px */
 const tagW = (text: string, strong?: boolean) => textWidth(text, 10.5, strong ? 700 : 500) + 8;
 
-/** 카드 바탕 받침 위에 쓰는 작은 글자 (선이 지나가도 읽히게) */
-function Tag({ p, x, y, text, anchor = "start", strong }: { p: Painter; x: number; y: number; text: string; anchor?: "start" | "end"; strong?: boolean }) {
+/** 이름표(Tag) 상자: 글자 + 양옆 4px, 높이 16px. x는 anchor 쪽 끝, y는 줄 가운데예요. 겹침을 미리 재는 곳(산점도)도 이 상자를 써요 */
+export function tagBox(text: string, x: number, y: number, anchor: "start" | "end" = "start", strong?: boolean): Box {
   const w = tagW(text, strong);
-  const left = anchor === "end" ? x - w : x;
+  return { x: anchor === "end" ? x - w : x, y: y - 8, w, h: 16 };
+}
+
+/** 카드 바탕 받침 위에 쓰는 작은 글자 (선이 지나가도 읽히게). 산점도 사분면 이름과 추세선 이름표도 이걸 써요 */
+export function Tag({ p, x, y, text, anchor = "start", strong }: { p: Painter; x: number; y: number; text: string; anchor?: "start" | "end"; strong?: boolean }) {
+  const b = tagBox(text, x, y, anchor, strong);
   return (
     <g>
-      <rect x={left} y={y - 8} width={w} height={16} rx={5} fill={p.paint("panel")} opacity={0.94} />
-      <Txt x={left + 4} y={y} size={10.5} weight={strong ? 700 : 500} fill={p.paint(strong ? "ink" : "muted")}>
+      <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={5} fill={p.paint("panel")} opacity={0.94} />
+      <Txt x={b.x + 4} y={y} size={10.5} weight={strong ? 700 : 500} fill={p.paint(strong ? "ink" : "muted")}>
         {text}
       </Txt>
     </g>
@@ -197,19 +203,9 @@ export function AnnotationsOver({ list, g }: { list?: readonly Annotation[]; g: 
       const pts = g.points().filter((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
       if (pts.length < 2) return;
       // 최소제곱 직선. 축이 선형이라 픽셀 좌표로 맞춰도 데이터로 맞춘 선과 같아요
-      const n = pts.length;
-      const mx = pts.reduce((s, q) => s + q.x, 0) / n;
-      const my = pts.reduce((s, q) => s + q.y, 0) / n;
-      let sxy = 0;
-      let sxx = 0;
-      for (const q of pts) {
-        sxy += (q.x - mx) * (q.y - my);
-        sxx += (q.x - mx) ** 2;
-      }
-      const k = sxx ? sxy / sxx : 0;
-      const at = (x: number) => my + k * (x - mx);
+      const { at } = linearFit(pts);
       const xa = pts[0].x;
-      const xb = pts[n - 1].x;
+      const xb = pts[pts.length - 1].x;
       nodes.push(
         <g key={i}>
           <line x1={xa} x2={xb} y1={at(xa)} y2={at(xb)} stroke={p.paint("muted")} strokeWidth={1.5} strokeDasharray="6 4" strokeLinecap="round" />

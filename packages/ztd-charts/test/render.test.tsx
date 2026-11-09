@@ -26,7 +26,7 @@ function summarize(svg: string) {
   };
 }
 
-describe("SSR: 33종 모두", () => {
+describe("SSR: 36종 모두", () => {
   for (const c of CHARTS) {
     for (const theme of ["dark", "light"] as const) {
       it(`${c.type} (${theme})`, () => {

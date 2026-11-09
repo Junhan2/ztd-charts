@@ -96,6 +96,7 @@ export function useChartData<T = Record<string, unknown>>(source: DataSource, op
   const key = typeof source === "function" ? "fn" : source instanceof Request ? source.url : source ? String(source) : "";
   const deps = options.deps ?? [];
   const depKey = JSON.stringify(deps.map((d) => (typeof d === "object" ? JSON.stringify(d) : String(d))));
+  const inFlight = useRef(false);
 
   useEffect(() => {
     const s = src.current;
@@ -106,6 +107,7 @@ export function useChartData<T = Record<string, unknown>>(source: DataSource, op
     }
     const ctrl = new AbortController();
     let alive = true;
+    inFlight.current = true;
     setState((prev) => ({ ...prev, data: keepPrevious ? prev.data : [], status: "loading", error: null }));
     fetchChartData<T>(s, { ...opt.current, signal: ctrl.signal })
       .then((data) => {
@@ -114,16 +116,23 @@ export function useChartData<T = Record<string, unknown>>(source: DataSource, op
       .catch((e: unknown) => {
         if (!alive || ctrl.signal.aborted) return;
         setState((prev) => ({ ...prev, status: "error", error: e instanceof Error ? e : new Error(String(e)) }));
+      })
+      .finally(() => {
+        if (alive) inFlight.current = false;
       });
     return () => {
       alive = false;
+      inFlight.current = false;
       ctrl.abort();
     };
   }, [key, enabled, tick, depKey, keepPrevious]);
 
   useEffect(() => {
     if (!refreshMs || !enabled) return undefined;
-    const id = setInterval(() => setTick((v) => v + 1), refreshMs);
+    // 응답이 refreshMs보다 느리면 다음 차례가 앞 요청을 취소해 데이터가 영영 안 와요. 가져오는 중이면 이번 차례는 건너뛰어요
+    const id = setInterval(() => {
+      if (!inFlight.current) setTick((v) => v + 1);
+    }, refreshMs);
     return () => clearInterval(id);
   }, [refreshMs, enabled]);
 

@@ -8,6 +8,7 @@ function compositeHex(top: string, under: string, opacity: number): string {
   return toHex(composite([a[0], a[1], a[2], opacity], b));
 }
 import type { Painter } from "../theme/context";
+import { cssVarName, type ColorToken } from "../theme/tokens";
 
 export type Role = "accent" | "ink" | "strong" | "neutral" | "soft";
 
@@ -44,6 +45,14 @@ export function readableOn(p: Painter, raw: string): string {
   const best = pickText(raw, [p.theme.ink, p.theme.onAccent, p.theme.onNeutralStrong]);
   if (contrastRatio(best, raw) >= 4.5) return best === p.theme.ink ? p.paint("ink") : best === p.theme.onAccent ? p.paint("onAccent") : p.paint("onNeutralStrong");
   return pickText(raw, ["#FFFFFF", "#000000"]);
+}
+
+/** swatch()가 역할마다 쓰는 테마 토큰. 캔버스처럼 CSS 변수 이름이 필요한 곳이 써요. swatch를 바꾸면 같이 바꿔요 */
+const ROLE_TOKEN: Record<Role, ColorToken> = { accent: "accent", ink: "ink", strong: "neutralStrong", neutral: "neutral", soft: "neutralSoft" };
+
+/** 캔버스에 칠할 실제 색. 테마 토큰이면 그 CSS 변수 값을 읽고(없으면 계산용 색), 섞은 색이면 계산용 색이에요 */
+export function canvasColor(sw: Swatch, read: (cssVar: string, fallback: string) => string): string {
+  return sw.role === "mix" ? sw.raw : read(cssVarName(ROLE_TOKEN[sw.role]), sw.raw);
 }
 
 /** neutralStrong과 neutral 사이를 섞은 색 */
@@ -93,6 +102,19 @@ export function categoricalTokens(n: number, hi: ReadonlySet<number>): string[] 
     else out[idx] = "neutralStrong";
   });
   return out;
+}
+
+/**
+ * 점(산점도 계열)용 categorical. 가장 옅은 neutral 단계는 반지름 4px 점에서 카드 바탕과 대비가 1.3~1.4:1이라 거의 안 보여서,
+ * 한 칸 더 있는 것처럼 정하고 마지막 칸을 버려요. 계열이 둘이면 강조 아닌 계열이 neutral 대신 ink예요
+ */
+export function categoricalDots(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
+  return categorical(p, n + 1, hi).slice(0, n);
+}
+
+/** categoricalDots와 같은 순서의 토큰 이름 (범례용) */
+export function categoricalDotTokens(n: number, hi: ReadonlySet<number>): string[] {
+  return categoricalTokens(n + 1, hi).slice(0, n);
 }
 
 /** 강조만 accent, 나머지는 모두 neutral (기본 디자인 언어) */

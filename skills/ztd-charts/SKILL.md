@@ -1,11 +1,11 @@
 ---
 name: ztd-charts
-description: "Use when building React charts with ztd-charts: picking a chart that fits the data (33 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
+description: "Use when building React charts with ztd-charts: picking a chart that fits the data (36 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
 ---
 
 # ztd charts skill
 
-33 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
+36 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
 
 ## Steps
 
@@ -35,9 +35,9 @@ Decide the question first, then the form.
 | Why it went up or down | start + drivers (±) + end | `waterfall` | |
 | Drop-off by stage | stage + people (shrinking) | `funnel` | `sankey` (when paths split) |
 | Flow, movement | source + target + value | `sankey` | `chord` (two-way relationships) |
-| Distribution | group + many values | `box` | `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
+| Distribution | group + many values | `box` | `histogram` (one measure's shape, p95 and a limit), `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
 | Finding patterns | category × category + value | `heatmap` | `calendar` (daily, one year) |
-| Three metrics together | 2 or 3 numbers + name | `bubble` | scatter plot without size |
+| Two or three metrics together | 2 or 3 numbers + name | `scatter` (two numbers) | `bubble` (a third number as size) |
 | Comparing several metrics | item × metrics (4 to 8) | `radar` (1 or 2 series) | `parallel` (many items) |
 | Against a target | value + target | `gauge` (one), `bullet` (several) | `radialBar` (3 to 6 goals) |
 

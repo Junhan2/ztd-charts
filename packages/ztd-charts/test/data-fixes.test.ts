@@ -373,6 +373,42 @@ describe("useChartData", () => {
     }
   });
 
+  it("응답이 refreshMs보다 느려도 새로 고침이 앞 요청을 취소하지 않아 데이터가 와요", async () => {
+    const { useChartData, mount } = await loadHook();
+    let open = 0;
+    let most = 0;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      most = Math.max(most, ++open);
+      return fakeFetch(input, init).finally(() => open--);
+    });
+    const h = mount((p: { url: string }) => useChartData(p.url, { refreshMs: 20 }) as Hook, { url: "https://x/slow.json" });
+    try {
+      await tick(200);
+      // 새로 고침이 이어서 돌아 status는 loading일 수 있어요. 데이터가 왔는지와 요청이 겹치지 않았는지를 봐요
+      expect(h.get().data).toHaveLength(1);
+      expect(h.get().error).toBeNull();
+      expect(most).toBe(1);
+    } finally {
+      h.unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("빠른 응답은 refreshMs마다 다시 불러와요", async () => {
+    const { useChartData, mount } = await loadHook();
+    let calls = 0;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => (calls++, fakeFetch(input, init)));
+    const h = mount((p: { url: string }) => useChartData(p.url, { refreshMs: 20 }) as Hook, { url: "https://x/fast.json" });
+    try {
+      await tick(130);
+      expect(h.get().data).toHaveLength(1);
+      expect(calls).toBeGreaterThanOrEqual(4);
+    } finally {
+      h.unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("본문이 있는 Request도 다시 불러올 수 있어요 (매번 clone)", async () => {
     const { useChartData, mount } = await loadHook();
     let calls = 0;

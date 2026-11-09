@@ -5,7 +5,7 @@ import { ensureBaseStyles } from "./css";
 import { useIsoLayoutEffect } from "./env";
 import type { ChartMessages } from "./i18n";
 import type { ChartCtx } from "./useChart";
-import type { ChartEvent, TooltipData } from "./types";
+import type { ChartEvent, TooltipData, TooltipRow } from "./types";
 
 export interface ChartFrameProps<T> {
   c: ChartCtx<T>;
@@ -39,6 +39,12 @@ export interface ChartFrameProps<T> {
 }
 
 const MAX_TABLE_ROWS = 60;
+const MAX_TIP_ROWS = 8;
+
+/** 계열이 많은 툴팁은 앞 8줄만 보여 주고, 빠진 계열 수를 마지막 줄에 알려요. 보여 줄 순서로 정렬해서 넘겨요 */
+export function capTipRows(rows: TooltipRow[], more: (n: number) => string): TooltipRow[] {
+  return rows.length > MAX_TIP_ROWS ? [...rows.slice(0, MAX_TIP_ROWS), { label: more(rows.length - MAX_TIP_ROWS), value: "" }] : rows;
+}
 /** 화면에서 숨기고 스크린리더만 읽게. 인라인이라 CSS가 들어오기 전(SSR, JS 없음)에도 숨어요 */
 const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 

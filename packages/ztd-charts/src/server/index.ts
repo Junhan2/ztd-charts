@@ -93,7 +93,7 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const pad = Number(opts.padding ?? 24) || 0;
   const frame = opts.frame ?? !!spec.card;
   const card = spec.card ?? {};
-  const def = resolveDef(spec.type);
+  const def = resolveDef(spec.type, spec.encoding);
   const inner = frame ? W - pad * 2 - 40 : W - pad * 2;
   // { csv }를 한 번만 읽도록 행으로 바꿔 넘겨요
   const markup = chartMarkup({ ...spec, data: rows }, inner, opts.height, theme, false, false, locale);
@@ -135,7 +135,8 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
       // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게)
       const col = esc(paint.raw(it.color));
       if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${y + 8}" y2="${y + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${y + 8}" r="2.2" fill="${col}"/>`);
-      else parts.push(`<rect x="${lx}" y="${y + 3.5}" width="9" height="9" rx="2.5" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
+      // 원(circle)은 브라우저 카드 범례와 같게 둥근 모서리를 반지름까지 키워요
+      else parts.push(`<rect x="${lx}" y="${y + 3.5}" width="9" height="9" rx="${it.shape === "circle" ? 4.5 : 2.5}" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
       lx -= 12;
     }
     y += 26;
@@ -195,7 +196,7 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   // 정적 HTML 에는 스크립트가 없어 다시 재생 버튼이 눌러도 아무 일도 안 해요. 그래서 interactive 일 때만 버튼을 그려요
   const shown = withCard ? (opts.interactive || !spec.card ? spec : { ...spec, card: { ...spec.card, replay: false } }) : { ...spec, card: undefined };
   const markup = renderToStaticMarkup(createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, height: opts.height, animate: false, locale })));
-  const def = resolveDef(spec.type);
+  const def = resolveDef(spec.type, spec.encoding);
   const title = opts.title ?? spec.card?.title ?? (def ? nameIn(def, lang) : "Chart");
   const rv = opts.interactive ? opts.interactive.reactVersion ?? "19" : "19";
   const script = opts.interactive

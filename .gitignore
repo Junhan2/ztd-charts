@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-ssr/
+packages/cli/fonts/
 *.tsbuildinfo
 .DS_Store
 coverage/

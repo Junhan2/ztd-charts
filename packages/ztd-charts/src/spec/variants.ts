@@ -8,13 +8,15 @@ export interface ChartVariant {
   /** 화면 이름. 한글은 locales/variants-ko.ts의 VARIANT_NAMES_KO */
   name: string;
   options: Record<string, unknown>;
+  /** 예시 encoding 위에 덮어쓰는 채널. 범위 띠처럼 예시 데이터의 다른 필드를 쓰는 꼴만 있어요 */
+  encoding?: Record<string, string | string[]>;
 }
 
 /* @__NO_SIDE_EFFECTS__ */
-const v = (id: string, name: string, options: Record<string, unknown>): ChartVariant => ({ id, name, options });
+const v = (id: string, name: string, options: Record<string, unknown>, encoding?: ChartVariant["encoding"]): ChartVariant => ({ id, name, options, ...(encoding && { encoding }) });
 
 /**
- * 차트마다 이름 붙은 꼴. 예시 데이터를 그대로 쓰고 옵션만 바꿔요.
+ * 차트마다 이름 붙은 꼴. 예시 데이터를 그대로 쓰고 옵션만 바꿔요 (범위 띠는 예시 데이터의 p5, p95 필드를 encoding에 더해요).
  * 문서 차트 페이지의 변형 모음, CLI `example <type> --variant <id>`, MCP get_chart_schema가 같이 써요.
  * 옵션이 없는 차트(marimekko, bump)와 꼴이라 할 만한 옵션이 없는 차트(slope)는 없어요
  */
@@ -35,6 +37,8 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
     v("every-series", "Every series in color", { colorMode: "categorical", area: false }),
     v("forecast", "Target band and forecast", { annotations: [{ type: "band", y: [70, 80] }, { type: "forecast", from: "2025-10" }] }),
     v("zoom", "Drag to zoom", { brush: "zoom" }),
+    v("band", "Range band", { area: false }, { lower: "p5", upper: "p95" }),
+    v("forecast-band", "Forecast range", { area: false, bandFrom: "forecast", annotations: [{ type: "forecast", from: "2025-10" }] }, { lower: "p5", upper: "p95" }),
   ],
   area: [v("percent", "100% stacked", { stack: "percent" }), v("overlap", "Overlapping", { stack: "none" })],
   stream: [v("silhouette", "Centered", { offset: "silhouette" }), v("data-order", "Data order", { reorder: false })],
@@ -54,6 +58,9 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
   parallel: [v("as-measured", "No flipped axes", { invert: [] })],
   candlestick: [v("plain", "Candles only", { ma: [] }), v("zoom", "Drag to zoom", { brush: "zoom" }), v("green-up", "Green up, red down", { upColor: "#16A34A", downColor: "#DC2626" })],
   segmented: [v("thin", "Thin bar", { variant: "thin" }), v("bar-only", "Bar only", { list: false })],
+  skyline: [v("rate-strip", "Rate strip", { frontRate: "strip" }), v("shallow", "Shallow blocks", { depth: 0.16 }), v("no-wall", "Without wall", { wall: false }), v("textured", "Texture on every row", { texture: "all" })],
+  histogram: [v("dots", "Dots", { variant: "dots" }), v("step", "Outline", { variant: "step" }), v("log", "Log bins", { log: true }), v("kde", "Density curve", { kde: true }), v("no-marks", "Without percentile lines", { marks: [] })],
+  scatter: [v("fit", "Trend line", { fit: "linear" }), v("quadrants", "Quadrants", { refLines: { x: 5, y: 2000 } }), v("jitter", "Jitter", { jitter: { amount: 0.3 } })],
 };
 
 /** 차트의 변형을 한 언어로. type은 정식 이름(레지스트리 type)이고, 없으면 빈 배열 */
@@ -65,5 +72,7 @@ export function variantsIn(type: string, lang: Lang): ChartVariant[] {
 /** 예시 스펙에 변형을 입혀요. 한국어 예시를 넘기면 한국어 예시에 입혀요. 그 꼴이 없으면 null */
 export function variantSpec(def: Pick<ChartDef, "type" | "example">, id: string): ChartSpec | null {
   const found = VARIANTS[def.type]?.find((x) => x.id === id);
-  return found ? { ...def.example, options: { ...def.example.options, ...found.options } } : null;
+  if (!found) return null;
+  const encoding = found.encoding && { encoding: { ...def.example.encoding, ...found.encoding } };
+  return { ...def.example, ...encoding, options: { ...def.example.options, ...found.options } };
 }

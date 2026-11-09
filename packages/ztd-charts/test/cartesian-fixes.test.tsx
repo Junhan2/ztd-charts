@@ -1,13 +1,16 @@
+import { readFileSync } from "node:fs";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BarChart } from "../src/charts/bar";
 import { BoxPlot } from "../src/charts/box";
-import { BubbleChart } from "../src/charts/bubble";
+import { BubbleChart, ScatterChart } from "../src/charts/bubble";
+import { nearestInDirection } from "../src/charts/scatter-kit";
 import { BulletChart } from "../src/charts/bullet";
 import { BumpChart } from "../src/charts/bump";
 import { CalendarHeatmap } from "../src/charts/calendar";
 import { CandlestickChart } from "../src/charts/candlestick";
+import { autoLegend, Chart } from "../src/charts/Chart";
 import { DumbbellChart } from "../src/charts/dumbbell";
 import { Heatmap } from "../src/charts/heatmap";
 import { AreaChart, LineChart } from "../src/charts/line";
@@ -23,14 +26,21 @@ import { WaterfallChart } from "../src/charts/waterfall";
 import type { ChartFrameProps } from "../src/core/ChartFrame";
 import { MotionEngine } from "../src/core/motion";
 import { textWidth } from "../src/core/text";
+import { renderSpecToSVG } from "../src/server";
+import { CHARTS, localizeDef, variantSpec, VARIANTS } from "../src/spec";
+import type { ChartSpec } from "../src/spec/types";
+import { validateSpec } from "../src/spec/validate";
+import { ThemeProvider } from "../src/theme/context";
 
 /**
  * SSR은 렌더마다 엔진을 새로 만들어 m.items가 늘 데이터 순서예요. 브라우저에서는 엔진이 남아서
  * 데이터가 바뀌어도 m.items가 처음 생긴 순서를 지켜요. engine을 주면 렌더 사이에 엔진을 이어 써서 그 상황을 재현해요.
+ * motion을 주면 snap 대신 그 함수가 엔진에 marks를 넘겨요 (전환 중간 프레임을 그릴 때).
  * active를 주면 호버/키보드로 고른 항목을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props
  */
 const state = vi.hoisted(() => ({
   engine: null as null | { snap: (m: never[]) => void; items: () => unknown[]; get: (k: string) => number[] | undefined },
+  motion: null as null | ((marks: never[]) => void),
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard" | "touch",
   spy: false,
@@ -45,7 +55,8 @@ vi.mock("../src/core/useMotion", async (orig) => {
     useMotion: (marks: never[], opts: never) => {
       const e = state.engine;
       if (!e) return actual.useMotion(marks, opts);
-      e.snap(marks);
+      if (state.motion) state.motion(marks);
+      else e.snap(marks);
       return { items: e.items(), get: (k: string) => e.get(k), elapsed: Infinity, fade: () => 1, waiting: false, animating: false, generation: 0 };
     },
   };
@@ -76,6 +87,7 @@ vi.mock("../src/core/ChartFrame", async (orig) => {
 
 afterEach(() => {
   state.engine = null;
+  state.motion = null;
   state.active = null;
   state.via = "pointer";
   state.spy = false;
@@ -569,5 +581,862 @@ describe("18: live line", () => {
       [n - 1, "pointer"],
       [0, "pointer"],
     ]);
+  });
+});
+
+/** 키보드로 k를 고른 상태로 그려요. 툴팁과 라이브 영역 글이 같이 찍혀요 */
+const atKey = (k: number, draw: () => string) => {
+  state.active = k;
+  state.via = "keyboard";
+  try {
+    return draw();
+  } finally {
+    state.active = null;
+    state.via = "pointer";
+  }
+};
+const bigLine = Array.from({ length: 10000 }, (_, i) => ({ x: i, y: Math.round((Math.sin(i / 60) * 40 + (i % 13) - 6) * 100) / 100 }));
+const bigArea = Array.from({ length: 10000 }, (_, i) => ({ x: i, a: 10 + (i % 17), b: 20 + Math.round(Math.cos(i / 90) * 8) }));
+/**
+ * 이름 → 그림. 레지스트리 예시(영어, 한국어), 변형, 서버 SVG(PNG 원본), 키보드로 고른 상태, 1만 점 줄이기(라인은 LTTB, 쌓은 영역은 구간 평균).
+ * 다크 테마는 맨 앞 테마 변수만 달라서 라이트만 둬요
+ */
+function plainCases(): Record<string, () => string> {
+  const out: Record<string, () => string> = {};
+  for (const type of ["line", "area"]) {
+    const def = CHARTS.find((c) => c.type === type)!;
+    for (const lang of ["en", "ko"] as const)
+      out[`${type}/${lang}`] = () =>
+        r(
+          <ThemeProvider theme="light">
+            <Chart spec={localizeDef(def, lang).example} width={640} animate={false} />
+          </ThemeProvider>,
+        );
+    // 띠를 켜는 변형(band, forecast-band)은 띠 그림이라 빼요
+    for (const v of VARIANTS[type].filter((x) => !x.encoding?.lower)) out[`${type}/variant/${v.id}`] = () => r(<Chart spec={variantSpec(def, v.id)!} width={480} animate={false} />);
+    out[`${type}/svg`] = () => renderSpecToSVG(def.example, { width: 720, theme: "light" });
+    out[`${type}/keyboard`] = () => atKey(5, () => r(<Chart spec={def.example} width={640} animate={false} />));
+  }
+  out["line/10k"] = () => r(<LineChart data={bigLine} maxPoints={200} width={640} animate={false} />);
+  out["area/10k"] = () => r(<AreaChart data={bigArea} y={["a", "b"]} maxPoints={200} width={640} animate={false} />);
+  return out;
+}
+
+/** 띠 path(불투명도 0.16)와 칠한 색 */
+const bandPaths = (h: string) => [...h.matchAll(/<path d="([^"]+)" fill="([^"]+)" opacity="0.16"/g)].map((m) => ({ d: m[1], fill: m[2] }));
+/** 선 path. 굵기 2.6은 강조 계열, 1.7은 나머지 */
+const linePaths = (h: string) => [...h.matchAll(/<path d="([^"]+)" fill="none" stroke="([^"]+)" stroke-width="([\d.]+)"/g)].map((m) => ({ d: m[1], stroke: m[2], width: +m[3] }));
+/** 툴팁 글 (태그를 빼고 빈칸 하나로) */
+const tipText = (h: string) => decode((/<div class="ztd-tip"[^>]*>(.*?)<\/div><span class="ztd-sr"/.exec(h)?.[1] ?? "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+const liveText = (h: string) => decode(/aria-live="polite" aria-atomic="true">([^<]*)</.exec(h)![1]);
+
+describe("19: range band", () => {
+  /** 띠를 넣기 전(0.4.1, d806a87) 마크업. 띠가 없는 라인, 영역 그림은 이것과 바이트까지 같아야 해요 */
+  const BEFORE = new URL("./fixtures/line-area-before.json", import.meta.url);
+
+  it("charts without a band render the same markup as before the band", () => {
+    const cases = plainCases();
+    const before = JSON.parse(readFileSync(BEFORE, "utf8")) as Record<string, string>;
+    expect(Object.keys(before).sort()).toEqual(Object.keys(cases).sort());
+    for (const [name, draw] of Object.entries(cases)) expect(draw(), name).toBe(before[name]);
+  });
+
+  /** 계단 띠의 가로 변 (M, H, V만 써요) */
+  const hsegs = (d: string) => {
+    const out: { a: number; b: number; y: number }[] = [];
+    let x = 0;
+    let y = 0;
+    for (const [, c, p, q] of d.matchAll(/([MHVZ])([-\d.]*)(?:,([-\d.]+))?/g)) {
+      if (c === "M") [x, y] = [+p, +q];
+      else if (c === "H") {
+        out.push({ a: Math.min(x, +p), b: Math.max(x, +p), y });
+        x = +p;
+      } else if (c === "V") y = +p;
+    }
+    return out;
+  };
+  /** x에서 띠의 위, 아래 y (그 x를 지나는 가로 변 중 가장 위, 가장 아래) */
+  const bandAt = (segs: ReturnType<typeof hsegs>, x: number) => {
+    const ys = segs.filter((g) => g.a - 1e-6 <= x && x <= g.b + 1e-6).map((g) => g.y);
+    return { top: Math.min(...ys), bottom: Math.max(...ys) };
+  };
+  /** 매끈한 선(M x,y C … C …)의 꼭짓점과 구간 가운데 점 (3차 베지어 t = 0.5) */
+  const curveSamples = (d: string) => {
+    const p = pairs(d);
+    const out: { vertex: [number, number]; mid?: [number, number] }[] = [{ vertex: p[0] }];
+    for (let i = 1; i + 2 < p.length; i += 3) {
+      const [a, c1, c2, b] = [p[i - 1], p[i], p[i + 1], p[i + 2]];
+      out.push({ vertex: b, mid: [(a[0] + 3 * c1[0] + 3 * c2[0] + b[0]) / 8, (a[1] + 3 * c1[1] + 3 * c2[1] + b[1]) / 8] });
+    }
+    return out;
+  };
+  /** 1만 점, 두 계열(넓은 표). 위 경계에 한 점짜리 뾰족한 값이 있고, 97번째 점마다 선이 위 경계에 닿아요 (구간 평균이면 둘 다 띠 밖으로 나가요) */
+  const noise = (i: number) => {
+    const v = Math.sin(i * 12.9898) * 43758.5453;
+    return (v - Math.floor(v)) * 2 - 1;
+  };
+  const tenK = Array.from({ length: 10000 }, (_, i) => {
+    const a = 150 + 60 * Math.sin(i / 500) + 5 * noise(i);
+    const b = 70 + 25 * Math.cos(i / 300) + 4 * noise(i + 1e5);
+    const wa = 10 + 6 * Math.abs(noise(i + 2e5));
+    const wb = 8 + 5 * Math.abs(noise(i + 3e5));
+    const aHi = a + wa + (i === 4321 ? 80 : 0);
+    return { x: i, a: i % 97 ? a : aHi, aLo: a - wa, aHi, b: i % 97 ? b : b + wb, bLo: b - wb, bHi: b + wb };
+  });
+  const H10K = 300;
+  // yDomain을 정해서 값 → 픽셀을 테스트가 직접 계산해요 (위 여백 10, 아래 22)
+  const yPx = (v: number) => H10K - 22 - (v / 300) * (H10K - 22 - 10);
+  const drawTenK = () => r(<LineChart data={tenK} y={["a", "b"]} lower={["aLo", "bLo"]} upper={["aHi", "bHi"]} yDomain={[0, 300]} width={640} height={H10K} animate={false} />);
+  const tenKBands = (h: string) => {
+    const lines = linePaths(h);
+    const bands = bandPaths(h);
+    // 강조 계열(a)은 accent, 나머지(b)는 회색이에요
+    const accent = (f: string) => f.includes("accent");
+    return [
+      { lo: "aLo", hi: "aHi", line: lines.find((l) => l.width === 2.6)!, band: hsegs(bands.find((b) => accent(b.fill))!.d) },
+      { lo: "bLo", hi: "bHi", line: lines.find((l) => l.width === 1.7)!, band: hsegs(bands.find((b) => !accent(b.fill))!.d) },
+    ] as const;
+  };
+
+  it("10k points in two series: every pixel column covers the lowest lower and the highest upper of its points", () => {
+    const h = drawTenK();
+    expect(bandPaths(h)).toHaveLength(2);
+    for (const { lo, hi, line, band } of tenKBands(h)) {
+      // 선은 첫 점과 끝 점을 남겨요: 그 x가 데이터의 x 범위예요
+      const p = pairs(line.d);
+      const [x0, x1] = [p[0][0], p[p.length - 1][0]];
+      const cols = new Map<number, { lo: number; hi: number }>();
+      tenK.forEach((d, i) => {
+        const c = Math.floor(x0 + ((x1 - x0) * i) / (tenK.length - 1));
+        const m = cols.get(c) ?? { lo: Infinity, hi: -Infinity };
+        cols.set(c, { lo: Math.min(m.lo, d[lo]), hi: Math.max(m.hi, d[hi]) });
+      });
+      expect(cols.size).toBeGreaterThan(500);
+      for (const [c, want] of cols) {
+        if (c + 0.5 < x0 || c + 0.5 > x1) continue;
+        const got = bandAt(band, c + 0.5);
+        // 픽셀은 아래로 커져요: 아래 경계는 원본 lower 최솟값 이하(더 아래), 위 경계는 upper 최댓값 이상(더 위)
+        expect(got.bottom, `column ${c}`).toBeGreaterThanOrEqual(yPx(want.lo) - 0.006);
+        expect(got.top, `column ${c}`).toBeLessThanOrEqual(yPx(want.hi) + 0.006);
+      }
+    }
+    // 한 점짜리 위 경계(80 높은 값)도 남아요
+    const spike = tenK[4321].aHi;
+    expect(Math.min(...tenKBands(h)[0].band.map((g) => g.y))).toBeLessThanOrEqual(yPx(spike) + 0.006);
+  });
+
+  it("200 samples of each drawn line (points and curve midpoints) lie inside its band", () => {
+    for (const { line, band } of tenKBands(drawTenK())) {
+      const all = curveSamples(line.d);
+      // LTTB로 줄여도 점이 200개보다 많아요
+      expect(all.length).toBeGreaterThan(200);
+      const step = (all.length - 1) / 199;
+      for (let i = 0; i < 200; i++) {
+        const s = all[Math.round(i * step)];
+        for (const [x, y] of s.mid ? [s.vertex, s.mid] : [s.vertex]) {
+          const got = bandAt(band, x);
+          expect(y, `x ${x}`).toBeGreaterThanOrEqual(got.top - 0.01);
+          expect(y, `x ${x}`).toBeLessThanOrEqual(got.bottom + 0.01);
+        }
+      }
+    }
+  });
+
+  const days = (n: number) => Array.from({ length: n }, (_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`);
+
+  it("crossed bounds draw the same band as the bounds in order", () => {
+    const rows = days(8).map((day, i) => ({ day, v: 50 + i, lo: 40 + i, hi: 62 + i * 2 }));
+    // 셋째, 여섯째 행은 아래와 위가 바뀌었어요
+    const crossed = rows.map((d, i) => (i === 2 || i === 5 ? { ...d, lo: d.hi, hi: d.lo } : d));
+    const band = (data: typeof rows) => bandPaths(r(<LineChart data={data} x="day" y="v" lower="lo" upper="hi" width={480} animate={false} />));
+    expect(band(crossed)).toHaveLength(1);
+    expect(band(crossed)).toEqual(band(rows));
+  });
+
+  it("a missing bound breaks the band at that x and the tooltip there has no range", () => {
+    const rows = days(9).map((day, i) => ({ day, v: 50 + i, lo: 40 + i, hi: i === 4 ? null : 60 + i }));
+    const draw = () => r(<LineChart data={rows} x="day" y="v" lower="lo" upper="hi" width={480} animate={false} />);
+    const h = draw();
+    const [band] = bandPaths(h);
+    const runs = band.d.split("M").slice(1).map((d) => pairs(`M${d}`).map((q) => q[0]));
+    expect(runs).toHaveLength(2);
+    const xs = pairs(linePaths(h)[0].d).filter((_, i) => i % 3 === 0).map((q) => q[0]);
+    expect(xs).toHaveLength(9);
+    expect(Math.max(...runs[0])).toBeCloseTo(xs[3], 1);
+    expect(Math.min(...runs[1])).toBeCloseTo(xs[5], 1);
+    state.active = 4;
+    expect(tipText(draw())).toBe("1/5 v 54");
+    state.active = 5;
+    expect(tipText(draw())).toBe("1/6 v 55 (lo 45 ~ hi 65)");
+  });
+
+  it('bandFrom "forecast" starts the band at the forecast x, and without a forecast draws no band', () => {
+    const rows = days(10).map((day, i) => ({ day, v: 50 + i, lo: 40 + i, hi: 60 + i * 2 }));
+    const notes = [{ type: "forecast" as const, from: "2025-01-07" }];
+    const draw = (extra: object) => r(<LineChart data={rows} x="day" y="v" lower="lo" upper="hi" width={480} animate={false} {...extra} />);
+    const h = draw({ bandFrom: "forecast", annotations: notes });
+    const xf = +/<line x1="([\d.]+)" x2="[\d.]+" y1="[\d.]+" y2="[\d.]+" stroke="[^"]+" stroke-dasharray="2 3"/.exec(h)![1];
+    const start = (html: string) => Math.min(...pairs(bandPaths(html)[0].d).map((q) => q[0]));
+    expect(start(h)).toBeCloseTo(xf, 1);
+    // 기본("start")은 첫 x부터
+    expect(start(draw({ annotations: notes }))).toBeLessThan(xf - 100);
+    expect(bandPaths(draw({ bandFrom: "forecast" }))).toHaveLength(0);
+  });
+
+  it("a chart narrower than its margins draws without throwing", () => {
+    const rows = Array.from({ length: 80 }, (_, i) => ({ x: i, v: 50 + (i % 7), lo: 40 + (i % 5), hi: 60 + (i % 9) }));
+    for (const width of [0, 20, 40]) expect(() => r(<LineChart data={rows} x="x" y="v" lower="lo" upper="hi" width={width} animate={false} />), `width ${width}`).not.toThrow();
+  });
+
+  it("lower and upper with nothing to draw render the same as a chart without a band", () => {
+    const rows = days(10).map((day, i) => ({ day, v: 50 + i, lo: 40 + i, hi: 60 + i * 2 }));
+    state.active = 4;
+    const plain = r(<LineChart data={rows} x="day" y="v" width={480} animate={false} />);
+    expect(r(<LineChart data={rows} x="day" y="v" lower="lo" upper="hi" bandFrom="forecast" width={480} animate={false} />)).toBe(plain);
+  });
+
+  it("outside marks the drawn points outside the band and counts them in the description", () => {
+    const rows = days(8).map((day, i) => ({ day, v: i === 2 ? 75 : i === 6 ? 30 : 50 + i, lo: 40 + i, hi: 60 + i }));
+    const marks = (h: string) => [...h.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="3.6"/g)].map((m) => +m[1]);
+    const on = r(<LineChart data={rows} x="day" y="v" lower="lo" upper="hi" outside width={480} animate={false} />);
+    const xs = pairs(linePaths(on)[0].d).filter((_, i) => i % 3 === 0).map((q) => q[0]);
+    expect(marks(on)).toHaveLength(2);
+    expect(marks(on)[0]).toBeCloseTo(xs[2], 1);
+    expect(marks(on)[1]).toBeCloseTo(xs[6], 1);
+    expect(desc(on)).toContain("Range lo to hi. 2 points outside the range: 1/3, 1/7.");
+    const off = r(<LineChart data={rows} x="day" y="v" lower="lo" upper="hi" width={480} animate={false} />);
+    expect(marks(off)).toEqual([]);
+    expect(desc(off)).not.toContain("outside");
+  });
+
+  it('tooltip and live region read the value, then the range: "p50 820ms (p5 410 ~ p95 2,300)"', () => {
+    const rows = days(10).map((day, i) => ({ day, p50: i === 4 ? 820 : 700 + i * 10, p5: i === 4 ? 410 : 400, p95: i === 4 ? 2300 : 1900 }));
+    const draw = (extra: object = {}) => r(<LineChart data={rows} x="day" y="p50" lower="p5" upper="p95" unit="ms" width={480} animate={false} {...extra} />);
+    state.active = 4;
+    state.via = "keyboard";
+    const h = draw();
+    expect(tipText(h)).toBe("1/5 p50 820ms (p5 410 ~ p95 2,300)");
+    expect(liveText(h)).toBe("1/5: p50 820ms (p5 410 ~ p95 2,300) (5/10)");
+    // 범위가 축 밖으로 넘치지 않아요 (축이 p95까지 넓어져요)
+    for (const [, y] of pairs(bandPaths(h)[0].d)) expect(y).toBeGreaterThanOrEqual(10 - 0.01);
+    // 함수로 준 경계는 이름 대신 "하한", "상한"
+    const ko = draw({ lower: (d: { p5: number }) => d.p5, upper: (d: { p95: number }) => d.p95, locale: "ko-KR" });
+    expect(liveText(ko)).toContain("p50 820ms (하한 410 ~ 상한 2,300)");
+  });
+
+  it("long and wide tables draw the same bands, the highlight in accent and the others gray, and stacked areas draw none", () => {
+    const long = days(6).flatMap((day, i) => [
+      { day, app: "A", v: 50 + i, lo: 45 + i, hi: 56 + i },
+      { day, app: "B", v: 30 + i, lo: 26 + i, hi: 35 + i },
+    ]);
+    const wide = days(6).map((day, i) => ({ day, A: 50 + i, A_lo: 45 + i, A_hi: 56 + i, B: 30 + i, B_lo: 26 + i, B_hi: 35 + i }));
+    const fromLong = bandPaths(r(<LineChart data={long} x="day" y="v" series="app" lower="lo" upper="hi" width={480} animate={false} />));
+    const fromWide = bandPaths(r(<LineChart data={wide} x="day" y={["A", "B"]} lower={["A_lo", "B_lo"]} upper={["A_hi", "B_hi"]} width={480} animate={false} />));
+    expect(fromLong).toEqual(fromWide);
+    expect(fromLong.map((b) => b.fill.includes("accent"))).toEqual([false, true]);
+    const area = (stack: "none" | "stacked") => bandPaths(r(<AreaChart data={long} x="day" y="v" series="app" lower="lo" upper="hi" stack={stack} width={480} animate={false} />));
+    expect(area("none")).toHaveLength(2);
+    expect(area("stacked")).toHaveLength(0);
+  });
+});
+
+describe("20: lines break at missing values", () => {
+  /** 빠진 값에서 선을 끊기 전(764eb2b) 마크업. 빠진 값이 없는 그림과 쌓은 영역은 이것과 바이트까지 같아야 해요 */
+  const BEFORE = new URL("./fixtures/line-gaps-before.json", import.meta.url);
+  const DAYS = Array.from({ length: 14 }, (_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`);
+  /** 긴 표, 14일. Ours는 4, 5일(null, undefined)과 10일(NaN)이 빠지고, Rival은 첫날 행이 없고 끝 이틀이 null, Other는 7일 하나만 이웃 없이 남아요 */
+  const longGaps = DAYS.flatMap((day, i) => [
+    { day, app: "Ours", v: i === 3 ? null : i === 4 ? undefined : i === 9 ? NaN : 50 + i * 2 + (i % 3) },
+    ...(i === 0 ? [] : [{ day, app: "Rival", v: i >= 12 ? null : 40 + (i % 4) * 3 }]),
+    { day, app: "Other", v: i < 6 || i === 7 ? null : 30 + i },
+  ]);
+  /** 넓은 표, x 0~23. a는 8, 9가 값과 범위 모두 빠지고 15는 값만 빠져요(범위는 있어요). 5는 범위 밖. b는 앞 셋과 끝 둘이 빠지고 12는 이웃 없이 남아요 */
+  const wideGaps = Array.from({ length: 24 }, (_, i) => {
+    const mid = Math.round((60 + 10 * Math.sin(i / 3)) * 10) / 10;
+    const gap = i === 8 || i === 9;
+    return { t: i, a: gap || i === 15 ? null : i === 5 ? mid + 14 : mid, aLo: gap ? null : mid - 6, aHi: gap ? null : mid + 6, b: i < 3 || i === 11 || i === 13 || i >= 22 ? null : 40 + (i % 5) * 2 };
+  });
+  /** 12개월 영역(겹치기, 손익 색, 계단). p는 5, 6월이 빠지고 음수도 있어요. q는 앞 두 달, 7월, 9월, 12월이 빠져서 8월이 혼자 남아요 */
+  const areaGapsSpec = (extra: object): ChartSpec => ({
+    type: "area",
+    data: Array.from({ length: 12 }, (_, i) => ({ m: `2025-${String(i + 1).padStart(2, "0")}`, p: i === 4 || i === 5 ? null : Math.round(20 * Math.sin(i / 2)), q: i < 2 || i === 6 || i === 8 || i === 11 ? null : 10 + i })),
+    encoding: { x: "m", y: ["p", "q"] },
+    options: { stack: "none", signColors: true, curve: "step", ...extra },
+  });
+  /** 1만 점. 앞 10점, 2000~2049, 5000, 6990~7020(7000만 남아요), 끝 50점이 빠져요 */
+  const tenKGaps = bigLine.map((d, i) => ({ x: d.x, y: i < 10 || (i >= 2000 && i < 2050) || i === 5000 || (Math.abs(i - 7005) <= 15 && i !== 7000) || i >= 9950 ? null : d.y }));
+
+  /** 빠진 값이 없는 그림: 위 plainCases에 띠 변형, 1만 점 띠, 1만 점 겹친 영역(LTTB)을 더해요. 쌓은 영역은 빠진 값이 있어도 예전 그대로라 같이 둬요 */
+  function gapFreeCases(): Record<string, () => string> {
+    const out = plainCases();
+    const line = CHARTS.find((c) => c.type === "line")!;
+    for (const v of VARIANTS.line.filter((x) => x.encoding?.lower)) out[`line/variant/${v.id}`] = () => r(<Chart spec={variantSpec(line, v.id)!} width={480} animate={false} />);
+    out["line/10k-band"] = () => r(<LineChart data={bigLine.map((d) => ({ ...d, lo: d.y - 6, hi: d.y + 6 }))} lower="lo" upper="hi" maxPoints={200} width={640} animate={false} />);
+    out["area/10k-overlap"] = () => r(<AreaChart data={bigArea} y={["a", "b"]} stack="none" maxPoints={200} width={640} animate={false} />);
+    out["area/stacked-gaps"] = () => atKey(3, () => r(<AreaChart data={longGaps} x="day" y="v" series="app" width={480} animate={false} />));
+    return out;
+  }
+  /** 빠진 값이 있는 그림. 끊기 전에는 이웃 점을 이었어요. 지금은 connectNulls를 켜면 그때와 같아요 */
+  function gapCases(extra: { connectNulls?: boolean } = { connectNulls: true }): Record<string, () => string> {
+    return {
+      // 키보드로 Ours가 빠진 4일을 골라요
+      "gaps/long-keyboard": () => atKey(3, () => r(<LineChart data={longGaps} x="day" y="v" series="app" width={480} animate={false} {...extra} />)),
+      "gaps/wide-band": () => r(<LineChart data={wideGaps} x="t" y={["a", "b"]} lower={["aLo"]} upper={["aHi"]} area outside annotations={[{ type: "trend" }, { type: "forecast", from: 18 }]} width={640} animate={false} {...extra} />),
+      "gaps/area-svg": () => renderSpecToSVG(areaGapsSpec(extra), { width: 640, theme: "light" }),
+      "gaps/10k": () => r(<LineChart data={tenKGaps} maxPoints={200} width={640} animate={false} {...extra} />),
+    };
+  }
+  const before = () => JSON.parse(readFileSync(BEFORE, "utf8")) as Record<string, string>;
+
+  it("charts without missing values, and stacked areas with them, render the same markup as before", () => {
+    const pinned = before();
+    expect(Object.keys(pinned).sort()).toEqual([...Object.keys(gapFreeCases()), ...Object.keys(gapCases())].sort());
+    for (const [name, draw] of Object.entries(gapFreeCases())) expect(draw(), name).toBe(pinned[name]);
+  });
+
+  it("connectNulls draws the same data with missing values as before: neighbours joined", () => {
+    const pinned = before();
+    for (const [name, draw] of Object.entries(gapCases())) expect(draw(), name).toBe(pinned[name]);
+  });
+
+  /** path의 하위 경로마다 (x, y) 쌍. curve "linear"면 꼭짓점이에요 */
+  const subpaths = (d: string) => d.split("M").slice(1).map((s) => pairs(`M${s}`));
+  /** 점 [cx, cy, r]. 점 좌표는 반올림하지 않아서 path와 같은 0.01 단위로 맞춰요 */
+  const circles = (h: string) => [...h.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)"/g)].map((m) => [Math.round(+m[1] * 100) / 100, Math.round(+m[2] * 100) / 100, +m[3]]);
+  /** 칠한 path (영역 면, 선 아래 그라데이션, 손익 색 면) */
+  const fills = (h: string) => [...h.matchAll(/<path d="([^"]+)" fill="(?!none)[^"]*"/g)].map((m) => m[1]);
+
+  it("a missing value in the middle splits the line into two runs; connectNulls joins them", () => {
+    const rows = DAYS.slice(0, 10).map((day, i) => ({ day, v: i === 4 ? null : 10 + i }));
+    const line = (extra: object) => linePaths(r(<LineChart data={rows} x="day" y="v" curve="linear" width={480} animate={false} {...extra} />))[0].d;
+    const joined = subpaths(line({ connectNulls: true }));
+    const runs = subpaths(line({}));
+    expect(joined).toHaveLength(1);
+    expect(runs.map((q) => q.length)).toEqual([4, 5]);
+    // 점은 그대로이고, 빠진 5일을 건너 잇는 선만 없어요
+    expect(runs.flat()).toEqual(joined[0]);
+  });
+
+  it("a point with no neighbours shows as a dot, also with dots off and on an overlapping area", () => {
+    // 20개라 dots "auto"는 점을 그리지 않아요. 10, 12번째가 빠져서 11번째가 혼자 남아요
+    const rows = Array.from({ length: 20 }, (_, i) => ({ x: i, v: i === 9 || i === 11 ? null : 10 + (i % 4) }));
+    for (const Kind of [LineChart, AreaChart]) {
+      const draw = (extra: object) => r(<Kind data={rows} x="x" y="v" curve="linear" width={480} animate={false} {...extra} />);
+      const at = pairs(linePaths(draw({ connectNulls: true }))[0].d)[9];
+      for (const h of [draw({}), draw({ dots: false })]) {
+        expect(circles(h)).toEqual([[...at, 3]]);
+        // 선은 그 점에서 긋는 게 없어요 (M 하나)
+        expect(subpaths(linePaths(h)[0].d).map((q) => q.length)).toEqual([9, 1, 8]);
+      }
+      expect(circles(draw({ connectNulls: true }))).toEqual([]);
+    }
+  });
+
+  it("a chart with one x has nothing missing and renders exactly as before (no added dot)", () => {
+    const one = [{ x: "a", s: "p", v: 5 }, { x: "a", s: "q", v: 7 }];
+    for (const Kind of [LineChart, AreaChart]) {
+      const draw = (extra: object) => r(<Kind data={one} x="x" y="v" series="s" stack="none" dots={false} width={480} animate={false} {...extra} />);
+      expect(draw({})).toBe(draw({ connectNulls: true }));
+      expect(circles(draw({}))).toEqual([]);
+    }
+  });
+
+  it("gaps at the start and the end: the line and the area cover only the x with values", () => {
+    const full = DAYS.slice(0, 10).map((day, i) => ({ day, v: 10 + i }));
+    const rows = full.map((d, i) => ({ ...d, v: i < 2 || i > 7 ? null : d.v }));
+    const xs = pairs(linePaths(r(<LineChart data={full} x="day" y="v" curve="linear" width={480} animate={false} />))[0].d).map((q) => q[0]);
+    const line = r(<LineChart data={rows} x="day" y="v" curve="linear" dots={false} width={480} animate={false} />);
+    expect(subpaths(linePaths(line)[0].d).map((q) => q.map(([x]) => x))).toEqual([xs.slice(2, 8)]);
+    expect(circles(line)).toEqual([]);
+    const [fill] = fills(r(<AreaChart data={rows} x="day" y="v" curve="linear" width={480} animate={false} />));
+    const fx = subpaths(fill).map((q) => q.map(([x]) => x));
+    expect(fx).toHaveLength(1);
+    expect([Math.min(...fx[0]), Math.max(...fx[0])]).toEqual([xs[2], xs[7]]);
+  });
+
+  it("long and wide tables break at the same x: a missing row and a null make the same gap", () => {
+    const long = DAYS.flatMap((day, i) => [...(i === 3 ? [] : [{ day, s: "A", v: 10 + i }]), { day, s: "B", v: i === 6 ? null : 5 + (i % 3) }]);
+    const wide = DAYS.map((day, i) => ({ day, A: i === 3 ? null : 10 + i, B: i === 6 ? null : 5 + (i % 3) }));
+    const fromLong = linePaths(r(<LineChart data={long} x="day" y="v" series="s" width={480} animate={false} />));
+    expect(fromLong).toEqual(linePaths(r(<LineChart data={wide} x="day" y={["A", "B"]} width={480} animate={false} />)));
+    expect(fromLong.map((l) => subpaths(l.d).length)).toEqual([2, 2]);
+  });
+
+  it("fills break with the line: an overlapping area, the gradient under a line, and sign colours", () => {
+    const rows = DAYS.slice(0, 10).map((day, i) => ({ day, v: i === 4 || i === 5 ? null : i % 2 ? 6 : -3 }));
+    const p = { data: rows, x: "day", y: "v", curve: "linear", width: 480, animate: false } as const;
+    for (const h of [r(<AreaChart {...p} />), r(<AreaChart {...p} signColors />), r(<LineChart {...p} area />), r(<LineChart {...p} area signColors />)]) {
+      const [left, right] = subpaths(linePaths(h)[0].d);
+      const gap = [left[left.length - 1][0], right[0][0]];
+      const list = fills(h);
+      expect(list.length).toBeGreaterThan(0);
+      for (const d of list) {
+        expect(subpaths(d)).toHaveLength(2);
+        // 면도 빠진 두 날 사이를 칠하지 않아요
+        for (const [x] of pairs(d)) expect(x <= gap[0] + 0.01 || x >= gap[1] - 0.01, `x ${x}`).toBe(true);
+      }
+    }
+  });
+
+  it("stacked areas keep today's treatment of missing values, with or without connectNulls", () => {
+    for (const stack of ["stacked", "percent"] as const) {
+      const draw = (extra: object) => r(<AreaChart data={longGaps} x="day" y="v" series="app" stack={stack} width={480} animate={false} {...extra} />);
+      expect(draw({})).toBe(draw({ connectNulls: true }));
+      for (const d of fills(draw({}))) expect(subpaths(d)).toHaveLength(1);
+    }
+  });
+
+  it("10k points with gaps keep every gap and the lone point after LTTB", () => {
+    const draw = (extra: object) => r(<LineChart data={tenKGaps} curve="linear" maxPoints={200} width={640} animate={false} {...extra} />);
+    const h = draw({});
+    const runs = subpaths(linePaths(h)[0].d);
+    // 데이터의 조각: 10~1999, 2050~4999, 5001~6989, 7000(혼자), 7021~9949
+    const ends = [[10, 1999], [2050, 4999], [5001, 6989], [7000, 7000], [7021, 9949]];
+    expect(runs).toHaveLength(ends.length);
+    const total = runs.reduce((n, q) => n + q.length, 0);
+    expect(total).toBeGreaterThan(150);
+    expect(total).toBeLessThanOrEqual(200 + 3 * runs.length);
+    // x 픽셀은 데이터 x에 비례해요. 첫 점(10)과 끝 점(9949)으로 자를 만들어 조각 양끝이 데이터 조각의 양끝인지 봐요
+    const [x0, x1] = [runs[0][0][0], runs[4][runs[4].length - 1][0]];
+    const X = (k: number) => x0 + ((x1 - x0) * (k - 10)) / (9949 - 10);
+    runs.forEach((q, i) => {
+      expect(q[0][0], `run ${i} start`).toBeCloseTo(X(ends[i][0]), 1);
+      expect(q[q.length - 1][0], `run ${i} end`).toBeCloseTo(X(ends[i][1]), 1);
+    });
+    expect(circles(h).map((c) => c[0])).toEqual([runs[3][0][0]]);
+    // 한 번에 줄이면(connectNulls) 예전처럼 하나로 이어요
+    expect(subpaths(linePaths(draw({ connectNulls: true }))[0].d)).toHaveLength(1);
+  });
+
+  it("animation across changing gaps (real engine): every frame is finite and draws the new runs, and each transition ends as a still render", () => {
+    const sets = [
+      DAYS.map((day, i) => ({ day, a: 10 + i, b: 20 - i })),
+      DAYS.map((day, i) => ({ day, a: i === 6 ? null : 12 + (i % 5), b: 20 - i })),
+      // a는 혼자 남은 점 하나와 세 조각, b는 두 곳이 빠져요
+      DAYS.map((day, i) => ({ day, a: i % 4 === 1 ? null : 9 + i, b: i === 3 || i === 5 ? null : 15 })),
+      DAYS.slice(0, 9).map((day, i) => ({ day, a: 30 - i, b: 5 + i })),
+      DAYS.map((day, i) => ({ day, a: i < 3 ? null : 10 + i, b: 20 - i })),
+    ];
+    const views = [(rows: (typeof sets)[number]) => <LineChart data={rows} x="day" y={["a", "b"]} width={480} animate={false} />, (rows: (typeof sets)[number]) => <AreaChart data={rows} x="day" y={["a", "b"]} stack="none" width={480} animate={false} />];
+    const shape = (h: string) => linePaths(h).map((l) => subpaths(l.d).map((q) => q.length));
+    const still = (el: ReactElement) => {
+      const [engine, motion] = [state.engine, state.motion];
+      state.engine = null;
+      state.motion = null;
+      try {
+        return r(el);
+      } finally {
+        [state.engine, state.motion] = [engine, motion];
+      }
+    };
+    for (const view of views) {
+      const e = new MotionEngine<never>();
+      e.configure("spring", 1100);
+      state.engine = e as never;
+      let changeAt = 0;
+      let frameAt = 0;
+      // 실제 훅처럼: 목표가 바뀌면 지금 값에서 새 목표로, 같으면 그리기 정보만
+      state.motion = (marks) => {
+        if (!e.size) e.snap(marks);
+        else if (!e.sameTargets(marks)) e.update(marks, changeAt);
+        else e.refreshData(marks);
+        e.step(frameAt);
+      };
+      sets.forEach((rows, n) => {
+        changeAt = n * 10000;
+        const target = still(view(rows));
+        for (const dt of [0, 40, 160, 400, 900]) {
+          frameAt = changeAt + dt;
+          const h = r(view(rows));
+          expect(h, `set ${n} +${dt}ms`).not.toMatch(/NaN|Infinity/);
+          expect(shape(h), `set ${n} +${dt}ms`).toEqual(shape(target));
+        }
+        frameAt = changeAt + 5000;
+        expect(r(view(rows)), `set ${n} settled`).toBe(target);
+      });
+    }
+    // 등장: 조각마다 제 차례에 그려져요 (왼쪽 조각이 더 많이 그려져 있어요)
+    const e = new MotionEngine<never>();
+    e.configure("spring", 1100);
+    state.engine = e as never;
+    let frameAt = 0;
+    state.motion = (marks) => {
+      if (!e.size) {
+        e.hold(marks);
+        e.start(0);
+      }
+      e.step(frameAt);
+    };
+    const offsets = (h: string) => [...h.matchAll(/stroke-width="2.6"[^>]*pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="([-\d.e]+)"/g)].map((m) => +m[1]);
+    for (const t of [80, 250, 450, 700]) {
+      frameAt = t;
+      const h = r(views[0](sets[2]));
+      expect(h).not.toMatch(/NaN|Infinity/);
+      const o = offsets(h);
+      // a의 조각 셋 (혼자 남은 첫 점은 점으로만)
+      expect(o, `${t}ms`).toHaveLength(3);
+      for (let i = 0; i < o.length; i++) {
+        expect(o[i]).toBeGreaterThanOrEqual(0);
+        expect(o[i]).toBeLessThanOrEqual(1);
+        if (i) expect(o[i]).toBeGreaterThanOrEqual(o[i - 1]);
+      }
+    }
+    frameAt = 5000;
+    expect(r(views[0](sets[2]))).toBe(still(views[0](sets[2])));
+  });
+
+  it("a broken line and its band break at the same x, the line stays inside the band, and the trend line is unchanged", () => {
+    // A는 6, 7일에 값과 범위가 모두 비고, B는 10일에 행이 없어요
+    const rows = DAYS.slice(0, 12).flatMap((day, i) => {
+      const off = i === 5 || i === 6;
+      return [{ day, s: "A", v: off ? null : 50 + (i % 4) * 3, lo: off ? null : 45 + (i % 4) * 3, hi: off ? null : 58 + (i % 4) * 3 }, ...(i === 9 ? [] : [{ day, s: "B", v: 30 + (i % 3), lo: 26 + (i % 3), hi: 33 + (i % 3) }])];
+    });
+    const draw = (extra: object) => r(<LineChart data={rows} x="day" y="v" series="s" lower="lo" upper="hi" curve="linear" annotations={[{ type: "trend" }]} width={480} animate={false} {...extra} />);
+    const h = draw({});
+    const lines = linePaths(h);
+    const bands = bandPaths(h);
+    expect(lines).toHaveLength(2);
+    lines.forEach((line, s) => {
+      const runs = subpaths(line.d);
+      const bandRuns = subpaths(bands[s].d);
+      expect(runs).toHaveLength(2);
+      expect(bandRuns).toHaveLength(2);
+      runs.forEach((q, i) => {
+        const bx = bandRuns[i].map(([x]) => x);
+        expect([Math.min(...bx), Math.max(...bx)]).toEqual([q[0][0], q[q.length - 1][0]]);
+        for (const [x, yy] of q) {
+          const ys = bandRuns[i].filter(([b]) => Math.abs(b - x) < 0.01).map(([, b]) => b);
+          expect(yy).toBeGreaterThanOrEqual(Math.min(...ys));
+          expect(yy).toBeLessThanOrEqual(Math.max(...ys));
+        }
+      });
+    });
+    // connectNulls면 선만 예전처럼 이어지고, 띠와 추세선은 같아요
+    const joined = draw({ connectNulls: true });
+    expect(linePaths(joined).map((l) => subpaths(l.d).length)).toEqual([1, 1]);
+    expect(bandPaths(joined)).toEqual(bands);
+    const trend = (html: string) => /<line [^>]*stroke-dasharray="6 4"[^>]*>/.exec(html)?.[0];
+    expect(trend(h)).toBeDefined();
+    expect(trend(h)).toBe(trend(joined));
+  });
+
+  it("tooltip, keyboard, live region, hidden table, description and events read missing values as before", () => {
+    // 4일: Ours가 빠졌어요. 7일: Other가 혼자 남은 점이에요
+    for (const k of [3, 6]) {
+      const read = (extra: object) => {
+        const h = atKey(k, () => r(<LineChart data={longGaps} x="day" y="v" series="app" width={480} animate={false} {...extra} />));
+        return { tip: tipText(h), live: liveText(h), table: tds(h), desc: desc(h), events: frame().events.map((ev) => `${ev.label}: ${ev.formatted} (${ev.value})`) };
+      };
+      expect(read({}), `day ${k + 1}`).toEqual(read({ connectNulls: true }));
+    }
+  });
+});
+
+describe("툴팁 줄 수 한도", () => {
+  // 계열 12개, 점 3개씩. 툴팁은 8줄까지 보여 주고, 빠진 계열 수를 마지막 줄에 알려요
+  const names = Array.from({ length: 12 }, (_, s) => `S${s + 1}`);
+  const rows = (k = 0) => ["a", "b", "c"].flatMap((x) => names.map((s, i) => ({ x, s, y: i + 1 + k })));
+  const lastRows = () => (frame().tip?.rows ?? []).slice(-2);
+
+  it("선 차트는 9번째 줄에 '외 N개'를 붙여요", () => {
+    state.active = 1;
+    r(<LineChart data={rows()} series="s" width={480} height={240} animate={false} />);
+    expect(frame().tip?.rows).toHaveLength(9);
+    expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
+  });
+
+  it("스트림도 같아요", () => {
+    state.active = 1;
+    r(<StreamGraph data={rows()} series="s" width={480} animate={false} />);
+    expect(frame().tip?.rows).toHaveLength(9);
+    expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
+  });
+
+  it("범프도 같아요", () => {
+    state.active = 1;
+    r(<BumpChart data={["a", "b", "c"].flatMap((x) => names.map((series, i) => ({ x, series, rank: i + 1 })))} series="series" width={480} animate={false} />);
+    expect(frame().tip?.rows).toHaveLength(9);
+    expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
+  });
+
+  it("8개 이하면 줄을 더하지 않아요", () => {
+    state.active = 1;
+    r(<LineChart data={["a", "b", "c"].flatMap((x) => names.slice(0, 8).map((s, i) => ({ x, s, y: i + 1 })))} series="s" width={480} height={240} animate={false} />);
+    expect(frame().tip?.rows).toHaveLength(8);
+    expect(frame().tip?.rows.some((row) => row.value === "")).toBe(false);
+  });
+});
+
+describe("stacked area, stream: hover reads a real row, not a bucket average", () => {
+  // 짝수 날 a 10 · b 7, 홀수 날 a 30 · b 3. 이틀을 평균하면 20 · 5라서 데이터에 없는 값이 보여요
+  const daily = (n: number) => Array.from({ length: n }, (_, i) => ({ d: new Date(2025, 0, 1 + i), a: i % 2 ? 30 : 10, b: i % 2 ? 3 : 7 }));
+  /** 가리킨 칸의 이벤트 key(날짜 ms)로 원래 행을 찾아요 */
+  const rowOf = (data: ReturnType<typeof daily>, k: number) => data.find((d) => String(d.d.getTime()) === frame().events[k].key)!;
+  const tipValues = () => frame().tip!.rows.map((t) => t.value);
+
+  it("when a stacked area buckets, the tooltip and event show the representative row", () => {
+    const data = daily(2000);
+    state.active = 100;
+    r(<AreaChart data={data} x="d" y={["a", "b"]} width={400} animate={false} />);
+    expect(frame().events.length).toBeLessThan(2000);
+    const e = frame().events[100];
+    const row = rowOf(data, 100);
+    expect(e.datum).toBe(row);
+    expect(e.value).toBe(row.a);
+    expect(e.formatted).toBe(`a ${row.a}, b ${row.b}`);
+    expect(tipValues()).toEqual([String(row.a), String(row.b)]);
+    // 100% 쌓기의 몫도 그 행의 값으로 나눠요
+    r(<AreaChart data={data} x="d" y={["a", "b"]} stack="percent" width={400} animate={false} />);
+    const t = row.a + row.b;
+    expect(tipValues()).toEqual([`${Math.round((row.a / t) * 100)}% · ${row.a}`, `${Math.round((row.b / t) * 100)}% · ${row.b}`]);
+  });
+
+  it("a bucketed stream shows the representative row", () => {
+    for (const n of [365, 2000]) {
+      const data = daily(n);
+      state.active = 100;
+      r(<StreamGraph data={data} x="d" y={["a", "b"]} width={400} animate={false} />);
+      expect(frame().events.length).toBeLessThan(n);
+      const row = rowOf(data, 100);
+      expect(frame().events[100].value).toBe(row.a + row.b);
+      expect(tipValues()).toEqual([String(row.a), String(row.b)]);
+    }
+  });
+});
+
+describe("scatter", () => {
+  /** 산점도를 정식 타입으로 올리기 전(0.4.1, d806a87)의 마크업. 기록한 스펙과 테마도 같이 들어 있어요 */
+  const BEFORE: { name: string; spec: ChartSpec; theme: "dark" | "light"; server?: boolean; html: string }[] = JSON.parse(readFileSync(new URL("./fixtures/bubble-scatter-before.json", import.meta.url), "utf8"));
+  /** 정수만 쓰는 고정 난수 (0 이상 1 미만) */
+  const lcg = (seed: number) => {
+    let s = seed >>> 0;
+    return () => {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  };
+  const circles = (h: string) => [...h.matchAll(/<circle class="ztd-mark" cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)" fill="([^"]+)"/g)].map((m) => ({ x: +m[1], y: +m[2], r: +m[3], fill: m[4] }));
+
+  it("a scatter spec with a size channel still draws as bubble, as it did when scatter was an alias", () => {
+    const data = [{ x: 1, y: 2, s: 10 }, { x: 2, y: 3, s: 40 }, { x: 3, y: 1, s: 90 }];
+    const spec = (type: string) => ({ type, data, encoding: { x: "x", y: "y", size: "s" } }) as ChartSpec;
+    const scatter = r(<Chart spec={spec("scatter")} width={400} animate={false} />);
+    expect(scatter).toBe(r(<Chart spec={spec("bubble")} width={400} animate={false} />));
+    expect(new Set(circles(scatter).map((c) => c.r)).size).toBe(3);
+    expect(renderSpecToSVG(spec("scatter"), { width: 400 })).toBe(renderSpecToSVG(spec("bubble"), { width: 400 }));
+    const codes = validateSpec(spec("scatter")).warnings.map((w) => w.code);
+    expect(codes).toContain("alias");
+    expect(codes).not.toContain("unknown_channel");
+  });
+
+  it("existing bubble and scatter specs draw the same markup as 0.4.1 (bubble example, plain scatter, server SVG)", () => {
+    expect(BEFORE.map((b) => b.name)).toEqual(expect.arrayContaining(["bubble example, dark", "bubble example, Korean", "scatter plain, dark", "scatter plain, server SVG", "scatter with bubble options", "bubble without size"]));
+    for (const b of BEFORE) {
+      const html = b.server
+        ? renderSpecToSVG(b.spec, { width: 720, theme: b.theme, frame: false })
+        : r(
+            <ThemeProvider theme={b.theme}>
+              <Chart spec={b.spec} width={640} animate={false} />
+            </ThemeProvider>,
+          );
+      expect(html, b.name).toBe(b.html);
+    }
+  });
+
+  it("an arrow key picks the nearest dot in that half-plane (1,000 random dots against brute force)", () => {
+    const rnd = lcg(5);
+    const pts = Array.from({ length: 1000 }, () => ({ x: rnd() * 640, y: rnd() * 320 }));
+    const brute = (from: number, [ux, uy]: readonly [number, number]) => {
+      let best: number | null = null;
+      let bd = Infinity;
+      pts.forEach((q, k) => {
+        const dx = q.x - pts[from].x;
+        const dy = q.y - pts[from].y;
+        if (k === from || dx * ux + dy * uy <= 0 || Math.hypot(dx, dy) >= bd) return;
+        bd = Math.hypot(dx, dy);
+        best = k;
+      });
+      return best;
+    };
+    let edges = 0;
+    for (let from = 0; from < pts.length; from++)
+      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const want = brute(from, step);
+        if (want === null) edges++;
+        expect(nearestInDirection(pts, from, step), `${from} ${step}`).toBe(want);
+      }
+    // 끝에 있는 점에서는 그 방향으로 갈 점이 없어요
+    expect(edges).toBeGreaterThanOrEqual(4);
+  });
+
+  it("arrow keys follow screen directions, the first key goes to the highlighted dot, and bubble keeps data order", () => {
+    // 가운데 점과 네 방향의 점. 화면 위(ArrowUp)는 y 값이 큰 쪽이에요
+    const data = [
+      { x: 5, y: 5, name: "center" },
+      { x: 7, y: 5, name: "right" },
+      { x: 9, y: 5, name: "far right" },
+      { x: 5, y: 8, name: "up" },
+      { x: 2, y: 5, name: "left" },
+      { x: 5, y: 1, name: "down" },
+    ];
+    state.spy = true;
+    state.active = 0;
+    r(<ScatterChart data={data} label="name" width={480} height={300} animate={false} />);
+    for (const key of ["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"]) expect(frame().onKey!(keyEvent(key)), key).toBe(true);
+    expect(state.calls).toEqual([
+      [1, "keyboard"],
+      [4, "keyboard"],
+      [3, "keyboard"],
+      [5, "keyboard"],
+    ]);
+    // 첫 키: 강조 점으로. 강조가 없으면 키 반대쪽 끝(오른쪽 키면 가장 왼쪽 점)부터
+    state.active = null;
+    state.calls = [];
+    r(<ScatterChart data={data} label="name" highlight="far right" width={480} height={300} animate={false} />);
+    frame().onKey!(keyEvent("ArrowLeft"));
+    r(<ScatterChart data={data} label="name" width={480} height={300} animate={false} />);
+    frame().onKey!(keyEvent("ArrowRight"));
+    expect(state.calls).toEqual([
+      [2, "keyboard"],
+      [4, "keyboard"],
+    ]);
+    // Home, End는 ChartFrame 몫이에요
+    expect(frame().onKey!(keyEvent("Home"))).toBe(false);
+    r(<BubbleChart data={data} label="name" width={480} animate={false} />);
+    expect(frame().onKey).toBeUndefined();
+  });
+
+  it("hiding series C keeps series B's fill token, in the chart and in the card legend", () => {
+    // C가 B보다 먼저 나와요. 남은 계열로 색을 다시 정하면 B가 C 자리(ink)로 올라가요
+    const data = ["A", "C", "B"].flatMap((g, si) => [0, 1, 2, 3].map((k) => ({ g, x: k + si * 4, y: k * 2 + si })));
+    state.active = 8;
+    r(<ScatterChart data={data} series="g" width={480} animate={false} />);
+    const all = frame().tip!.rows[0];
+    expect(frame().events[8].series).toBe("B");
+    // C를 숨기면 B의 첫 점은 4번이에요
+    state.active = 4;
+    r(<ScatterChart data={data} series="g" hidden={["C"]} width={480} animate={false} />);
+    expect(frame().events).toHaveLength(8);
+    expect(frame().tip!.rows[0]).toEqual(all);
+    expect(all).toMatchObject({ label: "B", color: expect.stringContaining("--ztd-neutral-strong") });
+    state.active = null;
+    const h = r(<ScatterChart data={data} series="g" hidden={["C"]} width={480} animate={false} />);
+    expect(new Set(circles(h).map((c) => c.fill))).toEqual(new Set([expect.stringContaining("--ztd-accent"), all.color]));
+    const spec: ChartSpec = { type: "scatter", data, encoding: { x: "x", y: "y", series: "g" } };
+    const tokens = (s: ChartSpec) => autoLegend(s, data, "en-US").map((l) => `${l.label}:${l.color}:${l.shape}`);
+    expect(tokens(spec)).toEqual(["A:accent:circle", "C:ink:circle", "B:neutralStrong:circle"]);
+    expect(tokens({ ...spec, options: { hidden: ["C"] } })).toEqual(["A:accent:circle", "B:neutralStrong:circle"]);
+    // 판별 함수 강조도 범례와 점이 같은 계열을 강조해요
+    const isB = (d: { g: string }) => d.g === "B";
+    expect(tokens({ ...spec, options: { highlight: isB } })).toEqual(["A:ink:circle", "C:neutralStrong:circle", "B:accent:circle"]);
+    state.active = 8;
+    r(<ScatterChart data={data} series="g" highlight={isB} width={480} animate={false} />);
+    expect(frame().tip!.rows[0].color).toContain("--ztd-accent");
+  });
+
+  it("jitter spreads dots that share an x value the same way on every render, without Math.random", () => {
+    const data = Array.from({ length: 30 }, (_, i) => ({ x: i % 3, y: i }));
+    const random = vi.spyOn(Math, "random");
+    const plain = circles(r(<ScatterChart data={data} width={480} animate={false} />));
+    const a = r(<ScatterChart data={data} jitter={{ amount: 0.4 }} width={480} animate={false} />);
+    const again = r(<ScatterChart data={data} jitter={{ amount: 0.4 }} width={480} animate={false} />);
+    const otherSeed = r(<ScatterChart data={data} jitter={{ amount: 0.4, seed: 2 }} width={480} animate={false} />);
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
+    expect(again).toBe(a);
+    expect(otherSeed).not.toBe(a);
+    expect(new Set(plain.map((c) => c.x)).size).toBe(3);
+    // 점은 데이터 순서로 그려요. 세 줄이 퍼지되 옆 줄과 섞이지 않아요 (간격의 ±40%)
+    const cols = [0, 1, 2].map((k) => circles(a).filter((_, i) => i % 3 === k).map((c) => c.x));
+    for (const col of cols) expect(new Set(col).size).toBe(10);
+    expect(Math.max(...cols[0])).toBeLessThan(Math.min(...cols[1]));
+    expect(Math.max(...cols[1])).toBeLessThan(Math.min(...cols[2]));
+  });
+
+  it("fit draws a least-squares trend line, and the tooltip shows its slope and R²", () => {
+    const data = Array.from({ length: 10 }, (_, i) => ({ x: i, y: 2 * i + 1 }));
+    expect(r(<ScatterChart data={data} width={480} animate={false} />)).not.toContain('stroke-dasharray="6 4"');
+    state.active = 3;
+    const h = r(<ScatterChart data={data} fit="linear" width={480} animate={false} />);
+    expect(textOf(h, "Trend")).toHaveLength(1);
+    expect(frame().tip!.rows.slice(-2)).toEqual([
+      { label: "Trend slope", value: "+2", strong: false },
+      { label: "R²", value: "1.00", strong: false },
+    ]);
+    // y = 2x + 1이라 선이 첫 점과 마지막 점을 지나요
+    const [x1, y1, x2, y2] = /<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"[^>]*stroke-dasharray="6 4"/.exec(h)!.slice(1).map(Number);
+    const dots = circles(h);
+    expect([x1, y1, x2, y2]).toEqual([dots[0].x, dots[0].y, dots[9].x, dots[9].y].map((v) => expect.closeTo(v, 6)));
+    // 사분면 이름과 함께여도 추세선 이름표가 이름을 덮지 않아요 (오른쪽 위 이름이 그 자리에 있어요)
+    const names = ["Slow and cheap", "Slow and costly", "Fast and cheap", "Fast and costly"];
+    const both = r(<ScatterChart data={data} fit="linear" refLines={{ x: 4, y: 8 }} quadrants={names} width={480} animate={false} />);
+    // 이름표 글자는 늘 왼쪽 정렬이라 글자 상자는 x부터 글자 폭까지예요
+    const box = (t: T) => ({ x: t.x, y: t.y - 8, w: textWidth(t.text, t.size, 500), h: 16 });
+    const trend = box(textOf(both, "Trend")[0]);
+    for (const q of names.map((s) => box(textOf(both, s)[0]))) expect(trend.x + trend.w <= q.x || q.x + q.w <= trend.x || trend.y + trend.h <= q.y || q.y + q.h <= trend.y).toBe(true);
+  });
+
+  it("refLines draw an x and a y line under the dots, stretch the axes to reach them, and name the four quadrants", () => {
+    const H = 300;
+    const data = Array.from({ length: 12 }, (_, i) => ({ x: i, y: i * 3 }));
+    const names = ["Slow and cheap", "Slow and costly", "Fast and cheap", "Fast and costly"];
+    const refLines = (h: string) => [...h.matchAll(/<line x1="([-\d.]+)" x2="([-\d.]+)" y1="([-\d.]+)" y2="([-\d.]+)" stroke="[^"]+" stroke-dasharray="3 3"/g)].map((m) => m.slice(1).map(Number));
+    const h = r(<ScatterChart data={data} refLines={{ x: 5, y: 15 }} quadrants={names} width={480} height={H} animate={false} />);
+    const [[vx, vx2], [, , hy, hy2]] = refLines(h);
+    expect([vx, hy]).toEqual([vx2, hy2]);
+    expect(h.indexOf('stroke-dasharray="3 3"')).toBeLessThan(h.indexOf('class="ztd-mark"'));
+    const [tl, tr, bl, br] = names.map((s) => textOf(h, s)[0]);
+    expect([tl.x < vx, tr.x > vx, bl.x < vx, br.x > vx, tl.y < hy, tr.y < hy, bl.y > hy, br.y > hy]).toEqual(Array(8).fill(true));
+    // 선 위의 점은 오른쪽, 위쪽 칸으로 세요
+    expect(desc(h)).toContain(" Reference lines at x 5 and y 15. Quadrants: Slow and cheap 0; Slow and costly 7; Fast and cheap 5; Fast and costly 0.");
+    // y 60은 데이터(최대 33)보다 위라서 축이 거기까지 늘어나요. 위 두 칸은 이름이 들어갈 높이가 없어 빼요
+    const far = r(<ScatterChart data={data} refLines={{ x: 5, y: 60 }} quadrants={names} width={480} height={H} animate={false} />);
+    const [, [, , fy]] = refLines(far);
+    expect(fy).toBeGreaterThanOrEqual(10);
+    expect(fy).toBeLessThan(Math.min(...circles(far).map((c) => c.y)));
+    expect([names[0], names[1]].map((s) => textOf(far, s).length)).toEqual([0, 0]);
+  });
+
+  it("the description counts dots per series and says which way y goes with x, in English and Korean", () => {
+    const data = ["A", "B", "C"].flatMap((g, si) => [0, 1, 2, 3].map((k) => ({ g, x: k + si * 4, y: (k % 2 ? 7 : 0) + si * 6 })));
+    // 피어슨 상관계수의 제곱으로 따로 계산해요
+    const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+    const [mx, my] = [mean(data.map((d) => d.x)), mean(data.map((d) => d.y))];
+    const cov = (f: (d: (typeof data)[number]) => number, g: (d: (typeof data)[number]) => number) => data.reduce((a, d) => a + f(d) * g(d), 0);
+    const r2 = (cov((d) => d.x - mx, (d) => d.y - my) ** 2 / (cov((d) => d.x - mx, (d) => d.x - mx) * cov((d) => d.y - my, (d) => d.y - my))).toFixed(2);
+    expect(Number(r2)).toBeGreaterThan(0.1);
+    expect(Number(r2)).toBeLessThan(0.99);
+    expect(desc(r(<ScatterChart data={data} series="g" xLabel="Cost" yLabel="Latency" width={480} animate={false} />))).toMatch(new RegExp(` 3 series: A 4 points, B 4 points, C 4 points\\. Latency rises as Cost rises, R² ${r2}\\.$`));
+    expect(desc(r(<ScatterChart data={data} series="g" xLabel="비용" yLabel="응답 시간" locale="ko-KR" width={480} animate={false} />))).toMatch(new RegExp(` 계열 3개: A 4개, B 4개, C 4개\\. 비용 값이 클수록 응답 시간 값도 커요\\(R² ${r2}\\)\\.$`));
+    expect(desc(r(<ScatterChart data={data.map((d) => ({ ...d, y: -d.y }))} series="g" width={480} animate={false} />))).toContain(` y falls as x rises, R² ${r2}.`);
+    const zigzag = [1, -1, 1, -1, 1, -1].map((y, x) => ({ x, y }));
+    expect(desc(r(<ScatterChart data={zigzag} fit="linear" width={480} animate={false} />))).toContain(" No clear straight-line relationship between x and y, R² 0.09.");
+  });
+
+  it("4 or fewer series get their names beside the dots without covering any, 5 or more leave it to the legend", () => {
+    const make = (k: number) => Array.from({ length: k }, (_, si) => `S${si}`).flatMap((g, si) => [0, 1, 2, 3, 4].map((j) => ({ g, x: si * 10 + j, y: si * 6 + j * 2 })));
+    const three = r(<ScatterChart data={make(3)} series="g" width={640} height={320} animate={false} />);
+    const dots = circles(three);
+    for (const s of ["S0", "S1", "S2"]) {
+      const t = textOf(three, s);
+      expect(t, s).toHaveLength(1);
+      // 글자 상자와 점이 겹치지 않아요
+      const w = textWidth(s, t[0].size, s === "S0" ? 700 : 600);
+      for (const d of dots) {
+        const nx = Math.max(t[0].x, Math.min(d.x, t[0].x + w));
+        const ny = Math.max(t[0].y - 7, Math.min(d.y, t[0].y + 7));
+        expect(Math.hypot(d.x - nx, d.y - ny), s).toBeGreaterThan(d.r);
+      }
+    }
+    // 이름표는 실제 점 바로 옆에 붙고, 데이터가 아닌 색 점은 그리지 않아요
+    expect((three.match(/<circle /g) ?? []).length).toBe(dots.length);
+    for (const s of ["S0", "S1", "S2"]) {
+      const t = textOf(three, s)[0];
+      const w = textWidth(s, t.size, s === "S0" ? 700 : 600);
+      const gap = Math.min(...dots.map((d) => Math.hypot(d.x - Math.max(t.x, Math.min(d.x, t.x + w)), d.y - Math.max(t.y - 7, Math.min(d.y, t.y + 7))) - d.r));
+      expect(gap, s).toBeLessThanOrEqual(6);
+    }
+    const five = r(<ScatterChart data={make(5)} series="g" width={640} height={320} animate={false} />);
+    for (const s of ["S0", "S1", "S2", "S3", "S4"]) expect(textOf(five, s), s).toHaveLength(0);
   });
 });

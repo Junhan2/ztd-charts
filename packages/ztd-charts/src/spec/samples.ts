@@ -1,8 +1,8 @@
 /**
  * 차트마다 쓰는 예시 데이터. 모두 가상의 값이에요.
  * 기본 이름(pieSample …)은 영어 라벨이고, 숫자가 같은 한글판은 이름 끝에 Ko가 붙어요(pieSampleKo …).
- * 한글판은 영어판의 글자만 바꿔 만들어요 (relabel 또는 언어마다 이름을 받는 빌더).
- * 글자가 없는 sparkline, calendar, box, candlestick 예시는 한 벌이에요. 차트 타입으로 고르려면 localizeDef(def, lang).example.data.
+ * 한글판은 영어판의 글자만 바꿔 만들어요 (relabel, 넓은 표의 필드 이름은 rekey, 또는 언어마다 이름을 받는 빌더).
+ * 글자가 없는 sparkline, calendar, box, candlestick, histogram 예시는 한 벌이에요. 차트 타입으로 고르려면 localizeDef(def, lang).example.data.
  * 문서, 테스트, CLI init, MCP 예시가 같이 써요.
  */
 
@@ -16,6 +16,14 @@ function relabel<T extends object>(rows: readonly T[], ko: Record<string, string
     for (const [k, v] of Object.entries(r)) out[k] = typeof v === "string" && typeof ko[v] === "string" ? ko[v] : v;
     return out as T;
   });
+}
+
+/**
+ * 행마다 필드 이름을 ko(영어 -> 한글)로 바꾼 사본. 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름을 바꿔요.
+ * 값, 키 순서, 행 수는 그대로예요
+ */
+function rekey<T extends object>(rows: readonly T[], ko: Record<string, string>): Record<string, unknown>[] {
+  return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [ko[k] ?? k, v])));
 }
 
 export const pieSample = [
@@ -191,10 +199,10 @@ export const bubbleSampleKo = /* @__PURE__ */ relabel(bubbleSample, {
 const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_KO = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 
-/** apps: [우리 앱, 경쟁 A, 경쟁 B] */
+/** apps: [우리 앱, 경쟁 A, 경쟁 B]. 우리 앱에만 예상 범위 p5, p95가 있어요 (추세 둘레로 갈수록 넓어지는 90% 구간, 범위 띠 변형이 써요) */
 function lineRows(apps: readonly string[]) {
   return MONTHS_EN.flatMap((_m, i) => [
-    { month: `2025-${String(i + 1).padStart(2, "0")}`, app: apps[0], mau: Math.round((42 + i * 3.1 + Math.sin(i * 0.9) * 2.2) * 10) / 10 },
+    { month: `2025-${String(i + 1).padStart(2, "0")}`, app: apps[0], mau: Math.round((42 + i * 3.1 + Math.sin(i * 0.9) * 2.2) * 10) / 10, p5: Math.round((39.4 + i * 2.9) * 10) / 10, p95: Math.round((44.6 + i * 3.3) * 10) / 10 },
     { month: `2025-${String(i + 1).padStart(2, "0")}`, app: apps[1], mau: Math.round((55 + i * 0.9 + Math.cos(i * 0.7) * 1.8) * 10) / 10 },
     { month: `2025-${String(i + 1).padStart(2, "0")}`, app: apps[2], mau: Math.round((38 - i * 0.6 + Math.sin(i * 1.3) * 1.5) * 10) / 10 },
   ]);
@@ -438,6 +446,12 @@ export const boxSample = /* @__PURE__ */ (() => {
   );
 })();
 
+/** API 요청 지연 시간 320건 (ms). 대부분 170ms 언저리이고, 25건마다 하나씩 캐시를 놓친 느린 요청이 꼬리를 만들어요 */
+export const histogramSample = /* @__PURE__ */ (() => {
+  const rnd = seeded(17);
+  return Array.from({ length: 320 }, (_, i) => ({ ms: Math.round(i % 25 === 0 ? 650 + rnd() * 800 : Math.exp(Math.log(170) + gauss(rnd) * 0.42)) }));
+})();
+
 /** 노트북 모델 비교 */
 export const parallelSample = [
   { model: "Air 13", price: 159, weight: 1.24, battery: 18, perf: 72, screen: 13.6 },
@@ -494,3 +508,41 @@ export const candlestickSample = /* @__PURE__ */ (() => {
   }
   return out;
 })();
+
+/** AI 에이전트의 하루 토큰 14일치. 2주 동안 약 51% 오르고, 10월 31일에 실패와 재시도가 튀어요 */
+export const skylineSample = [
+  { day: "2026-10-23", Input: 410000, Cached: 317223, Output: 186999, Reasoning: 79534, Failed: 11000, Retried: 10000 },
+  { day: "2026-10-24", Input: 446030, Cached: 337921, Output: 202044, Reasoning: 87942, Failed: 15314, Retried: 9190 },
+  { day: "2026-10-25", Input: 440886, Cached: 336150, Output: 202507, Reasoning: 87489, Failed: 15398, Retried: 6051 },
+  { day: "2026-10-26", Input: 472300, Cached: 370227, Output: 221753, Reasoning: 92899, Failed: 13276, Retried: 4626 },
+  { day: "2026-10-27", Input: 456358, Cached: 366468, Output: 216506, Reasoning: 88261, Failed: 9041, Retried: 5714 },
+  { day: "2026-10-28", Input: 482495, Cached: 386711, Output: 226337, Reasoning: 92466, Failed: 8633, Retried: 9460 },
+  { day: "2026-10-29", Input: 519595, Cached: 405554, Output: 238274, Reasoning: 100345, Failed: 12610, Retried: 12608 },
+  { day: "2026-10-30", Input: 509048, Cached: 387050, Output: 230518, Reasoning: 99954, Failed: 16653, Retried: 11318 },
+  { day: "2026-10-31", Input: 545022, Cached: 413595, Output: 248950, Reasoning: 108123, Failed: 90000, Retried: 126000 },
+  { day: "2026-11-01", Input: 566932, Cached: 440538, Output: 264628, Reasoning: 111944, Failed: 17316, Retried: 5841 },
+  { day: "2026-11-02", Input: 550201, Cached: 439688, Output: 260808, Reasoning: 106914, Failed: 12001, Retried: 6097 },
+  { day: "2026-11-03", Input: 586400, Cached: 471716, Output: 276507, Reasoning: 112488, Failed: 10262, Retried: 10281 },
+  { day: "2026-11-04", Input: 587529, Cached: 462627, Output: 271133, Reasoning: 113044, Failed: 12856, Retried: 13840 },
+  { day: "2026-11-05", Input: 622545, Cached: 476047, Output: 282345, Reasoning: 121668, Failed: 19059, Retried: 14613 },
+];
+export const skylineSampleKo = /* @__PURE__ */ rekey(skylineSample, { Input: "입력", Cached: "캐시", Output: "출력", Reasoning: "추론", Failed: "실패", Retried: "재시도" });
+
+/** names: [대형, 중형, 소형] 모델, request: 요청 이름 앞말. 모델이 번갈아 오는 요청 54개의 비용(센트, 정수로 반올림)과 응답 시간(ms) */
+function scatterRows(names: readonly string[], request: string) {
+  const rnd = seeded(29);
+  const models = [
+    { model: names[0], cost: [5, 14], base: 1400, perCent: 150, sd: 260 },
+    { model: names[1], cost: [2, 7], base: 650, perCent: 150, sd: 170 },
+    { model: names[2], cost: [1, 3], base: 280, perCent: 130, sd: 90 },
+  ];
+  return Array.from({ length: 54 }, (_, i) => {
+    const m = models[i % 3];
+    const cost = Math.round(m.cost[0] + rnd() * (m.cost[1] - m.cost[0]));
+    const ms = Math.max(120, Math.round((m.base + cost * m.perCent + gauss(rnd) * m.sd) / 10) * 10);
+    return { id: `${request} ${i + 1}`, model: m.model, cost, ms };
+  });
+}
+/** 모델별 요청 비용(센트)과 응답 시간(ms) */
+export const scatterSample = /* @__PURE__ */ scatterRows(["Large", "Medium", "Small"], "Request");
+export const scatterSampleKo = /* @__PURE__ */ scatterRows(["대형", "중형", "소형"], "요청");

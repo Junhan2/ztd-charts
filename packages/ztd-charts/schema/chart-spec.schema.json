@@ -43,7 +43,10 @@
         "box",
         "parallel",
         "candlestick",
-        "segmented"
+        "segmented",
+        "skyline",
+        "histogram",
+        "scatter"
       ]
     }
   },
@@ -2390,6 +2393,36 @@
             "series": {
               "type": "string",
               "description": "Series field (long tables) (string)"
+            },
+            "lower": {
+              "description": "Lower bound of the range band. In wide tables an array in the order of y (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "upper": {
+              "description": "Upper bound of the range band. Same shape as lower (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
             }
           },
           "required": [
@@ -2530,6 +2563,24 @@
               "description": "Color below the baseline (token name or CSS color)",
               "default": "neutralStrong",
               "type": "string"
+            },
+            "bandFrom": {
+              "description": "Where the range band starts. \"forecast\" starts it at the forecast annotation",
+              "default": "start",
+              "enum": [
+                "start",
+                "forecast"
+              ]
+            },
+            "outside": {
+              "description": "Mark points outside the range band and count them in the description",
+              "default": false,
+              "type": "boolean"
+            },
+            "connectNulls": {
+              "description": "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it",
+              "default": false,
+              "type": "boolean"
             },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
@@ -2701,6 +2752,36 @@
             "series": {
               "type": "string",
               "description": "Series field (string)"
+            },
+            "lower": {
+              "description": "Lower bound of the range band, with stack \"none\" only. In wide tables an array in the order of y (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "upper": {
+              "description": "Upper bound of the range band. Same shape as lower (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
             }
           },
           "required": [
@@ -2824,6 +2905,24 @@
               "description": "Color below the baseline (token name or CSS color)",
               "default": "neutralStrong",
               "type": "string"
+            },
+            "bandFrom": {
+              "description": "Where the range band starts. \"forecast\" starts it at the forecast annotation",
+              "default": "start",
+              "enum": [
+                "start",
+                "forecast"
+              ]
+            },
+            "outside": {
+              "description": "Mark points outside the range band and count them in the description",
+              "default": false,
+              "type": "boolean"
+            },
+            "connectNulls": {
+              "description": "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it",
+              "default": false,
+              "type": "boolean"
             },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
@@ -6503,6 +6602,695 @@
               "description": "Show a list of name, value and share below",
               "default": true,
               "type": "boolean"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "description": "Show tooltips",
+              "default": true,
+              "type": "boolean"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Skyline",
+      "description": "Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front. Use when: 7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard. Avoid when: Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "skyline"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "description": "Period field (date or category) (any)"
+            },
+            "y": {
+              "description": "Back row fields stacked into each block. An array for wide tables (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "series": {
+              "type": "string",
+              "description": "Series field (long tables, back row only) (string)"
+            },
+            "front": {
+              "description": "Front row fields: a smaller outcome in the same unit as y (wide tables only) (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "depth": {
+              "description": "Back row depth as a share of the period slot, from 0.1 to 0.32. Values outside are pulled into the range",
+              "default": 0.32,
+              "type": "number"
+            },
+            "wall": {
+              "description": "Value grid on the back wall, with its labels on the right",
+              "default": true,
+              "type": "boolean"
+            },
+            "texture": {
+              "description": "Rows that get the hatch pattern, for print and for readers who cannot tell the grays apart",
+              "default": "front",
+              "enum": [
+                "front",
+                "all",
+                "none"
+              ]
+            },
+            "frontRate": {
+              "description": "Front row total as a share of the back row: \"label\" in a label and the tooltip, \"strip\" as a rate strip under the floor, false hides it",
+              "default": "label"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "description": "Show tooltips",
+              "default": true,
+              "type": "boolean"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Histogram",
+      "description": "Distribution of raw samples with its tail and the share past a limit. Use when: 30 or more raw samples, such as request latency, where the tail and the share past a limit matter. Avoid when: Comparing categories (use bars), or fewer than 10 samples (a beeswarm fits better)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "histogram"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "description": "Sample value field (raw rows) (number)"
+            },
+            "group": {
+              "type": "string",
+              "description": "Group field. Up to 2 groups overlap (string)"
+            },
+            "x0": {
+              "type": "string",
+              "description": "Bin start (pre-binned rows) (number)"
+            },
+            "x1": {
+              "type": "string",
+              "description": "Bin end (pre-binned rows) (number)"
+            },
+            "count": {
+              "type": "string",
+              "description": "Samples in the bin (pre-binned rows) (number)"
+            }
+          },
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "variant": {
+              "description": "Shape. dots stacks one dot per N samples, step draws an outline that overlays well",
+              "default": "bars",
+              "enum": [
+                "bars",
+                "dots",
+                "step"
+              ]
+            },
+            "marks": {
+              "description": "Percentile lines with labels, such as [\"p50\", \"p95\", \"p99\"]. p50 is solid, the rest dashed. From pre-binned rows they are estimated inside the bins",
+              "default": [
+                "p50",
+                "p95"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "threshold": {
+              "description": "Limit line { value, label, side }. side \"above\" (default) or \"below\" is the bad side: its bins take the accent color and the description counts the samples past it",
+              "type": "object"
+            },
+            "edges": {
+              "description": "Bin edges, smallest first. Samples outside them are counted and reported, not drawn. Bins come from edges, then binWidth, then bins, then the Freedman-Diaconis rule (Sturges under 30 samples)",
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "binWidth": {
+              "description": "Bin width. Edges fall on multiples of it. Not used with log",
+              "type": "number"
+            },
+            "bins": {
+              "description": "About this many bins. Widths snap to a readable step",
+              "type": "number",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "log": {
+              "description": "Log bins and axis. Every value must be above 0",
+              "default": false,
+              "type": "boolean"
+            },
+            "kde": {
+              "description": "Density curve over the bins (raw rows only)",
+              "default": false,
+              "type": "boolean"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "description": "Show tooltips",
+              "default": true,
+              "type": "boolean"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Scatter plot",
+      "description": "How two numbers relate, one dot per item, colored by series. Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series. Avoid when: x is time (a line works better), or there are more than 50,000 dots",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "scatter"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "description": "x value (number)"
+            },
+            "y": {
+              "type": "string",
+              "description": "y value (number)"
+            },
+            "series": {
+              "type": "string",
+              "description": "Series field (one color per series) (string)"
+            },
+            "label": {
+              "type": "string",
+              "description": "Name (string)"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "xLabel": {
+              "description": "x axis title",
+              "type": "string"
+            },
+            "yLabel": {
+              "description": "y axis title",
+              "type": "string"
+            },
+            "zero": {
+              "description": "Include 0 on the axes",
+              "default": false,
+              "type": "boolean"
+            },
+            "maxLabels": {
+              "description": "Maximum number of dot labels. With a series channel the series names are labeled instead, and this defaults to 0",
+              "default": 6,
+              "type": "number"
+            },
+            "canvasThreshold": {
+              "description": "Dot count that switches to canvas",
+              "default": 1500,
+              "type": "number"
+            },
+            "xFormat": {
+              "description": "x value format",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "hidden": {
+              "description": "Series to hide. Colors stay as if every series were shown",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fit": {
+              "description": "Trend line over the visible dots (least squares). The tooltip shows its slope and R²",
+              "enum": [
+                "linear"
+              ]
+            },
+            "refLines": {
+              "description": "Reference lines { x, y }. With both, they split the plot into four quadrants",
+              "type": "object"
+            },
+            "quadrants": {
+              "description": "Quadrant names, drawn when refLines has both x and y. In reading order: top left, top right, bottom left, bottom right",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "jitter": {
+              "description": "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render",
+              "type": "object"
             },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",

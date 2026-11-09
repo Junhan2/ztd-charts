@@ -34,9 +34,9 @@ describe("MCP 도구", () => {
     expect(tools.find((t) => t.name === "list_charts")!.annotations?.readOnlyHint).toBe(true);
   });
   it("list_charts: 전체와 필터", async () => {
-    expect(firstJson((await call("list_charts", {})).content).count).toBe(33);
+    expect(firstJson((await call("list_charts", {})).content).count).toBe(36);
     const r = firstJson((await call("list_charts", { group: "distribution" })).content);
-    expect(r.charts.map((c: { type: string }) => c.type)).toEqual(["beeswarm", "ridgeline", "box"]);
+    expect(r.charts.map((c: { type: string }) => c.type)).toEqual(["beeswarm", "ridgeline", "box", "histogram"]);
   });
   it("get_chart_schema: 스키마, 예시, React 코드. 별칭과 모르는 타입", async () => {
     const r = await call("get_chart_schema", { type: "line" });
@@ -47,7 +47,7 @@ describe("MCP 도구", () => {
     expect(j.variants.map((v: { id: string }) => v.id)).toContain("forecast");
     expect(firstJson((await call("get_chart_schema", { type: "doughnut" })).content).type).toBe("donut");
     expect((await call("get_chart_schema", { type: "pyramid" })).isError).toBe(true);
-    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(33);
+    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(36);
   });
   it("validate_spec: 오류 경로와 제안", async () => {
     const j = firstJson((await call("validate_spec", { spec: { type: "bar", data: [{ q: "1분기", revenue: 1 }], encoding: { x: "q", y: "revenu" } } })).content);
@@ -105,7 +105,7 @@ describe("MCP 도구", () => {
     const { resources } = await client.listResources();
     expect(resources[0].uri).toBe("ztd-charts://schema/chart-spec.json");
     const r = await client.readResource({ uri: resources[0].uri });
-    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(33);
+    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(36);
   });
 });
 
@@ -115,7 +115,7 @@ describe("stdio 서버 (빌드 결과)", () => {
     const c = new Client({ name: "stdio-test", version: "0.0.0" });
     await c.connect(new StdioClientTransport({ command: "node", args: [bin], stderr: "ignore" }));
     const r = await c.callTool({ name: "list_charts", arguments: { level: "basic" } });
-    expect(JSON.parse((r.content as Content[])[0].text!).count).toBe(10);
+    expect(JSON.parse((r.content as Content[])[0].text!).count).toBe(11);
     await c.close();
   });
 });

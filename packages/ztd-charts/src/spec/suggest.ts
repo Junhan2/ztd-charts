@@ -236,7 +236,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     const enc: Record<string, string> = { x: nums[0].name, y: nums[1].name };
     if (nums[2]) enc.size = nums[2].name;
     if (label) enc.label = label.name;
-    out.push(mk("bubble", nums[2] ? 0.86 : 0.8, nums[2] ? t(`A bubble chart shows ${nums[0].name}, ${nums[1].name} and ${nums[2].name} together`, `버블 차트로 ${nums[0].name}, ${nums[1].name}, ${nums[2].name} 세 값을 함께 보여 줘요`) : t(`A scatter plot shows how ${nums[0].name} relates to ${nums[1].name}`, `산점도로 ${nums[0].name} 값과 ${nums[1].name} 값의 관계를 보여 줘요`), rows, enc));
+    out.push(mk(nums[2] ? "bubble" : "scatter", nums[2] ? 0.86 : 0.8, nums[2] ? t(`A bubble chart shows ${nums[0].name}, ${nums[1].name} and ${nums[2].name} together`, `버블 차트로 ${nums[0].name}, ${nums[1].name}, ${nums[2].name} 세 값을 함께 보여 줘요`) : t(`A scatter plot shows how ${nums[0].name} relates to ${nums[1].name}`, `산점도로 ${nums[0].name} 값과 ${nums[1].name} 값의 관계를 보여 줘요`), rows, enc));
   }
 
   // 같은 타입은 가장 높은 점수만

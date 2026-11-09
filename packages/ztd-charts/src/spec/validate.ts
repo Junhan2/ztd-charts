@@ -1,5 +1,7 @@
 import { parseCSV } from "../data/parse";
-import { hasField, toNumber } from "../data/accessor";
+import { hasField, numGetter, toNumber } from "../data/accessor";
+import { markPercentile } from "../data/percentile";
+import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
 import { toDate } from "../core/format";
 import { META } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
@@ -90,6 +92,118 @@ function annotationIssue(a: unknown): [string, string] | null {
   return null;
 }
 
+/** 스카이라인만의 검사(음수, 기간 수, y 없는 front, 모두 0, 앞줄 계열 수, depth 범위). 문제를 report(오류인지, 경로, 코드, [영어, 한글])로 알려 줘요 */
+function skylineIssues(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, options: unknown, fields: string[], report: (isError: boolean, path: string, code: string, msg: [string, string]) => void): void {
+  const list = (v: unknown) => (Array.isArray(v) ? v : [v]).filter((f): f is string => typeof f === "string");
+  const yFields = list(enc.y ?? (fields.includes("y") ? "y" : undefined));
+  const frontFields = list(enc.front);
+  // 데이터 필드를 모를 때(url 데이터나 빈 data)만 알려요. 필드를 알면 위 채널 검사가 missing_channel로 이미 알려요
+  if (enc.front !== undefined && enc.y === undefined && !fields.length) report(true, "encoding.y", "skyline_front_without_y", ["y is required: front stands in front of the back row that y stacks", "y가 필요해요. front는 y로 쌓은 뒷줄 앞에 서요"]);
+  if (frontFields.length >= 4) report(false, "encoding.front", "skyline_front_many", ["The front row reads best with 3 series or fewer", "앞줄은 3개까지 읽기 쉬워요"]);
+  const depth = options && typeof options === "object" ? (options as Record<string, unknown>).depth : undefined;
+  if (typeof depth === "number" && (depth < 0.1 || depth > 0.32)) report(false, "options.depth", "skyline_depth_range", ["depth is from 0.1 to 0.32, so it is pulled into that range", "depth는 0.1~0.32예요. 범위 안으로 묶어서 그려요"]);
+  if (!rows || !rows.length) return;
+  const xField = typeof enc.x === "string" ? enc.x : "x";
+  const periods = new Set(rows.map((r) => String(r[xField] ?? ""))).size;
+  const many: [string, string] = ["There are many periods, so neighboring periods are summed when drawn. bar or area may read better", "기간이 많아서 이웃 기간을 합쳐 그려요. bar나 area가 나을 수 있어요"];
+  if (periods > 120) report(true, "data", "skyline_too_many_periods", many);
+  else if (periods > 40) report(false, "data", "skyline_many_periods", many);
+  const valueFields = [...yFields, ...frontFields];
+  let negative: string | null = null;
+  let positive = false;
+  for (const r of rows)
+    for (const f of valueFields) {
+      const v = toNumber(r[f]);
+      if (v < 0) negative ??= f;
+      else if (v > 0) positive = true;
+    }
+  if (negative !== null) report(true, yFields.includes(negative) ? "encoding.y" : "encoding.front", "skyline_negative", ["Skyline stacks from 0. Use bar when there are negative values", "스카이라인은 0부터 쌓아요. 음수가 있으면 bar를 쓰세요"]);
+  else if (!positive && valueFields.length) report(false, "data", "skyline_all_zero", ["Every value is 0, so there is nothing to draw", "모든 값이 0이라 그릴 값이 없어요"]);
+}
+
+type Report = (path: string, code: string, message: string) => void;
+
+/** 범위 띠의 경계 필드 목록 (넓은 표는 y와 같은 순서의 배열, 긴 표는 하나) */
+const fieldList = (v: unknown): unknown[] => (Array.isArray(v) ? v : [v]);
+
+/**
+ * 범위 띠 검사 (라인, 영역). 한쪽 경계만 있음, 필드 수, 쌓은 영역(오류), 아래가 위보다 큰 행(바꿔서 그려요), 예측 주석 없는 bandFrom
+ */
+function checkBand(type: string, enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, err: Report, warn: Report): void {
+  const { lower, upper, y, series } = enc;
+  if (lower === undefined && upper === undefined) return;
+  if (lower === undefined || upper === undefined) {
+    warn(`encoding.${lower === undefined ? "lower" : "upper"}`, "band_half", t("A range band needs both encoding.lower and encoding.upper, so nothing is drawn", "범위 띠에는 encoding.lower와 encoding.upper가 모두 있어야 해서 그리지 않아요"));
+    return;
+  }
+  const lo = fieldList(lower);
+  const hi = fieldList(upper);
+  const wide = Array.isArray(y);
+  const yCount = wide ? y.length : 1;
+  if (wide ? lo.length !== yCount || hi.length !== yCount : lo.length > 1 || hi.length > 1)
+    warn(
+      "encoding.lower",
+      "band_fields",
+      wide
+        ? t(`lower and upper need one field for each of the ${yCount} y fields. Series without one draw no band`, `lower와 upper에는 y 필드 ${yCount}개마다 필드가 하나씩 있어야 해요. 없는 계열은 띠를 그리지 않아요`)
+        : t("lower and upper take one field each when y is one field. Only the first is used", "y가 필드 하나면 lower와 upper도 필드 하나씩이에요. 첫 필드만 써요"),
+    );
+  if (type === "area") {
+    const many = yCount > 1 || (typeof series === "string" && (!rows || new Set(rows.map((r) => String(r?.[series]))).size > 1));
+    if (opts.stack === "stacked" || opts.stack === "percent" || (opts.stack === undefined && many))
+      err("options.stack", "band_stacked", t('A range band cannot go on stacked areas. Set options.stack to "none"', '쌓은 영역에는 범위 띠를 그릴 수 없어요. options.stack을 "none"으로 두세요'));
+  }
+  let crossed = 0;
+  for (const r of rows ?? []) {
+    for (let s = 0; s < lo.length; s++) {
+      const fa = lo[s];
+      const fb = hi[s];
+      if (typeof fa === "string" && typeof fb === "string" && toNumber(r?.[fa]) > toNumber(r?.[fb])) crossed++;
+    }
+  }
+  if (crossed) warn("encoding.lower", "band_crossed", t(`lower is above upper in ${crossed === 1 ? "1 row" : `${crossed} rows`}. They are swapped when drawn`, `${crossed}개 행에서 lower가 upper보다 커요. 바꿔서 그려요`));
+  if (opts.bandFrom === "forecast" && !(Array.isArray(opts.annotations) && opts.annotations.some((a) => typeof a === "object" && a?.type === "forecast")))
+    warn("options.bandFrom", "band_no_forecast", t('bandFrom "forecast" needs a forecast annotation. Without one no band is drawn', 'bandFrom "forecast"에는 forecast 주석이 있어야 해요. 없으면 띠를 그리지 않아요'));
+}
+
+/**
+ * 히스토그램만의 옵션 검사. log면 모든 값(미리 나눈 행은 구간 시작, 경계)이 0보다 커야 해요. 그룹은 2개까지 겹쳐요.
+ * 필요한 채널(원시 행은 value, 미리 나눈 행은 x0, x1, count)은 채널 검사가 봐요
+ */
+function checkHistogram(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, binned: boolean, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const log = o.log === true;
+  if (log && rows?.length) {
+    const k = binned ? "x0" : "value";
+    const f = enc[k];
+    const read = numGetter<Record<string, unknown>>(typeof f === "string" ? f : undefined, k);
+    const bad = rows.filter((r, i) => read(r, i) <= 0).length;
+    if (bad) err("options.log", "log_not_positive", t(`log needs every value above 0, and ${bad} ${binned ? "bins start" : "values are"} at or below 0`, `log를 쓰려면 모든 값이 0보다 커야 해요(0 이하 ${bad}개)`));
+  }
+  if (Array.isArray(o.edges)) {
+    const e = o.edges.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+    if (!(e.length >= 2 && e.length === o.edges.length && e.every((x, i) => i === 0 || x > e[i - 1]))) err("options.edges", "bad_edges", t("options.edges must be 2 or more numbers, smallest first", "options.edges 값은 작은 것부터 늘어놓은 숫자 2개 이상이어야 해요"));
+    else if (log && e[0] <= 0) err("options.edges", "log_not_positive", t("With log, every edge must be above 0", "log면 모든 경계가 0보다 커야 해요"));
+  }
+  if (typeof o.binWidth === "number" && !(o.binWidth > 0)) err("options.binWidth", "out_of_range", t("options.binWidth must be above 0", "options.binWidth 값은 0보다 커야 해요"));
+  else if (o.binWidth !== undefined && log) warn("options.binWidth", "ignored_option", t("binWidth is not used with log: true. Use bins or edges", "log: true면 binWidth를 쓰지 않아요. bins나 edges를 써 주세요"));
+  const th = o.threshold;
+  if (th && typeof th === "object" && !Array.isArray(th)) {
+    const { value, side, label } = th as Record<string, unknown>;
+    if (!(typeof value === "number" && Number.isFinite(value)) || (side !== undefined && side !== "above" && side !== "below") || (label !== undefined && typeof label !== "string"))
+      err("options.threshold", "bad_threshold", t('options.threshold must be { value: number, label?: string, side?: "above" | "below" }', 'options.threshold 값은 { value: 숫자, label?: 문자열, side?: "above" | "below" } 꼴이어야 해요'));
+  }
+  if (Array.isArray(o.marks)) {
+    const bad = o.marks.filter((m) => !(typeof m === "string" && Number.isFinite(markPercentile(m))));
+    if (bad.length) err("options.marks", "bad_marks", t(`options.marks takes percentiles from "p0" to "p100", such as "p95" (got ${bad.map(String).join(", ")})`, `options.marks 값은 "p95"처럼 "p0"~"p100" 사이 분위여야 해요(지금 ${bad.map(String).join(", ")})`));
+  }
+  if (rows?.length && typeof enc.group === "string") {
+    const g = enc.group;
+    const groups = new Set(rows.map((r) => (r && typeof r === "object" ? String(r[g] ?? "") : "")));
+    const k = HISTOGRAM_MAX_GROUPS;
+    if (groups.size > k) warn("encoding.group", "too_many_groups", t(`A histogram overlays up to ${k} groups, and the data has ${groups.size}, so only the first ${k} are drawn. Use ridgeline for more`, `히스토그램은 그룹을 ${k}개까지 겹쳐요. 데이터에 ${groups.size}개가 있어서 앞의 ${k}개만 그려요. 더 많으면 ridgeline을 써 주세요`));
+  }
+}
+
 /**
  * 스펙 검사. 오류(렌더 불가)와 경고(동작은 하지만 의심)를 나눠 돌려줘요.
  * 메시지는 영어, { lang: "ko" }면 한글. code와 path는 언어와 상관없이 같아요.
@@ -122,6 +236,11 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   if (!def && TYPE_ALIASES[spec.type]) {
     def = getChartDef(TYPE_ALIASES[spec.type]);
     warn("type", "alias", t(`"${spec.type}" is drawn as "${def?.type}"`, `"${spec.type}" 타입은 "${def?.type}" 차트로 그려요`));
+  }
+  // 0.4까지 scatter는 bubble의 별칭이라, size 채널이 있으면 그때처럼 bubble로 그려요 (resolveDef와 같은 규칙)
+  if (def?.type === "scatter" && spec.encoding && typeof spec.encoding === "object" && (spec.encoding as Record<string, unknown>).size !== undefined) {
+    def = getChartDef("bubble");
+    warn("type", "alias", t('"scatter" with a size channel is drawn as "bubble"', 'size 채널이 있는 "scatter"는 "bubble" 차트로 그려요'));
   }
   if (!def) {
     const near = closest(spec.type, [...CHARTS.map((c) => c.type), ...Object.keys(TYPE_ALIASES)]);
@@ -170,10 +289,13 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       warn(`encoding.${k}`, "unknown_channel", t(`${chartName} has no channel "${k}".${near ? ` Did you mean "${near}"?` : ""} Available channels: ${names.join(", ")}`, `${chartName}에는 "${k}" 채널이 없어요.${near ? ` "${near}"인가요?` : ""} 가능한 채널: ${names.join(", ")}`));
     }
   }
+  // 히스토그램은 행 모양에 따라 필요한 채널이 달라요: 원시 행은 value, 미리 나눈 행은 x0, x1, count
+  const binned = def.type === "histogram" && isPreBinned(rows?.find((r) => r && typeof r === "object"), enc.value, enc.count);
+  const needed = def.type !== "histogram" ? null : binned ? ["x0", "x1", "count"] : ["value"];
   for (const c of def.encoding) {
     const v = enc[c.name];
     if (v === undefined) {
-      if (c.required) {
+      if (c.required || needed?.includes(c.name)) {
         // 기본 필드 이름(채널 이름)과 같으면 생략해도 돼요
         if (fields.includes(c.name)) continue;
         if (!fields.length) warn(`encoding.${c.name}`, "missing_channel_default", t(`encoding.${c.name} is missing, so the "${c.name}" field is used`, `encoding.${c.name} 값이 없어서 "${c.name}" 필드를 써요`));
@@ -273,6 +395,16 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       if (!seen) warn("options.highlight", "highlight_not_found", t(`Could not find "${h}" to highlight among the data values`, `강조할 "${h}" 값을 데이터에서 찾지 못했어요`));
     }
   }
+
+  if (def.type === "skyline")
+    skylineIssues(rows, enc, options, fields, (isError, path, code, [en, ko]) => (isError ? err : warn)(path, code, t(en, ko)));
+
+  if (def.type === "line" || def.type === "area") {
+    const opts = options && typeof options === "object" && !Array.isArray(options) ? (options as Record<string, unknown>) : {};
+    checkBand(def.type, enc, opts, rows, t, err, warn);
+  }
+
+  if (def.type === "histogram") checkHistogram(rows, enc, options && typeof options === "object" && !Array.isArray(options) ? options : {}, binned, err, warn, t);
 
   // card
   if (spec.card !== undefined) {

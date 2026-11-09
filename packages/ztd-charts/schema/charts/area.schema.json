@@ -43,6 +43,36 @@
         "series": {
           "type": "string",
           "description": "Series field (string)"
+        },
+        "lower": {
+          "description": "Lower bound of the range band, with stack \"none\" only. In wide tables an array in the order of y (number)",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "upper": {
+          "description": "Upper bound of the range band. Same shape as lower (number)",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
         }
       },
       "required": [
@@ -166,6 +196,24 @@
           "description": "Color below the baseline (token name or CSS color)",
           "default": "neutralStrong",
           "type": "string"
+        },
+        "bandFrom": {
+          "description": "Where the range band starts. \"forecast\" starts it at the forecast annotation",
+          "default": "start",
+          "enum": [
+            "start",
+            "forecast"
+          ]
+        },
+        "outside": {
+          "description": "Mark points outside the range band and count them in the description",
+          "default": false,
+          "type": "boolean"
+        },
+        "connectNulls": {
+          "description": "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it",
+          "default": false,
+          "type": "boolean"
         },
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",

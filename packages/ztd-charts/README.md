@@ -1,6 +1,6 @@
 # ztd charts
 
-Animated, accessible React charts that read like a report. 33 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+Animated, accessible React charts that read like a report. 36 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [Docs](https://charts.ztd.app/docs/docs/) · [Example dashboards](https://charts.ztd.app/docs/examples/) · [GitHub](https://github.com/Junhan2/ztd-charts) · [한국어](https://github.com/Junhan2/ztd-charts/blob/main/README.ko.md)
 
@@ -11,7 +11,7 @@ Animated, accessible React charts that read like a report. 33 charts in pure SVG
 - **Each card says one thing.** One item takes the accent color and the rest stay neutral, with a bold takeaway under the chart, so a reader sees the point before reading the axes.
 - **Motion that explains.** Charts draw in as they scroll into view, move on from where they are when the data changes, and let you drag over a range to read its change, high and low.
 - **Accessible by default.** Keyboard navigation, a screen reader description and data table for every chart, reduced motion, and every label at WCAG AA contrast.
-- **Small, with nothing else to install.** React is the only peer dependency. A chart with the shared core is about 12 to 22 kB Brotli, and very large data switches to canvas on its own.
+- **Small, with nothing else to install.** React is the only peer dependency. A chart with the shared core is about 12 to 24 kB Brotli, and very large data switches to canvas on its own.
 - **Ready for AI.** Every chart is also a JSON spec with a public JSON Schema, and a CLI, an MCP server and an agent skill validate it and render it to PNG, SVG or HTML.
 - **English and Korean.** en-US by default. `locale="ko-KR"` switches number formats (1.2만, 3.4억) and chart text to Korean.
 
@@ -45,7 +45,7 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 
 ## What's in the package
 
-- `ztd-charts`: 33 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `StatCard`, `ThemeProvider` and the data helpers.
+- `ztd-charts`: 36 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `StatCard`, `ThemeProvider` and the data helpers.
 - `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React.
 - `ztd-charts/server`: server rendering to SVG and HTML.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.

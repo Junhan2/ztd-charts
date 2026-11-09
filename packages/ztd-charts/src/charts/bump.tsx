@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AxisXBand } from "../core/axis";
-import { ChartFrame, Txt } from "../core/ChartFrame";
+import { capTipRows, ChartFrame, Txt } from "../core/ChartFrame";
 import { evenIndex, monotonePath } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
@@ -91,7 +91,8 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
   let tip: TooltipData | null = null;
   if (c.active !== null && model.keys[c.active] !== undefined) {
     const k = c.active;
-    tip = { x: xs(k), y: top, title: model.labels[k], rows: [...lines].filter((l) => Number.isFinite(l.ranks[k])).sort((a, b) => a.ranks[k] - b.ranks[k]).slice(0, 8).map((l) => ({ label: l.name, value: msg.rank(l.ranks[k]), color: l.hi ? accent.fill : p.paint("neutralStrong"), strong: l.hi })) };
+    const rows = [...lines].filter((l) => Number.isFinite(l.ranks[k])).sort((a, b) => a.ranks[k] - b.ranks[k]).map((l) => ({ label: l.name, value: msg.rank(l.ranks[k]), color: l.hi ? accent.fill : p.paint("neutralStrong"), strong: l.hi }));
+    tip = { x: xs(k), y: top, title: model.labels[k], rows: capTipRows(rows, c.t.more) };
   }
   const D = c.motion.duration ?? 1100;
   const desc = props.description ?? `${msg.kind}. ${msg.desc(nS, model.labels[0] ?? "", model.labels[nK - 1] ?? "")}.`;

@@ -82,7 +82,7 @@ export function getChartInfo(type: string, locale?: string) {
     schema: schemaForIn(def.type, lang),
     example: def.example,
     react: reactSnippet(def.example, { locale }),
-    /** 이름 붙은 꼴: 예시 options 위에 덮어쓰는 옵션 (ztd-charts example <type> --variant <id>) */
+    /** 이름 붙은 꼴: 예시 options 위에 덮어쓰는 옵션, 범위 띠처럼 필드를 더하는 꼴은 encoding도 (ztd-charts example <type> --variant <id>) */
     variants: variantsIn(def.type, lang),
   };
 }
@@ -150,8 +150,8 @@ export function findFonts(extra: string[] = []): string[] {
   } catch {
     /* pretendard가 없으면 시스템 글꼴 */
   }
-  const here = dirname(fileURLToPath(import.meta.url));
-  dirs.push(join(here, "../fonts"));
+  // 패키지에 실은 Pretendard는 사용자가 글꼴을 주지 않았을 때만 읽어요. --font나 ZTD_CHARTS_FONT_DIR로 준 글꼴이 이기게요
+  if (!extra.length && !process.env.ZTD_CHARTS_FONT_DIR) dirs.push(join(dirname(fileURLToPath(import.meta.url)), "../fonts"));
   for (const d of dirs) {
     if (!existsSync(d)) continue;
     for (const f of readdirSync(d)) if (/^Pretendard-(Regular|Medium|SemiBold|Bold|ExtraBold)\.(otf|ttf)$/i.test(f) || (d === process.env.ZTD_CHARTS_FONT_DIR && /\.(otf|ttf|ttc)$/i.test(f))) out.push(join(d, f));

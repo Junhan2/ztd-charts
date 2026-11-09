@@ -15,6 +15,7 @@ export type Highlight<T = unknown> = number | string | ReadonlyArray<number | st
 export interface ChartEvent<T = unknown> {
   /** 원본 데이터 항목. 합계나 계산된 항목이면 null */
   datum: T | null;
+  /** 차트에 놓인 순서의 위치예요. 값으로 정렬하는 차트(롤리팝, 파레토, sort를 켠 막대)에서는 data의 줄 번호와 달라요. 원래 행은 datum으로 읽어요 */
   index: number;
   key: string;
   label: string;
@@ -26,7 +27,8 @@ export interface ChartEvent<T = unknown> {
 
 export interface TooltipRow {
   label?: string;
-  value: string;
+  /** 굵게 쓰는 값. 범위 띠는 값 뒤에 흐린 범위 글을 붙여 넘겨요 */
+  value: ReactNode;
   /** 칠한 색 (CSS 색) */
   color?: string;
   strong?: boolean;

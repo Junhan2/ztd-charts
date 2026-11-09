@@ -2,7 +2,7 @@ import { useMemo, type ComponentType } from "react";
 import { ChartCard, ChartState, type LegendItem } from "../components/ChartCard";
 import { resolveHighlight } from "../core/highlight";
 import { langOf } from "../core/i18n";
-import { categoricalTokens } from "../core/palette";
+import { categoricalDotTokens, categoricalTokens } from "../core/palette";
 import type { ChartEvent, Highlight } from "../core/types";
 import { strGetter, uniq, numGetter } from "../data/accessor";
 import { useChartData } from "../data/useChartData";
@@ -14,7 +14,8 @@ import { AreaChart, LineChart } from "./line";
 import { BarChart } from "./bar";
 import { BeeswarmChart } from "./beeswarm";
 import { BoxPlot } from "./box";
-import { BubbleChart } from "./bubble";
+import { BubbleChart, ScatterChart } from "./bubble";
+import { seriesHighlight } from "./scatter-kit";
 import { BulletChart } from "./bullet";
 import { BumpChart } from "./bump";
 import { CalendarHeatmap } from "./calendar";
@@ -23,6 +24,7 @@ import { ChordChart } from "./chord";
 import { DumbbellChart } from "./dumbbell";
 import { FunnelChart } from "./funnel";
 import { Heatmap } from "./heatmap";
+import { HistogramChart } from "./histogram";
 import { LollipopChart } from "./lollipop";
 import { MarimekkoChart } from "./marimekko";
 import { ParallelCoordinates } from "./parallel";
@@ -33,6 +35,7 @@ import { RadarChart } from "./radar";
 import { RidgelineChart } from "./ridgeline";
 import { SankeyChart } from "./sankey";
 import { SegmentedBar } from "./segmented";
+import { SkylineChart } from "./skyline";
 import { SlopeChart } from "./slope";
 import { Sparkline } from "./sparkline";
 import { StreamGraph } from "./stream";
@@ -76,11 +79,18 @@ export const CHART_COMPONENTS: Record<string, ComponentType<any>> = {
   parallel: ParallelCoordinates,
   candlestick: CandlestickChart,
   segmented: SegmentedBar,
+  skyline: SkylineChart,
+  histogram: HistogramChart,
+  scatter: ScatterChart,
 };
 
-/** 타입이나 별칭으로 채널, 이름 찾기 (레지스트리 전체를 끌어오지 않아요) */
-export function resolveDef(type: string): ChartMeta | undefined {
-  return resolveMeta(type);
+/**
+ * 타입이나 별칭으로 채널, 이름 찾기 (레지스트리 전체를 끌어오지 않아요).
+ * 0.4까지 scatter는 bubble의 별칭이었어요. size 채널이 있는 scatter 스펙은 그때처럼 bubble로 그려요
+ */
+export function resolveDef(type: string, encoding?: ChartSpec["encoding"]): ChartMeta | undefined {
+  const def = resolveMeta(type);
+  return def?.type === "scatter" && encoding?.size !== undefined ? resolveMeta("bubble") : def;
 }
 
 /** encoding(채널 -> 필드)을 컴포넌트 프롭으로 */
@@ -95,7 +105,7 @@ export function encodingToProps(def: Pick<ChartMeta, "encoding">, encoding: Char
 
 /** 스펙으로 범례 만들기 (card.legend: "auto"). locale은 차트를 그리는 로캘이고 캔들스틱 범례 글자에 써요 */
 export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], locale: string): LegendItem[] {
-  const def = resolveDef(spec.type);
+  const def = resolveDef(spec.type, spec.encoding);
   if (!def || !rows.length) return [];
   const enc = spec.encoding ?? {};
   const opt = spec.options ?? {};
@@ -114,6 +124,16 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const ma = maPeriods(Array.isArray(opt.ma) ? (opt.ma as number[]) : undefined, rows.length);
     const t = CANDLE_TEXT[langOf(locale)];
     return [{ label: t.up, color: (opt.upColor as string | undefined) ?? "accent" }, { label: t.down, color: (opt.downColor as string | undefined) ?? "neutralStrong" }, ...ma.map((d, i) => ({ label: t.maLegend(d), color: MA_TOKENS[i], shape: "line" as const }))];
+  }
+  if (def.type === "scatter") {
+    if (typeof enc.series !== "string") return [];
+    const g = strGetter(enc.series, "series");
+    const series = uniq(rows.map((r, i) => g(r, i)));
+    if (series.length < 2) return [];
+    // 차트와 같은 규칙: 색은 숨긴 계열까지 모든 계열로 정하고, 숨긴 계열은 범례에서만 빼요
+    const tokens = categoricalDotTokens(series.length, seriesHighlight(h, rows, series, g));
+    const hidden = new Set(Array.isArray(opt.hidden) ? opt.hidden.map(String) : []);
+    return series.flatMap((s, i) => (hidden.has(s) ? [] : [{ label: s, color: tokens[i], shape: "circle" as const }]));
   }
   if (["marimekko", "area", "bar", "line", "stream", "radar"].includes(def.type)) {
     let series: string[] = [];
@@ -151,7 +171,7 @@ export interface ChartProps {
 /** JSON 스펙 하나로 차트(와 카드)를 그려요 */
 export function Chart(props: ChartProps) {
   const { spec } = props;
-  const def = resolveDef(spec.type);
+  const def = resolveDef(spec.type, spec.encoding);
   // { csv }는 렌더마다 다시 읽지 않아요
   const inline = useMemo(() => inlineRows(spec.data), [spec.data]);
   const remote = !inline && spec.data && typeof spec.data === "object" && "url" in spec.data ? (spec.data as { url: string; format?: "json" | "csv" | "auto"; select?: string }) : null;

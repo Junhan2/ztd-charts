@@ -11,7 +11,7 @@ export const VARIANT_NAMES_KO: Record<string, Record<string, string>> = {
   heatmap: { values: "모든 칸에 값", "no-legend": "범례 없음" },
   radar: { circular: "원형 격자", "three-rings": "고리 3개" },
   bubble: { zero: "0부터", "few-labels": "이름표 3개" },
-  line: { step: "계단", "every-series": "계열마다 색", forecast: "목표 구간과 예측", zoom: "끌어서 확대" },
+  line: { step: "계단", "every-series": "계열마다 색", forecast: "목표 구간과 예측", zoom: "끌어서 확대", band: "범위 띠", "forecast-band": "예측 구간" },
   area: { percent: "100% 쌓기", overlap: "겹치기" },
   stream: { silhouette: "가운데 기준", "data-order": "데이터 순서" },
   bar: { grouped: "묶은 막대", percent: "100% 막대", horizontal: "가로 막대" },
@@ -30,4 +30,7 @@ export const VARIANT_NAMES_KO: Record<string, Record<string, string>> = {
   parallel: { "as-measured": "뒤집지 않은 축" },
   candlestick: { plain: "봉만", zoom: "끌어서 확대", "green-up": "초록 상승, 빨강 하락" },
   segmented: { thin: "얇은 막대", "bar-only": "막대만" },
+  skyline: { "rate-strip": "비율 띠", shallow: "얕은 블록", "no-wall": "뒷벽 없이", textured: "모든 줄에 무늬" },
+  histogram: { dots: "점", step: "윤곽", log: "로그 구간", kde: "밀도 곡선", "no-marks": "분위 선 없음" },
+  scatter: { fit: "추세선", quadrants: "사분면", jitter: "흔들림" },
 };

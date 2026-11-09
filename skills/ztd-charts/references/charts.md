@@ -1,4 +1,4 @@
-# Reference for all 33 charts
+# Reference for all 36 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -163,12 +163,12 @@
 - What: Change over time
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
-- encoding: x, y[], series?
-- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor
+- encoding: x, y[], series?, lower?[], upper?[]
+- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
-{"type":"line","data":[{"month":"2025-01","app":"Our app","mau":42},{"month":"2025-01","app":"Rival A","mau":56.8},{"month":"2025-01","app":"Rival B","mau":38}],"encoding":{"x":"month","y":"mau","series":"app"},"options":{"area":true},"card":{"number":"13","title":"Line chart","subtitle":"Monthly active users (10k)","takeaway":"Only our app keeps climbing","level":"basic"}}
+{"type":"line","data":[{"month":"2025-01","app":"Our app","mau":42,"p5":39.4,"p95":44.6},{"month":"2025-01","app":"Rival A","mau":56.8},{"month":"2025-01","app":"Rival B","mau":38}],"encoding":{"x":"month","y":"mau","series":"app"},"options":{"area":true},"card":{"number":"13","title":"Line chart","subtitle":"Monthly active users (10k)","takeaway":"Only our app keeps climbing","level":"basic"}}
 ```
 
 ## area · Area chart (`<AreaChart>`, Basic, Trend)
@@ -176,8 +176,8 @@
 - What: Running totals and a changing mix (stacked, 100% stacked)
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
-- encoding: x, y[], series?
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor
+- encoding: x, y[], series?, lower?[], upper?[]
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -429,6 +429,45 @@
 
 ```json
 {"type":"segmented","data":[{"method":"Card","amount":412},{"method":"Mobile pay","amount":278},{"method":"Bank transfer","amount":134}],"encoding":{"label":"method","value":"amount"},"options":{"highlight":"Mobile pay"},"card":{"number":"33","title":"Segmented bar","subtitle":"Payment volume by method (100M KRW)","takeaway":"Mobile pay is one in three","level":"basic"}}
+```
+
+## skyline · Skyline (`<SkylineChart>`, Intermediate, Trend)
+
+- What: Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front
+- Use when: 7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard
+- Avoid when: Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)
+- encoding: x, y[], series?, front?[]
+- Chart options: depth, wall, texture: front|all|none, frontRate
+- Default highlight: the largest value
+
+```json
+{"type":"skyline","data":[{"day":"2026-10-23","Input":410000,"Cached":317223,"Output":186999,"Reasoning":79534,"Failed":11000,"Retried":10000},{"day":"2026-10-24","Input":446030,"Cached":337921,"Output":202044,"Reasoning":87942,"Failed":15314,"Retried":9190},{"day":"2026-10-25","Input":440886,"Cached":336150,"Output":202507,"Reasoning":87489,"Failed":15398,"Retried":6051}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 14 days","takeaway":"Nov 5 was the busiest day","level":"intermediate"}}
+```
+
+## histogram · Histogram (`<HistogramChart>`, Intermediate, Distribution)
+
+- What: Distribution of raw samples with its tail and the share past a limit
+- Use when: 30 or more raw samples, such as request latency, where the tail and the share past a limit matter
+- Avoid when: Comparing categories (use bars), or fewer than 10 samples (a beeswarm fits better)
+- encoding: value?, group?, x0?, x1?, count?
+- Chart options: variant: bars|dots|step, marks, threshold, edges, binWidth, bins, log, kde
+- Default highlight: the largest value
+
+```json
+{"type":"histogram","data":[{"ms":844},{"ms":132},{"ms":147}],"encoding":{"value":"ms"},"options":{"unit":"ms","marks":["p50","p95"],"threshold":{"value":400,"label":"SLO","side":"above"}},"card":{"number":"35","title":"Histogram","subtitle":"API request latency (ms)","takeaway":"1 in 16 requests misses the SLO","level":"intermediate","legend":[{"label":"Over the SLO","color":"accent"},{"label":"Within","color":"neutral"}]}}
+```
+
+## scatter · Scatter plot (`<ScatterChart>`, Basic, Relationship)
+
+- What: How two numbers relate, one dot per item, colored by series
+- Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series
+- Avoid when: x is time (a line works better), or there are more than 50,000 dots
+- encoding: x, y, series?, label?
+- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, hidden, fit: linear, refLines, quadrants, jitter
+- Default highlight: none, or the first series when a series channel is set
+
+```json
+{"type":"scatter","data":[{"id":"Request 1","model":"Large","cost":7,"ms":2400},{"id":"Request 2","model":"Medium","cost":6,"ms":1500},{"id":"Request 3","model":"Small","cost":3,"ms":660}],"encoding":{"x":"cost","y":"ms","series":"model","label":"id"},"options":{"highlight":"Large","xLabel":"Cost (¢)","yLabel":"Latency (ms)","unit":"ms","refLines":{"y":2000},"quadrants":["Slow and cheap","Slow and costly","Fast and cheap","Fast and costly"]},"card":{"number":"36","title":"Scatter plot","subtitle":"Cost and latency per request by model","takeaway":"Only the large model goes over 2 s","level":"basic","legend":"auto"}}
 ```
 
 ## Common options

@@ -109,14 +109,15 @@ JSON 스펙에서는 `options.annotations`에 적어요. 검사(`validate`)는 �
 
 ## 실시간 데이터
 
-`LiveLineChart`는 흘러오는 값을 그려요. 가진 행을 넘기고(`x`는 시각: Date, ms, ISO 문자열) 새 행이 오면 뒤에 붙여 주세요. 최근 `window`(기본 1분)만 보여 줘요. 그보다 오래된 행은 그때그때 버려 주세요. 넘긴 행을 모두 정렬하고 훑어요.
+`LiveLineChart`는 흘러오는 값을 그려요. 가진 행을 넘기고(`x`는 시각: Date, ms, ISO 문자열) 새 행이 오면 뒤에 붙여 주세요. 최근 `window`(기본 1분)만 보여 줘요. 그 두 배쯤만 남기고 오래된 행은 그때그때 버려 주세요. 넘긴 행을 모두 정렬하고 훑어요. `window`에 딱 맞춰 자르면 선 왼쪽 끝이 비어요.
 - 점과 점 사이에는 차트가 데이터 시각을 따라가는 자기 시계로 선을 왼쪽으로 미끄러뜨려요. 그래서 다음 점이 오기 전에 선 끝이 비지 않아요. 점이 한꺼번에 몰려오면 조금 빨리 따라잡아요.
 - 마우스를 올리거나 Tab으로 들어가 화살표로 옮기면 멈춰서 값을 읽을 수 있어요. 벗어나면 다시 흘러요.
 - 동작 줄이기에서는 점이 들어올 때만 움직여요.
 - 컴포넌트로만 써요. JSON 스펙과 CLI는 멈춘 그림을 그려서 `live` 스펙 종류는 없어요.
 
 ```tsx
-// rows: [{ t: 1717383600000, v: 1204 }, ...], 새 행이 오면 뒤에 붙여요
+// rows: [{ t: 1717383600000, v: 1204 }, ...]. 새 행 `next`가 오면 뒤에 붙이고 `window`의 두 배까지만 남겨요
+setRows((rows) => [...rows.filter((r) => r.t > next.t - 120_000), next]);
 <LiveLineChart data={rows} x="t" y="v" window={60_000} format="integer" />
 ```
 
@@ -156,6 +157,8 @@ export function Revenue() {
 | 측정값 → 백분위(p95) | `percentiles(rows, { by: "분", value: "ms" })`로 묶음마다 `p50`, `p95`, `p99`를 구한 뒤 `y={["p50", "p95", "p99"]}` |
 
 `loading`은 `refreshMs`나 `reload()`로 다시 불러올 때도 true예요. 그동안 `data`에는 이전 행이 남아 있어요. 위처럼 `loading={r.loading && !r.data.length}`로 넘기면 처음 불러올 때만 스켈레톤을 보여 주고, 다시 불러오는 동안에는 차트를 그대로 둬요.
+
+빠진 값은 `null`, `NaN`, CSV의 빈 칸, 그 x에 그 계열의 행이 없는 경우예요. 0.5부터 라인 차트와 쌓지 않은 영역 차트는 빠진 값에서 선과 면을 끊고, 이웃 없이 혼자 남은 점은 점으로 그려요. 데이터에 없는 값을 그리지 않으려고요. `connectNulls`(JSON 스펙에서는 `options.connectNulls`)를 켜면 예전처럼 이웃 점을 이어요. 쌓은 영역은 그대로예요: 빠진 값을 0으로 쌓아요.
 
 예시 코드는 [examples/data/](../examples/data)에 있어요(REST, CSV, Supabase, Google Sheets, Postgres API). 문서 사이트 ["데이터 연결" 페이지](https://charts.ztd.app/docs/data/)에서 직접 동작을 볼 수 있고, Google Sheets 주소를 붙여 넣어 볼 수도 있어요.
 
@@ -198,7 +201,7 @@ npx ztd-charts-cli suggest sales.csv --out-dir charts
 
 안내 문구, 차트 글자, 숫자 형식은 영어가 기본이에요. 명령 앞뒤 어디든 `--locale ko`를 붙이면 한국어로 바뀌어요.
 
-프로젝트에 설치하면(`npm i -D ztd-charts-cli`) 명령 이름은 `ztd-charts`예요. 설치하지 않았다면 `npx ztd-charts-cli`로 실행해 주세요. `npx ztd-charts`는 명령이 없는 차트 라이브러리 패키지를 받아요. PNG는 [resvg](https://github.com/yisibl/resvg-js)로 그리고, `pretendard` 패키지가 있거나 `ZTD_CHARTS_FONT_DIR`을 주면 그 글꼴을 써요(`--font path.otf`도 돼요).
+프로젝트에 설치하면(`npm i -D ztd-charts-cli`) 명령 이름은 `ztd-charts`예요. 설치하지 않았다면 `npx ztd-charts-cli`로 실행해 주세요. `npx ztd-charts`는 명령이 없는 차트 라이브러리 패키지를 받아요. PNG는 [resvg](https://github.com/yisibl/resvg-js)로 그려요. 패키지에 Pretendard가 들어 있어서 글꼴이 없는 컴퓨터에서도 글자가 보여요. `--font path.otf`나 `ZTD_CHARTS_FONT_DIR`을 주면 그 글꼴을 대신 써요.
 
 ## MCP 서버
 

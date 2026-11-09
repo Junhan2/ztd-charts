@@ -9,7 +9,7 @@
 
 <p align="center">
   Animated, accessible React charts that read like a report.<br>
-  33 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+  36 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 - **Each card says one thing.** One item takes the accent color and the rest stay neutral, with a bold takeaway under the chart, so a reader sees the point before reading the axes.
 - **Motion that explains.** Charts draw in as they scroll into view, move on from where they are when the data changes, and let you drag over a range to read its change, high and low.
 - **Accessible by default.** Keyboard navigation, a screen reader description and data table for every chart, reduced motion, and every label at WCAG AA contrast.
-- **Small, with nothing else to install.** React is the only peer dependency. A chart with the shared core is about 12 to 22 kB Brotli, and very large data switches to canvas on its own.
+- **Small, with nothing else to install.** React is the only peer dependency. A chart with the shared core is about 12 to 24 kB Brotli, and very large data switches to canvas on its own.
 - **Ready for AI.** Every chart is also a JSON spec with a public JSON Schema, and a CLI, an MCP server and an agent skill validate it and render it to PNG, SVG or HTML.
 - **English and Korean.** en-US by default. `locale="ko-KR"` switches number formats (1.2만, 3.4억) and chart text to Korean.
 
@@ -87,9 +87,9 @@ import { Chart } from "ztd-charts";
 />;
 ```
 
-## 33 charts
+## 36 charts
 
-<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 33 charts in the light theme, from pie and donut to candlestick and segmented bar"></a>
+<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 36 charts in the light theme, from pie and donut to histogram and scatter plot"></a>
 
 | Group | Charts |
 |---|---|
@@ -97,9 +97,9 @@ import { Chart } from "ztd-charts";
 | Hierarchy | Treemap · Sunburst |
 | Flow | Funnel · Sankey · Chord |
 | Comparison | Bar · Waterfall · Pareto · Radar · Slope · Dumbbell · Lollipop |
-| Trend | Line · Area · Streamgraph · Sparkline · Calendar heatmap · Bump · Candlestick |
-| Distribution | Box plot (violin too) · Beeswarm · Ridgeline |
-| Relationship | Heatmap · Bubble (scatter too) · Parallel coordinates |
+| Trend | Line (range band too) · Area · Streamgraph · Sparkline · Calendar heatmap · Bump · Candlestick · Skyline |
+| Distribution | Box plot (violin too) · Beeswarm · Ridgeline · Histogram |
+| Relationship | Heatmap · Bubble · Scatter · Parallel coordinates |
 | KPI | Gauge · Bullet · Radial bar |
 
 Each chart has a page with a live demo, its props and copyable code in the [gallery](https://charts.ztd.app/docs/). Why each one made the cut, and what was left out, is in the [chart catalog](docs/catalog.md).

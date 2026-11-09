@@ -30,7 +30,7 @@ export { ParetoChart, type ParetoChartProps } from "./charts/pareto";
 export { MarimekkoChart, type MarimekkoChartProps } from "./charts/marimekko";
 export { Heatmap, type HeatmapProps } from "./charts/heatmap";
 export { RadarChart, type RadarChartProps } from "./charts/radar";
-export { BubbleChart, type BubbleChartProps } from "./charts/bubble";
+export { BubbleChart, ScatterChart, type BubbleChartProps, type ScatterChartProps } from "./charts/bubble";
 export { LineChart, AreaChart, type LineChartProps, type AreaChartProps, type XYProps } from "./charts/line";
 export { StreamGraph, type StreamGraphProps } from "./charts/stream";
 export { BarChart, type BarChartProps } from "./charts/bar";
@@ -51,6 +51,8 @@ export { BoxPlot, type BoxPlotProps } from "./charts/box";
 export { ParallelCoordinates, type ParallelCoordinatesProps } from "./charts/parallel";
 export { CandlestickChart, type CandlestickChartProps } from "./charts/candlestick";
 export { SegmentedBar, type SegmentedBarProps } from "./charts/segmented";
+export { SkylineChart, type SkylineChartProps } from "./charts/skyline";
+export { HistogramChart, type HistogramChartProps, type HistogramThreshold } from "./charts/histogram";
 export { type XRange } from "./core/brush";
 
 export { Chart, CHART_COMPONENTS, encodingToProps, autoLegend, resolveDef, type ChartProps } from "./charts/Chart";
@@ -63,4 +65,4 @@ export { squarify, buildTree, partitionAngles, type TreeNode, type Rect } from "
 export { stack, insideOut, type StackOffset } from "./layout/stack";
 export { sankeyLayout, type SankeyNode, type SankeyLink } from "./layout/sankey";
 export { chordLayout } from "./layout/chord";
-export { kde, boxStats, beeswarm, ranks, type BoxStats } from "./layout/stats";
+export { kde, boxStats, beeswarm, ranks, binEdges, binCounts, binIndex, dotUnit, type BoxStats, type BinOptions } from "./layout/stats";

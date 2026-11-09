@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChartFrame, Txt } from "../core/ChartFrame";
+import { capTipRows, ChartFrame, Txt } from "../core/ChartFrame";
 import { areaPath, nearestIndex, type Curve } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
@@ -56,6 +56,8 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   // 폭의 절반보다 점이 많으면 구간 평균으로 줄여요 (층마다 같은 x, 2px에 한 점)
   const budget = Math.max(40, Math.round(W / 2));
   const model = useMemo(() => bucketSeries(model0, budget), [model0, budget]);
+  // 툴팁, 이벤트의 값: 줄였으면 구간 평균이 아니라 대표 행(이름표와 같은 행)의 실제 값
+  const rowVals = model.rowValues ?? model.values;
   const nS = model.series.length;
 
   const order = useMemo(() => (props.reorder === false ? model.series.map((_, i) => i) : insideOut(model.values)), [model, props.reorder]);
@@ -123,26 +125,25 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
         index: k,
         key: model.keys[k],
         label: model.labels[k],
-        value: model.values.reduce((a, r) => a + (Number.isFinite(r[k]) ? r[k] : 0), 0),
+        value: rowVals.reduce((a, r) => a + (Number.isFinite(r[k]) ? r[k] : 0), 0),
         // 값이 없는 계열은 0이라고 읽지 않게 빼요 (라인 차트와 같아요)
         formatted: model.series
-          .map((s, si) => (Number.isFinite(model.values[si][k]) ? `${s} ${fv(model.values[si][k])}` : null))
+          .map((s, si) => (Number.isFinite(rowVals[si][k]) ? `${s} ${fv(rowVals[si][k])}` : null))
           .filter(Boolean)
           .join(", "),
       })),
-    [model, fv],
+    [model, rowVals, fv],
   );
 
   let tip: TooltipData | null = null;
   if (c.active !== null && model.keys[c.active] !== undefined) {
     const k = c.active;
     const rows = layers
-      .map((L) => ({ L, v: model.values[L.s][k] }))
+      .map((L) => ({ L, v: rowVals[L.s][k] }))
       .filter((r) => Number.isFinite(r.v))
       .sort((a, b) => b.v - a.v)
-      .slice(0, 8)
       .map((r) => ({ label: r.L.name, value: c.fv(r.v), color: r.L.sw.fill, strong: r.L.hi }));
-    tip = { x: xs(k), y: Math.min(...layers.map((L) => L.top[k])), title: model.labels[k], rows };
+    tip = { x: xs(k), y: Math.min(...layers.map((L) => L.top[k])), title: model.labels[k], rows: capTipRows(rows, c.t.more) };
   }
 
   const msg = MSG[c.lang];

@@ -117,7 +117,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.6 KB"
+    "limit": "13.8 KB"
   },
   {
     "name": "RadarChart",
@@ -141,7 +141,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "14.0 KB"
+    "limit": "15.6 KB"
   },
   {
     "name": "LineChart",
@@ -153,7 +153,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "22.2 KB"
+    "limit": "24.3 KB"
   },
   {
     "name": "AreaChart",
@@ -165,7 +165,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "22.2 KB"
+    "limit": "24.3 KB"
   },
   {
     "name": "StreamGraph",
@@ -189,7 +189,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "18.2 KB"
+    "limit": "18.3 KB"
   },
   {
     "name": "RadialBarChart",
@@ -285,7 +285,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.8 KB"
+    "limit": "14.0 KB"
   },
   {
     "name": "RidgelineChart",
@@ -333,7 +333,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "14.1 KB"
+    "limit": "14.2 KB"
   },
   {
     "name": "BumpChart",
@@ -369,7 +369,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.3 KB"
+    "limit": "13.5 KB"
   },
   {
     "name": "CandlestickChart",
@@ -381,7 +381,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.2 KB"
+    "limit": "19.3 KB"
   },
   {
     "name": "SegmentedBar",
@@ -394,6 +394,42 @@
       "react-dom/server"
     ],
     "limit": "12.4 KB"
+  },
+  {
+    "name": "SkylineChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ SkylineChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "17.9 KB"
+  },
+  {
+    "name": "HistogramChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ HistogramChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "18.2 KB"
+  },
+  {
+    "name": "ScatterChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ ScatterChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "18.3 KB"
   },
   {
     "name": "StatCard",
@@ -441,10 +477,10 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "2.9 KB"
+    "limit": "3.0 KB"
   },
   {
-    "name": "Chart (spec renderer, all 33)",
+    "name": "Chart (spec renderer, all charts)",
     "path": "packages/ztd-charts/dist/index.js",
     "import": "{ Chart }",
     "ignore": [
@@ -453,7 +489,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "68.3 KB"
+    "limit": "84.5 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -465,7 +501,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "86.8 KB"
+    "limit": "107.2 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -477,6 +513,6 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.6 KB"
+    "limit": "24.7 KB"
   }
 ]

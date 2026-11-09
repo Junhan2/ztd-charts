@@ -2,12 +2,12 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.4.1";
+export const VERSION = "0.5.0";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
 const en = {
-  help: `ztd-charts ${VERSION}  CLI for 33 React chart types
+  help: `ztd-charts ${VERSION}  CLI for 36 React chart types
 
 Usage
   ztd-charts list [--group proportion] [--level basic] [--json]
@@ -91,7 +91,7 @@ Examples
 export type CliText = typeof en;
 
 const ko: CliText = {
-  help: `ztd-charts ${VERSION}  React 차트 33종을 위한 CLI
+  help: `ztd-charts ${VERSION}  React 차트 36종을 위한 CLI
 
 사용법
   ztd-charts list [--group 비율] [--level 기본] [--json]

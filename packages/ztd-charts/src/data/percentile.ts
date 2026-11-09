@@ -13,6 +13,13 @@ export function percentile(values: readonly unknown[], p: number): number {
   return at(sortedNumbers(values), p);
 }
 
+/** 분위 이름("p95")을 숫자(95)로. "p" 뒤 0~100 숫자가 아니면 NaN이에요. 히스토그램 marks와 스펙 검사가 같이 써요 */
+export function markPercentile(id: string): number {
+  const m = /^p(\d+(?:\.\d+)?)$/.exec(id);
+  const v = m ? Number(m[1]) : NaN;
+  return v >= 0 && v <= 100 ? v : NaN;
+}
+
 export interface PercentilesOptions {
   /** 묶을 필드. 여러 필드로 묶으려면 배열(예: ["minute", "api"]). 차트 encoding처럼 점 경로도 돼요 */
   by: string | readonly string[];

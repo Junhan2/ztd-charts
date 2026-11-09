@@ -21,8 +21,10 @@ const CH_marimekko: ChannelDef[] = [ch("x", "string", true, "Column field"), ch(
 const CH_heatmap: ChannelDef[] = [ch("x", "string", true, "Column field"), ch("y", "string", true, "Row field"), VALUE];
 const CH_radar: ChannelDef[] = [ch("axis", "string", true, "Metric (axis) field"), ch("value", "number", true, "Value field", { multi: true }), ch("series", "string", false, "Series field")];
 const CH_bubble: ChannelDef[] = [ch("x", "number", true, "x value"), ch("y", "number", true, "y value"), ch("size", "number", false, "Circle size"), ch("label", "string", false, "Name")];
-const CH_line: ChannelDef[] = [ch("x", "any", true, "x field (date, number or category)"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field (long tables)")];
-const CH_area: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field")];
+/** 범위 띠 (라인, 영역): 넓은 표면 y와 같은 순서의 배열, 긴 표면 필드 하나 */
+const UPPER = ch("upper", "number", false, "Upper bound of the range band. Same shape as lower", { multi: true });
+const CH_line: ChannelDef[] = [ch("x", "any", true, "x field (date, number or category)"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field (long tables)"), ch("lower", "number", false, "Lower bound of the range band. In wide tables an array in the order of y", { multi: true }), UPPER];
+const CH_area: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field"), ch("lower", "number", false, 'Lower bound of the range band, with stack "none" only. In wide tables an array in the order of y', { multi: true }), UPPER];
 const CH_stream: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field", { multi: true }), ch("series", "string", false, "Series field")];
 const CH_bar: ChannelDef[] = [ch("x", "string", true, "Category field"), ch("y", "number", true, "Value field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field")];
 const CH_radialBar: ChannelDef[] = [LABEL, VALUE];
@@ -42,6 +44,14 @@ const CH_box: ChannelDef[] = [ch("group", "string", true, "Group field"), ch("va
 const CH_parallel: ChannelDef[] = [ch("label", "string", false, "Row name field")];
 const CH_candlestick: ChannelDef[] = [ch("x", "date", true, "Date (period) field"), ch("open", "number", true, "Open price field"), ch("high", "number", true, "High price field"), ch("low", "number", true, "Low price field"), ch("close", "number", true, "Close price field"), ch("volume", "number", false, "Volume field")];
 const CH_segmented: ChannelDef[] = [LABEL, VALUE];
+const CH_skyline: ChannelDef[] = [
+  ch("x", "any", true, "Period field (date or category)"),
+  ch("y", "number", true, "Back row fields stacked into each block. An array for wide tables", { multi: true }),
+  ch("series", "string", false, "Series field (long tables, back row only)"),
+  ch("front", "number", false, "Front row fields: a smaller outcome in the same unit as y (wide tables only)", { multi: true }),
+];
+const CH_histogram: ChannelDef[] = [ch("value", "number", false, "Sample value field (raw rows)"), ch("group", "string", false, "Group field. Up to 2 groups overlap"), ch("x0", "number", false, "Bin start (pre-binned rows)"), ch("x1", "number", false, "Bin end (pre-binned rows)"), ch("count", "number", false, "Samples in the bin (pre-binned rows)")];
+const CH_scatter: ChannelDef[] = [ch("x", "number", true, "x value"), ch("y", "number", true, "y value"), ch("series", "string", false, "Series field (one color per series)"), ch("label", "string", false, "Name")];
 
 export const CHANNELS: Record<string, ChannelDef[]> = {
   pie: CH_pie,
@@ -77,6 +87,9 @@ export const CHANNELS: Record<string, ChannelDef[]> = {
   parallel: CH_parallel,
   candlestick: CH_candlestick,
   segmented: CH_segmented,
+  skyline: CH_skyline,
+  histogram: CH_histogram,
+  scatter: CH_scatter,
 };
 
 /** 타입 -> 컴포넌트 이름, 영어 이름, 한글 이름. 한글 이름은 여기 한 곳에만 둬요 (localizeDef, 한글 검증 메시지가 같이 써요) */
@@ -114,6 +127,9 @@ export const META: Record<string, { component: string; name: string; nameKo: str
   parallel: { component: "ParallelCoordinates", name: "Parallel coordinates", nameKo: "평행 좌표" },
   candlestick: { component: "CandlestickChart", name: "Candlestick chart", nameKo: "캔들스틱" },
   segmented: { component: "SegmentedBar", name: "Segmented bar", nameKo: "비율 막대" },
+  skyline: { component: "SkylineChart", name: "Skyline", nameKo: "스카이라인" },
+  histogram: { component: "HistogramChart", name: "Histogram", nameKo: "히스토그램" },
+  scatter: { component: "ScatterChart", name: "Scatter plot", nameKo: "산점도" },
 };
 
 /** 차트 이름을 한 언어로. 예: nameIn(META.pie, "ko") === "파이 차트" */
@@ -131,7 +147,6 @@ export function specLocale(spec: Pick<ChartSpec, "options">, override?: string):
 /** 차트 이름 별칭 (AI가 자주 쓰는 이름) */
 export const TYPE_ALIASES: Record<string, string> = {
   doughnut: "donut",
-  scatter: "bubble",
   column: "bar",
   stackedBar: "bar",
   groupedBar: "bar",
@@ -156,6 +171,7 @@ export const TYPE_ALIASES: Record<string, string> = {
   segmentedBar: "segmented",
   proportionBar: "segmented",
   stackedBar100: "segmented",
+  hist: "histogram",
 };
 
 export interface ChartMeta {

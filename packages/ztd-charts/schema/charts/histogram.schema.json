@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/ztd-charts/schema/charts/histogram.schema.json",
+  "title": "Histogram",
+  "description": "Distribution of raw samples with its tail and the share past a limit. Use when: 30 or more raw samples, such as request latency, where the tail and the share past a limit matter. Avoid when: Comparing categories (use bars), or fewer than 10 samples (a beeswarm fits better)",
+  "type": "object",
+  "required": [
+    "type",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "type": {
+      "const": "histogram"
+    },
+    "data": {
+      "$ref": "#/$defs/data"
+    },
+    "encoding": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "Sample value field (raw rows) (number)"
+        },
+        "group": {
+          "type": "string",
+          "description": "Group field. Up to 2 groups overlap (string)"
+        },
+        "x0": {
+          "type": "string",
+          "description": "Bin start (pre-binned rows) (number)"
+        },
+        "x1": {
+          "type": "string",
+          "description": "Bin end (pre-binned rows) (number)"
+        },
+        "count": {
+          "type": "string",
+          "description": "Samples in the bin (pre-binned rows) (number)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "description": "Shape. dots stacks one dot per N samples, step draws an outline that overlays well",
+          "default": "bars",
+          "enum": [
+            "bars",
+            "dots",
+            "step"
+          ]
+        },
+        "marks": {
+          "description": "Percentile lines with labels, such as [\"p50\", \"p95\", \"p99\"]. p50 is solid, the rest dashed. From pre-binned rows they are estimated inside the bins",
+          "default": [
+            "p50",
+            "p95"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "threshold": {
+          "description": "Limit line { value, label, side }. side \"above\" (default) or \"below\" is the bad side: its bins take the accent color and the description counts the samples past it",
+          "type": "object"
+        },
+        "edges": {
+          "description": "Bin edges, smallest first. Samples outside them are counted and reported, not drawn. Bins come from edges, then binWidth, then bins, then the Freedman-Diaconis rule (Sturges under 30 samples)",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "binWidth": {
+          "description": "Bin width. Edges fall on multiples of it. Not used with log",
+          "type": "number"
+        },
+        "bins": {
+          "description": "About this many bins. Widths snap to a readable step",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "log": {
+          "description": "Log bins and axis. Every value must be above 0",
+          "default": false,
+          "type": "boolean"
+        },
+        "kde": {
+          "description": "Density curve over the bins (raw rows only)",
+          "default": false,
+          "type": "boolean"
+        },
+        "height": {
+          "description": "Height in px. Without it, each chart picks a default that fits its width",
+          "type": "number",
+          "minimum": 40
+        },
+        "width": {
+          "description": "Fixed width in px. Without it, the chart fits its parent",
+          "type": "number",
+          "minimum": 40
+        },
+        "highlight": {
+          "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          ]
+        },
+        "format": {
+          "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+          "anyOf": [
+            {
+              "enum": [
+                "number",
+                "integer",
+                "percent",
+                "ratio",
+                "compact",
+                "currency",
+                "decimal"
+              ]
+            },
+            {
+              "type": "object",
+              "description": "Intl.NumberFormat options plus suffix and prefix"
+            }
+          ]
+        },
+        "unit": {
+          "description": "Unit appended to values. For example \"%\" or \"ms\"",
+          "type": "string"
+        },
+        "locale": {
+          "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+          "default": "en-US",
+          "type": "string"
+        },
+        "animate": {
+          "description": "Entry and update animation",
+          "default": true,
+          "type": "boolean"
+        },
+        "duration": {
+          "description": "Animation length (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "easing": {
+          "description": "Motion curve",
+          "default": "spring",
+          "enum": [
+            "spring",
+            "easeOut",
+            "easeInOut",
+            "linear"
+          ]
+        },
+        "stagger": {
+          "description": "Delay between items as they enter (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "reducedMotion": {
+          "description": "\"auto\" follows the OS setting. true always turns motion off",
+          "default": "auto"
+        },
+        "animateOnView": {
+          "description": "Play when the chart scrolls into view",
+          "default": true,
+          "type": "boolean"
+        },
+        "showLabels": {
+          "description": "Labels drawn on the chart (values and names)",
+          "default": true,
+          "type": "boolean"
+        },
+        "tooltip": {
+          "description": "Show tooltips",
+          "default": true,
+          "type": "boolean"
+        },
+        "syncId": {
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "type": "string"
+        },
+        "ariaLabel": {
+          "description": "Name for screen readers",
+          "type": "string"
+        },
+        "description": {
+          "description": "Description for screen readers. Built from the data when omitted",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "card": {
+      "$ref": "#/$defs/card"
+    },
+    "theme": {
+      "$ref": "#/$defs/theme"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "data": {
+      "description": "An array of objects, or one of { values }, { csv }, { url }",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "values"
+          ],
+          "properties": {
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "csv"
+          ],
+          "properties": {
+            "csv": {
+              "type": "string",
+              "description": "CSV text (the first line is the header)"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "JSON or CSV address (REST API, Google Sheets CSV export and so on)"
+            },
+            "format": {
+              "enum": [
+                "json",
+                "csv",
+                "auto"
+              ],
+              "default": "auto"
+            },
+            "select": {
+              "type": "string",
+              "description": "Path to the array inside the response JSON. For example \"data.items\""
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "card": {
+      "type": "object",
+      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway and level badge",
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "For example \"01\""
+        },
+        "title": {
+          "type": "string"
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "takeaway": {
+          "type": "string",
+          "description": "Bold one-line takeaway at the bottom"
+        },
+        "level": {
+          "type": "string",
+          "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
+        },
+        "legend": {
+          "anyOf": [
+            {
+              "const": "auto"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "enum": [
+                      "square",
+                      "line",
+                      "dash",
+                      "circle"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Marks the data as sample data"
+        },
+        "replay": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "anyOf": [
+        {
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Token overrides. For example { accent: \"#00C2FF\" }",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

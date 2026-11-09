@@ -109,14 +109,15 @@ In a JSON spec they go in `options.annotations`, and `validate` points at the it
 
 ## Live data
 
-`LiveLineChart` draws a stream. Pass the rows you have (`x` is a time: a Date, ms or an ISO string) and append new rows as they arrive. It shows the last `window` (default one minute). Drop rows older than that as you go: the chart sorts and scans every row you pass.
+`LiveLineChart` draws a stream. Pass the rows you have (`x` is a time: a Date, ms or an ISO string) and append new rows as they arrive. It shows the last `window` (default one minute). Keep about twice that and drop older rows as you go: the chart sorts and scans every row you pass, and trimming to exactly the window leaves a gap at the left edge.
 - Between points the line glides left on the chart's own clock, which follows your timestamps, so the end does not go blank before the next point arrives. If points arrive in a burst, it catches up a little faster.
 - Point at it, or Tab in and move with the arrows, and it pauses so you can read a value. It resumes when you leave.
 - With reduced motion it moves only when a point arrives.
 - It is a component only: JSON specs and the CLI draw still pictures, so there is no `live` spec type.
 
 ```tsx
-// rows: [{ t: 1717383600000, v: 1204 }, ...], append each new row as it arrives
+// rows: [{ t: 1717383600000, v: 1204 }, ...]. When a new row `next` arrives, append it and keep twice the window
+setRows((rows) => [...rows.filter((r) => r.t > next.t - 120_000), next]);
 <LiveLineChart data={rows} x="t" y="v" window={60_000} format="integer" />
 ```
 
@@ -156,6 +157,8 @@ export function Revenue() {
 | Raw samples → percentiles (p95) | `percentiles(rows, { by: "minute", value: "ms" })` gives `p50`, `p95`, `p99` per group, then `y={["p50", "p95", "p99"]}` |
 
 `loading` is true while any fetch runs, including `refreshMs` and `reload()`. The previous rows stay in `data` meanwhile, so `loading={r.loading && !r.data.length}` (as above) shows the skeleton only on the first load and keeps the chart in place during a refresh.
+
+A missing value is `null`, `NaN`, an empty CSV cell, or no row for a series at an x. From 0.5, line charts and non-stacked area charts break the line and its fill at a missing value, and a point left with no neighbours shows as a dot, so the chart draws only values that are in the data. `connectNulls` (`options.connectNulls` in a JSON spec) joins the neighbours as before. Stacked areas are unchanged: a missing value stacks as 0.
 
 Example code is in [examples/data/](../examples/data) (REST, CSV, Supabase, Google Sheets, Postgres API). The docs site's ["Data" page](https://charts.ztd.app/docs/data/) shows them working, and you can paste a Google Sheets address to try it.
 
@@ -198,7 +201,7 @@ npx ztd-charts-cli suggest sales.csv --out-dir charts
 
 Messages, chart text and number formats are English by default; add `--locale ko` anywhere on the command line for Korean.
 
-Installed in a project (`npm i -D ztd-charts-cli`), the command is `ztd-charts`. Without installing, run it as `npx ztd-charts-cli`: `npx ztd-charts` alone fetches the chart library, which has no command. PNGs are drawn with [resvg](https://github.com/yisibl/resvg-js); if the `pretendard` package is installed or `ZTD_CHARTS_FONT_DIR` is set, that font is used (`--font path.otf` works too).
+Installed in a project (`npm i -D ztd-charts-cli`), the command is `ztd-charts`. Without installing, run it as `npx ztd-charts-cli`: `npx ztd-charts` alone fetches the chart library, which has no command. PNGs are drawn with [resvg](https://github.com/yisibl/resvg-js) in Pretendard, which ships with the package, so text renders even on a machine with no fonts installed. `--font path.otf` or `ZTD_CHARTS_FONT_DIR` uses your own fonts instead.
 
 ## MCP server
 

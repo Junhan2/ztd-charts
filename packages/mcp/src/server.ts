@@ -1,10 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, specSnippet, suggest, validate, type ChartSpec } from "ztd-charts-cli";
-import { GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
+import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.4.1";
+export const SERVER_VERSION = "0.5.0";
+/** 설명에 쓰는 차트 수. 차트를 더해도 손으로 고치지 않게 목록에서 세요 */
+const N = CHARTS.length;
 
 const GROUP_IDS = GROUPS.map((g) => g.id) as [ChartGroup, ...ChartGroup[]];
 const LEVEL_IDS = LEVELS.map((l) => l.id) as [ChartLevel, ...ChartLevel[]];
@@ -21,13 +23,13 @@ function trimSpec(spec: ChartSpec, rows = 20): ChartSpec {
 export function createServer(): McpServer {
   // 에이전트가 넘기는 주소로 사내망, 이 컴퓨터, 클라우드 메타데이터를 읽지 못하게 기본으로 막아요. 로컬 개발 서버의 데이터가 필요하면 이 값을 1로 켜요
   const allowPrivate = process.env.ZTD_CHARTS_ALLOW_PRIVATE_URLS === "1";
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, resources: {} }, instructions: 'ztd-charts: 33 animated React chart types driven by a JSON spec { type, data, encoding, options, card }. Typical flow: suggest_chart (or list_charts) -> get_chart_schema -> write a spec -> validate_spec -> render_chart to preview -> use the returned React snippet. Built-in chart text (tooltips, screen reader text, badges) and number formats are English by default. For Korean, pass locale "ko" to render_chart or set options.locale in the spec, and write card text in Korean. validate_spec and suggest_chart take locale too.' });
+  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, resources: {} }, instructions: `ztd-charts: ${N} animated React chart types driven by a JSON spec { type, data, encoding, options, card }. Typical flow: suggest_chart (or list_charts) -> get_chart_schema -> write a spec -> validate_spec -> render_chart to preview -> use the returned React snippet. Built-in chart text (tooltips, screen reader text, badges) and number formats are English by default. For Korean, pass locale "ko" to render_chart or set options.locale in the spec, and write card text in Korean. validate_spec and suggest_chart take locale too.` });
 
   server.registerTool(
     "list_charts",
     {
       title: "List chart types",
-      description: "List the 33 chart types with name, level (basic, intermediate, advanced), group, one-line summary, when to use or avoid, and encoding channels. Filter by group or level.",
+      description: `List the ${N} chart types with name, level (basic, intermediate, advanced), group, one-line summary, when to use or avoid, and encoding channels. Filter by group or level.`,
       inputSchema: { group: z.enum(GROUP_IDS).optional().describe("Chart group"), level: z.enum(LEVEL_IDS).optional().describe("Difficulty level") },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
@@ -41,8 +43,8 @@ export function createServer(): McpServer {
     "get_chart_schema",
     {
       title: "Get chart schema",
-      description: "Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all 33 charts (about 200 KB, so prefer asking for one type).",
-      inputSchema: { type: z.string().optional().describe('Chart type, e.g. "pie", "line", "sankey". Aliases like "scatter", "violin" work.') },
+      description: `Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all ${N} charts (about 200 KB, so prefer asking for one type).`,
+      inputSchema: { type: z.string().optional().describe('Chart type, e.g. "pie", "line", "sankey". Aliases like "doughnut", "violin" work.') },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
     async ({ type }) => {

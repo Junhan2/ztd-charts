@@ -1,6 +1,6 @@
 # ztd-charts-cli
 
-`ztd-charts`: the list of all 33 charts, JSON Schema, spec validation, SVG/PNG/HTML rendering, starter files, and chart suggestions from your data.
+`ztd-charts`: the list of all 36 charts, JSON Schema, spec validation, SVG/PNG/HTML rendering, starter files, and chart suggestions from your data.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [GitHub](https://github.com/Junhan2/ztd-charts)
 
@@ -21,7 +21,7 @@ Installed in a project (`npm i -D ztd-charts-cli`), the command is `ztd-charts`.
 
 Messages, chart text and number formats are English by default. Add `--locale ko` for Korean. `validate` exits with 1 when the spec has errors, so it works in CI.
 
-PNGs are drawn with resvg. Chart text asks for Pretendard first, then Apple SD Gothic Neo, Noto Sans KR or Malgun Gothic. Besides system fonts, the CLI loads the `pretendard` package when it is installed next to the CLI, every font in `ZTD_CHARTS_FONT_DIR`, and `--font path.otf`. For Korean text in PNGs, make one of those fonts available.
+PNGs are drawn with resvg. Chart text asks for Pretendard first, then Apple SD Gothic Neo, Noto Sans KR or Malgun Gothic. The package ships Pretendard in the five weights charts use (SIL Open Font License 1.1, see `fonts/LICENSE.txt`), so PNG text, Korean included, renders even in a Linux container with no fonts installed. `--font path.otf` or `ZTD_CHARTS_FONT_DIR` loads your own fonts in place of the bundled ones.
 
 To use it from a program: `import { render, validate, suggest, listCharts } from "ztd-charts-cli"`.
 

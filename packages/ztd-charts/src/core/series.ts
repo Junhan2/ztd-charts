@@ -20,6 +20,8 @@ export interface SeriesModel<T> {
   /** values[s][k], 값이 없으면 NaN */
   values: number[][];
   rows: (T | null)[][];
+  /** bucketSeries로 줄였을 때만: 구간 평균(values)이 아니라 대표 행(keys, labels, rows와 같은 행)의 실제 값. 툴팁과 이벤트가 읽어요 */
+  rowValues?: number[][];
 }
 
 const DATE_RE = /^\d{4}-\d{1,2}(-\d{1,2})?([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
@@ -121,7 +123,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
 
 /**
  * x를 구간 평균으로 줄여요. 모든 계열이 같은 x를 쓰니 쌓은 차트(영역, 스트림)에서 층이 어긋나지 않아요.
- * 대표 키와 라벨은 구간 가운데 것을 써요.
+ * 대표 키와 라벨은 구간 가운데 것을 써요. 그 행의 실제 값은 rowValues에 남겨요 (평균은 그리기용).
  */
 export function bucketSeries<T>(m: SeriesModel<T>, maxPoints: number): SeriesModel<T> {
   const n = m.keys.length;
@@ -156,5 +158,6 @@ export function bucketSeries<T>(m: SeriesModel<T>, maxPoints: number): SeriesMod
     series: m.series,
     values,
     rows: m.rows.map((r) => pick.map((k) => r[k])),
+    rowValues: m.values.map((r) => pick.map((k) => r[k])),
   };
 }

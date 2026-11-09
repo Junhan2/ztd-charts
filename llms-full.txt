@@ -1,6 +1,6 @@
 # ztd charts: full reference
 
-> ztd charts (npm package ztd-charts) is a React 18+ chart library with 33 animated, interactive, accessible chart types drawn in pure SVG. It has zero runtime dependencies: react and react-dom are peer dependencies. Each chart can be written as a JSON spec { type, data, encoding, options, card } and rendered with <Chart spec/>, validated against a JSON Schema, drawn to PNG, SVG or HTML by the ztd-charts CLI, or picked and drawn by AI agents through a stdio MCP server. MIT license.
+> ztd charts (npm package ztd-charts) is a React 18+ chart library with 36 animated, interactive, accessible chart types drawn in pure SVG. It has zero runtime dependencies: react and react-dom are peer dependencies. Each chart can be written as a JSON spec { type, data, encoding, options, card } and rendered with <Chart spec/>, validated against a JSON Schema, drawn to PNG, SVG or HTML by the ztd-charts CLI, or picked and drawn by AI agents through a stdio MCP server. MIT license.
 
 Key facts:
 
@@ -37,14 +37,14 @@ Channels whose prop name differs: gauge value -> valueKey, gauge target -> targe
 
 Entry points:
 
-- `ztd-charts`: the 33 chart components (<PieChart>, <LineChart> and so on), <Chart spec/>, <ChartCard>, <ChartGrid>, <ChartState>, <ThemeProvider>, useChartData, number formatters
+- `ztd-charts`: the 36 chart components (<PieChart>, <LineChart> and so on), <Chart spec/>, <ChartCard>, <ChartGrid>, <ChartState>, <ThemeProvider>, useChartData, number formatters
 - `ztd-charts/spec`: works without React. CHARTS (the registry), validateSpec, specSchema, schemaFor, suggestCharts, chartsIn, localizeDef, sample data
 - `ztd-charts/server`: renderSpecToSVG (a standalone SVG with the card frame), renderSpecToHTML, resolveSpecData
 - `ztd-charts/schema.json`: JSON Schema (draft 2020-12) for every spec. One chart: `ztd-charts/schema/charts/<type>.schema.json`
 
 Spec:
 
-- type: one of the 33 types below. Aliases: doughnut -> donut, scatter -> bubble, column -> bar, stackedBar -> bar, groupedBar -> bar, stacked -> area, streamgraph -> stream, radial -> radialBar, radialbar -> radialBar, progress -> gauge, progressRing -> gauge, kpi -> gauge, violin -> box, boxplot -> box, calendarHeatmap -> calendar, parallel-coordinates -> parallel, parallelCoordinates -> parallel, mekko -> marimekko, spider -> radar, ohlc -> candlestick, candle -> candlestick, stock -> candlestick, segment -> segmented, segmentedBar -> segmented, proportionBar -> segmented, stackedBar100 -> segmented
+- type: one of the 36 types below. Aliases: doughnut -> donut, column -> bar, stackedBar -> bar, groupedBar -> bar, stacked -> area, streamgraph -> stream, radial -> radialBar, radialbar -> radialBar, progress -> gauge, progressRing -> gauge, kpi -> gauge, violin -> box, boxplot -> box, calendarHeatmap -> calendar, parallel-coordinates -> parallel, parallelCoordinates -> parallel, mekko -> marimekko, spider -> radar, ohlc -> candlestick, candle -> candlestick, stock -> candlestick, segment -> segmented, segmentedBar -> segmented, proportionBar -> segmented, stackedBar100 -> segmented, hist -> histogram
 - data: an array of row objects, { values }, { csv } or { url, format?, select? }. <Chart>, the CLI and the MCP render_chart tool fetch the url.
 - encoding: channel -> field name. y can be an array of fields for wide tables.
 - options.highlight: Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none". Without it, each chart picks its own default (listed per chart in llms-full.txt).
@@ -62,13 +62,13 @@ Data helpers:
 - Accessors accept a field name (dot paths ok) or a function (d, i) => value. Strings like "1,234", "12%", "₩5,000" are read as numbers.
 - <ChartState loading error empty onRetry> shows matching states at chart height.
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.49 KB, DonutChart 13.5 KB, FunnelChart 12.25 KB, WaffleChart 12.39 KB, Treemap 12.76 KB, SunburstChart 13.14 KB, WaterfallChart 13.06 KB, ParetoChart 13.36 KB, MarimekkoChart 12.93 KB, Heatmap 13.52 KB, RadarChart 12.94 KB, BubbleChart 13.93 KB, LineChart 22.11 KB, AreaChart 22.17 KB, StreamGraph 15.44 KB, BarChart 18.13 KB, RadialBarChart 11.77 KB, GaugeChart 11.96 KB, BulletChart 12.56 KB, Sparkline 13.74 KB, SlopeChart 12.49 KB, DumbbellChart 12.13 KB, LollipopChart 12.87 KB, BeeswarmChart 13.76 KB, RidgelineChart 12.87 KB, SankeyChart 13.4 KB, ChordChart 12.4 KB, CalendarHeatmap 14.01 KB, BumpChart 13.66 KB, BoxPlot 14.04 KB, ParallelCoordinates 13.28 KB, CandlestickChart 19.18 KB, SegmentedBar 12.35 KB, StatCard 14.38 KB, LiveLineChart 12.99 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.49 KB, DonutChart 13.5 KB, FunnelChart 12.25 KB, WaffleChart 12.39 KB, Treemap 12.76 KB, SunburstChart 13.14 KB, WaterfallChart 13.06 KB, ParetoChart 13.36 KB, MarimekkoChart 12.93 KB, Heatmap 13.73 KB, RadarChart 12.94 KB, BubbleChart 15.51 KB, LineChart 24.23 KB, AreaChart 24.23 KB, StreamGraph 15.45 KB, BarChart 18.25 KB, RadialBarChart 11.77 KB, GaugeChart 11.96 KB, BulletChart 12.56 KB, Sparkline 13.74 KB, SlopeChart 12.49 KB, DumbbellChart 12.13 KB, LollipopChart 12.87 KB, BeeswarmChart 13.97 KB, RidgelineChart 12.89 KB, SankeyChart 13.4 KB, ChordChart 12.4 KB, CalendarHeatmap 14.18 KB, BumpChart 13.65 KB, BoxPlot 14.04 KB, ParallelCoordinates 13.48 KB, CandlestickChart 19.24 KB, SegmentedBar 12.35 KB, SkylineChart 17.86 KB, HistogramChart 18.12 KB, ScatterChart 18.26 KB, StatCard 14.38 KB, LiveLineChart 12.99 KB
 
 Source: https://github.com/Junhan2/ztd-charts (MIT license). The two sections below are the agent skill (skills/ztd-charts/SKILL.md) and the reference for every chart, both from the repository.
 
 ## ztd charts skill
 
-33 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
+36 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
 
 ### Steps
 
@@ -98,9 +98,9 @@ Decide the question first, then the form.
 | Why it went up or down | start + drivers (±) + end | `waterfall` | |
 | Drop-off by stage | stage + people (shrinking) | `funnel` | `sankey` (when paths split) |
 | Flow, movement | source + target + value | `sankey` | `chord` (two-way relationships) |
-| Distribution | group + many values | `box` | `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
+| Distribution | group + many values | `box` | `histogram` (one measure's shape, p95 and a limit), `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
 | Finding patterns | category × category + value | `heatmap` | `calendar` (daily, one year) |
-| Three metrics together | 2 or 3 numbers + name | `bubble` | scatter plot without size |
+| Two or three metrics together | 2 or 3 numbers + name | `scatter` (two numbers) | `bubble` (a third number as size) |
 | Comparing several metrics | item × metrics (4 to 8) | `radar` (1 or 2 series) | `parallel` (many items) |
 | Against a target | value + target | `gauge` (one), `bullet` (several) | `radialBar` (3 to 6 goals) |
 
@@ -183,7 +183,7 @@ export function Revenue() {
 - MCP (stdio): `npx -y ztd-charts-mcp`. Tools `list_charts`, `get_chart_schema`, `validate_spec`, `render_chart`, `suggest_chart`. `render_chart` takes `locale: "ko"` for Korean chart text.
 - Without React, `ztd-charts/spec` has the registry in English. Korean names, descriptions and examples: `chartsIn("ko")` or `localizeDef(def, "ko")`. Korean messages: `validateSpec(spec, { lang: "ko" })`, `suggestCharts(rows, { lang: "ko" })`.
 
-## Reference for all 33 charts
+## Reference for all 36 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -348,12 +348,12 @@ export function Revenue() {
 - What: Change over time
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
-- encoding: x, y[], series?
-- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor
+- encoding: x, y[], series?, lower?[], upper?[]
+- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
-{"type":"line","data":[{"month":"2025-01","app":"Our app","mau":42},{"month":"2025-01","app":"Rival A","mau":56.8},{"month":"2025-01","app":"Rival B","mau":38}],"encoding":{"x":"month","y":"mau","series":"app"},"options":{"area":true},"card":{"number":"13","title":"Line chart","subtitle":"Monthly active users (10k)","takeaway":"Only our app keeps climbing","level":"basic"}}
+{"type":"line","data":[{"month":"2025-01","app":"Our app","mau":42,"p5":39.4,"p95":44.6},{"month":"2025-01","app":"Rival A","mau":56.8},{"month":"2025-01","app":"Rival B","mau":38}],"encoding":{"x":"month","y":"mau","series":"app"},"options":{"area":true},"card":{"number":"13","title":"Line chart","subtitle":"Monthly active users (10k)","takeaway":"Only our app keeps climbing","level":"basic"}}
 ```
 
 ### area · Area chart (`<AreaChart>`, Basic, Trend)
@@ -361,8 +361,8 @@ export function Revenue() {
 - What: Running totals and a changing mix (stacked, 100% stacked)
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
-- encoding: x, y[], series?
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor
+- encoding: x, y[], series?, lower?[], upper?[]
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -614,6 +614,45 @@ export function Revenue() {
 
 ```json
 {"type":"segmented","data":[{"method":"Card","amount":412},{"method":"Mobile pay","amount":278},{"method":"Bank transfer","amount":134}],"encoding":{"label":"method","value":"amount"},"options":{"highlight":"Mobile pay"},"card":{"number":"33","title":"Segmented bar","subtitle":"Payment volume by method (100M KRW)","takeaway":"Mobile pay is one in three","level":"basic"}}
+```
+
+### skyline · Skyline (`<SkylineChart>`, Intermediate, Trend)
+
+- What: Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front
+- Use when: 7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard
+- Avoid when: Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)
+- encoding: x, y[], series?, front?[]
+- Chart options: depth, wall, texture: front|all|none, frontRate
+- Default highlight: the largest value
+
+```json
+{"type":"skyline","data":[{"day":"2026-10-23","Input":410000,"Cached":317223,"Output":186999,"Reasoning":79534,"Failed":11000,"Retried":10000},{"day":"2026-10-24","Input":446030,"Cached":337921,"Output":202044,"Reasoning":87942,"Failed":15314,"Retried":9190},{"day":"2026-10-25","Input":440886,"Cached":336150,"Output":202507,"Reasoning":87489,"Failed":15398,"Retried":6051}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 14 days","takeaway":"Nov 5 was the busiest day","level":"intermediate"}}
+```
+
+### histogram · Histogram (`<HistogramChart>`, Intermediate, Distribution)
+
+- What: Distribution of raw samples with its tail and the share past a limit
+- Use when: 30 or more raw samples, such as request latency, where the tail and the share past a limit matter
+- Avoid when: Comparing categories (use bars), or fewer than 10 samples (a beeswarm fits better)
+- encoding: value?, group?, x0?, x1?, count?
+- Chart options: variant: bars|dots|step, marks, threshold, edges, binWidth, bins, log, kde
+- Default highlight: the largest value
+
+```json
+{"type":"histogram","data":[{"ms":844},{"ms":132},{"ms":147}],"encoding":{"value":"ms"},"options":{"unit":"ms","marks":["p50","p95"],"threshold":{"value":400,"label":"SLO","side":"above"}},"card":{"number":"35","title":"Histogram","subtitle":"API request latency (ms)","takeaway":"1 in 16 requests misses the SLO","level":"intermediate","legend":[{"label":"Over the SLO","color":"accent"},{"label":"Within","color":"neutral"}]}}
+```
+
+### scatter · Scatter plot (`<ScatterChart>`, Basic, Relationship)
+
+- What: How two numbers relate, one dot per item, colored by series
+- Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series
+- Avoid when: x is time (a line works better), or there are more than 50,000 dots
+- encoding: x, y, series?, label?
+- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, hidden, fit: linear, refLines, quadrants, jitter
+- Default highlight: none, or the first series when a series channel is set
+
+```json
+{"type":"scatter","data":[{"id":"Request 1","model":"Large","cost":7,"ms":2400},{"id":"Request 2","model":"Medium","cost":6,"ms":1500},{"id":"Request 3","model":"Small","cost":3,"ms":660}],"encoding":{"x":"cost","y":"ms","series":"model","label":"id"},"options":{"highlight":"Large","xLabel":"Cost (¢)","yLabel":"Latency (ms)","unit":"ms","refLines":{"y":2000},"quadrants":["Slow and cheap","Slow and costly","Fast and cheap","Fast and costly"]},"card":{"number":"36","title":"Scatter plot","subtitle":"Cost and latency per request by model","takeaway":"Only the large model goes over 2 s","level":"basic","legend":"auto"}}
 ```
 
 ### Common options

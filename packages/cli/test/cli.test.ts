@@ -2,11 +2,11 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getChartSchema, listCharts, reactSnippet, render, specSnippet, suggest, validate } from "../src/api";
+import { findFonts, getChartSchema, listCharts, reactSnippet, render, specSnippet, suggest, validate } from "../src/api";
 import { CHARTS } from "ztd-charts/spec";
 
 const exec = promisify(execFile);
@@ -46,18 +46,18 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.4.1");
+    expect((await run("--version")).out.trim()).toBe("0.5.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
   });
-  it("list: 33종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
+  it("list: 36종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
     const t = await run("list");
-    expect(t.out).toContain("33 charts");
+    expect(t.out).toContain("36 charts");
     expect(t.out).toContain("Intermediate");
-    expect((await run("list", "--locale=ko")).out).toContain("33종");
+    expect((await run("list", "--locale=ko")).out).toContain("36종");
     const j = JSON.parse((await run("list", "--json")).out);
-    expect(j).toHaveLength(33);
+    expect(j).toHaveLength(36);
     const adv = JSON.parse((await run("list", "--level", "심화", "--json")).out);
     expect(adv.length).toBeGreaterThan(0);
     expect(adv.every((c: { level: string }) => c.level === "advanced")).toBe(true);
@@ -66,7 +66,7 @@ describe("ztd-charts CLI", () => {
   it("info, schema, example", async () => {
     expect((await run("info", "sankey")).out).toContain("<SankeyChart");
     const all = JSON.parse((await run("schema")).out);
-    expect(all.oneOf).toHaveLength(33);
+    expect(all.oneOf).toHaveLength(36);
     await run("schema", "pie", "--out", "pie.schema.json");
     expect(JSON.parse(readFileSync(join(dir, "pie.schema.json"), "utf8")).properties.type.const).toBe("pie");
     await run("example", "donut", "--out", "donut.json");
@@ -165,7 +165,7 @@ describe("ztd-charts CLI", () => {
 
 describe("CLI API", () => {
   it("listCharts, getChartSchema, validate, reactSnippet", () => {
-    expect(listCharts()).toHaveLength(33);
+    expect(listCharts()).toHaveLength(36);
     expect(listCharts({ group: "flow" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(listCharts({ group: "흐름" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(getChartSchema("violin")).toMatchObject({ properties: { type: { const: "box" } } });
@@ -176,12 +176,41 @@ describe("CLI API", () => {
     // card.legend: "auto"가 string으로 넓어지지 않게 타입을 달아요 (TS에서 바로 컴파일)
     expect(specSnippet(CHARTS[0].example)).toContain("const spec: ChartSpec = {");
   });
-  it("render는 33종 모두 PNG로 그려요", async () => {
+  it("render는 36종 모두 PNG로 그려요", async () => {
     for (const c of CHARTS) {
       const r = await render(c.example, { format: "png", width: 560, scale: 1 });
       expect(r.png!.subarray(1, 4).toString(), c.type).toBe("PNG");
       expect(r.width).toBe(560);
     }
+  });
+  it("render는 같은 스카이라인 스펙에서 두 번 같은 PNG를 만들어요 (기본 폭)", async () => {
+    const spec = CHARTS.find((c) => c.type === "skyline")!.example;
+    const [a, b] = [await render(spec, { format: "png" }), await render(spec, { format: "png" })];
+    expect(a.png!.length).toBeGreaterThan(1000);
+    expect(Buffer.compare(a.png!, b.png!)).toBe(0);
+  });
+  it("npm 패키지에 PNG용 Pretendard 다섯 굵기와 OFL 라이선스가 실려요", async () => {
+    // 글꼴이 하나도 없는 리눅스(node:22-slim 같은 컨테이너)에서는 이 글꼴이 빠지면 PNG의 글자가 모두 사라져요
+    const { stdout } = await exec("npm", ["pack", "--dry-run", "--json"], { cwd: fileURLToPath(new URL("..", import.meta.url)) });
+    const files = (JSON.parse(stdout) as { files: { path: string }[] }[])[0].files.map((f) => f.path);
+    for (const w of ["Regular", "Medium", "SemiBold", "Bold", "ExtraBold"]) expect(files).toContain(`fonts/Pretendard-${w}.otf`);
+    expect(files).toContain("fonts/LICENSE.txt");
+  });
+  it("--font로 글꼴을 주면 패키지에 실은 Pretendard는 읽지 않아요", () => {
+    const fromBundle = (list: string[]) => list.filter((f) => f.includes(`${sep}cli${sep}fonts${sep}`));
+    const bundled = fromBundle(findFonts());
+    expect(bundled).toHaveLength(5);
+    const mine = bundled.find((f) => f.endsWith("Pretendard-Regular.otf"))!;
+    expect(fromBundle(findFonts([mine]))).toEqual([mine]);
+  });
+  it("scatter with jitter draws the same PNG twice (fixed seed)", async () => {
+    const def = CHARTS.find((c) => c.type === "scatter")!;
+    const spec = { ...def.example, options: { ...def.example.options, jitter: { amount: 0.4 } } };
+    const png = async (s: Parameters<typeof render>[0]) => (await render(s, { format: "png", width: 560, scale: 1 })).png!;
+    const a = await png(spec);
+    expect(a.equals(await png(spec))).toBe(true);
+    // 흔들림이 실제로 그림을 바꿔요
+    expect(a.equals(await png(def.example))).toBe(false);
   });
   it("suggest", () => {
     expect(suggest([{ value: 1, target: 2 }]).suggestions[0].type).toBe("gauge");

@@ -208,3 +208,32 @@ export function argMin(xs: readonly number[]): number {
   });
   return best;
 }
+
+export interface LinearFit {
+  /** x가 1 늘 때 y가 느는 양 */
+  slope: number;
+  /** 결정계수(0~1). 점이 직선에 붙을수록 1이고, x나 y가 모두 같으면 0이에요 */
+  r2: number;
+  /** 직선 위 y */
+  at: (x: number) => number;
+}
+
+/**
+ * 최소제곱 직선. 라인, 막대, 캔들스틱의 추세선 주석과 산점도 추세선이 같이 써요.
+ * x가 모두 같으면 기울기 0인 가로선이에요
+ */
+export function linearFit(pts: readonly { x: number; y: number }[]): LinearFit {
+  const n = pts.length;
+  const mx = pts.reduce((s, q) => s + q.x, 0) / n;
+  const my = pts.reduce((s, q) => s + q.y, 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (const q of pts) {
+    sxy += (q.x - mx) * (q.y - my);
+    sxx += (q.x - mx) ** 2;
+    syy += (q.y - my) ** 2;
+  }
+  const slope = sxx ? sxy / sxx : 0;
+  return { slope, r2: sxx && syy ? (sxy * sxy) / (sxx * syy) : 0, at: (x) => my + slope * (x - mx) };
+}

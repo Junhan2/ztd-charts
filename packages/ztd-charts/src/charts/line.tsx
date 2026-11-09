@@ -1,9 +1,10 @@
 import { useId, useMemo, type ReactNode } from "react";
 import { AXIS_FONT, AxisPill, fitTickLabels, GridY, HoverLine, thinLabels, yAxisWidth } from "../core/axis";
 import { BrushBand, changeRatio, ExtremeTags, signedPercent, useChartBrush, useZoom, type BrushProps } from "../core/brush";
-import { ChartFrame, Txt } from "../core/ChartFrame";
+import { capTipRows, ChartFrame, Txt } from "../core/ChartFrame";
 import { makeTickFormatter } from "../core/format";
 import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, forecastFrom, forecastX, type Annotation, type AnnotationGeom } from "../core/annotations";
+import { bandBounds, bandPath, bandShape, boundField, isOutside, type BandShape, type BoundField } from "../core/band";
 import { areaPath, linePath, nearestIndex, r2, type Curve } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
@@ -16,6 +17,7 @@ import { lazyArray } from "../core/lazy";
 import { useChart, type ChartCtx } from "../core/useChart";
 import { useSync } from "../core/sync";
 import { useMotion } from "../core/useMotion";
+import { uniq } from "../data/accessor";
 import { lttb } from "../data/parse";
 import { stack } from "../layout/stack";
 import { plural, type ChartLang } from "../core/i18n";
@@ -26,6 +28,16 @@ const en = {
   /** 고른 구간을 읽어 줄 때 앞부분 */
   span: (range: string, change: string) => `${range}: ${change}`,
   desc: (nS: number, names: string, from: string, to: string, n: number) => `${plural(nS, "series", "series")} (${names}), x from ${from} to ${to}, ${plural(n, "point")}`,
+  /** 경계 필드에 이름이 없을 때(함수) 툴팁에 쓰는 이름 */
+  lower: "low",
+  upper: "high",
+  /** 설명: 칠한 범위. ranges는 "p5 to p95" 꼴 */
+  band: (ranges: string) => ` Range ${ranges}.`,
+  range: (lo: string, hi: string) => `${lo} to ${hi}`,
+  /** 설명: 범위 밖 점 (outside 옵션) */
+  outside: (n: number, where: string) => (n ? ` ${plural(n, "point")} outside the range: ${where}.` : " No points outside the range."),
+  /** 범위 밖 점 하나: x 이름표와 계열 */
+  where: (label: string, series: string) => `${label} (${series})`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
@@ -34,6 +46,12 @@ const MSG: Record<ChartLang, typeof en> = {
     area: "영역 차트",
     span: (range, change) => `${range} 구간 ${change}`,
     desc: (nS, names, from, to, n) => `계열 ${nS}개(${names}), x ${from}부터 ${to}까지 ${n}개 지점`,
+    lower: "하한",
+    upper: "상한",
+    band: (ranges) => ` 범위 ${ranges}.`,
+    range: (lo, hi) => `${lo}~${hi}`,
+    outside: (n, where) => (n ? ` 범위 밖 ${n}개 지점: ${where}.` : " 범위 밖 지점 없음."),
+    where: (label, series) => `${label}(${series})`,
   },
 };
 
@@ -71,6 +89,16 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
   baseline?: number;
   /** signColors에서 기준값 아래 색. 테마 토큰이나 CSS 색. 기본 "neutralStrong" */
   downColor?: string;
+  /** 범위 띠의 아래 경계 필드. 넓은 표면 y와 같은 순서의 배열, 긴 표면 필드 하나(계열은 series). upper와 함께 줘요. 쌓은 영역에서는 그리지 않아요 */
+  lower?: Accessor<T, number> | string[];
+  /** 범위 띠의 위 경계 필드. lower와 같은 꼴 */
+  upper?: Accessor<T, number> | string[];
+  /** 띠를 그리기 시작하는 x. "forecast"면 forecast 주석의 from부터예요. 기본 "start" */
+  bandFrom?: "start" | "forecast";
+  /** 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요. 기본 false */
+  outside?: boolean;
+  /** 빠진 값(null, NaN, 그 x에 그 계열의 행이 없음)을 건너 이웃 점을 이어요. 기본 false: 선과 면이 그 자리에서 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역은 상관없어요 */
+  connectNulls?: boolean;
 }
 
 /** 모델에서 x 인덱스 a~b(양끝 포함)만 남겨요 */
@@ -87,6 +115,47 @@ function sliceModel<T>(m: SeriesModel<T>, a: number, b: number): SeriesModel<T> 
     values: m.values.map((r) => r.slice(lo, hi + 1)),
     rows: m.rows.map((r) => r.slice(lo, hi + 1)),
   };
+}
+
+/** 띠를 그리기 시작하는 x 인덱스. "forecast"면 forecast 주석의 from 이상인 첫 x이고, 그런 x가 없으면 띠를 그리지 않아요 (데이터 값으로 재서 축 범위보다 먼저 정해요) */
+function bandStartIndex(m: SeriesModel<unknown>, mode: XYProps["bandFrom"], from: unknown): number {
+  if (mode !== "forecast") return 0;
+  const n = m.keys.length;
+  if (from === undefined) return n;
+  if (m.type === "band") {
+    const i = m.keys.indexOf(String(from));
+    return i < 0 ? n : i;
+  }
+  const t = xNum(m.type, from);
+  if (!Number.isFinite(t)) return n;
+  const i = m.xnum.findIndex((v) => v >= t);
+  return i < 0 ? n : i;
+}
+
+/** 설명에 붙이는 띠 문장: 칠한 범위, outside면 범위 밖 점 수와 앞 다섯 곳. 칠한 범위가 없으면 빈 글자 */
+function describeBand<T>(m: SeriesModel<T>, bands: { lo: number[]; hi: number[] }[], names: readonly (readonly [string, string])[], outside: boolean, msg: (typeof MSG)[ChartLang]): string {
+  // 계열이 여럿이면 어느 계열의 범위인지 같이 적어요: "p5 to p95 (Our app)"
+  const named = (si: number, text: string) => (m.series.length > 1 && m.series[si] ? msg.where(text, m.series[si]) : text);
+  const ranges = uniq(bands.flatMap((b, si) => (b.lo.some(Number.isFinite) ? [named(si, msg.range(...names[si]))] : [])));
+  if (!ranges.length) return "";
+  const text = msg.band(ranges.join(", "));
+  if (!outside) return text;
+  let n = 0;
+  const where: string[] = [];
+  bands.forEach((b, si) => {
+    for (let k = 0; k < b.lo.length; k++) {
+      if (!isOutside(m.values[si][k], b.lo[k], b.hi[k])) continue;
+      n++;
+      if (where.length < 5) where.push(named(si, m.labels[k]));
+    }
+  });
+  return text + msg.outside(n, `${where.join(", ")}${n > where.length ? ", …" : ""}`);
+}
+
+/** 경계 필드의 이름 (툴팁, 설명). 계열마다 고르는 규칙은 boundField와 같고 함수면 fallback */
+function boundName(f: unknown, s: number, wide: boolean, fallback: string): string {
+  const v = boundField(f as BoundField<unknown>, s, wide);
+  return typeof v === "string" && v ? v : fallback;
 }
 
 export interface LineChartProps<T = Row> extends XYProps<T> {
@@ -110,6 +179,12 @@ interface SeriesDraw {
   sw: Swatch;
   hi: boolean;
   idx: number[];
+  /** 이어 그리는 조각마다 pts 안 [시작, 끝). 빠진 값에서 끊겨요. [[0, 5], [5, 9]]면 0~4, 5~8 두 조각 */
+  spans: (readonly [number, number])[];
+  /** 범위 띠 모양. 위, 아래 y는 움직임 값 뒤쪽에 붙어요 */
+  band?: BandShape;
+  /** 띠 밖으로 나간 점 (pts 안 위치, outside 옵션) */
+  out?: number[];
 }
 
 function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number): ((k: number) => number) & { v?: (t: number) => number } {
@@ -178,8 +253,28 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   // 쌓은 영역은 층이 같은 x를 써야 해서 LTTB 대신 구간 평균으로 줄여요 (2px에 한 점이면 곡선이 충분히 고와요)
   const areaBudget = Math.max(40, Math.round(props.maxPoints ?? W / 2));
   const model = useMemo(() => (stackMode !== "none" ? bucketSeries(viewed, areaBudget) : viewed), [viewed, stackMode, areaBudget]);
+  // 툴팁, 이벤트의 값: 줄였으면 구간 평균이 아니라 대표 행(이름표, datum과 같은 행)의 실제 값
+  const rowVals = model.rowValues ?? model.values;
 
   const stacked = useMemo(() => (stackMode === "none" ? null : stack(model.values, stackMode === "percent" ? "expand" : "zero")), [model, stackMode]);
+
+  // 예측 주석이 시작하는 x (띠 시작과 예측 점선이 같이 써요)
+  const fFrom = forecastFrom(props.annotations);
+  // 범위 띠: 계열마다 [아래, 위] 값 (바뀐 경계는 바꿔 놓고, bandFrom 앞과 빠진 x는 NaN). 쌓은 영역에서는 그리지 않아요
+  const { lower, upper } = props;
+  const bandStart = bandStartIndex(model as SeriesModel<unknown>, props.bandFrom, fFrom);
+  // 그릴 경계가 하나도 없으면(예: 예측 주석 없는 bandFrom "forecast") 띠가 없는 차트와 똑같이 그려요
+  const bands = useMemo(() => {
+    if (lower === undefined || upper === undefined || stackMode !== "none") return null;
+    const b = bandBounds(model.rows, lower, upper, Array.isArray(props.y), props.data, bandStart);
+    return b.some((s) => s.lo.some(Number.isFinite)) ? b : null;
+  }, [model, lower, upper, props.y, props.data, stackMode, bandStart]);
+  // 띠 값의 양끝은 띠가 바뀔 때만 구해요 (매 프레임 1만 칸을 allY에 넣지 않게)
+  const bandYs = useMemo(() => {
+    const ys: number[] = [];
+    bands?.forEach((b) => b.lo.forEach((v, k) => Number.isFinite(v) && ys.push(v, b.hi[k])));
+    return ys.length ? extent(ys) : ys;
+  }, [bands]);
 
   const hi = useMemo(() => {
     const totals = model.values.map((row) => row.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
@@ -197,6 +292,8 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const allY: number[] = [];
   if (stacked) stacked.y1.forEach((r) => r.forEach((v) => allY.push(v)));
   else model.values.forEach((r) => r.forEach((v) => Number.isFinite(v) && allY.push(v)));
+  // 띠도 그림 안에 (그리는 x만)
+  allY.push(...bandYs);
   // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게
   props.referenceLines?.forEach((r) => allY.push(r.y));
   allY.push(...annotationYs(props.annotations));
@@ -255,7 +352,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     },
   };
   // 예측 구간: 이 x부터 선을 점선으로 (데이터 밖이면 없어요)
-  const xf = forecastX(geom, forecastFrom(props.annotations));
+  const xf = forecastX(geom, fFrom);
   // 주석 설명의 x: 데이터에 있는 x면 화면 이름표("Mar")로
   const xText = (v: unknown) => {
     const n = xn(v);
@@ -264,24 +361,40 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   };
   const toneOf = (si: number, v: number) => (signOn && hi.has(si) && v < baseline ? down : colors[si].fill);
 
+  // 빠진 값에서 선과 면을 끊어요. connectNulls면 예전처럼 이웃 점을 잇고, 쌓은 영역은 늘 예전 그대로예요.
+  // x가 하나뿐이면 빠진 값으로 끊길 곳이 없어서 예전과 같아요 (그 점 하나에 점을 찍지 않아요)
+  const breaks = !props.connectNulls && !stacked && model.keys.length > 1;
+
   const draws = useMemo<SeriesDraw[]>(() => {
     return model.series.map((name, s) => {
-      let idx: number[] = [];
+      const val = (k: number) => (stacked ? stacked.y1[s][k] : model.values[s][k]);
+      // 값이 있는 x를 이어진 조각으로 모아요. 끊지 않으면 조각 하나예요
+      let parts: number[][] = [];
       for (let k = 0; k < model.keys.length; k++) {
-        const v = stacked ? stacked.y1[s][k] : model.values[s][k];
-        if (Number.isFinite(v)) idx.push(k);
+        if (!Number.isFinite(val(k))) continue;
+        const last = parts[parts.length - 1];
+        if (last && (!breaks || last[last.length - 1] === k - 1)) last.push(k);
+        else parts.push([k]);
       }
-      if (idx.length > maxPts) {
-        const pts = idx.map((k) => ({ x: xs(k), y: stacked ? stacked.y1[s][k] : model.values[s][k], k }));
-        idx = lttb(pts, maxPts).map((q) => q.k);
-      }
-      const pts = idx.map((k) => y(stacked ? stacked.y1[s][k] : model.values[s][k]));
+      const count = parts.reduce((t, q) => t + q.length, 0);
+      // 조각이 여럿이면 조각마다 따로 줄여요 (빠진 x를 건너 잇지 않게). 몫은 점 수에 비례하고, 조각마다 양끝과 가장 두드러진 점 하나는 남아요. 조각이 하나면 예전처럼 maxPts예요
+      if (count > maxPts) parts = parts.map((q) => lttb(q.map((k) => ({ x: xs(k), y: val(k), k })), parts.length > 1 ? Math.max(3, Math.round((maxPts * q.length) / count)) : maxPts).map((o) => o.k));
+      const idx = parts.flat();
+      let at = 0;
+      const spans = parts.map((q) => [at, (at += q.length)] as const);
+      const pts = idx.map((k) => y(val(k)));
       const base = stacked ? idx.map((k) => y(stacked.y0[s][k])) : isArea ? idx.map(() => y(base0)) : undefined;
-      return { s, name, pts, xs: idx.map((k) => xs(k)), base, sw: colors[s], hi: hi.has(s), idx };
+      const draw: SeriesDraw = { s, name, pts, xs: idx.map((k) => xs(k)), base, sw: colors[s], hi: hi.has(s), idx, spans };
+      const b = bands?.[s];
+      const band = b ? bandShape(xs, b.lo, b.hi, y, maxPts) : null;
+      if (!b || !band) return draw;
+      // 띠 밖 점은 그린 선의 점(줄인 뒤 남은 점)에서 찾아요
+      const out = props.outside ? idx.flatMap((k, i) => (isOutside(model.values[s][k], b.lo[k], b.hi[k]) ? [i] : [])) : undefined;
+      return { ...draw, band, out };
     });
     // xs, y는 아래 값들로 정해져요
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, stacked, colors, hi, x0, x1, H, dom[0], dom[1], maxPts, isArea]);
+  }, [model, stacked, colors, hi, x0, x1, H, dom[0], dom[1], maxPts, isArea, bands, props.outside, breaks]);
 
   const stg = c.motion.stagger ?? 120;
   const order = useMemo(() => [...draws].sort((a, b) => Number(a.hi) - Number(b.hi)), [draws]);
@@ -289,11 +402,15 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     () =>
       order.map((d, k) => {
         const baseLine = y(base0);
+        // 띠의 위, 아래 y는 선 값 뒤에 붙여 같이 움직여요 (데이터가 바뀌면 띠도 선과 함께 미끄러져요)
+        const band = d.band ? [...d.band.top, ...d.band.bottom] : [];
+        const bandParts = d.band ? [d.band.top.length, d.band.bottom.length] : [];
         if (isArea) {
           const b = d.base ?? d.pts.map(() => baseLine);
-          return { key: `s:${d.name}`, to: [1, ...d.pts, ...b], from: [0, ...d.pts.map(() => baseLine), ...b.map(() => baseLine)], delay: k * stg * 0.5, parts: [1, d.pts.length, b.length], data: d };
+          // 영역은 바닥에서 차오르고 띠도 함께 올라와요
+          return { key: `s:${d.name}`, to: [1, ...d.pts, ...b, ...band], from: [0, ...d.pts.map(() => baseLine), ...b.map(() => baseLine), ...band.map(() => baseLine)], delay: k * stg * 0.5, parts: [1, d.pts.length, b.length, ...bandParts], data: d };
         }
-        return { key: `s:${d.name}`, to: [1, ...d.pts], from: [0, ...d.pts], enter: [0, ...d.pts], delay: k * stg, parts: [1, d.pts.length], data: d };
+        return { key: `s:${d.name}`, to: [1, ...d.pts, ...band], from: [0, ...d.pts, ...band], enter: [0, ...d.pts, ...band], delay: k * stg, parts: [1, d.pts.length, ...bandParts], data: d };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [order, stg, isArea, H, base0],
@@ -301,10 +418,25 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const m = useMotion(marks, c.motion);
 
   const fv = c.fv;
+  const fmt = c.fmt;
+  // 띠 글: 계열마다 경계 이름으로 x마다 범위 글과 설명 문장을 만들어요. 이름 없는 계열(긴 표 하나)은 y 필드 이름으로 읽어요
+  const bandText = useMemo(() => {
+    if (!bands) return null;
+    const wide = Array.isArray(props.y);
+    const names = model.series.map((_, si) => [boundName(lower, si, wide, msg.lower), boundName(upper, si, wide, msg.upper)] as const);
+    // 툴팁, 라이브 영역, 숨긴 표의 범위 글: " (p5 410 ~ p95 2,300)". 단위는 값에만 붙여요. 범위가 없는 x는 빈 글자
+    const range = (si: number, k: number) => (Number.isFinite(bands[si].lo[k]) ? ` (${names[si][0]} ${fmt(bands[si].lo[k])} ~ ${names[si][1]} ${fmt(bands[si].hi[k])})` : "");
+    return { range, unnamed: typeof props.y === "string" ? props.y : undefined, desc: describeBand(model, bands, names, props.outside === true, msg) };
+  }, [bands, props.y, model, lower, upper, msg, fmt, props.outside]);
   const events: ChartEvent<T>[] = useMemo(() => {
     const hs = [...hi][0] ?? 0;
+    // 툴팁과 같은 순서: 값 다음에 범위
+    const line = (s: string, si: number, k: number) => {
+      const name = s || bandText?.unnamed;
+      return `${name ? `${name} ` : ""}${fv(rowVals[si][k])}${bandText?.range(si, k) ?? ""}`;
+    };
     return lazyArray(model.keys.length, (k) => {
-      const v = model.values[hs]?.[k];
+      const v = rowVals[hs]?.[k];
       return {
         datum: model.rows[hs]?.[k] ?? null,
         index: k,
@@ -312,12 +444,12 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         label: model.labels[k],
         value: Number.isFinite(v) ? v : null,
         formatted: model.series
-          .map((s, si) => (Number.isFinite(model.values[si][k]) ? `${s ? `${s} ` : ""}${fv(model.values[si][k])}` : null))
+          .map((s, si) => (Number.isFinite(rowVals[si][k]) ? line(s, si, k) : null))
           .filter(Boolean)
           .join(", "),
       };
     });
-  }, [model, hi, fv]);
+  }, [model, rowVals, hi, fv, bandText]);
 
   // 확대 전 전체 순서는 구간을 정할 때만 찾아요
   const fullIndexOf = (key: string, fallback: number) => {
@@ -342,14 +474,20 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   useSync(c, props.syncId, model.keys, model.labels);
   let tip: TooltipData | null = null;
   if (activeK !== null && model.keys[activeK] !== undefined && !brush.dragging) {
+    // 100% 쌓기의 몫도 그 행의 값을 같은 규칙으로 쌓아요 (줄이지 않았으면 그림의 몫과 같아요)
+    const share = stackMode === "percent" ? stack(rowVals.map((r) => [r[activeK]]), "expand") : null;
     const rows = model.series
-      .map((s, si) => ({ s, si, v: model.values[si][activeK] }))
+      .map((s, si) => ({ s, si, v: rowVals[si][activeK] }))
       .filter((r) => Number.isFinite(r.v))
       .sort((a, b) => b.v - a.v)
-      .slice(0, 8)
-      .map((r) => ({ label: r.s || c.t.value, value: stackMode === "percent" && stacked ? `${Math.round(stacked.y1[r.si][activeK] - stacked.y0[r.si][activeK])}% · ${c.fv(r.v)}` : c.fv(r.v), color: toneOf(r.si, r.v), strong: hi.has(r.si) }));
+      .map((r) => {
+        // 범위는 값 뒤에 흐리게: "820ms (p5 410 ~ p95 2,300)"
+        const range = bandText?.range(r.si, activeK);
+        const value = share ? `${Math.round(share.y1[r.si][0] - share.y0[r.si][0])}% · ${c.fv(r.v)}` : c.fv(r.v);
+        return { label: r.s || bandText?.unnamed || c.t.value, value: range ? <>{value}<span style={{ fontWeight: 500, color: p.paint("muted") }}>{range}</span></> : value, color: toneOf(r.si, r.v), strong: hi.has(r.si) };
+      });
     const yy = Math.min(...model.series.map((_, si) => (stacked ? y(stacked.y1[si][activeK]) : Number.isFinite(model.values[si][activeK]) ? y(model.values[si][activeK]) : H)));
-    tip = { x: xs(activeK), y: Math.max(top, yy), title: model.labels[activeK], rows };
+    tip = { x: xs(activeK), y: Math.max(top, yy), title: model.labels[activeK], rows: capTipRows(rows, c.t.more) };
   }
 
   const onMove = (px: number) => {
@@ -418,9 +556,11 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const dots = props.dots ?? "auto";
   const showDots = dots === true || (dots === "auto" && !isArea && model.keys.length <= 16);
   const kindName = isArea ? msg.area : msg.line;
-  const desc = props.description ?? `${kindName}. ${msg.desc(nS, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.${describeAnnotations(props.annotations, c.lang, c.fv, xText)}`;
+  const desc = props.description ?? `${kindName}. ${msg.desc(nS, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.${bandText?.desc ?? ""}${describeAnnotations(props.annotations, c.lang, c.fv, xText)}`;
 
   const pieces: ReactNode[] = [];
+  // 띠는 모든 선 아래 한 층에 깔아요 (다른 계열의 선을 덮지 않게)
+  const bandLayer: ReactNode[] = [];
   for (const it of m.items) {
     const d = it.data;
     const v = it.v;
@@ -429,13 +569,37 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     const ys = v.slice(1, 1 + n);
     const pts = d.xs.map((xx, i) => [xx, ys[i] ?? ys[ys.length - 1] ?? 0] as [number, number]);
     const sign = signOn && d.hi;
-    const lp = linePath(pts, curve);
-    // 손익 색: 선에서 기준값까지 칠한 영역 하나를 위아래 자르기 영역으로 나눠 칠해요 (바닥이 평평해서 V, H로 닫아요)
-    const signArea = sign && n ? `${lp}V${r2(yb)}H${r2(pts[0][0])}Z` : "";
+    // 선과 면은 조각마다 하위 경로 하나라서, 조각이 하나면 예전과 같은 path예요
+    const spans = d.spans;
+    const lines = spans.map(([a, b]) => linePath(pts.slice(a, b), curve));
+    // 손익 색: 선에서 기준값까지 칠한 영역 하나를 위아래 자르기 영역으로 나눠 칠해요 (바닥이 평평해서 조각마다 V, H로 닫아요)
+    const signArea = sign ? spans.map(([a], r) => `${lines[r]}V${r2(yb)}H${r2(d.xs[a])}Z`).join("") : "";
+    // 면: 조각마다 선을 위 경계로, bottom을 아래 경계로 닫아요
+    const areaD = (bottom: [number, number][]) => spans.map(([a, b]) => areaPath(pts.slice(a, b), bottom.slice(a, b), curve)).join("");
+    // 이웃 없이 혼자 남은 점은 선으로 보이지 않아서 점을 찍어요 (connectNulls면 예전처럼 찍지 않아요)
+    const lone = breaks ? spans.filter(([a, b]) => b - a === 1).map(([a]) => a) : [];
+    const dot = (i: number, opacity: number) => {
+      const [xx, yy] = pts[i];
+      const col = sign && yy > yb ? down : d.sw.fill;
+      return <circle key={i} cx={xx} cy={yy} r={d.hi ? 3 : 2.2} fill={d.hi ? col : p.paint("panel")} stroke={col} strokeWidth={d.hi ? 0 : 1.4} opacity={opacity} />;
+    };
+    if (d.band) {
+      // 움직임 값: [진행, 선 y…, (영역 바닥 y…), 띠 위 y…, 띠 아래 y…]
+      const o = 1 + (isArea ? 2 * n : n);
+      const nb = d.band.top.length;
+      bandLayer.push(<path key={it.key} d={bandPath(d.band, v.slice(o, o + nb), v.slice(o + nb, o + 2 * nb), curve)} fill={d.sw.fill} opacity={0.16 * draw * (it.exiting ? 0.4 : 1)} />);
+    }
+    // 띠 밖으로 나간 점: 계열 색 점에 바탕색 테두리를 둘러 선 위에서도 보여요
+    const outsideDots = (opacity: (i: number) => number) =>
+      d.out?.map((i) => {
+        const [xx, yy] = pts[i];
+        return <circle key={`o${i}`} cx={xx} cy={yy} r={3.6} fill={sign && yy > yb ? down : d.sw.fill} stroke={p.paint("panel")} strokeWidth={1.5} opacity={opacity(i)} />;
+      });
     if (isArea) {
       const bs = v.slice(1 + n, 1 + 2 * n);
       const bottomPts = d.xs.map((xx, i) => [xx, bs[i] ?? y(base0)] as [number, number]);
-      const fills = sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.5} clipPath={`url(#${gid}${t})`} />) : <path d={areaPath(pts, bottomPts, curve)} fill={d.sw.fill} opacity={stackMode === "none" ? (d.hi ? 0.5 : 0.28) : 1} />;
+      const lp = lines.join("");
+      const fills = sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.5} clipPath={`url(#${gid}${t})`} />) : <path d={areaD(bottomPts)} fill={d.sw.fill} opacity={stackMode === "none" ? (d.hi ? 0.5 : 0.28) : 1} />;
       const stroke = (dashed: boolean) =>
         (sign ? (["up", "dn"] as const) : ([null] as const)).map((t) => (
           <path key={t ?? "s"} d={lp} fill="none" stroke={t === "dn" ? down : stackMode === "none" ? d.sw.fill : p.paint("panel")} strokeWidth={stackMode === "none" ? (d.hi ? 2.2 : 1.4) : 1.2} strokeLinejoin="round" strokeDasharray={dashed ? "5 4" : undefined} opacity={Math.min(1, draw * 1.4)} clipPath={t ? `url(#${gid}${t})` : undefined} />
@@ -451,17 +615,26 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
           ) : (
             stroke(false)
           )}
+          {lone.map((i) => dot(i, Math.min(1, draw * 1.4)))}
+          {outsideDots(() => Math.min(1, draw * 1.4))}
         </g>,
       );
     } else {
       const width = d.hi ? 2.6 : 1.7;
       const dash = draw < 0.999;
+      // 점은 선이 그 자리까지 그려질 때 나타나요
+      const appear = (i: number) => Math.max(0, Math.min(1, (draw - (n > 1 ? i / (n - 1) : 1)) * 8 + (draw >= 0.999 ? 1 : 0)));
+      // 그리기 점선은 하위 경로마다 처음부터 다시 시작해서, 조각이 여럿이면 그리는 동안만 조각마다 path를 따로 둬요.
+      // 조각은 점 순서로 제 차례에 그려져서 왼쪽부터 한 번에 긋는 것처럼 보여요 (점이 나타나는 때와 같아요)
+      const segs: (readonly [string, number])[] = dash && spans.length > 1 ? spans.flatMap(([a, b], r) => (b - a > 1 ? [[lines[r], Math.max(0, Math.min(1, (draw * (n - 1) - a) / (b - 1 - a)))] as const] : [])) : [[lines.join(""), draw]];
       // 그려지는 중에는 그리기 점선(1 1), 다 그린 뒤 예측 구간은 5 4 점선. 손익 색은 기준값 위아래를 자르기 영역으로 나눠 칠해요
       const stroke = (dashed: boolean) =>
-        (sign ? (["up", "dn"] as const) : ([null] as const)).map((t) => (
-          <path key={t ?? "s"} d={lp} fill="none" stroke={t === "dn" ? down : d.sw.fill} strokeWidth={width} strokeLinejoin="round" strokeLinecap="round" pathLength={dash ? 1 : undefined} strokeDasharray={dash ? "1 1" : dashed ? "5 4" : undefined} strokeDashoffset={dash ? 1 - draw : undefined} clipPath={t ? `url(#${gid}${t})` : undefined} />
-        ));
-      const under = props.area && d.hi ? (sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.16 * draw} clipPath={`url(#${gid}${t})`} />) : <path d={areaPath(pts, pts.map(([xx]) => [xx, y(base0)] as [number, number]), curve)} fill={`url(#${gid}g)`} opacity={draw} />) : null;
+        (sign ? (["up", "dn"] as const) : ([null] as const)).flatMap((t) =>
+          segs.map(([sd, sp], j) => (
+            <path key={`${t ?? "s"}${j}`} d={sd} fill="none" stroke={t === "dn" ? down : d.sw.fill} strokeWidth={width} strokeLinejoin="round" strokeLinecap="round" pathLength={dash ? 1 : undefined} strokeDasharray={dash ? "1 1" : dashed ? "5 4" : undefined} strokeDashoffset={dash ? 1 - sp : undefined} clipPath={t ? `url(#${gid}${t})` : undefined} />
+          )),
+        );
+      const under = props.area && d.hi ? (sign ? (["up", "dn"] as const).map((t) => <path key={t} d={signArea} fill={t === "up" ? d.sw.fill : down} opacity={0.16 * draw} clipPath={`url(#${gid}${t})`} />) : <path d={areaD(pts.map(([xx]) => [xx, y(base0)] as [number, number]))} fill={`url(#${gid}g)`} opacity={draw} />) : null;
       pieces.push(
         <g key={it.key} opacity={it.exiting ? 0.4 : 1}>
           {under}
@@ -473,14 +646,8 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
           ) : (
             stroke(false)
           )}
-          {showDots
-            ? pts.map(([xx, yy], i) => {
-                const f = n > 1 ? i / (n - 1) : 1;
-                const o = Math.max(0, Math.min(1, (draw - f) * 8 + (draw >= 0.999 ? 1 : 0)));
-                const col = sign && yy > yb ? down : d.sw.fill;
-                return <circle key={i} cx={xx} cy={yy} r={d.hi ? 3 : 2.2} fill={d.hi ? col : p.paint("panel")} stroke={col} strokeWidth={d.hi ? 0 : 1.4} opacity={Math.min(1, o)} />;
-              })
-            : null}
+          {(showDots ? pts.map((_, i) => i) : lone).map((i) => dot(i, appear(i)))}
+          {outsideDots(appear)}
         </g>,
       );
     }
@@ -551,6 +718,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         <line key={i} x1={x0} x2={x1} y1={y(r.y)} y2={y(r.y)} stroke={p.paint("dim")} strokeDasharray="3 3" />
       ))}
       <rect x={x0} y={top} width={Math.max(0, x1 - x0)} height={Math.max(0, H - bottom - top)} fill="transparent" />
+      {bandLayer}
       {pieces}
       <AnnotationsOver list={props.annotations} g={geom} />
       {activeK !== null && model.keys[activeK] !== undefined ? (
