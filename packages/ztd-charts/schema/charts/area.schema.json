@@ -109,6 +109,16 @@
             "band"
           ]
         },
+        "aggregate": {
+          "description": "How rows with the same x (and series) combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
+          "default": "sum",
+          "enum": [
+            "sum",
+            "mean",
+            "last",
+            "count"
+          ]
+        },
         "zero": {
           "description": "Include 0 on the y axis",
           "default": true,
@@ -246,7 +256,7 @@
           ]
         },
         "format": {
-          "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+          "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
           "anyOf": [
             {
               "enum": [

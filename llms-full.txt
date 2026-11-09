@@ -48,7 +48,7 @@ Spec:
 - data: an array of row objects, { values }, { csv } or { url, format?, select? }. <Chart>, the CLI and the MCP render_chart tool fetch the url.
 - encoding: channel -> field name. y can be an array of fields for wide tables.
 - options.highlight: Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none". Without it, each chart picks its own default (listed per chart in llms-full.txt).
-- options.format: Value format. "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" or Intl.NumberFormat options. options.unit is text appended to each value.
+- options.format: Value format. "number" | "integer" | "percent" (values are already percents: 42 → "42%") | "ratio" (0.42 → "42%") | "compact" | "currency" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | "decimal" or Intl.NumberFormat options. options.unit is text appended to each value.
 - Other common options: height, width, locale, animate, duration, easing (spring|easeOut|easeInOut|linear), stagger, reducedMotion, animateOnView, showLabels, tooltip, syncId, ariaLabel, description. Each chart adds its own options.
 - card: { number, title, subtitle, takeaway, level: "basic" | "intermediate" | "advanced" (Korean "기본" | "중급" | "심화" also accepted), legend: "auto" | [{ label, color }], sample }
 - JSON Schema: https://unpkg.com/ztd-charts/schema/chart-spec.schema.json
@@ -62,7 +62,7 @@ Data helpers:
 - Accessors accept a field name (dot paths ok) or a function (d, i) => value. Strings like "1,234", "12%", "₩5,000" are read as numbers.
 - <ChartState loading error empty onRetry> shows matching states at chart height.
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.49 KB, DonutChart 13.5 KB, FunnelChart 12.25 KB, WaffleChart 12.39 KB, Treemap 12.76 KB, SunburstChart 13.14 KB, WaterfallChart 13.06 KB, ParetoChart 13.36 KB, MarimekkoChart 12.93 KB, Heatmap 13.73 KB, RadarChart 12.94 KB, BubbleChart 15.51 KB, LineChart 24.23 KB, AreaChart 24.23 KB, StreamGraph 15.45 KB, BarChart 18.25 KB, RadialBarChart 11.77 KB, GaugeChart 11.96 KB, BulletChart 12.56 KB, Sparkline 13.74 KB, SlopeChart 12.49 KB, DumbbellChart 12.13 KB, LollipopChart 12.87 KB, BeeswarmChart 13.97 KB, RidgelineChart 12.89 KB, SankeyChart 13.4 KB, ChordChart 12.4 KB, CalendarHeatmap 14.18 KB, BumpChart 13.65 KB, BoxPlot 14.04 KB, ParallelCoordinates 13.48 KB, CandlestickChart 19.24 KB, SegmentedBar 12.35 KB, SkylineChart 17.86 KB, HistogramChart 18.12 KB, ScatterChart 18.26 KB, StatCard 14.38 KB, LiveLineChart 12.99 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.87 KB, DonutChart 13.89 KB, FunnelChart 12.26 KB, WaffleChart 12.43 KB, Treemap 12.84 KB, SunburstChart 13.2 KB, WaterfallChart 13.4 KB, ParetoChart 13.68 KB, MarimekkoChart 13.09 KB, Heatmap 13.84 KB, RadarChart 13.07 KB, BubbleChart 15.64 KB, LineChart 24.65 KB, AreaChart 24.65 KB, StreamGraph 15.62 KB, BarChart 18.88 KB, RadialBarChart 11.85 KB, GaugeChart 12.04 KB, BulletChart 12.63 KB, Sparkline 13.9 KB, SlopeChart 12.75 KB, DumbbellChart 12.25 KB, LollipopChart 13.06 KB, BeeswarmChart 14.08 KB, RidgelineChart 12.97 KB, SankeyChart 13.5 KB, ChordChart 12.48 KB, CalendarHeatmap 14.24 KB, BumpChart 13.86 KB, BoxPlot 14.37 KB, ParallelCoordinates 13.59 KB, CandlestickChart 19.63 KB, SegmentedBar 12.47 KB, SkylineChart 18.04 KB, HistogramChart 18.35 KB, ScatterChart 18.4 KB, StatCard 14.58 KB, LiveLineChart 13.18 KB
 
 Source: https://github.com/Junhan2/ztd-charts (MIT license). The two sections below are the agent skill (skills/ztd-charts/SKILL.md) and the reference for every chart, both from the repository.
 
@@ -193,7 +193,7 @@ export function Revenue() {
 - Use when: 2 to 4 items that add up to 100%
 - Avoid when: More than 4 items, or values close to each other (bars are more accurate)
 - encoding: label, value
-- Chart options: colorMode: categorical|emphasis, sort, startAngle, labelMode: percent|value|label|none
+- Chart options: colorMode: categorical|emphasis, sort, startAngle, labelMode: percent|value|label|none, other
 - Default highlight: the largest value
 
 ```json
@@ -206,7 +206,7 @@ export function Revenue() {
 - Use when: The total matters as much as the shares
 - Avoid when: More than 6 items
 - encoding: label, value
-- Chart options: innerRadius, centerValue, centerLabel, legend: auto|right|bottom|none, sort
+- Chart options: innerRadius, centerValue, centerLabel, legend: auto|right|bottom|none, sort, other
 - Default highlight: the largest value
 
 ```json
@@ -349,7 +349,7 @@ export function Revenue() {
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -362,7 +362,7 @@ export function Revenue() {
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -375,7 +375,7 @@ export function Revenue() {
 - Use when: 5 or more series where the rhythm of the flow matters, such as viewing by genre
 - Avoid when: You need to read exact values
 - encoding: x, y[], series?
-- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band
+- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count
 - Default highlight: the largest value
 
 ```json
@@ -388,7 +388,7 @@ export function Revenue() {
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
 - encoding: x, y[], series?
-- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, annotations
+- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, aggregate: sum|mean|last|count, annotations
 - Default highlight: the first series or item
 
 ```json
@@ -660,7 +660,7 @@ export function Revenue() {
 - `height` (number): Height in px. Without it, each chart picks a default that fits its width
 - `width` (number): Fixed width in px. Without it, the chart fits its parent
 - `highlight` (highlight): Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none"
-- `format` (format): Value format. "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" or Intl.NumberFormat options
+- `format` (format): Value format. "number" | "integer" | "percent" (values are already percents: 42 → "42%") | "ratio" (0.42 → "42%") | "compact" | "currency" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | "decimal" or Intl.NumberFormat options
 - `unit` (string): Unit appended to values. For example "%" or "ms"
 - `locale` (string, default "en-US"): Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). "ko" or "ko-*" switches to Korean. Falls back to the ThemeProvider locale
 - `animate` (boolean, default true): Entry and update animation

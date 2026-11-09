@@ -6,7 +6,7 @@ import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { findFonts, getChartSchema, listCharts, reactSnippet, render, specSnippet, suggest, validate } from "../src/api";
+import { findFonts, getChartSchema, listCharts, reactSnippet, render, specSnippet, stripEmoji, suggest, validate } from "../src/api";
 import { CHARTS } from "ztd-charts/spec";
 
 const exec = promisify(execFile);
@@ -46,7 +46,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.5.0");
+    expect((await run("--version")).out.trim()).toBe("0.5.1");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
@@ -164,6 +164,15 @@ describe("ztd-charts CLI", () => {
 });
 
 describe("CLI API", () => {
+  it("PNG 글자에서 이모지만 빼고 알려요 (©, ™, 숫자는 그대로, 화면 낭독 글은 그대로)", async () => {
+    const svg = '<svg><desc>🍎 사과</desc><text x="1">🍎 사과</text><text>Apple 🍎</text><text>👍🏽 ok</text><text>🇰🇷 서울</text><text>#️⃣ 1</text><text>👨‍👩‍👧 가족</text><text>© 2025 ™ 42</text></svg>';
+    const out = stripEmoji(svg);
+    expect(out.removed).toBe(6);
+    expect(out.svg).toBe('<svg><desc>🍎 사과</desc><text x="1">사과</text><text>Apple</text><text>ok</text><text>서울</text><text>1</text><text>가족</text><text>© 2025 ™ 42</text></svg>');
+    const res = await render({ type: "bar", data: [{ k: "🍎 사과", v: 4 }, { k: "배", v: 5 }], encoding: { x: "k", y: "v" } }, { format: "png", locale: "ko" });
+    expect(res.notes).toEqual(["PNG에는 이모지 글꼴이 없어서 글자에서 이모지 1개를 뺐어요. SVG와 HTML에는 그대로 있어요"]);
+    expect((await render({ type: "bar", data: [{ k: "배", v: 5 }], encoding: { x: "k", y: "v" } }, { format: "png" })).notes).toBeUndefined();
+  });
   it("listCharts, getChartSchema, validate, reactSnippet", () => {
     expect(listCharts()).toHaveLength(36);
     expect(listCharts({ group: "flow" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);

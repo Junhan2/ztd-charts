@@ -176,7 +176,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
           </g>
         );
       })}
-      <AxisXBand p={p} labels={steps.map((s) => s.label)} centers={steps.map((s) => x(`${s.i}`) + bw / 2)} y={H - bottom + 13} strong={new Set(steps.map((s, k) => (s.total ? k : -1)).filter((k) => k >= 0))} />
+      <AxisXBand p={p} width={W} labels={steps.map((s) => s.label)} centers={steps.map((s) => x(`${s.i}`) + bw / 2)} y={H - bottom + 13} strong={new Set(steps.map((s, k) => (s.total ? k : -1)).filter((k) => k >= 0))} />
     </ChartFrame>
   );
 }

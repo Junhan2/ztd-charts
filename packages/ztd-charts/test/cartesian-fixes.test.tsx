@@ -14,7 +14,7 @@ import { autoLegend, Chart } from "../src/charts/Chart";
 import { DumbbellChart } from "../src/charts/dumbbell";
 import { Heatmap } from "../src/charts/heatmap";
 import { AreaChart, LineChart } from "../src/charts/line";
-import { LiveLineChart } from "../src/charts/live";
+import { LiveLineChart, stepClock } from "../src/charts/live";
 import { LollipopChart } from "../src/charts/lollipop";
 import { ParetoChart } from "../src/charts/pareto";
 import { RadarChart } from "../src/charts/radar";
@@ -569,6 +569,20 @@ describe("18: live line", () => {
     expect(h).not.toContain("<animate");
     const ko = r(<LiveLineChart data={data} width={480} animate={false} locale="ko-KR" />);
     for (const s of ["지금", "1분 전", "30초 전"]) expect(textOf(ko, s).length).toBe(1);
+  });
+
+  it("keeps the clock moving through a data gap instead of freezing and rushing after it", () => {
+    const s = { tA: 10_000, gap: 250, win: 60_000, paused: false };
+    // 끊김: 가장 새 점을 넘어서도 프레임마다 같은 속도로 흘러요 (예전에는 tA에서 멈췄어요)
+    let clock = 9_900;
+    for (let f = 0; f < 120; f++) clock = stepClock(clock, 16, s);
+    expect(clock).toBe(9_900 + 120 * 16);
+    // 끊김 뒤 실시간으로 온 점(tA가 시계 근처)이면 따라잡기 없이 평소 속도예요
+    expect(stepClock(clock, 16, { ...s, tA: clock + 100 })).toBe(clock + 16);
+    // 두 간격 넘게 뒤처지면(쌓인 점) 빨리 따라잡고, 멈춤(짚는 중)이면 그대로, 창 하나보다 앞서면 가장 새 점으로
+    expect(stepClock(9_000, 16, s) - 9_000).toBe(16 * (1_000 / 500));
+    expect(stepClock(9_000, 16, { ...s, paused: true })).toBe(9_000);
+    expect(stepClock(s.tA + s.win, 16, s)).toBe(s.tA);
   });
 
   it("points at the nearest point by time", () => {

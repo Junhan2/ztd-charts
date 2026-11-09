@@ -145,7 +145,8 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
         )}
       </g>
       {props.showExtremes && n > 2
-        ? [argMax(vals), argMin(vals)].map((k, j) => <circle key={j} cx={xs(k)} cy={y(vals[k])} r={2.4} fill={p.paint("panel")} stroke={p.paint("ink")} strokeWidth={1.3} opacity={t >= 0.99 ? 1 : 0} />)
+        ? // 값이 모두 비면 최고, 최저 점이 없어요 (cy="NaN" 방지)
+          [argMax(vals), argMin(vals)].filter((k) => k >= 0 && Number.isFinite(vals[k])).map((k, j) => <circle key={j} cx={xs(k)} cy={y(vals[k])} r={2.4} fill={p.paint("panel")} stroke={p.paint("ink")} strokeWidth={1.3} opacity={t >= 0.99 ? 1 : 0} />)
         : null}
       {kMark >= 0 && variant !== "bar" && Number.isFinite(vals[kMark]) ? <circle cx={xs(kMark)} cy={y(vals[kMark])} r={3.2} fill={accent.fill} stroke={p.paint("panel")} strokeWidth={1.5} opacity={Math.max(0, (t - 0.85) / 0.15)} /> : null}
       {c.active !== null && Number.isFinite(vals[c.active]) ? <circle cx={xs(c.active)} cy={y(vals[c.active])} r={3.4} fill={p.paint("ink")} stroke={p.paint("panel")} strokeWidth={1.5} pointerEvents="none" /> : null}

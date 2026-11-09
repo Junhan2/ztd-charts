@@ -8,8 +8,8 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { categorical, emphasis, type Swatch } from "../core/palette";
 import { extent, fitDomain, scaleBand, scaleLinear } from "../core/scale";
-import { prepSeries, syncKeyOf } from "../core/series";
-import { textWidth, truncate } from "../core/text";
+import { prepSeries, syncKeyOf, type Aggregate } from "../core/series";
+import { textWidth, truncate, type Box } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useSync } from "../core/sync";
@@ -39,6 +39,8 @@ export interface BarChartProps<T = Row> extends BaseChartProps<T> {
   orientation?: "vertical" | "horizontal";
   /** 값 순 정렬 (계열 하나일 때). 기본 false */
   sort?: boolean;
+  /** 같은 범주, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  aggregate?: Aggregate;
   /** 강조 대상: 계열 하나면 범주, 여러 개면 계열. 기본 "max" / 첫 계열. 계열이 여러 개일 때 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean */
   highlight?: BaseChartProps<T>["highlight"];
   /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선. 세로 막대에서만 그려요. 예측 뒤 막대는 옅게 점선 테두리로 */
@@ -65,7 +67,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const { p, width: W, height: H } = c;
   const layout = props.layout ?? "grouped";
 
-  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: "band", locale: c.locale }), [props.data, props.x, props.y, props.series, c.locale]);
+  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: "band", locale: c.locale, aggregate: props.aggregate }), [props.data, props.x, props.y, props.series, c.locale, props.aggregate]);
   const model = useMemo(() => {
     if (!props.sort || model0.series.length !== 1) return model0;
     const idx = model0.keys.map((_, k) => k).sort((a, b) => (model0.values[0][b] || 0) - (model0.values[0][a] || 0));
@@ -166,6 +168,25 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     [segs, single, horizontal, showValues, layout, W, H, c.fmt],
   );
 
+  // 막대가 쌓이지 않는 배치 (묶음, 계열 하나)
+  const solo = layout === "grouped" || nS === 1;
+  // 세로 막대 위(음수면 아래)의 값 글자 자리. 솎였거나(계열 하나) 칸보다 넓으면(묶음) null. 그리기와 아래 상자가 같이 써요
+  const valueSpot = (sg: BarSeg, i: number, pos: number, th: number, a: number, b: number, tw: number) => {
+    if (nS === 1 ? shownValues !== null && !shownValues.has(i) : th < tw * 0.8) return null;
+    return { x: pos + th / 2, y: sg.v1 < sg.v0 || sg.value < 0 ? Math.max(a, b) + 8 : Math.min(a, b) - 8, size: th < 26 ? 10 : 11 };
+  };
+
+  // 막대 위아래 값 글자의 상자. 주석 이름표(기준선, 예측)가 이걸 피해요 (390px에서 "Goal 100"이 값을 가리던 문제)
+  const labelBoxes: Box[] = [];
+  if (showValues && !horizontal && notes?.length && solo) {
+    segs.forEach((sg, i) => {
+      const { pos, th, a, b } = geom(sg);
+      const tw = textWidth(valueText(sg), 11, 700);
+      const at = valueSpot(sg, i, pos, th, a, b, tw);
+      if (at) labelBoxes.push({ x: at.x - tw / 2 - 1, y: at.y - at.size / 2 - 1, w: tw + 2, h: at.size + 2 });
+    });
+  }
+
   const stg = c.motion.stagger ?? 60;
   const marks = useMemo<Mark<BarSeg>[]>(
     () =>
@@ -226,20 +247,20 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         const lo = m.fade(sg.k * stg + 320, 260);
         // 예측 구간의 막대: 옅게 칠하고 점선 테두리 (쌓은 막대는 구분선을 그대로 둬요)
         const projected = fk >= 0 && sg.k >= fk;
-        const solo = layout === "grouped" || nS === 1;
         const outline = projected && solo;
         let label: ReactNode = null;
         if (showValues) {
           const text = valueText(sg);
           const tw = textWidth(text, 11, 700);
           const len = Math.abs(b - a);
-          if (layout === "grouped" || nS === 1) {
+          if (solo) {
+            const at = horizontal ? null : valueSpot(sg, i, pos, th, a, b, tw);
             label = horizontal ? (
               <Txt x={Math.max(a, b) + 6} y={pos + th / 2} size={11} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
                 {text}
               </Txt>
-            ) : (nS === 1 ? !shownValues || shownValues.has(i) : th >= tw * 0.8) ? (
-              <Txt x={pos + th / 2} y={neg ? Math.max(a, b) + 8 : Math.min(a, b) - 8} anchor="middle" size={th < 26 ? 10 : 11} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
+            ) : at ? (
+              <Txt x={at.x} y={at.y} anchor="middle" size={at.size} weight={sg.hi ? 800 : 500} fill={p.paint(sg.hi ? "ink" : "muted")} opacity={lo}>
                 {text}
               </Txt>
             ) : null;
@@ -253,7 +274,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         }
         return (
           <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : activeCat === null || activeCat === sg.k ? 1 : 0.38} onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
-            {layout === "grouped" || nS === 1 ? (
+            {solo ? (
               // 막대가 0이거나 아주 짧아도 칸 전체를 호버 영역으로 (칠한 부분만 받으면 0 막대는 잡을 수 없어요)
               horizontal ? <rect x={x0} y={pos} width={Math.max(0, x1 - x0)} height={th} fill="transparent" /> : <rect x={pos} y={top} width={th} height={Math.max(0, H - bottom - top)} fill="transparent" />
             ) : null}
@@ -263,7 +284,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
           </g>
         );
       })}
-      <AnnotationsOver list={notes} g={ag} />
+      <AnnotationsOver list={notes} g={{ ...ag, avoid: labelBoxes }} />
       {horizontal ? (
         <g aria-hidden="true">
           {model.keys.map((key, k) => {
@@ -276,7 +297,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
           })}
         </g>
       ) : (
-        <AxisXBand p={p} labels={model.labels} centers={model.keys.map((key) => band(key) + band.bandwidth / 2)} y={H - bottom + 13} strong={single ? hi : undefined} />
+        <AxisXBand p={p} width={W} labels={model.labels} centers={model.keys.map((key) => band(key) + band.bandwidth / 2)} y={H - bottom + 13} strong={single ? hi : undefined} />
       )}
       {!horizontal && activeCat !== null ? <AxisPill p={p} x={band(model.keys[activeCat]) + band.bandwidth / 2} y={H - bottom + 13} label={model.labels[activeCat]} width={W} /> : null}
     </ChartFrame>

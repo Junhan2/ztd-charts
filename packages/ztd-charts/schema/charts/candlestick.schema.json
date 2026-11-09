@@ -170,7 +170,7 @@
           ]
         },
         "format": {
-          "description": "Value format. \"number\" | \"integer\" | \"percent\" | \"ratio\" | \"compact\" | \"currency\" | \"decimal\" or Intl.NumberFormat options",
+          "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
           "anyOf": [
             {
               "enum": [

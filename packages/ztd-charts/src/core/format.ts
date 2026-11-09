@@ -34,9 +34,16 @@ export function formatNumber(v: number, opts: Intl.NumberFormatOptions & { local
   return dropNegativeZero(nf(locale, rest).format(v));
 }
 
-/** 0~100 값을 "42%"로. 1% 미만만 소수 한 자리 */
+/** 소수 한 자리로 줄이면 0이 되는 아주 작은 값 (0은 아님) */
+const isTiny = (v: number) => v !== 0 && Math.abs(v) < 0.05;
+
+/** 아주 작은 값은 유효 숫자 2자리로 ("0" 대신 "0.000012") */
+const formatTiny = (v: number, locale: string, suffix = "") => `${formatNumber(v, { locale, maximumSignificantDigits: 2, maximumFractionDigits: 20 })}${suffix}`;
+
+/** 0~100 값을 "42%"로. 1% 미만만 소수 한 자리, 0.05% 미만은 유효 숫자 2자리 */
 export function formatPercent(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
   if (!Number.isFinite(v)) return "-";
+  if (isTiny(v) && opts.maximumFractionDigits === undefined) return formatTiny(v, opts.locale ?? DEFAULT_LOCALE, "%");
   const a = Math.abs(v);
   return `${formatNumber(v, { maximumFractionDigits: a > 0 && a < 1 ? 1 : 0, ...opts })}%`;
 }
@@ -104,8 +111,10 @@ export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOC
       return (v) => formatCompact(v, { locale });
     case "currency":
       return fixed(currencyOptions(locale));
-    default:
-      return fixed({ maximumFractionDigits: 1 });
+    default: {
+      const one = fixed({ maximumFractionDigits: 1 });
+      return (v) => (isTiny(v) ? formatTiny(v, locale) : one(v));
+    }
   }
 }
 

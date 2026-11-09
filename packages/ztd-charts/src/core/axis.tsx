@@ -9,7 +9,11 @@ export const AXIS_FONT = 10.5;
 export function tickLabels(ticks: readonly number[], fmt: ValueFormatter, locale?: string): string[] {
   const out = ticks.map(fmt);
   if (new Set(out).size === out.length) return out;
-  return ticks.map((t) => formatNumber(t, { locale, maximumFractionDigits: 2 }));
+  // 글자가 겹치면 눈금 간격에 맞춘 자릿수로 (간격이 0.00001이면 소수 5자리. 아주 작은 값이 모두 "0"이 되지 않게)
+  let step = Infinity;
+  for (let i = 1; i < ticks.length; i++) step = Math.min(step, Math.abs(ticks[i] - ticks[i - 1]));
+  const digits = step > 0 && Number.isFinite(step) ? Math.min(20, Math.max(2, Math.ceil(-Math.log10(step) - 1e-9))) : 2;
+  return ticks.map((t) => formatNumber(t, { locale, maximumFractionDigits: digits }));
 }
 
 export function yAxisWidth(ticks: number[], fmt: ValueFormatter, locale?: string): number {
@@ -88,10 +92,17 @@ export function AxisXBand(props: {
   sub?: string[];
   size?: number;
   maxWidth?: number;
+  /** 차트 폭. 라벨을 가장자리까지 남은 자리만큼 말줄임해요 (강조 라벨이 카드 밖으로 잘리지 않게) */
+  width: number;
 }) {
-  const { p, labels, centers, y } = props;
+  const { p, labels, centers, y, width } = props;
   const size = props.size ?? AXIS_FONT;
-  const show = thinLabels(centers, labels, size, 6, 600, props.strong);
+  // 가운데 정렬 라벨이 들어가는 폭: 가까운 가장자리까지의 두 배, 길어도 maxWidth(기본 160px)까지. 줄인 글자로 겹침을 셈해요
+  const fitted = labels.map((l, i) => {
+    const edge = 2 * Math.max(0, Math.min(centers[i], width - centers[i])) - 2;
+    return truncate(l, Math.min(props.maxWidth ?? 160, edge), size, props.strong?.has(i) ? 700 : 500);
+  });
+  const show = thinLabels(centers, fitted, size, 6, 600, props.strong);
   return (
     <g aria-hidden="true">
       {show.map((i) => {
@@ -99,7 +110,7 @@ export function AxisXBand(props: {
         return (
           <g key={i}>
             <Txt x={centers[i]} y={y} anchor="middle" size={size} weight={strong ? 700 : 500} fill={p.paint(strong ? "ink" : "muted")}>
-              {labels[i]}
+              {fitted[i]}
             </Txt>
             {props.sub?.[i] ? (
               <Txt x={centers[i]} y={y + size + 3} anchor="middle" size={size - 1} fill={p.paint("muted")}>

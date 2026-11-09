@@ -44,7 +44,7 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.55)), duration: 1100, stagger: 90 });
   const { p, width: W, height: H } = c;
   const byRank = props.rank !== undefined || props.value === undefined;
-  const model = useMemo(() => prepSeries(props.data, props.x, (byRank ? props.rank ?? "rank" : props.value) as never, props.series, { xType: "band", locale: c.locale, sum: false }), [props.data, props.x, props.rank, props.value, props.series, byRank, c.locale]);
+  const model = useMemo(() => prepSeries(props.data, props.x, (byRank ? props.rank ?? "rank" : props.value) as never, props.series, { xType: "band", locale: c.locale, aggregate: "last" }), [props.data, props.x, props.rank, props.value, props.series, byRank, c.locale]);
   const nK = model.keys.length;
   const nS = model.series.length;
 
@@ -154,7 +154,7 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
             );
           })
         : null}
-      <AxisXBand p={p} labels={model.labels} centers={model.keys.map((_, k) => xs(k))} y={H - bottom + 14} />
+      <AxisXBand p={p} width={W} labels={model.labels} centers={model.keys.map((_, k) => xs(k))} y={H - bottom + 14} />
     </ChartFrame>
   );
 }

@@ -29,7 +29,7 @@ import { LollipopChart } from "./lollipop";
 import { MarimekkoChart } from "./marimekko";
 import { ParallelCoordinates } from "./parallel";
 import { ParetoChart } from "./pareto";
-import { DonutChart, PieChart } from "./pie";
+import { DonutChart, groupOther, otherLabel, PieChart, sliceValue } from "./pie";
 import { GaugeChart, RadialBarChart } from "./radial";
 import { RadarChart } from "./radar";
 import { RidgelineChart } from "./ridgeline";
@@ -111,13 +111,19 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
   const opt = spec.options ?? {};
   const h = opt.highlight as Highlight | undefined;
   const perItem = ["pie", "donut", "waffle"];
+  // 도넛은 비중이 든 자기 범례(오른쪽이나 아래)를 그려요. 카드 범례까지 그리면 범례가 두 번 나와요
+  if (def.type === "donut" && opt.legend !== "none") return [];
   if (perItem.includes(def.type)) {
     const gl = strGetter(enc.label as string | undefined, "label");
     const gv = numGetter(enc.value as string | undefined, "value");
-    const labels = rows.map((r, i) => gl(r, i));
-    const hi = resolveHighlight(h, rows, labels, rows.map((r, i) => gv(r, i)), def.type === "waffle" ? "first" : "max");
-    const tokens = categoricalTokens(labels.length, hi);
-    return labels.map((l, i) => ({ label: l, color: tokens[i] }));
+    const isWaffle = def.type === "waffle";
+    const items = rows.map((r, i) => ({ r, label: gl(r, i), value: isWaffle ? gv(r, i) : sliceValue(gv(r, i)) }));
+    // 파이, 도넛은 차트와 같은 규칙으로 "기타"를 묶고 기타는 강조하지 않아요
+    const { kept, other } = isWaffle ? { kept: items, other: null } : groupOther(items, opt.other as number | undefined, (n, value) => ({ r: {}, label: otherLabel(langOf(locale), n), value }));
+    const hi = resolveHighlight(h, kept.map((x) => x.r), kept.map((x) => x.label), kept.map((x) => x.value), isWaffle ? "first" : "max");
+    const all = other ? [...kept, other] : kept;
+    const tokens = categoricalTokens(all.length, hi);
+    return all.map((x, i) => ({ label: x.label, color: tokens[i] }));
   }
   if (def.type === "candlestick") {
     // 차트가 그리는 이동평균만 (행 수보다 긴 기간은 빼요)

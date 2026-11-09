@@ -1,9 +1,9 @@
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import type { KeyboardEvent, ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Chart } from "../src/charts/Chart";
+import { autoLegend, Chart } from "../src/charts/Chart";
 import { BarChart } from "../src/charts/bar";
-import { Legend } from "../src/components/ChartCard";
+import { ChartCard, Legend } from "../src/components/ChartCard";
 import { StatCard } from "../src/components/StatCard";
 import { AxisPill, GridY, tickLabels, yAxisWidth } from "../src/core/axis";
 import { ChartFrame, type ChartFrameProps } from "../src/core/ChartFrame";
@@ -413,5 +413,64 @@ describe("StatCard", () => {
     expect(spark.tooltip).toBe(false);
     expect(spark.showValue).toBe(false);
     expect(spark.ariaLabel).toBe("MRR, trend");
+  });
+});
+
+describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ k: `채널 ${i + 1}`, v: Math.round(1000 / Math.pow(i + 1, 1.6)) / 10 }));
+
+  it("바깥 라벨은 들어가는 만큼만 그려서 위아래로 넘치지 않아요", () => {
+    const html = renderToStaticMarkup(<Chart spec={{ type: "pie", data: many, encoding: { label: "k", value: "v" } }} width={560} height={300} animate={false} />);
+    const ys = [...html.matchAll(/<text[^>]*\sy="(-?[\d.]+)"[^>]*>[^<]*%<\/text>/g)].map((m) => +m[1]);
+    expect(ys.length).toBeGreaterThan(5);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(300);
+  });
+
+  it("other는 큰 조각 n개만 두고 나머지를 기타로 묶고, 기타는 강조하지 않아요 (카드 범례도 같아요)", () => {
+    const spec = { type: "pie", data: many, encoding: { label: "k", value: "v" }, options: { other: 6 }, card: { legend: "auto" as const } };
+    const legend = autoLegend(spec, many, "ko");
+    expect(legend.map((l) => l.label)).toEqual(["채널 1", "채널 2", "채널 3", "채널 4", "채널 5", "채널 6", "기타 34개"]);
+    expect(legend[0].color).toBe("accent");
+    expect(legend[6].color).not.toBe("accent");
+    expect(renderToStaticMarkup(<Chart spec={spec} width={560} animate={false} locale="ko" />)).toContain("기타 34개");
+  });
+
+  it("390px 막대: 강조된 긴 이름은 카드 안에 들어가게 줄이고, 주석 이름표는 값 라벨을 피해요", () => {
+    const long = renderToStaticMarkup(<BarChart data={[{ x: "Very long category name that keeps going on and on", y: 42 }, { x: "B", y: 31 }, { x: "Short", y: 9 }]} x="x" y="y" width={390} animate={false} />);
+    expect(long).not.toMatch(/<text[^>]*>Very long category name that keeps going on and on<\/text>/);
+    expect(long).toMatch(/<text[^>]*>Very long[^<]*…<\/text>/);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const data = months.map((m, i) => ({ x: m, y: [62, 68, 71, 77, 80, 86, 90, 95, 99, 104, 113, 122][i] }));
+    const svg = renderToStaticMarkup(<BarChart data={data} x="x" y="y" width={390} animate={false} annotations={[{ type: "line", y: 100, label: "Goal 100" }, { type: "forecast", from: "Nov" }]} />);
+    const tags = [...svg.matchAll(/<rect[^>]*\sx="([\d.]+)"[^>]*\sy="([\d.]+)"[^>]*\swidth="([\d.]+)"[^>]*\sheight="16"[^>]*rx="5"/g)].map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: 16 }));
+    const values = [...svg.matchAll(/<text[^>]*\sx="([\d.]+)"[^>]*\sy="([\d.]+)"[^>]*>(\d+)<\/text>/g)].filter((m) => +m[3] >= 60).map((m) => ({ x: +m[1] - m[3].length * 3.5, y: +m[2] - 6, w: m[3].length * 7, h: 12 }));
+    expect(tags).toHaveLength(2);
+    expect(values.length).toBeGreaterThanOrEqual(10);
+    const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    expect(tags.flatMap((t) => values.filter((v) => hit(t, v)))).toEqual([]);
+  });
+
+  it("카드 제목이 안쪽 차트의 접근 가능한 이름이 되고, ariaLabel이 있으면 그게 먼저예요", () => {
+    const bar = <BarChart data={[{ x: "A", y: 1 }, { x: "B", y: 2 }]} x="x" y="y" width={400} animate={false} />;
+    const html = renderToStaticMarkup(<ChartCard title="월 매출">{bar}</ChartCard>);
+    expect(html).toContain('aria-label="월 매출"');
+    expect(html).not.toContain('aria-label="Bar chart"');
+    expect(renderToStaticMarkup(<ChartCard title="월 매출"><BarChart data={[{ x: "A", y: 1 }]} x="x" y="y" width={400} animate={false} ariaLabel="1분기 매출" /></ChartCard>)).toContain('aria-label="1분기 매출"');
+    expect(renderToStaticMarkup(bar)).toContain('aria-label="Bar chart"');
+  });
+
+  it("값이 모두 빈 스파크라인(최고·최저 점)과 평행 좌표는 NaN을 내지 않고, 슬로프는 못 그린 까닭을 설명에 적어요", () => {
+    const spark = CHARTS.find((c) => c.type === "sparkline")!.example;
+    const empty = { ...spark, data: (spark.data as Record<string, unknown>[]).map((r) => ({ ...r, revenue: null })) };
+    expect(renderToStaticMarkup(<Chart spec={empty} width={400} animate={false} />)).not.toContain("NaN");
+    expect(renderToStaticMarkup(<Chart spec={{ type: "parallel", data: [{ a: null, b: null, c: null }, { a: null, b: null, c: null }], encoding: { dimensions: ["a", "b", "c"] } }} width={400} animate={false} />)).not.toContain("NaN");
+    const slope = renderToStaticMarkup(<Chart spec={{ type: "slope", data: [{ k: "A", p: "2024", v: 1 }, { k: "B", p: "2025", v: 2 }], encoding: { label: "k", x: "p", value: "v" } }} width={400} animate={false} />);
+    expect(slope).toContain("No item has a value in both the first period (2024) and the last period (2025)");
+  });
+
+  it("Infinity 조각이 있어도 NaN을 내지 않아요", () => {
+    const html = renderToStaticMarkup(<Chart spec={{ type: "pie", data: [{ label: "a", value: 3 }, { label: "b", value: Infinity }, { label: "c", value: 2 }] }} width={400} animate={false} />);
+    expect(html).not.toContain("NaN");
   });
 });

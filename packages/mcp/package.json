@@ -1,6 +1,6 @@
 {
   "name": "ztd-charts-mcp",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "ztd-charts MCP server (stdio): list charts, get schemas, validate specs, render SVG/PNG, and get chart suggestions from data",
   "license": "MIT",
   "author": "Junhan2",

@@ -189,7 +189,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
           </g>
         );
       })}
-      <AxisXBand p={p} labels={model.boxes.map((b) => b.name)} centers={model.boxes.map((b) => band(b.name) + band.bandwidth / 2)} y={H - bottom + 13} strong={new Set(model.boxes.filter((b) => b.hi).map((b) => b.g))} />
+      <AxisXBand p={p} width={W} labels={model.boxes.map((b) => b.name)} centers={model.boxes.map((b) => band(b.name) + band.bandwidth / 2)} y={H - bottom + 13} strong={new Set(model.boxes.filter((b) => b.hi).map((b) => b.g))} />
     </ChartFrame>
   );
 }

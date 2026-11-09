@@ -260,7 +260,7 @@ describe("range band (encoding.lower, encoding.upper)", () => {
   const rows = [
     { d: "a", app: "A", v: 5, lo: 4, hi: 6 },
     { d: "b", app: "A", v: 6, lo: 7, hi: 5 },
-    { d: "a", app: "B", v: 2, lo: 1, hi: 3 },
+    { d: "c", app: "B", v: 2, lo: 1, hi: 3 },
   ];
   const band = (type: string, extra: object = {}) => validateSpec({ type, data: rows, encoding: { x: "d", y: "v", lower: "lo", upper: "hi" }, ...extra });
   const codes = (r: ReturnType<typeof validateSpec>) => [...r.errors.map((e) => e.code), ...r.warnings.map((w) => `!${w.code}`)];
@@ -309,6 +309,60 @@ describe("options.connectNulls (line, area)", () => {
     expect(validateAll({ ...spec, options: { connectNulls: "yes" } })).toBe(false);
     expect(validateSpec({ ...spec, options: { connectNulls: true } }).warnings).toEqual([]);
     expect(validateSpec({ ...spec, options: { connectNulls: "yes" } }).errors.map((e) => e.code)).toEqual(["bad_option_type"]);
+  });
+});
+
+describe("text in number columns and duplicate x (options.aggregate)", () => {
+  const codesOf = (r: ReturnType<typeof validateSpec>) => [...r.errors.map((e) => e.code), ...r.warnings.map((w) => `!${w.code}`)];
+
+  it("draws text cells as gaps with the row numbers in a warning, and rejects only when more than half is text", () => {
+    const data = [{ k: "A", v: 10 }, { k: "B", v: "n/a" }, { k: "C", v: "n/a" }, { k: "D", v: 30 }, { k: "E", v: "#N/A" }, { k: "F", v: 25 }];
+    const half = validateSpec({ type: "bar", data, encoding: { x: "k", y: "v" } });
+    expect(half.valid).toBe(true);
+    expect(half.warnings.map((w) => `${w.path} ${w.message}`)).toEqual(['encoding.y 3 values in "v" are not a number and drawn as a gap (row 2 "n/a", row 3 "n/a", row 5 "#N/A")']);
+    expect(validateSpec({ type: "bar", data, encoding: { x: "k", y: "v" } }, { lang: "ko" }).warnings[0].message).toBe('"v" 값 3개는 숫자가 아니라 빈 칸으로 그려요(2행 "n/a", 3행 "n/a", 5행 "#N/A")');
+    expect(codesOf(validateSpec({ type: "bar", data: [...data, { k: "G", v: "-" }], encoding: { x: "k", y: "v" } }))).toEqual(["not_numeric"]);
+  });
+
+  it("warns when rows with the same x get added, unless options.aggregate says how to combine them", () => {
+    const data = [{ m: "2025-01", r: 3 }, { m: "2025-01", r: 5 }, { m: "2025-02", r: 4.2 }];
+    const spec = { type: "line", data, encoding: { x: "m", y: "r" } };
+    expect(codesOf(validateSpec(spec))).toEqual(["!duplicate_x"]);
+    expect(validateSpec(spec, { lang: "ko" }).warnings[0].message).toBe('m 값이 같은 행은 더해서 그려요(1곳, 처음 "2025-01" 2행). 비율, 평균처럼 더하면 안 되는 값이면 options.aggregate를 "mean", "last", "count" 중 하나로 정해 주세요');
+    expect(validateSpec({ ...spec, options: { aggregate: "mean" } }).warnings).toEqual([]);
+    expect(codesOf(validateSpec({ type: "line", data: data.map((d, i) => ({ ...d, s: i === 1 ? "b" : "a" })), encoding: { x: "m", y: "r", series: "s" } }))).toEqual([]);
+    expect(codesOf(validateSpec({ ...spec, options: { aggregate: "median" } }))).toEqual(["bad_enum"]);
+    const owners = CHARTS.filter((c) => c.options.some((o) => o.name === "aggregate")).map((c) => c.type);
+    expect(owners).toEqual(["line", "area", "stream", "bar"]);
+    for (const t of owners) expect(KO.find((k) => k.type === t)!.options.find((o) => o.name === "aggregate")!.description, t).toMatch(HANGUL);
+  });
+});
+
+describe("highlight by wide-table column, slope periods", () => {
+  it("a wide-table column name is a valid highlight, and a slope says which periods and items it leaves out", () => {
+    const wide = { type: "line", data: [{ m: "2025-01", ours: 1, theirs: 2 }, { m: "2025-02", ours: 3, theirs: 2 }], encoding: { x: "m", y: ["ours", "theirs"] }, options: { highlight: "ours" } };
+    expect(validateSpec(wide).warnings).toEqual([]);
+    expect(validateSpec({ ...wide, options: { highlight: "nobody" } }).warnings.map((w) => w.code)).toEqual(["highlight_not_found"]);
+    const data = [
+      { k: "A", p: "2023", v: 1 }, { k: "A", p: "2024", v: 2 }, { k: "A", p: "2025", v: 3 },
+      { k: "B", p: "2023", v: 4 }, { k: "B", p: "2024", v: 5 },
+    ];
+    const r = validateSpec({ type: "slope", data, encoding: { label: "k", x: "p", value: "v" } });
+    expect(r.warnings.map((w) => `${w.code} ${w.message}`)).toEqual(["slope_periods Only the first and last periods are drawn (3 periods: 2023, 2024, 2025)", 'slope_incomplete 1 item lacks a value in the first (2023) or last (2025) period and is left out ("B")']);
+    expect(validateSpec({ type: "slope", data, encoding: { label: "k", x: "p", value: "v" } }, { lang: "ko" }).warnings.map((w) => w.message)).toEqual(["처음과 마지막 기간만 그려요(기간 3개: 2023, 2024, 2025)", '처음(2023)이나 마지막(2025) 기간 값이 없는 항목 1개는 빼고 그려요("B")']);
+  });
+});
+
+describe("pie and donut slices (options.other)", () => {
+  it("warns about slices of 0 or less by name, and suggests options.other for many slices", () => {
+    const data = [{ label: "검색", value: 40 }, { label: "환불", value: -8 }, { label: "보류", value: 0 }];
+    expect(validateSpec({ type: "pie", data }).warnings.map((w) => `${w.code} ${w.message}`)).toEqual(['nonpositive_slice 2 slices are 0 or less and left out ("환불" -8, "보류" 0)']);
+    expect(validateSpec({ type: "donut", data }, { lang: "ko" }).warnings[0].message).toBe('0 이하인 조각 2개는 빼고 그려요("환불" -8, "보류" 0)');
+    const many = Array.from({ length: 12 }, (_, i) => ({ label: `c${i}`, value: 12 - i }));
+    expect(validateSpec({ type: "pie", data: many }).warnings.map((w) => w.code)).toEqual(["many_slices"]);
+    expect(validateSpec({ type: "pie", data: many, options: { other: 6 } }).warnings).toEqual([]);
+    expect(CHARTS.filter((c) => c.options.some((o) => o.name === "other")).map((c) => c.type)).toEqual(["pie", "donut"]);
+    for (const t of ["pie", "donut"]) expect(KO.find((k) => k.type === t)!.options.find((o) => o.name === "other")!.description, t).toMatch(HANGUL);
   });
 });
 

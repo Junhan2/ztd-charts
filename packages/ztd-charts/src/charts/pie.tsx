@@ -9,18 +9,43 @@ import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter } from "../data/accessor";
-import { plural, type ChartLang } from "../core/i18n";
+import { langOf, plural, type ChartLang } from "../core/i18n";
+import { useChartLocale } from "../theme/context";
 
 const en = {
   pie: "Pie chart",
   donut: "Donut chart",
   share: "Share",
   desc: (n: number, total: string, top: string) => `${plural(n, "item")}, total ${total}. ${top}.`,
+  other: (n: number) => `Other (${n})`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
-  ko: { pie: "파이 차트", donut: "도넛 차트", share: "비중", desc: (n, total, top) => `${n}개 항목, 합계 ${total}. ${top}.` },
+  ko: { pie: "파이 차트", donut: "도넛 차트", share: "비중", desc: (n, total, top) => `${n}개 항목, 합계 ${total}. ${top}.`, other: (n) => `기타 ${n}개` },
 };
+
+/** "기타" 조각 이름 (스펙 범례도 같은 이름을 써요) */
+export const otherLabel = (lang: ChartLang, n: number) => MSG[lang].other(n);
+
+/**
+ * 큰 값 n개만 남기고(kept, 원래 순서) 나머지를 "기타" 한 조각(other)으로 묶어요. 기타는 맨 끝에 그리고 강조하지 않아요.
+ * 묶을 조각이 둘 이상일 때만 묶어요(아니면 other는 null). make는 묶은 개수와 합으로 기타 조각을 만들어요
+ */
+export function groupOther<R extends { value: number }>(rows: R[], n: number | undefined, make: (count: number, value: number) => R): { kept: R[]; other: R | null } {
+  if (typeof n !== "number" || !(n >= 1) || rows.length <= n + 1) return { kept: rows, other: null };
+  const keep = new Set(
+    rows
+      .map((r, i) => ({ v: r.value, i }))
+      .sort((a, b) => b.v - a.v)
+      .slice(0, Math.floor(n))
+      .map((x) => x.i),
+  );
+  const rest = rows.filter((_, i) => !keep.has(i));
+  return { kept: rows.filter((_, i) => keep.has(i)), other: make(rest.length, sum(rest.map((r) => r.value))) };
+}
+
+/** 조각 값: 0보다 큰 유한한 수만. 음수, 0, NaN, Infinity는 0 (Infinity가 합계를 망가뜨려 NaN이 되지 않게) */
+export const sliceValue = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
 
 export interface PieChartProps<T = Row> extends BaseChartProps<T> {
   /** 항목 이름. 기본 "label" */
@@ -35,6 +60,8 @@ export interface PieChartProps<T = Row> extends BaseChartProps<T> {
   startAngle?: number;
   /** 조각 안 라벨: "percent" | "value" | "label" | "none". 기본 "percent" */
   labelMode?: "percent" | "value" | "label" | "none";
+  /** 큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요. 기본 묶지 않음 */
+  other?: number;
 }
 
 export interface DonutChartProps<T = Row> extends PieChartProps<T> {
@@ -62,17 +89,24 @@ interface Slice<T> {
 
 function useSlices<T>(props: PieChartProps<T>) {
   const { data } = props;
+  const lang = langOf(useChartLocale(props.locale));
   return useMemo(() => {
     const gl = strGetter(props.label, "label");
     const gv = numGetter(props.value, "value");
-    let rows = data.map((d, i) => ({ d, i, label: gl(d, i), value: Math.max(0, gv(d, i) || 0) }));
+    let rows = data.map((d, i) => ({ d, i, label: gl(d, i), value: sliceValue(gv(d, i)) }));
     if (props.sort) rows = [...rows].sort((a, b) => b.value - a.value);
-    const total = sum(rows.map((r) => r.value));
-    const labels = rows.map((r) => r.label);
-    const values = rows.map((r) => r.value);
-    const hi = resolveHighlight(props.highlight, rows.map((r) => r.d), labels, values, "max");
-    return { rows, total, hi };
-  }, [data, props.label, props.value, props.sort, props.highlight]);
+    const lk = typeof props.label === "string" ? props.label : "label";
+    const vk = typeof props.value === "string" ? props.value : "value";
+    const { kept, other } = groupOther(rows, props.other, (n, value) => {
+      const label = otherLabel(lang, n);
+      return { d: { [lk]: label, [vk]: value } as T, i: -1, label, value };
+    });
+    const grouped = other ? [...kept, other] : kept;
+    const total = sum(grouped.map((r) => r.value));
+    // 기타 조각은 강조 후보에서 빼요 (가장 커도 강조색을 받지 않게)
+    const hi = resolveHighlight(props.highlight, kept.map((r) => r.d), kept.map((r) => r.label), kept.map((r) => r.value), "max");
+    return { rows: grouped, total, hi };
+  }, [data, props.label, props.value, props.sort, props.highlight, props.other, lang]);
 }
 
 function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
@@ -141,9 +175,10 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
   const labelMode = props.labelMode ?? (isDonut ? "none" : "percent");
   const labelR = isDonut ? (r0 + R) / 2 : R * 0.62;
 
-  // 바깥 라벨: 작은 조각은 원 밖으로
+  // 바깥 라벨: 작은 조각은 원 밖으로. null이면 자리가 없어 라벨을 그리지 않아요
   const outside = useMemo(() => {
-    if (labelMode === "none" || !c.showLabels) return new Map<number, { x: number; y: number; anchor: "start" | "end" | "middle" }>();
+    const out = new Map<number, { x: number; y: number; anchor: "start" | "end" | "middle" } | null>();
+    if (labelMode === "none" || !c.showLabels) return out;
     const list: { i: number; x: number; y: number; side: number }[] = [];
     slices.forEach((s) => {
       const text = sliceText(s, labelMode, c.fv, c.pct);
@@ -155,14 +190,22 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
         list.push({ i: s.i, x, y, side: Math.sin(mid) >= 0 ? 1 : -1 });
       }
     });
-    const out = new Map<number, { x: number; y: number; anchor: "start" | "end" | "middle" }>();
+    // 한쪽에 15px 간격으로 들어가는 만큼만 큰 조각부터 남겨요. 넘치면 라벨이 위로 쌓여 카드 밖으로 나가 제목을 덮어요
+    const gap = 15;
+    const pad = 8;
+    const room = Math.max(0, Math.floor((plotH - 2 * pad) / gap) + 1);
     for (const side of [1, -1]) {
-      const group = list.filter((l) => l.side === side);
+      let group = list.filter((l) => l.side === side);
+      if (group.length > room) {
+        const keep = new Set([...group].sort((a, b) => slices[b.i].value - slices[a.i].value).slice(0, room).map((g) => g.i));
+        for (const g of group) if (!keep.has(g.i)) out.set(g.i, null);
+        group = group.filter((g) => keep.has(g.i));
+      }
       const ys = dodgeVertical(
         group.map((g) => g.y),
-        15,
-        8,
-        plotH - 8,
+        gap,
+        pad,
+        plotH - pad,
       );
       group.forEach((g, k) => {
         const nearTop = Math.abs(g.x - cx) < 14;
@@ -244,6 +287,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
             const mid = start + (s.a0 + s.a1) / 2;
             const o = m.fade(D * 0.35 + (s.a0 / TAU) * D * 0.5, 260) * c.dim(s.i);
             const out = outside.get(s.i);
+            if (out === null) return null;
             if (out) {
               return (
                 <Txt key={s.i} x={out.x} y={out.y} anchor={out.anchor} size={12} weight={700} fill={p.paint("ink")} opacity={o}>

@@ -10,7 +10,7 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { categorical, ramp, swatch, type Swatch } from "../core/palette";
 import { extent, fitDomain, scaleLinear, timeTicks } from "../core/scale";
-import { bucketSeries, prepSeries, xNum, type SeriesModel, type XType } from "../core/series";
+import { bucketSeries, prepSeries, xNum, type Aggregate, type SeriesModel, type XType } from "../core/series";
 import { dodgeVertical, textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { lazyArray } from "../core/lazy";
@@ -65,6 +65,8 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
   curve?: Curve;
   /** x 종류를 직접 정해요 */
   xType?: XType;
+  /** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  aggregate?: Aggregate;
   /** y 범위 고정 */
   yDomain?: [number, number];
   /** y축에 0을 포함. 선 차트 기본 false, 영역 기본 true */
@@ -243,7 +245,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const msg = MSG[c.lang];
   const gid = useId().replace(/:/g, "");
 
-  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale }), [props.data, props.x, props.y, props.series, props.xType, c.locale]);
+  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale, aggregate: props.aggregate }), [props.data, props.x, props.y, props.series, props.xType, c.locale, props.aggregate]);
   const nS = model0.series.length;
   const stackMode = isArea ? props.stack ?? (nS > 1 ? "stacked" : "none") : "none";
   // 확대한 구간 (model0의 x 인덱스)

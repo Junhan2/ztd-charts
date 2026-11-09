@@ -26,7 +26,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "항목이 4개를 넘거나 값 차이가 작을 때(막대가 더 정확해요)",
     why: "강조 조각(기본은 가장 큰 조각)만 강조색으로, 나머지는 무채색으로 칠해서 메시지가 분명해요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
-    options: { colorMode: "항목마다 다른 무채색(categorical) 또는 강조 조각만 색(emphasis)", sort: "큰 값부터 정렬", startAngle: "시작 각도(도). 0이 12시", labelMode: "조각 라벨에 보일 내용" },
+    options: { colorMode: "항목마다 다른 무채색(categorical) 또는 강조 조각만 색(emphasis)", sort: "큰 값부터 정렬", startAngle: "시작 각도(도). 0이 12시", labelMode: "조각 라벨에 보일 내용", other: '큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요' },
     example: { data: S.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { subtitle: "기기별 매출 비중", takeaway: "2~4개 항목만", legend: "auto" } },
   },
   donut: {
@@ -35,7 +35,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "항목이 6개를 넘을 때",
     why: "등장할 때 가운데 숫자가 0부터 올라가서 합계가 먼저 눈에 들어와요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
-    options: { innerRadius: "안쪽 반지름 비율", centerValue: '가운데 숫자: "total" | "highlight" | 숫자 | null(없음)', centerLabel: "가운데 숫자 아래 설명", legend: "범례 위치", sort: "큰 값부터 정렬" },
+    options: { innerRadius: "안쪽 반지름 비율", centerValue: '가운데 숫자: "total" | "highlight" | 숫자 | null(없음)', centerLabel: "가운데 숫자 아래 설명", legend: "범례 위치", sort: "큰 값부터 정렬", other: '큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요' },
     example: { data: S.donutSampleKo, encoding: { label: "type", value: "count" }, options: { centerLabel: "전환(건)" }, card: { subtitle: "전환 유형별 비중", takeaway: "가운데에 총합" } },
   },
   funnel: {
@@ -134,7 +134,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "x가 순서 없는 범주일 때",
     why: "강조 계열만 색으로, 나머지는 회색으로 칠하고 오른쪽에 이름표를 붙여요. 1만 점도 LTTB로 줄여 path 하나로 그려요.",
     channels: { x: "x 필드(날짜, 숫자, 범주)", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드(긴 표)", lower: "범위 띠의 아래 경계. 넓은 표에서는 y와 같은 순서의 배열", upper: "범위 띠의 위 경계. lower와 같은 꼴" },
-    options: { curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", dots: '점 표시. "auto" | true | false', area: "강조 계열 아래 그라데이션", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", colorMode: "강조 계열만 색 또는 계열마다 색", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", referenceLines: "가로 기준선 [{ y, label }]", yLabel: "y축 이름", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: "강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감)", baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", dots: '점 표시. "auto" | true | false', area: "강조 계열 아래 그라데이션", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", colorMode: "강조 계열만 색 또는 계열마다 색", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", referenceLines: "가로 기준선 [{ y, label }]", yLabel: "y축 이름", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: "강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감)", baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
     example: { data: S.lineSampleKo, encoding: { x: "month", y: "mau", series: "app" }, options: { unit: "만", area: true }, card: { subtitle: "월간 활성 사용자(만 명)", takeaway: "우리 앱만 꾸준히 올라요" } },
   },
   area: {
@@ -143,7 +143,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "계열 하나하나의 정확한 값이 중요할 때",
     why: "바닥에서 차오르며 등장해서 쌓이는 구성을 한눈에 볼 수 있어요.",
     channels: { x: "x 필드", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드", lower: '범위 띠의 아래 경계(stack "none"일 때만). 넓은 표에서는 y와 같은 순서의 배열', upper: "범위 띠의 위 경계. lower와 같은 꼴" },
-    options: { stack: "쌓기 방식", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', stack: "쌓기 방식", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
     example: { data: S.areaSampleKo, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "SNS" }, card: { subtitle: "채널별 월 유입(천 명)", takeaway: "SNS 몫이 가장 빨리 커져요", legend: "auto" } },
   },
   stream: {
@@ -152,7 +152,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "정확한 값을 읽어야 할 때",
     why: "wiggle 기준선과 inside-out 정렬로 띠가 덜 출렁여요. 가장 두꺼운 곳에 이름을 넣어요.",
     channels: { x: "x 필드", y: "y 필드", series: "계열 필드" },
-    options: { offset: "기준선 모양", reorder: "모양이 깔끔해지게 계열 순서 바꾸기", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', offset: "기준선 모양", reorder: "모양이 깔끔해지게 계열 순서 바꾸기", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동" },
     example: { data: S.streamSampleKo, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "예능" }, card: { subtitle: "주별 장르 시청 시간(만 시간)", takeaway: "예능이 여름을 지배했어요" } },
   },
   bar: {
@@ -161,7 +161,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "시간 흐름이 핵심일 때(라인 차트가 나아요)",
     why: "계열이 하나면 가장 큰 막대만, 여럿이면 강조 계열만 색으로 칠해요.",
     channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드" },
-    options: { layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)", annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)", annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]" },
     example: { data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", legend: "auto" } },
   },
   radialBar: {
@@ -377,7 +377,7 @@ export const KO_COMMON_OPTIONS: Record<string, string> = {
   height: "높이(px). 없으면 차트마다 폭에 맞춘 기본값",
   width: "고정 폭(px). 없으면 부모 폭에 맞춰요",
   highlight: '강조할 항목. 인덱스, 이름, 배열, 또는 "max" | "min" | "first" | "last" | "none"',
-  format: '값 포맷. "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" 또는 Intl.NumberFormat 옵션',
+  format: '값 포맷. "number" | "integer" | "percent"(값이 이미 퍼센트: 42 → "42%") | "ratio"(0.42 → "42%") | "compact" | "currency"(한국어 로캘은 원화, 그 밖은 달러. 다른 통화는 Intl 옵션에 currency를 줘요) | "decimal" 또는 Intl.NumberFormat 옵션',
   unit: '값 뒤에 붙는 단위. 예: "명", "만 원"',
   locale: '숫자, 날짜, 차트 글자(툴팁, 스크린 리더 문장)의 로캘. "ko"나 "ko-*"면 한국어(1.2만). 없으면 ThemeProvider의 locale',
   animate: "등장, 전환 애니메이션",

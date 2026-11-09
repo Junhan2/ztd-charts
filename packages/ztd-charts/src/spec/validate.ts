@@ -3,6 +3,7 @@ import { hasField, numGetter, toNumber } from "../data/accessor";
 import { markPercentile } from "../data/percentile";
 import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
 import { toDate } from "../core/format";
+import { plural } from "../core/i18n";
 import { META } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
@@ -167,6 +168,123 @@ function checkBand(type: string, enc: Record<string, unknown>, opts: Record<stri
 }
 
 /**
+ * 같은 x(긴 표는 같은 x와 계열)가 여러 행이면 차트는 더해서 그려요. 비율, 평균처럼 더하면 안 되는 값일 수 있어 알려요.
+ * aggregate를 정했으면 묻지 않아요. 큰 표는 앞 10만 행만 봐요
+ */
+function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+  if (!rows || rows.length < 2 || opts.aggregate !== undefined) return;
+  const xf = fieldOf(enc, "x");
+  const sf = !Array.isArray(enc.y) && typeof enc.series === "string" ? enc.series : null;
+  const seen = new Map<string, number>();
+  let firstKey: string | null = null;
+  let firstX = "";
+  let places = 0;
+  for (let i = 0; i < Math.min(rows.length, 100_000); i++) {
+    const r = rows[i];
+    const xv = r?.[xf];
+    if (isBlank(xv)) continue;
+    const x = String(xv);
+    // 계열이 있으면 x 길이를 앞에 붙여 이어요 (x와 계열 이름의 경계가 어디든 다른 짝과 겹치지 않게)
+    const key = sf ? `${x.length}:${x}${String(r[sf] ?? "")}` : x;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    if (n !== 2) continue;
+    places++;
+    if (firstKey === null) {
+      firstKey = key;
+      firstX = x;
+    }
+  }
+  if (firstKey === null) return;
+  const times = seen.get(firstKey) ?? 2;
+  const what = sf ? `${xf}, ${sf}` : xf;
+  warn(
+    "encoding.x",
+    "duplicate_x",
+    t(
+      `Rows with the same ${sf ? `${xf} and ${sf}` : xf} are added together (${plural(places, "place")}, first "${firstX}" ×${times}). If they should not add up, such as rates or averages, set options.aggregate to "mean", "last" or "count"`,
+      `${what} 값이 같은 행은 더해서 그려요(${places}곳, 처음 "${firstX}" ${times}행). 비율, 평균처럼 더하면 안 되는 값이면 options.aggregate를 "mean", "last", "count" 중 하나로 정해 주세요`,
+    ),
+  );
+}
+
+/** 조각이 이보다 많으면 기타 묶기(options.other)를 권해요 */
+const MANY_SLICES = 8;
+
+/** 파이, 도넛: 0 이하 조각은 말없이 빠지고, 조각이 많으면 서로 구분하기 어려워요 */
+function checkSlices(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+  if (!rows) return;
+  const lf = fieldOf(enc, "label");
+  const vf = fieldOf(enc, "value");
+  const shown: string[] = [];
+  let n = 0;
+  for (const r of rows) {
+    const v = toNumber(r?.[vf]);
+    if (!Number.isFinite(v) || v > 0) continue;
+    n++;
+    if (shown.length < 3) shown.push(`${cellText(r?.[lf])} ${v}`);
+  }
+  if (n) {
+    const list = listText(shown, n, t);
+    warn("encoding.value", "nonpositive_slice", t(`${plural(n, "slice is", "slices are")} 0 or less and left out (${list})`, `0 이하인 조각 ${n}개는 빼고 그려요(${list})`));
+  }
+  if (rows.length > MANY_SLICES && opts.other === undefined)
+    warn("options.other", "many_slices", t(`${rows.length} slices are hard to tell apart. options.other: 6 keeps the 6 largest and groups the rest as "Other"`, `조각이 ${rows.length}개라 구분하기 어려워요. options.other: 6이면 큰 조각 6개만 두고 나머지를 "기타"로 묶어요`));
+}
+
+/** 슬로프(긴 표, encoding.x): 처음과 마지막 기간만 그리고, 둘 중 한쪽 값이 없는 항목은 빼요. 둘 다 말없이 일어나서 알려요 */
+function checkSlope(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+  if (!rows || !rows.length || opts.start !== undefined || opts.end !== undefined) return;
+  const xf = fieldOf(enc, "x");
+  const lf = fieldOf(enc, "label");
+  const vf = fieldOf(enc, "value");
+  const xs = [...new Set(rows.map((r) => String(r?.[xf] ?? "")))];
+  const first = xs[0];
+  const last = xs[xs.length - 1];
+  if (xs.length > 2) {
+    const list = listText(xs.slice(0, 4), xs.length, t);
+    warn("encoding.x", "slope_periods", t(`Only the first and last periods are drawn (${xs.length} periods: ${list})`, `처음과 마지막 기간만 그려요(기간 ${xs.length}개: ${list})`));
+  }
+  const has = new Map<string, [boolean, boolean]>();
+  for (const r of rows) {
+    const l = String(r?.[lf] ?? "");
+    const x = String(r?.[xf] ?? "");
+    const e = has.get(l) ?? [false, false];
+    if (Number.isFinite(toNumber(r?.[vf]))) {
+      if (x === first) e[0] = true;
+      if (x === last) e[1] = true;
+    }
+    has.set(l, e);
+  }
+  const missing = [...has].filter(([, [a, b]]) => !a || !b).map(([l]) => l);
+  if (!missing.length) return;
+  const names = listText(missing.slice(0, 3).map((l) => cellText(l)), missing.length, t);
+  const n = missing.length;
+  warn("encoding.label", "slope_incomplete", t(`${plural(n, "item lacks", "items lack")} a value in the first (${first}) or last (${last}) period and ${n === 1 ? "is" : "are"} left out (${names})`, `처음(${first})이나 마지막(${last}) 기간 값이 없는 항목 ${n}개는 빼고 그려요(${names})`));
+}
+
+/** 경고 문구에 넣는 칸 값 (길면 줄여요) */
+function cellText(v: unknown): string {
+  const s = typeof v === "string" ? JSON.stringify(v) : String(v);
+  return s.length > 24 ? `${s.slice(0, 23)}…` : s;
+}
+
+/** 경고 문구의 목록: 보여 줄 것을 쉼표로 잇고, 전체가 더 많으면 영어 ", …", 한국어 " 등"을 붙여요 */
+function listText(shown: string[], total: number, t: (en: string, ko: string) => string): string {
+  return `${shown.join(", ")}${total > shown.length ? t(", …", " 등") : ""}`;
+}
+
+/** 인코딩의 필드 이름. 문자열이 아니면 기본 이름(x, label, value 등) */
+function fieldOf(enc: Record<string, unknown>, k: string): string {
+  return typeof enc[k] === "string" ? (enc[k] as string) : k;
+}
+
+/** 빈 칸: 없음, null, 빈 글자 */
+function isBlank(v: unknown): boolean {
+  return v === undefined || v === null || v === "";
+}
+
+/**
  * 히스토그램만의 옵션 검사. log면 모든 값(미리 나눈 행은 구간 시작, 경계)이 0보다 커야 해요. 그룹은 2개까지 겹쳐요.
  * 필요한 채널(원시 행은 value, 미리 나눈 행은 x0, x1, count)은 채널 검사가 봐요
  */
@@ -320,8 +438,29 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       }
       const vals = present.map((r) => r[f]).filter((x) => x !== null && x !== undefined && x !== "");
       if (c.type === "number" && vals.length) {
-        const ok = vals.filter((x) => Number.isFinite(toNumber(x))).length / vals.length;
-        if (ok < 0.8) err(`encoding.${c.name}`, "not_numeric", t(`Field "${f}" must be numeric (${Math.round(ok * 100)}% of values read as numbers)`, `"${f}" 필드는 숫자여야 해요(숫자로 읽히는 값 ${Math.round(ok * 100)}%)`));
+        // 숫자로 못 읽는 칸("n/a", "#N/A", "-")은 빈 칸으로 그려요. 절반 넘게 글자일 때만 숫자 열이 아니라고 봐요
+        let bad = 0;
+        const examples: string[] = [];
+        sample.forEach((r, i) => {
+          const x = r && typeof r === "object" ? r[f] : undefined;
+          if (isBlank(x) || Number.isFinite(toNumber(x))) return;
+          bad++;
+          if (examples.length < 3) examples.push(t(`row ${i + 1} ${cellText(x)}`, `${i + 1}행 ${cellText(x)}`));
+        });
+        const ok = 1 - bad / vals.length;
+        if (ok < 0.5) err(`encoding.${c.name}`, "not_numeric", t(`Field "${f}" must be numeric (${Math.round(ok * 100)}% of values read as numbers)`, `"${f}" 필드는 숫자여야 해요(숫자로 읽히는 값 ${Math.round(ok * 100)}%)`));
+        else if (bad) {
+          const list = listText(examples, bad, t);
+          const part = rows.length > sample.length;
+          warn(
+            `encoding.${c.name}`,
+            "some_not_numeric",
+            t(
+              `${plural(bad, "value")} in "${f}"${part ? ` (first ${sample.length} rows)` : ""} ${bad === 1 ? "is" : "are"} not a number and drawn as a gap (${list})`,
+              `${part ? `앞 ${sample.length}행 중 ` : ""}"${f}" 값 ${bad}개는 숫자가 아니라 빈 칸으로 그려요(${list})`,
+            ),
+          );
+        }
       }
       if (c.type === "date" && vals.length) {
         const ok = vals.filter((x) => toDate(x)).length / vals.length;
@@ -391,7 +530,9 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
     }
     if (rows && rows.length && typeof options.highlight === "string" && !["max", "min", "first", "last", "none"].includes(options.highlight)) {
       const h = options.highlight;
-      const seen = rows.slice(0, 2000).some((r) => r && typeof r === "object" && Object.values(r).some((x) => String(x) === h));
+      // 넓은 표(y가 열 배열)에서는 열 이름이 계열 이름이에요. 데이터 값에 없어도 강조돼요
+      const seriesColumn = Object.values(enc).some((v) => Array.isArray(v) && v.includes(h));
+      const seen = seriesColumn || rows.slice(0, 2000).some((r) => r && typeof r === "object" && Object.values(r).some((x) => String(x) === h));
       if (!seen) warn("options.highlight", "highlight_not_found", t(`Could not find "${h}" to highlight among the data values`, `강조할 "${h}" 값을 데이터에서 찾지 못했어요`));
     }
   }
@@ -399,12 +540,13 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   if (def.type === "skyline")
     skylineIssues(rows, enc, options, fields, (isError, path, code, [en, ko]) => (isError ? err : warn)(path, code, t(en, ko)));
 
-  if (def.type === "line" || def.type === "area") {
-    const opts = options && typeof options === "object" && !Array.isArray(options) ? (options as Record<string, unknown>) : {};
-    checkBand(def.type, enc, opts, rows, t, err, warn);
-  }
-
-  if (def.type === "histogram") checkHistogram(rows, enc, options && typeof options === "object" && !Array.isArray(options) ? options : {}, binned, err, warn, t);
+  const optsObj = options && typeof options === "object" && !Array.isArray(options) ? (options as Record<string, unknown>) : {};
+  if (def.type === "line" || def.type === "area") checkBand(def.type, enc, optsObj, rows, t, err, warn);
+  // 같은 x를 합쳐 그리는 차트는 aggregate 옵션이 있는 차트예요
+  if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn);
+  if (def.type === "pie" || def.type === "donut") checkSlices(enc, optsObj, rows, t, warn);
+  if (def.type === "slope") checkSlope(enc, optsObj, rows, t, warn);
+  if (def.type === "histogram") checkHistogram(rows, enc, optsObj, binned, err, warn, t);
 
   // card
   if (spec.card !== undefined) {

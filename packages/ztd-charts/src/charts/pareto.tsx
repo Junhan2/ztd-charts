@@ -166,7 +166,7 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
           {c.pct(lastHi.cum)}
         </Txt>
       ) : null}
-      <AxisXBand p={p} labels={labels} centers={cxs} y={H - bottom + 13} />
+      <AxisXBand p={p} width={W} labels={labels} centers={cxs} y={H - bottom + 13} />
     </ChartFrame>
   );
 }

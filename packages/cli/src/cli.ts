@@ -195,6 +195,7 @@ async function main(argv0: string[]) {
       if (format === "png") writeFileSync(target, res.png!);
       else writeFileSync(target, format === "html" ? res.html! : res.svg!);
       out(t.saved(`${target}${res.width ? ` (${res.width}×${res.height}${format === "png" ? ` @${scale ?? 2}x` : ""})` : ""}`));
+      for (const n of res.notes ?? []) out(`! ${n}`);
       return;
     }
     case "init": {

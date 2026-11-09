@@ -187,6 +187,28 @@ export interface RenderResult {
   html?: string;
   width?: number;
   height?: number;
+  /** 그리면서 바꾼 것 (PNG에서 뺀 이모지 등). 경고처럼 보여 줘요 */
+  notes?: string[];
+}
+
+/** 이모지 한 개: 국기(지역 문자 두 개), 키캡(#️⃣), 그림 문자와 피부색, ZWJ로 이은 묶음. ©, ™ 같은 글자 표시 기본 기호는 빼지 않아요 */
+const EMOJI = /\p{Regional_Indicator}{2}|[#*0-9]\p{Variation_Selector}?\p{Me}|(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\p{Variation_Selector})\p{Emoji_Modifier}?(?:\p{Join_Control}(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\p{Variation_Selector}?)\p{Emoji_Modifier}?)*/gu;
+
+/**
+ * PNG로 바꾸기 전에 SVG 글자에서 이모지를 빼요. resvg는 컬러 이모지 글꼴을 못 그려서, 이모지가 든 글자 덩어리 전체가 네모로 나와요.
+ * 이모지를 뺀 자리의 겹친 공백은 하나로 줄이고 앞뒤 공백은 지워요. 뺀 개수를 돌려줘요
+ */
+export function stripEmoji(svg: string): { svg: string; removed: number } {
+  let removed = 0;
+  // 그려지는 글자(<text>, <tspan>)만 봐요. 화면 낭독용 <title>, <desc>는 PNG에 안 그려져서 그대로 둬요
+  const out = svg.replace(/(<(?:text|tspan)\b[^>]*>)([^<]+)</g, (whole, open: string, text: string) => {
+    const t = text.replace(EMOJI, () => {
+      removed++;
+      return "";
+    });
+    return t === text ? whole : `${open}${t.replace(/ {2,}/g, " ").trim()}<`;
+  });
+  return { svg: out, removed };
 }
 
 function standaloneUrl(): string | null {
@@ -291,11 +313,19 @@ export async function render(input: ChartSpec, opts: RenderOptions = {}): Promis
   const width = m ? Number(m[1]) : undefined;
   const height = m ? Number(m[2]) : undefined;
   if (format === "svg") return { format, svg, width, height };
+  return { format, svg, width, height, ...(await svgToPng(svg, { scale: opts.scale, fonts: opts.fonts, locale })) };
+}
+
+/**
+ * SVG를 PNG로 (resvg). 이모지는 빼고, 뺀 수를 locale 언어로 notes에 알려요.
+ * MCP는 SVG가 너무 커서 글자로 못 보낼 때 이미 그린 SVG를 이걸로 바꿔 보내요
+ */
+export async function svgToPng(svg: string, opts: { scale?: number; fonts?: string[]; locale?: string } = {}): Promise<{ png: Buffer; notes?: string[] }> {
   const { Resvg } = await import("@resvg/resvg-js");
   const fontFiles = findFonts(opts.fonts);
-  const r = new Resvg(svg, { fitTo: { mode: "zoom", value: opts.scale ?? 2 }, font: { fontFiles, loadSystemFonts: true, defaultFontFamily: fontFiles.length ? "Pretendard" : "sans-serif" } });
-  const png = r.render().asPng();
-  return { format, svg, png: Buffer.from(png), width, height };
+  const plain = stripEmoji(svg);
+  const r = new Resvg(plain.svg, { fitTo: { mode: "zoom", value: opts.scale ?? 2 }, font: { fontFiles, loadSystemFonts: true, defaultFontFamily: fontFiles.length ? "Pretendard" : "sans-serif" } });
+  return { png: Buffer.from(r.render().asPng()), ...(plain.removed ? { notes: [CLI_TEXT[langOf(opts.locale)].emojiRemoved(plain.removed)] } : {}) };
 }
 
 /** http(s) 주소인지. loadRows, CLI suggest, MCP suggest_chart가 같은 규칙(대소문자 무시)을 써요 */

@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, specSnippet, suggest, validate, type ChartSpec } from "ztd-charts-cli";
+import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, specSnippet, suggest, svgToPng, validate, type ChartSpec } from "ztd-charts-cli";
 import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.5.0";
+export const SERVER_VERSION = "0.5.1";
 /** 설명에 쓰는 차트 수. 차트를 더해도 손으로 고치지 않게 목록에서 세요 */
 const N = CHARTS.length;
 
@@ -13,6 +13,8 @@ const LEVEL_IDS = LEVELS.map((l) => l.id) as [ChartLevel, ...ChartLevel[]];
 
 const text = (t: string) => ({ type: "text" as const, text: t });
 const json = (v: unknown) => text(JSON.stringify(v, null, 2));
+/** 이보다 긴 SVG는 글로 돌려주지 않아요 (10만 점 산점도 SVG는 15 MB라 AI의 맥락을 넘쳐요). PNG와 안내 한 줄로 대신해요 */
+const SVG_TEXT_LIMIT = 1_000_000;
 
 /** 데이터가 큰 스펙은 앞부분만 보여줘요 (응답 크기 관리) */
 function trimSpec(spec: ChartSpec, rows = 20): ChartSpec {
@@ -43,7 +45,7 @@ export function createServer(): McpServer {
     "get_chart_schema",
     {
       title: "Get chart schema",
-      description: `Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all ${N} charts (about 200 KB, so prefer asking for one type).`,
+      description: `Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all ${N} charts (about 250 KB, so prefer asking for one type).`,
       inputSchema: { type: z.string().optional().describe('Chart type, e.g. "pie", "line", "sankey". Aliases like "doughnut", "violin" work.') },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
@@ -94,14 +96,22 @@ export function createServer(): McpServer {
     async ({ spec, format = "png", width, theme, scale, locale }) => {
       const s = spec as unknown as ChartSpec;
       // 그릴 때와 같은 로캘(locale, 그다음 스펙 options.locale)로 검사해요
-      const v = validate(s, specLocale(s, locale));
+      const loc = specLocale(s, locale);
+      const v = validate(s, loc);
       if (!v.valid) return { isError: true, content: [text("Invalid spec. Fix the errors below (the same result validate_spec returns)."), json(v)] };
       try {
-        const res = await render(s, { format: format === "svg" ? "svg" : "png", width, theme, scale, locale, allowPrivate });
+        let res = await render(s, { format: format === "svg" ? "svg" : "png", width, theme, scale, locale, allowPrivate });
+        const wantsSvg = format !== "png";
+        const svgTooBig = wantsSvg && !!res.svg && res.svg.length > SVG_TEXT_LIMIT;
+        // SVG만 달라고 했는데 너무 크면 이미 그린 SVG를 PNG로 바꿔 보내요 (데이터를 다시 가져오거나 다시 그리지 않아요)
+        if (svgTooBig && !res.png) res = { ...res, ...(await svgToPng(res.svg!, { scale, locale: loc })) };
         const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [];
-        if (format !== "svg" && res.png) content.push({ type: "image", data: res.png.toString("base64"), mimeType: "image/png" });
-        if ((format === "svg" || format === "both") && res.svg) content.push(text(res.svg));
-        content.push(text(`Size ${res.width}×${res.height}px${v.warnings.length ? `\nWarnings: ${v.warnings.map((w) => w.message).join(" / ")}` : ""}`));
+        if ((format !== "svg" || svgTooBig) && res.png) content.push({ type: "image", data: res.png.toString("base64"), mimeType: "image/png" });
+        if (wantsSvg && res.svg && !svgTooBig) content.push(text(res.svg));
+        if (svgTooBig) content.push(text(`The SVG is ${(res.svg!.length / 1e6).toFixed(1)} MB, too large to return as text, so the PNG is attached instead. To get the SVG file, run: npx ztd-charts-cli render spec.json --out chart.svg`));
+        // 검사 경고와 그리면서 바꾼 것(PNG에서 뺀 이모지)을 같이 알려요
+        const warns = [...v.warnings.map((w) => w.message), ...(res.notes ?? [])];
+        content.push(text(`Size ${res.width}×${res.height}px${warns.length ? `\nWarnings: ${warns.join(" / ")}` : ""}`));
         content.push(text(`// React (components)\n${reactSnippet(s)}\n// React (spec as is)\n${specSnippet(s)}`));
         return { content };
       } catch (e) {

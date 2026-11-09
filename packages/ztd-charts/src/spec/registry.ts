@@ -8,7 +8,7 @@ export const COMMON_OPTIONS: OptionDef[] = [
   { name: "height", type: "number", min: 40, description: "Height in px. Without it, each chart picks a default that fits its width" },
   { name: "width", type: "number", min: 40, description: "Fixed width in px. Without it, the chart fits its parent" },
   { name: "highlight", type: "highlight", description: 'Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none"' },
-  { name: "format", type: "format", description: 'Value format. "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" or Intl.NumberFormat options' },
+  { name: "format", type: "format", description: 'Value format. "number" | "integer" | "percent" (values are already percents: 42 → "42%") | "ratio" (0.42 → "42%") | "compact" | "currency" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | "decimal" or Intl.NumberFormat options' },
   { name: "unit", type: "string", description: 'Unit appended to values. For example "%" or "ms"' },
   { name: "locale", type: "string", default: "en-US", description: 'Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). "ko" or "ko-*" switches to Korean. Falls back to the ThemeProvider locale' },
   { name: "animate", type: "boolean", default: true, description: "Entry and update animation" },
@@ -29,6 +29,8 @@ const op = (name: string, type: OptionDef["type"], description: string, extra: P
 
 const CURVE = op("curve", "enum", "Line shape", { enum: ["smooth", "linear", "step"], default: "smooth" });
 const XTYPE = op("xType", "enum", "Sets the x type yourself. Automatic when omitted", { enum: ["number", "date", "band"] });
+const OTHER = op("other", "number", 'Keep the n largest slices and group the rest into one "Other" slice. The Other slice is never highlighted', { min: 1 });
+const AGGREGATE = op("aggregate", "enum", 'How rows with the same x (and series) combine: "sum" adds them, "mean" averages, "last" keeps the last row, "count" counts rows', { enum: ["sum", "mean", "last", "count"], default: "sum" });
 const BRUSH = op("brush", "any", 'Drag to select a range. true shows the change and the high and low, "zoom" zooms into the range (keyboard: Shift+arrows, Enter)', { default: false });
 
 /** options.annotations 항목의 종류. 차트 쪽 Annotation 타입(core/annotations.tsx)과 맞는지 컴파일러가 봐요 */
@@ -61,7 +63,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "2 to 4 items that add up to 100%",
     avoidWhen: "More than 4 items, or values close to each other (bars are more accurate)",
     why: "Only the highlighted slice (the largest by default) gets the accent color and the rest stay neutral, so one share carries the message.",
-    options: [op("colorMode", "enum", "A gray step per item (categorical) or color only the highlight (emphasis)", { enum: ["categorical", "emphasis"], default: "categorical" }), op("sort", "boolean", "Sort largest first", { default: false }), op("startAngle", "number", "Start angle in degrees. 0 is 12 o'clock", { default: 0 }), op("labelMode", "enum", "What slice labels show", { enum: ["percent", "value", "label", "none"], default: "percent" })],
+    options: [op("colorMode", "enum", "A gray step per item (categorical) or color only the highlight (emphasis)", { enum: ["categorical", "emphasis"], default: "categorical" }), op("sort", "boolean", "Sort largest first", { default: false }), op("startAngle", "number", "Start angle in degrees. 0 is 12 o'clock", { default: 0 }), op("labelMode", "enum", "What slice labels show", { enum: ["percent", "value", "label", "none"], default: "percent" }), OTHER],
     example: { data: S.pieSample, encoding: { label: "device", value: "sales" }, options: { highlight: "Mobile" }, card: { subtitle: "Sales share by device", takeaway: "Only 2 to 4 items", legend: "auto" } },
   },
   {
@@ -72,7 +74,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "The total matters as much as the shares",
     avoidWhen: "More than 6 items",
     why: "The center number counts up as the chart enters, so the total reads first.",
-    options: [op("innerRadius", "number", "Inner radius ratio", { default: 0.62, min: 0.2, max: 0.9 }), op("centerValue", "any", 'Number in the center: "total" | "highlight" | a number | null (none)', { default: "total" }), op("centerLabel", "string", "Caption under the center number"), op("legend", "enum", "Legend position", { enum: ["auto", "right", "bottom", "none"], default: "auto" }), op("sort", "boolean", "Sort largest first", { default: false })],
+    options: [op("innerRadius", "number", "Inner radius ratio", { default: 0.62, min: 0.2, max: 0.9 }), op("centerValue", "any", 'Number in the center: "total" | "highlight" | a number | null (none)', { default: "total" }), op("centerLabel", "string", "Caption under the center number"), op("legend", "enum", "Legend position", { enum: ["auto", "right", "bottom", "none"], default: "auto" }), op("sort", "boolean", "Sort largest first", { default: false }), OTHER],
     example: { data: S.donutSample, encoding: { label: "type", value: "count" }, options: { centerLabel: "Conversions" }, card: { subtitle: "Share by conversion type", takeaway: "Total in the center" } },
   },
   {
@@ -197,7 +199,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "A metric over time, such as monthly users, alone or against other series",
     avoidWhen: "x is a category with no order",
     why: "Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path.",
-    options: [CURVE, XTYPE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN, BAND_FROM, OUTSIDE, CONNECT_NULLS],
+    options: [CURVE, XTYPE, AGGREGATE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN, BAND_FROM, OUTSIDE, CONNECT_NULLS],
     example: { data: S.lineSample, encoding: { x: "month", y: "mau", series: "app" }, options: { area: true }, card: { subtitle: "Monthly active users (10k)", takeaway: "Only our app keeps climbing" } },
     scalable: true,
   },
@@ -209,7 +211,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Seeing how each channel's traffic changes within the total",
     avoidWhen: "The exact value of each series matters",
     why: "Areas rise from the baseline as the chart enters, which shows the stacking at a glance.",
-    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS],
+    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, AGGREGATE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS],
     example: { data: S.areaSample, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "Social" }, card: { subtitle: "Monthly visits by channel (thousands)", takeaway: "Social's share grows the fastest", legend: "auto" } },
     scalable: true,
   },
@@ -221,7 +223,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "5 or more series where the rhythm of the flow matters, such as viewing by genre",
     avoidWhen: "You need to read exact values",
     why: "A wiggle baseline and inside-out ordering keep the bands calm. Names go where each band is thickest.",
-    options: [op("offset", "enum", "Baseline shape", { enum: ["wiggle", "silhouette"], default: "wiggle" }), op("reorder", "boolean", "Reorder the series for a cleaner shape", { default: true }), CURVE, XTYPE],
+    options: [op("offset", "enum", "Baseline shape", { enum: ["wiggle", "silhouette"], default: "wiggle" }), op("reorder", "boolean", "Reorder the series for a cleaner shape", { default: true }), CURVE, XTYPE, AGGREGATE],
     example: { data: S.streamSample, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "Variety" }, card: { subtitle: "Weekly viewing hours by genre (10k hours)", takeaway: "Variety ruled the summer" } },
   },
   {
@@ -232,7 +234,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Comparing sizes across categories precisely",
     avoidWhen: "The flow over time is the point (a line works better)",
     why: "With one series only the largest bar gets color; with several, only the highlighted series.",
-    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]")],
+    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), AGGREGATE, op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]")],
     example: { data: S.barSample, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "Overseas" }, card: { subtitle: "Revenue by quarter (100M KRW)", takeaway: "Overseas grows its share every quarter", legend: "auto" } },
   },
   {

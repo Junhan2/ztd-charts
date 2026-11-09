@@ -8,7 +8,7 @@
 - Use when: 2 to 4 items that add up to 100%
 - Avoid when: More than 4 items, or values close to each other (bars are more accurate)
 - encoding: label, value
-- Chart options: colorMode: categorical|emphasis, sort, startAngle, labelMode: percent|value|label|none
+- Chart options: colorMode: categorical|emphasis, sort, startAngle, labelMode: percent|value|label|none, other
 - Default highlight: the largest value
 
 ```json
@@ -21,7 +21,7 @@
 - Use when: The total matters as much as the shares
 - Avoid when: More than 6 items
 - encoding: label, value
-- Chart options: innerRadius, centerValue, centerLabel, legend: auto|right|bottom|none, sort
+- Chart options: innerRadius, centerValue, centerLabel, legend: auto|right|bottom|none, sort, other
 - Default highlight: the largest value
 
 ```json
@@ -164,7 +164,7 @@
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: curve: smooth|linear|step, xType: number|date|band, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -177,7 +177,7 @@
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
 - Default highlight: the first series or item
 
 ```json
@@ -190,7 +190,7 @@
 - Use when: 5 or more series where the rhythm of the flow matters, such as viewing by genre
 - Avoid when: You need to read exact values
 - encoding: x, y[], series?
-- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band
+- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count
 - Default highlight: the largest value
 
 ```json
@@ -203,7 +203,7 @@
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
 - encoding: x, y[], series?
-- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, annotations
+- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, aggregate: sum|mean|last|count, annotations
 - Default highlight: the first series or item
 
 ```json
@@ -475,7 +475,7 @@
 - `height` (number): Height in px. Without it, each chart picks a default that fits its width
 - `width` (number): Fixed width in px. Without it, the chart fits its parent
 - `highlight` (highlight): Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none"
-- `format` (format): Value format. "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal" or Intl.NumberFormat options
+- `format` (format): Value format. "number" | "integer" | "percent" (values are already percents: 42 → "42%") | "ratio" (0.42 → "42%") | "compact" | "currency" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | "decimal" or Intl.NumberFormat options
 - `unit` (string): Unit appended to values. For example "%" or "ms"
 - `locale` (string, default "en-US"): Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). "ko" or "ko-*" switches to Korean. Falls back to the ThemeProvider locale
 - `animate` (boolean, default true): Entry and update animation

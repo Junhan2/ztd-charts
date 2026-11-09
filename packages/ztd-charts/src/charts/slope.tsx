@@ -15,10 +15,11 @@ const en = {
   kind: "Slope chart",
   change: "Change",
   span: (a: string, b: string) => `${a} to ${b}`,
+  incomplete: (a: string, b: string) => `Slope chart. No item has a value in both the first period (${a}) and the last period (${b}), so nothing is drawn.`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
-  ko: { kind: "슬로프 차트", change: "변화", span: (a, b) => `${a}~${b}` },
+  ko: { kind: "슬로프 차트", change: "변화", span: (a, b) => `${a}~${b}`, incomplete: (a, b) => `슬로프 차트. 처음 기간(${a})과 마지막 기간(${b}) 값이 모두 있는 항목이 없어서 그리지 않아요.` },
 };
 
 export interface SlopeChartProps<T = Row> extends BaseChartProps<T> {
@@ -118,7 +119,7 @@ export function SlopeChart<T = Row>(props: SlopeChartProps<T>) {
   const desc = props.description ?? `${msg.kind}. ${msg.span(model.periods[0], model.periods[1])}: ${items.map((it) => `${it.label} ${c.fv(it.a)}→${c.fv(it.b)}`).join(", ")}.`;
 
   return (
-    <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
+    <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} emptyText={props.data.length && !items.length ? msg.incomplete(model.periods[0], model.periods[1]) : undefined} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
       <g aria-hidden="true">
         <line x1={xa} x2={xa} y1={top - 4} y2={H - bottom} stroke={p.paint("line")} />
         <line x1={xb} x2={xb} y1={top - 4} y2={H - bottom} stroke={p.paint("line")} />

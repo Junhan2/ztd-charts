@@ -3,10 +3,10 @@ import { fetchChartData, readResponse } from "../src/data/useChartData";
 import { dataSignature, fromObjects, fromRows, lttb, melt, normalizeData, parseCSV, pluck, toCSV } from "../src/data/parse";
 import { toNumber } from "../src/data/accessor";
 import { percentile, percentiles } from "../src/data/percentile";
-import { formatCompact, formatCurrency, formatPercent, makeFormatter, toDate } from "../src/core/format";
+import { formatCompact, formatCurrency, formatNumber, formatPercent, makeFormatter, toDate } from "../src/core/format";
 import { fitDomain, niceStep, robustMax, ticksFor, timeTicks } from "../src/core/scale";
 import { dodgeVertical, textWidth, truncate, wrapLines } from "../src/core/text";
-import { thinLabels } from "../src/core/axis";
+import { thinLabels, tickLabels } from "../src/core/axis";
 import { prepSeries } from "../src/core/series";
 import { resolveHighlight } from "../src/core/highlight";
 import { lazyArray } from "../src/core/lazy";
@@ -102,6 +102,9 @@ describe("toNumber", () => {
     expect(toNumber("")).toBeNaN();
     expect(toNumber(undefined)).toBeNaN();
   });
+  it("무한대는 문자열이든 숫자든 NaN (빈 값)", () => {
+    for (const v of [Infinity, -Infinity, "Infinity", 1 / 0]) expect(toNumber(v)).toBeNaN();
+  });
 });
 
 describe("LTTB", () => {
@@ -116,6 +119,13 @@ describe("LTTB", () => {
 });
 
 describe("숫자 포맷 (기본 en-US, ko는 만, 억)", () => {
+  it("아주 작은 값은 0이 아니라 제 값으로, 눈금은 간격에 맞춘 자릿수로", () => {
+    const fv = makeFormatter(undefined);
+    expect([0.000012, 0.000034, 0.0000009, 0.049, 0.06, 12.34].map(fv)).toEqual(["0.000012", "0.000034", "0.0000009", "0.049", "0.1", "12.3"]);
+    expect(formatPercent(0.004)).toBe("0.004%");
+    expect(tickLabels([0, 0.00001, 0.00002, 0.00003], (v) => formatNumber(v))).toEqual(["0", "0.00001", "0.00002", "0.00003"]);
+    expect(tickLabels([0, 0.05, 0.1, 0.15], (v) => formatNumber(v))).toEqual(["0", "0.05", "0.1", "0.15"]);
+  });
   it("영어 짧은 숫자는 K, M, B", () => {
     expect(formatCompact(12345)).toBe("12.3K");
     expect(formatCompact(3_400_000)).toBe("3.4M");
@@ -245,6 +255,14 @@ describe("계열 준비와 강조", () => {
     const wide = prepSeries([{ m: "1월", a: 1, b: 2 }], "m", ["a", "b"], undefined);
     expect(wide.series).toEqual(["a", "b"]);
     expect(wide.values[1][0]).toBe(2);
+  });
+  it("같은 x는 aggregate대로 합쳐요: sum(기본), mean(빈 값 빼고), last, count", () => {
+    const rows = [{ m: "1월", v: 3 }, { m: "1월", v: "n/a" }, { m: "1월", v: 5 }, { m: "2월", v: 4 }];
+    const at = (aggregate?: "sum" | "mean" | "last" | "count") => prepSeries(rows, "m", "v", undefined, { aggregate }).values[0];
+    expect(at()).toEqual([8, 4]);
+    expect(at("mean")).toEqual([4, 4]);
+    expect(at("last")).toEqual([5, 4]);
+    expect(at("count")).toEqual([3, 1]);
   });
   it("resolveHighlight", () => {
     const labels = ["a", "b", "c"];

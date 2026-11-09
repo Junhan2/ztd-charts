@@ -44,12 +44,15 @@ export function detectXType(raw: readonly unknown[]): XType {
   return "band";
 }
 
+/** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. "sum"(더하기) | "mean"(평균) | "last"(마지막 행) | "count"(행 수) */
+export type Aggregate = "sum" | "mean" | "last" | "count";
+
 export interface PrepOptions {
   xType?: XType;
   locale?: string;
   dateFormat?: Intl.DateTimeFormatOptions;
-  /** 같은 x, 같은 계열이 여러 번이면 합쳐요. 기본 true */
-  sum?: boolean;
+  /** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  aggregate?: Aggregate;
 }
 
 /**
@@ -102,9 +105,19 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
   const sIndex = new Map(seriesNames.map((s, i) => [s, i]));
   const values = seriesNames.map(() => new Array<number>(keys.length).fill(NaN));
   const rows = seriesNames.map(() => new Array<T | null>(keys.length).fill(null));
+  const agg: Aggregate = opts.aggregate ?? "sum";
+  // 평균은 숫자인 값만 세요 (빈 값은 평균을 끌어내리지 않아요)
+  const counts = agg === "mean" ? seriesNames.map(() => new Uint32Array(keys.length)) : null;
   const add = (s: number, k: number, v: number, d: T) => {
     const prev = values[s][k];
-    values[s][k] = Number.isFinite(prev) && opts.sum !== false ? prev + (Number.isFinite(v) ? v : 0) : v;
+    if (agg === "last") values[s][k] = v;
+    else if (agg === "count") values[s][k] = (Number.isFinite(prev) ? prev : 0) + 1;
+    else if (agg === "mean") {
+      if (Number.isFinite(v)) {
+        values[s][k] = (Number.isFinite(prev) ? prev : 0) + v;
+        counts![s][k]++;
+      }
+    } else values[s][k] = Number.isFinite(prev) ? prev + (Number.isFinite(v) ? v : 0) : v;
     rows[s][k] = d;
   };
   for (let i = 0; i < data.length; i++) {
@@ -118,6 +131,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
       add(s, k, toNumber(getY!(d, i)), d);
     }
   }
+  if (counts) for (let s = 0; s < values.length; s++) for (let k = 0; k < keys.length; k++) if (counts[s][k] > 1) values[s][k] /= counts[s][k];
   return { type, keys, xnum, labels, series: seriesNames, values, rows };
 }
 

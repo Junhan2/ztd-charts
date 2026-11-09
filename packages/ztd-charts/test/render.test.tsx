@@ -68,6 +68,17 @@ describe("renderSpecToSVG (resvg용 독립 SVG)", () => {
   it("틀린 스펙은 이유와 함께 실패", () => {
     expect(() => renderSpecToSVG({ type: "pie", data: [{ a: 1 }], encoding: { label: "x", value: "a" } })).toThrow(/x/);
   });
+  it("카드 범례는 좁으면 줄을 바꿔 카드 안에 들어가고, 도넛은 자기 범례만 그려요", () => {
+    const data = ["Very long category name that keeps going on and on", "아주 긴 한국어 범주 이름이 계속 이어지는 경우", "AnotherExtremelyLongSingleWordWithoutSpaces", "Short"].map((label, i) => ({ label, value: 40 - i * 9 }));
+    const svg = renderSpecToSVG({ type: "pie", data, card: { title: "Pie", legend: "auto" } }, { width: 390, theme: "light" });
+    const legend = [...svg.matchAll(/<text x="([\d.]+)" y="([\d.]+)" font-size="11.5"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ x: +m[1], y: +m[2], label: m[3] }));
+    expect(legend.map((l) => l.label).sort()).toEqual(data.map((d) => d.label).sort());
+    expect(new Set(legend.map((l) => l.y)).size).toBeGreaterThan(1);
+    expect(Math.min(...legend.map((l) => l.x))).toBeGreaterThanOrEqual(24 + 20 + 15);
+    const donut = renderSpecToSVG({ type: "donut", data, card: { title: "Donut", legend: "auto" } }, { width: 390, theme: "light" });
+    expect(donut.match(/font-size="11.5"/g) ?? []).toHaveLength(0);
+    expect(renderSpecToSVG({ type: "donut", data, options: { legend: "none" }, card: { title: "Donut", legend: "auto" } }, { width: 390 }).match(/font-size="11.5"/g)).toHaveLength(4);
+  });
   it("HTML은 문서와 테마 변수를 담아요", () => {
     const html = renderSpecToHTML(CHARTS[0].example, { theme: "light" });
     expect(html).toMatch(/^<!doctype html>/);
@@ -105,6 +116,16 @@ describe("컴포넌트", () => {
       const html = ssr(<Chart spec={{ ...c.example, data: [] }} width={400} animate={false} />);
       expect(html, c.type).toContain("ztd-root");
       expect(html, c.type).not.toContain("NaN");
+    }
+  });
+  it("숫자 칸의 NaN, Infinity는 빈 값으로 그려요 (합계, 비율, 배열 길이가 망가지지 않게)", () => {
+    for (const c of CHARTS) {
+      const rows = c.example.data as Record<string, unknown>[];
+      const num = Object.keys(rows[0]).filter((k) => rows.every((r) => typeof r[k] === "number"));
+      const data = rows.map((r, i) => (i % 4 === 1 ? { ...r, ...Object.fromEntries(num.map((k) => [k, i % 8 === 1 ? NaN : Infinity])) } : r));
+      const html = ssr(<Chart spec={{ ...c.example, data }} width={640} animate={false} />);
+      expect(html, c.type).toContain("ztd-root");
+      expect(html, c.type).not.toMatch(/NaN|Infinity/);
     }
   });
 });

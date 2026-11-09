@@ -51,6 +51,29 @@ export interface AnnotationGeom {
   edge?: boolean;
   /** 추세선을 맞출 강조 계열의 점 (픽셀) */
   points?: () => { x: number; y: number }[];
+  /** 이름표가 피할 글자 상자 (막대 값 라벨). 기준선, 예측, 구간 이름표가 덜 겹치는 자리로 가요 */
+  avoid?: readonly Box[];
+}
+
+type TagSpot = { x: number; y: number; anchor: "start" | "end" };
+
+const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+
+/** 후보 자리 중 피할 상자와 겹치는 넓이가 가장 작은 자리 (안 겹치는 첫 자리에서 멈춰요). 고른 상자는 다음 이름표가 피하게 taken에 넣어요 */
+function pickSpot(text: string, spots: TagSpot[], taken: Box[]): TagSpot {
+  let best = spots[0];
+  let least = Infinity;
+  for (const s of spots) {
+    const b = tagBox(text, s.x, s.y, s.anchor);
+    const hit = taken.reduce((n, o) => n + overlap(b, o), 0);
+    if (hit < least) {
+      best = s;
+      least = hit;
+    }
+    if (hit === 0) break;
+  }
+  taken.push(tagBox(text, best.x, best.y, best.anchor));
+  return best;
 }
 
 const clampX = (g: AnnotationGeom, x: number) => Math.max(g.x0, Math.min(g.x1, x));
@@ -60,6 +83,13 @@ function xRange(g: AnnotationGeom, v: readonly unknown[]): [number, number] | nu
   const a = g.xAt(v[0]);
   const b = g.xAt(v[1]);
   return a === null || b === null ? null : [Math.min(a, b) - g.half, Math.max(a, b) + g.half];
+}
+
+/** 가로 띠(y 구간)의 위, 아래 픽셀. 그림 영역 안으로 자르고, 값을 픽셀로 못 바꾸면 null. 띠 칠하기와 이름표가 같이 써요 */
+function yRange(g: AnnotationGeom, v: readonly unknown[]): [number, number] | null {
+  const a = g.y(Number(v[0]));
+  const b = g.y(Number(v[1]));
+  return Number.isFinite(a) && Number.isFinite(b) ? [Math.max(g.top, Math.min(a, b)), Math.min(g.bottom, Math.max(a, b))] : null;
 }
 
 /** 예측이 시작하는 픽셀 (그림 왼쪽 끝 안으로 당겨요). from이 없거나 그림 오른쪽 밖이면 null. 선의 점선 나누기도 이걸 써요 */
@@ -81,11 +111,9 @@ export function AnnotationsUnder({ list, g }: { list?: readonly Annotation[]; g:
   const nodes: ReactNode[] = [];
   list.forEach((a, i) => {
     if (a.type === "band" && isPair(a.y)) {
-      const ya = g.y(Number(a.y[0]));
-      const yb = g.y(Number(a.y[1]));
-      if (!Number.isFinite(ya) || !Number.isFinite(yb)) return;
-      const top = Math.max(g.top, Math.min(ya, yb));
-      const bot = Math.min(g.bottom, Math.max(ya, yb));
+      const ry = yRange(g, a.y);
+      if (!ry) return;
+      const [top, bot] = ry;
       nodes.push(
         <g key={i}>
           <rect x={g.x0} y={top} width={Math.max(0, g.x1 - g.x0)} height={Math.max(0, bot - top)} fill={p.paint("accent")} opacity={0.1} />
@@ -158,28 +186,46 @@ export function AnnotationsOver({ list, g }: { list?: readonly Annotation[]; g: 
   const nodes: ReactNode[] = [];
   // 사건 이름표가 겹치면 아랫줄로 내려요
   const rows: number[] = [];
+  // 기준선, 구간, 예측 이름표는 값 라벨과 앞서 놓은 이름표를 피해요. 피할 상자가 없으면 첫 후보(예전 자리)예요
+  const taken: Box[] = [...(g.avoid ?? [])];
   list.forEach((a, i) => {
     if (a.type === "line" && typeof a.y === "number") {
       const yy = g.y(a.y);
       if (!Number.isFinite(yy)) return;
+      const text = a.label ? truncate(a.label, 160, 10.5) : "";
+      const at = text
+        ? pickSpot(text, [
+            { x: g.x1 - 2, y: yy - 10, anchor: "end" },
+            { x: g.x0 + 2, y: yy - 10, anchor: "start" },
+            { x: g.x1 - 2, y: yy + 10, anchor: "end" },
+            { x: g.x0 + 2, y: yy + 10, anchor: "start" },
+          ], taken)
+        : null;
       nodes.push(
         <g key={i}>
           <line x1={g.x0} x2={g.x1} y1={yy} y2={yy} stroke={p.paint("dim")} strokeDasharray="4 3" />
-          {a.label ? <Tag p={p} x={g.x1 - 2} y={yy - 10} text={truncate(a.label, 160, 10.5)} anchor="end" /> : null}
+          {at ? <Tag p={p} x={at.x} y={at.y} text={text} anchor={at.anchor} /> : null}
         </g>,
       );
     } else if (a.type === "band" && a.label) {
-      const top = isPair(a.y) ? Math.max(g.top, Math.min(g.y(Number(a.y[0])), g.y(Number(a.y[1])))) : g.top;
+      const ry = isPair(a.y) ? yRange(g, a.y) : [g.top, g.bottom];
       const r = isPair(a.x) ? xRange(g, a.x) : [g.x0, g.x1];
-      if (!r || !Number.isFinite(top)) return;
-      nodes.push(<Tag key={i} p={p} x={Math.min(clampX(g, r[0]), g.x1 - 40) + 4} y={top + 11} text={truncate(a.label, 160, 10.5)} />);
+      if (!r || !ry) return;
+      const [top, bot] = ry;
+      const text = truncate(a.label, 160, 10.5);
+      const x = Math.min(clampX(g, r[0]), g.x1 - 40) + 4;
+      const at = pickSpot(text, [{ x, y: top + 11, anchor: "start" }, { x, y: bot - 11, anchor: "start" }], taken);
+      nodes.push(<Tag key={i} p={p} x={at.x} y={at.y} text={text} />);
     } else if (a.type === "forecast") {
       const xf = forecastX(g, a.from);
       if (xf === null) return;
+      const text = truncate(a.label ?? tx.forecast, 120, 10.5);
+      const x = Math.min(xf + 4, g.x1 - 50);
+      const at = pickSpot(text, [{ x, y: g.top + 9, anchor: "start" }, { x, y: g.bottom - 9, anchor: "start" }], taken);
       nodes.push(
         <g key={i}>
           <line x1={xf} x2={xf} y1={g.top} y2={g.bottom} stroke={p.paint("dim")} strokeDasharray="2 3" />
-          <Tag p={p} x={Math.min(xf + 4, g.x1 - 50)} y={g.top + 9} text={truncate(a.label ?? tx.forecast, 120, 10.5)} />
+          <Tag p={p} x={at.x} y={at.y} text={text} />
         </g>,
       );
     } else if (a.type === "event" && a.label) {

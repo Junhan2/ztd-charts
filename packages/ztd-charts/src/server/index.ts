@@ -6,7 +6,7 @@ import { ThemeProvider, makePainter, resolveThemeInput } from "../theme/context"
 import { baseCss } from "../core/css";
 import { DEFAULT_LOCALE } from "../core/format";
 import { langOf, type ChartLang } from "../core/i18n";
-import { textWidth } from "../core/text";
+import { textWidth, truncate } from "../core/text";
 import { fetchChartData, readResponse } from "../data/useChartData";
 import { themeToCss, type ChartTheme } from "../theme/tokens";
 import { levelBadge } from "../spec/labels";
@@ -125,21 +125,43 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const legend = card.legend === "auto" ? autoLegend(spec, rows, locale ?? DEFAULT_LOCALE) : card.legend ?? [];
   if (card.subtitle || legend.length) {
     parts.push(`<text x="${cx0 + ip}" y="${y + 12}" font-size="12.5" fill="${T.muted}">${esc(card.subtitle ?? "")}</text>`);
-    let lx = cx0 + cw - ip;
-    const paint = makePainter(theme, false);
-    for (const it of [...legend].reverse()) {
-      const tw = textWidth(it.label, 11.5);
-      lx -= tw;
-      parts.push(`<text x="${lx}" y="${y + 12}" font-size="11.5" fill="${T.muted}">${esc(it.label)}</text>`);
-      lx -= 15;
-      // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게)
-      const col = esc(paint.raw(it.color));
-      if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${y + 8}" y2="${y + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${y + 8}" r="2.2" fill="${col}"/>`);
-      // 원(circle)은 브라우저 카드 범례와 같게 둥근 모서리를 반지름까지 키워요
-      else parts.push(`<rect x="${lx}" y="${y + 3.5}" width="9" height="9" rx="${it.shape === "circle" ? 4.5 : 2.5}" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
-      lx -= 12;
+    // 범례는 브라우저 카드처럼 줄을 바꾸고 오른쪽에 붙여요: 항목은 색 9px + 6px + 글자, 항목 사이 12px, 줄 사이 18px.
+    // 한 줄에 들어가고 부제와 나란히 들어가면 부제 줄에, 아니면 부제 아래 줄부터 써요
+    const lineMax = cw - ip * 2;
+    const items = legend.map((it) => {
+      const label = truncate(it.label, lineMax - 15, 11.5);
+      const tw = textWidth(label, 11.5);
+      return { it, label, tw, w: 15 + tw };
+    });
+    const lineW = (line: typeof items) => line.reduce((s, x) => s + x.w, 0) + Math.max(0, line.length - 1) * 12;
+    const lines: (typeof items)[] = [];
+    for (const item of items) {
+      const last = lines[lines.length - 1];
+      if (last && lineW(last) + 12 + item.w <= lineMax) last.push(item);
+      else lines.push([item]);
     }
-    y += 26;
+    const subW = card.subtitle ? textWidth(card.subtitle, 12.5) : 0;
+    const besideSubtitle = lines.length === 1 && (!card.subtitle || subW + 12 + lineW(lines[0]) <= lineMax);
+    const paint = makePainter(theme, false);
+    let ly = besideSubtitle || !card.subtitle ? y : y + 18;
+    for (const line of lines) {
+      // 줄마다 오른쪽 끝에서 왼쪽으로 놓아요 (한 줄 범례는 예전과 같은 좌표, 같은 순서)
+      let lx = cx0 + cw - ip;
+      for (const { it, label, tw } of [...line].reverse()) {
+        lx -= tw;
+        parts.push(`<text x="${lx}" y="${ly + 12}" font-size="11.5" fill="${T.muted}">${esc(label)}</text>`);
+        lx -= 15;
+        // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게)
+        const col = esc(paint.raw(it.color));
+        if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${ly + 8}" y2="${ly + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${ly + 8}" r="2.2" fill="${col}"/>`);
+        // 원(circle)은 브라우저 카드 범례와 같게 둥근 모서리를 반지름까지 키워요
+        else parts.push(`<rect x="${lx}" y="${ly + 3.5}" width="9" height="9" rx="${it.shape === "circle" ? 4.5 : 2.5}" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
+        lx -= 12;
+      }
+      ly += 18;
+    }
+    // 범례 마지막 줄(범례가 없으면 부제 줄) 아래로 8px
+    y = ly + 8;
   }
   y += 6;
   const chartY = y;

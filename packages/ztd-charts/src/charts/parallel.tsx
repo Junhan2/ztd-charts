@@ -255,7 +255,8 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
       </g>
       {c.showLabels && n <= 60
         ? lines
-            .filter((l) => l.hi || c.active === l.i)
+            // 마지막 축 값이 비면(모두 빈 값 등) 이름표 자리를 모르니 그리지 않아요 (y="NaN" 방지)
+            .filter((l) => (l.hi || c.active === l.i) && Number.isFinite(l.ys[l.ys.length - 1]))
             .map((l) => (
               <Txt key={l.i} x={x1 + 8} y={l.ys[l.ys.length - 1]} size={11} weight={800} fill={p.paint("ink")} opacity={m.fade(D * 0.8, 300)}>
                 {truncate(l.label, labelR - 10, 11, 800)}

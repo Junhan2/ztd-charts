@@ -5,7 +5,7 @@ import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { midSwatch, swatch, type Swatch } from "../core/palette";
 import { extent, scaleLinear } from "../core/scale";
-import { bucketSeries, prepSeries, type SeriesModel, type XType } from "../core/series";
+import { bucketSeries, prepSeries, type Aggregate, type SeriesModel, type XType } from "../core/series";
 import { textWidth } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { lazyArray } from "../core/lazy";
@@ -29,6 +29,8 @@ export interface StreamGraphProps<T = Row> extends BaseChartProps<T> {
   y?: Accessor<T, number> | string[];
   series?: Accessor<T, string>;
   xType?: XType;
+  /** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  aggregate?: Aggregate;
   curve?: Curve;
   /** "wiggle"(기본, 흐름을 부드럽게) | "silhouette"(가운데 대칭) */
   offset?: "wiggle" | "silhouette";
@@ -52,7 +54,7 @@ interface Layer {
 export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(290, w * 0.48)), duration: 1100, stagger: 60 });
   const { p, width: W, height: H } = c;
-  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale }), [props.data, props.x, props.y, props.series, props.xType, c.locale]);
+  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale, aggregate: props.aggregate }), [props.data, props.x, props.y, props.series, props.xType, c.locale, props.aggregate]);
   // 폭의 절반보다 점이 많으면 구간 평균으로 줄여요 (층마다 같은 x, 2px에 한 점)
   const budget = Math.max(40, Math.round(W / 2));
   const model = useMemo(() => bucketSeries(model0, budget), [model0, budget]);

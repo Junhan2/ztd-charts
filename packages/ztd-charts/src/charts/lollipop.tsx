@@ -135,7 +135,7 @@ export function LollipopChart<T = Row>(props: LollipopChartProps<T>) {
           </g>
         );
       })}
-      {vertical ? <AxisXBand p={p} labels={rows.map((r) => r.label)} centers={rows.map((r) => band(`${r.i}`) + band.bandwidth / 2)} y={H - bottom + 13} strong={new Set(rows.filter((r) => r.hi).map((r) => r.i))} /> : null}
+      {vertical ? <AxisXBand p={p} width={W} labels={rows.map((r) => r.label)} centers={rows.map((r) => band(`${r.i}`) + band.bandwidth / 2)} y={H - bottom + 13} strong={new Set(rows.filter((r) => r.hi).map((r) => r.i))} /> : null}
     </ChartFrame>
   );
 }

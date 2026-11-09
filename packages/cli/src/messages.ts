@@ -2,7 +2,7 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.5.0";
+export const VERSION = "0.5.1";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
@@ -59,6 +59,7 @@ Examples
   variants: "Variants",
   noVariants: (type: string) => `${type} has no named variants`,
   saved: (p: string) => `Saved: ${p}`,
+  emojiRemoved: (n: number) => `Removed ${n} emoji from the PNG text because PNG has no emoji font. SVG and HTML keep them`,
   valid: (file: string, type: string, warnings: number) => `✓ ${file}: valid ${type} spec${warnings ? ` (${plural(warnings, "warning")})` : ""}`,
   skipped: (p: string) => `Skipped (already exists): ${p}`,
   created: (p: string) => `Created: ${p}`,
@@ -141,6 +142,7 @@ const ko: CliText = {
   variants: "변형",
   noVariants: (type) => `${type}에는 이름 붙은 변형이 없어요`,
   saved: (p) => `저장: ${p}`,
+  emojiRemoved: (n) => `PNG에는 이모지 글꼴이 없어서 글자에서 이모지 ${n}개를 뺐어요. SVG와 HTML에는 그대로 있어요`,
   valid: (file, type, warnings) => `✓ ${file}: 올바른 ${type} 스펙${warnings ? `(경고 ${warnings}개)` : ""}`,
   skipped: (p) => `건너뜀(이미 있음): ${p}`,
   created: (p) => `만듦: ${p}`,

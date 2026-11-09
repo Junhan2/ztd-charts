@@ -48,7 +48,7 @@ interface Poly {
 export function RadarChart<T = Row>(props: RadarChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(300, w * 0.66)), duration: 900, stagger: 160 });
   const { p, width: W, height: H } = c;
-  const model = useMemo(() => prepSeries(props.data, props.axis ?? "axis", props.value as never, props.series, { xType: "band", locale: c.locale, sum: true }), [props.data, props.axis, props.value, props.series, c.locale]);
+  const model = useMemo(() => prepSeries(props.data, props.axis ?? "axis", props.value as never, props.series, { xType: "band", locale: c.locale }), [props.data, props.axis, props.value, props.series, c.locale]);
   const axes = model.labels;
   const n = axes.length;
   const hi = useMemo(() => resolveHighlight(props.highlight as never, model.series as never[], model.series, model.series.map(() => 0), "first"), [model, props.highlight]);

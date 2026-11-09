@@ -1,5 +1,6 @@
-import { useEffect, useId, useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { overrideVars } from "../theme/context";
+import { CardTitleContext } from "./cardTitle";
 import type { ChartTheme } from "../theme/tokens";
 import { ensureBaseStyles } from "./css";
 import { useIsoLayoutEffect } from "./env";
@@ -13,6 +14,8 @@ export interface ChartFrameProps<T> {
   kind: string;
   ariaLabel?: string;
   description: string;
+  /** 그릴 것이 없을 때 설명 (기본 "No data."). 데이터는 있는데 못 그리는 까닭을 알려 줘요 */
+  emptyText?: string;
   events: ChartEvent<T>[];
   tip: TooltipData | null;
   renderTip?: ((e: ChartEvent<T>) => ReactNode) | boolean;
@@ -60,7 +63,9 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
 
   const count = events.length;
   const nav = !props.noNav && count > 0;
-  const label = props.ariaLabel ?? props.kind;
+  // 이름: ariaLabel, 그다음 감싼 카드의 제목, 그다음 차트 종류("Bar chart")
+  const cardTitle = useContext(CardTitleContext);
+  const label = props.ariaLabel ?? cardTitle ?? props.kind;
   // 표 내용이 같으면 다시 만들지 않아요. 등장 애니메이션 중 매 프레임 렌더되고, events를 매번 새로 만드는 차트도 있어서
   // 배열이 아니라 표에 실제로 들어가는 글자로 비교해요 (최대 60행). 글자는 배열이 바뀔 때만, 표를 보일 때만 만들어요
   const tableSig = useMemo(
@@ -249,7 +254,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
         style={{ fontFamily: "inherit", touchAction: "pan-y", position: props.underlay ? "relative" : undefined }}
       >
         <title id={titleId}>{label}</title>
-        <desc id={descId}>{count || c.description !== undefined ? props.description : c.t.empty}</desc>
+        <desc id={descId}>{count || c.description !== undefined ? props.description : props.emptyText ?? c.t.empty}</desc>
         {props.defs && !c.pending ? <defs>{props.defs}</defs> : null}
         {c.pending ? null : props.children}
       </svg>

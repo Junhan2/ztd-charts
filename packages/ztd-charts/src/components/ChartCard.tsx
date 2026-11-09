@@ -1,4 +1,5 @@
 import { useId, useState, type CSSProperties, type ReactNode } from "react";
+import { CardTitleContext } from "../core/cardTitle";
 import { ensureBaseStyles } from "../core/css";
 import { useIsoLayoutEffect } from "../core/env";
 import { SyncContext } from "../core/sync";
@@ -199,7 +200,10 @@ export function ChartCard(props: ChartCardProps) {
         ) : null}
       </header>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0, minWidth: 0 }}>
-        <ReplayContext.Provider value={replayN}>{props.children}</ReplayContext.Provider>
+        <ReplayContext.Provider value={replayN}>
+          {/* 글자 제목이면 안쪽 차트의 접근 가능한 이름이 돼요 (화면 낭독기가 "Bar chart" 대신 제목을 읽어요) */}
+          <CardTitleContext.Provider value={typeof props.title === "string" || typeof props.title === "number" ? String(props.title) : undefined}>{props.children}</CardTitleContext.Provider>
+        </ReplayContext.Provider>
       </div>
       {props.takeaway !== undefined || props.level || props.sample ? (
         <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }}>

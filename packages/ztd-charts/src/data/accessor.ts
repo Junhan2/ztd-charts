@@ -25,9 +25,12 @@ function field(d: unknown, k: string): unknown {
   return undefined;
 }
 
-/** "1,234", "12%", "₩5,000", " 3.5 " 같은 문자열도 숫자로. 못 읽으면 NaN ("$", "1,2,3"도) */
+/**
+ * "1,234", "12%", "₩5,000", " 3.5 " 같은 문자열도 숫자로. 못 읽으면 NaN ("$", "1,2,3"도).
+ * 무한대도 NaN(빈 값)이에요. 문자열 "Infinity"와 같은 규칙이고, 합계와 비율을 망가뜨려 그림에 NaN이 생기지 않게
+ */
 export function toNumber(v: unknown): number {
-  if (typeof v === "number") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
   if (typeof v === "bigint") return Number(v);
   if (typeof v === "string") {
     const s = v.trim();

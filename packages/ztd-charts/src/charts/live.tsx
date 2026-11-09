@@ -53,6 +53,17 @@ interface Pt<T> {
   d: T;
 }
 
+/**
+ * 화면 시계를 한 프레임(dt ms) 옮겨요. 데이터가 끊겨 시계가 가장 새 점(tA)을 넘어도 멈추지 않아서 선 끝이 왼쪽으로 밀려나고,
+ * 다시 온 점은 오른쪽 끝에 바로 붙어요. 두 간격 넘게 뒤처지면 그만큼 빨리 따라잡고(쌓인 점이 한꺼번에 와도), 창 하나보다 앞서면 가장 새 점으로 돌아와요
+ */
+export function stepClock(clock: number, dt: number, s: { tA: number; gap: number; win: number; paused: boolean }): number {
+  if (s.paused) return clock;
+  const lag = s.tA - clock;
+  const next = clock + dt * (s.gap && lag > 2 * s.gap ? lag / (2 * s.gap) : 1);
+  return next > s.tA + s.win ? s.tA : next;
+}
+
 /** 시각 td의 값 (두 점 사이는 직선으로). 점이 없으면 NaN */
 function valueAt<T>(pts: Pt<T>[], td: number): number {
   let k = pts.length - 1;
@@ -65,7 +76,8 @@ function valueAt<T>(pts: Pt<T>[], td: number): number {
 
 /**
  * 실시간 라인 차트: 새 점이 들어오면 선이 왼쪽으로 미끄러지고, 오른쪽 끝의 점과 값 표가 선을 따라가요.
- * 화면의 시각은 데이터의 시각을 따라가서(벽시계가 아니라) 다음 점이 오기 전에 선 끝이 비지 않아요.
+ * 화면의 시각은 데이터의 시각을 조금 뒤에서 따라가서 다음 점이 오기 전에 선 끝이 비지 않아요. 데이터가 끊기면 멈추지 않고 흘러서
+ * 선 끝이 왼쪽으로 밀려나고(빈자리가 끊김을 보여 줘요), 다시 온 점은 오른쪽 끝에 바로 붙어요.
  * 마우스나 키보드로 점을 짚으면 멈춰서 값을 읽게 해요. 동작 줄이기에서는 점이 들어올 때만 옮겨요
  */
 export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
@@ -126,16 +138,16 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   const line = vis.map((q) => [x1 + (q.t - tA) * px, y(q.v)] as [number, number]);
   const lp = polyline(line);
 
-  // 화면 오른쪽 끝의 시각. 가장 새 점을 넘지 않고, 너무 뒤처지면 빨리 따라잡아요
+  // 화면 오른쪽 끝의 시각 (stepClock). 데이터가 끊기면 가장 새 점을 넘어서도 흘러요
   const clock = useRef(0);
   const moving = c.motion.enabled;
   const shown = c.motion.active;
-  if (!moving || !clock.current || clock.current < tA - win) clock.current = tA;
+  if (!moving || !clock.current || Math.abs(clock.current - tA) > win) clock.current = tA;
   const shift = (tA - clock.current) * px;
 
   const groupRef = useRef<SVGGElement>(null);
   const headRef = useRef<SVGGElement>(null);
-  const snap = { tA, gap, px, x1, vis, y, bottom: H - BOTTOM, paused: c.active !== null };
+  const snap = { tA, gap, win, px, x1, vis, y, bottom: H - BOTTOM, paused: c.active !== null };
   const live = useRef(snap);
   live.current = snap;
 
@@ -146,13 +158,15 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
     let at = 0;
     return subscribeTick((now) => {
       const L = live.current;
-      const dt = at ? Math.min(250, now - at) : 0;
+      // 프레임이 늦게 와도(버벅임) 흐른 시간을 그대로 써요. 잘라 쓰면 시계가 뒤처졌다가 다음 점에서 급히 따라잡아요.
+      // 아주 긴 공백은 stepClock이 창 하나보다 앞선 시계를 가장 새 점으로 돌려놔요
+      const dt = at ? now - at : 0;
       at = now;
-      // 두 간격 넘게 뒤처지면 그만큼 빨리 가요 (쌓인 점이 한꺼번에 와도 곧 따라잡아요)
-      const lag = L.tA - clock.current;
-      if (!L.paused) clock.current = Math.min(L.tA, clock.current + dt * (L.gap && lag > 2 * L.gap ? lag / (2 * L.gap) : 1));
-      groupRef.current?.setAttribute("transform", tr((L.tA - clock.current) * L.px));
-      headRef.current?.setAttribute("transform", tr(L.x1, headY(L, clock.current)));
+      clock.current = stepClock(clock.current, dt, L);
+      // 시계가 가장 새 점을 넘으면(끊김) 끝점과 값 표도 선 끝을 따라 왼쪽으로 가요
+      const s = (L.tA - clock.current) * L.px;
+      groupRef.current?.setAttribute("transform", tr(s));
+      headRef.current?.setAttribute("transform", headAt(L, s, clock.current));
       return true;
     });
   }, [moving, shown]);
@@ -208,7 +222,7 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
         </g>
       </g>
       {n ? (
-        <g ref={headRef} transform={tr(x1, headY(snap, clock.current))} pointerEvents="none" aria-hidden="true">
+        <g ref={headRef} transform={headAt(snap, shift, clock.current)} pointerEvents="none" aria-hidden="true">
           {moving ? (
             <circle r={3.5} fill={accent} opacity={0.35}>
               <animate attributeName="r" values="3.5;11" dur="1.6s" repeatCount="indefinite" />
@@ -242,4 +256,9 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
 /** 머리(오른쪽 끝 점)의 높이: 화면 시각의 값, 그림 안으로 */
 function headY<T>(L: { vis: Pt<T>[]; y: (v: number) => number; bottom: number }, t: number): number {
   return Math.max(TOP, Math.min(L.bottom, L.y(valueAt(L.vis, t))));
+}
+
+/** 끝점 자리: 선 끝(끊겨서 밀려나면 그만큼 왼쪽)과 그 시각의 값. 그리기와 프레임 루프가 같이 써요 */
+function headAt<T>(L: { vis: Pt<T>[]; y: (v: number) => number; bottom: number; x1: number; tA: number }, shift: number, clock: number): string {
+  return tr(L.x1 + Math.min(0, shift), headY(L, Math.min(clock, L.tA)));
 }
