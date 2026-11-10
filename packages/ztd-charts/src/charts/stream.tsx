@@ -15,6 +15,7 @@ import { useMotion } from "../core/useMotion";
 import { insideOut, stack } from "../layout/stack";
 import { XAxis, xScaleFor } from "./line";
 import { plural, type ChartLang } from "../core/i18n";
+import type { Painter } from "../theme/context";
 
 const en = {
   kind: "Streamgraph",
@@ -51,6 +52,26 @@ interface Layer {
   label: { x: number; y: number; thick: number } | null;
 }
 
+/** 스트림의 층 순서(계열 자리, 아래 층부터): 기본 inside-out, reorder가 false면 데이터 순서. 차트와 카드 범례(autoLegend)가 같이 써요 */
+export function streamOrder(values: readonly (readonly number[])[], reorder?: boolean): number[] {
+  return reorder === false ? values.map((_, i) => i) : insideOut(values);
+}
+
+/** 스트림의 강조 계열: 기본은 합이 가장 큰 계열 */
+export function streamHighlight(highlight: unknown, series: string[], values: readonly (readonly number[])[]): ReadonlySet<number> {
+  const totals = values.map((r) => r.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
+  return resolveHighlight(highlight as never, series as never[], series, totals, "max");
+}
+
+/** 계열 자리마다 층 색: 강조는 accent, 나머지는 층 순서대로 neutralStrong에서 neutral까지 섞은 단계 */
+export function streamSwatches(p: Painter, order: readonly number[], hi: ReadonlySet<number>): Swatch[] {
+  const out: Swatch[] = new Array(order.length);
+  const rest = order.filter((s) => !hi.has(s));
+  for (const s of order) if (hi.has(s)) out[s] = swatch(p, "accent");
+  rest.forEach((s, j) => (out[s] = rest.length === 1 ? swatch(p, "neutral") : midSwatch(p, 1 - j / Math.max(1, rest.length - 1))));
+  return out;
+}
+
 /** 스트림그래프: 여러 계열의 흐름과 크기 변화 */
 export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(290, w * 0.48)), duration: 1100, stagger: 60 });
@@ -63,12 +84,9 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const rowVals = model.rowValues ?? model.values;
   const nS = model.series.length;
 
-  const order = useMemo(() => (props.reorder === false ? model.series.map((_, i) => i) : insideOut(model.values)), [model, props.reorder]);
+  const order = useMemo(() => streamOrder(model.values, props.reorder), [model, props.reorder]);
   const st = useMemo(() => stack(order.map((s) => model.values[s]), props.offset ?? "wiggle"), [model, order, props.offset]);
-  const hi = useMemo(() => {
-    const totals = model.values.map((r) => r.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
-    return resolveHighlight(props.highlight as never, model.series as never[], model.series, totals, "max");
-  }, [model, props.highlight]);
+  const hi = useMemo(() => streamHighlight(props.highlight, model.series, model.values), [model, props.highlight]);
 
   const top = 8;
   const bottom = 22;
@@ -86,9 +104,7 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1]);
 
   const layers = useMemo<Layer[]>(() => {
-    const rest = order.filter((s) => !hi.has(s));
-    const palette = new Map<number, Swatch>();
-    rest.forEach((s, j) => palette.set(s, rest.length === 1 ? swatch(p, "neutral") : midSwatch(p, 1 - j / Math.max(1, rest.length - 1))));
+    const palette = streamSwatches(p, order, hi);
     return order.map((s, li) => {
       const topPx = st.y1[li].map((v) => y(v));
       const botPx = st.y0[li].map((v) => y(v));
@@ -106,7 +122,7 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
       const lw = textWidth(name, 11, 700);
       const label = best >= 0 && bt >= 15 ? { x: xs(best), y: (topPx[best] + botPx[best]) / 2, thick: bt } : null;
       const fitsX = label ? label.x - lw / 2 > x0 + 2 && label.x + lw / 2 < x1 - 2 : false;
-      return { s, name, top: topPx, bot: botPx, sw: hi.has(s) ? swatch(p, "accent") : palette.get(s)!, hi: hi.has(s), label: fitsX ? label : null };
+      return { s, name, top: topPx, bot: botPx, sw: palette[s], hi: hi.has(s), label: fitsX ? label : null };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order, st, hi, p, H, W, model]);

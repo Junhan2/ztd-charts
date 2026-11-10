@@ -1,6 +1,6 @@
 # ztd charts
 
-Animated, accessible React charts that read like a report. 36 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+Animated, accessible React charts that read like a report. 37 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [Docs](https://charts.ztd.app/docs/docs/) · [Example dashboards](https://charts.ztd.app/docs/examples/) · [GitHub](https://github.com/Junhan2/ztd-charts) · [한국어](https://github.com/Junhan2/ztd-charts/blob/main/README.ko.md)
 
@@ -45,14 +45,20 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 
 ## What's in the package
 
-- `ztd-charts`: 36 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `StatCard`, `ThemeProvider` and the data helpers.
-- `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React.
+- `ztd-charts`: 37 chart components (`TileMap` is the newest), `LiveLineChart`, `ChartCard`, `ChartGrid`, `ChartFacets`, `StatCard`, `ThemeProvider` and the data helpers.
+- `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React. `FACET_TYPES` and `FACET_MAX` say which charts take `facet` and how many panels it draws.
 - `ztd-charts/server`: server rendering to SVG and HTML.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
 
 Data helpers: `useChartData` loads a URL or an async function and reports loading, error and empty states. `parseCSV`, `fromRows`, `fromObjects` and `melt` reshape tables. `percentiles(rows, { by: "minute", value: "ms" })` turns raw samples into `p50`, `p95` and `p99` rows for a latency chart.
 
 Card and tooltip helpers: `DownloadButtons` adds CSV, SVG and PNG download buttons to a card, and `templateTooltip("{label} · {value} · {owner}")` shows other columns of the row in the tooltip.
+
+Diverging bars: `layout: "diverging"` on `BarChart` stacks the `negative` series left of a zero line and the rest to the right, for Likert surveys, for-and-against splits and population pyramids. `neutral` splits one series across the line, and `percent` shows each segment as a share of its row.
+
+Tile grid map: `TileMap` draws one equal tile per region, shaded by its value, so Seoul reads as large as the biggest province. It ships the 16 Korean regions from July 2026 (`kr-sido`) and the 17 before the merger (`kr-sido-2025`), or takes your own tiles; `resolveGrid`, `tileMatcher`, `tileNeighbor` and `TILE_MAPS` expose the grids and name matching.
+
+Small multiples: `facet: { by: "region" }` on a line, area, bar or scatter spec draws the same chart once per group on a shared scale, and `<ChartFacets>` does the same in React. Their types are exported too: `TileMapProps`, `TileDef`, `ChartFacetsProps`, `SpecFacet`, `FacetType` and `FacetScale`.
 
 ESM with `sideEffects: false`, so only the charts you import end up in your bundle.
 

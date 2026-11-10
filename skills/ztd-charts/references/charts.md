@@ -1,4 +1,4 @@
-# Reference for all 36 charts
+# Reference for all 37 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -166,6 +166,7 @@
 - encoding: x, y[], series?, lower?[], upper?[]
 - Chart options: curve: smooth|linear|step, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, yScale: linear|log, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls, hidden
 - Default highlight: the first series or item
+- Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
 ```json
 {"type":"line","data":[{"month":"2025-01","app":"Our app","mau":42,"p5":39.4,"p95":44.6},{"month":"2025-01","app":"Rival A","mau":56.8},{"month":"2025-01","app":"Rival B","mau":38}],"encoding":{"x":"month","y":"mau","series":"app"},"options":{"area":true},"card":{"number":"13","title":"Line chart","subtitle":"Monthly active users (10k)","takeaway":"Only our app keeps climbing","level":"basic"}}
@@ -179,6 +180,7 @@
 - encoding: x, y[], series?, lower?[], upper?[]
 - Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls, hidden
 - Default highlight: the first series or item
+- Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
 ```json
 {"type":"area","data":[{"month":"Jan","channel":"Search","visits":120},{"month":"Jan","channel":"Social","visits":70},{"month":"Jan","channel":"Direct","visits":80}],"encoding":{"x":"month","y":"visits","series":"channel"},"options":{"highlight":"Social"},"card":{"number":"14","title":"Area chart","subtitle":"Monthly visits by channel (thousands)","takeaway":"Social's share grows the fastest","level":"basic","legend":"auto"}}
@@ -199,12 +201,13 @@
 
 ## bar · Bar chart (`<BarChart>`, Basic, Comparison)
 
-- What: Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis
+- What: Grouped, stacked, 100%, diverging and horizontal bars, with optional lines on the same axis
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
 - encoding: x, y[], series?, line?[]
-- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, aggregate: sum|mean|last|count, annotations, hidden
+- Chart options: layout: grouped|stacked|percent|diverging, orientation: vertical|horizontal, sort, negative, neutral, percent, aggregate: sum|mean|last|count, annotations, hidden
 - Default highlight: the first series or item
+- Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
 ```json
 {"type":"bar","data":[{"quarter":"Q1","team":"Domestic","revenue":42},{"quarter":"Q1","team":"Overseas","revenue":18},{"quarter":"Q2","team":"Domestic","revenue":48}],"encoding":{"x":"quarter","y":"revenue","series":"team"},"options":{"layout":"stacked","highlight":"Overseas"},"card":{"number":"16","title":"Bar chart","subtitle":"Revenue by quarter (100M KRW)","takeaway":"Overseas grows its share every quarter","level":"basic","legend":"auto"}}
@@ -465,9 +468,23 @@
 - encoding: x, y, series?, label?
 - Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter
 - Default highlight: none, or the first series when a series channel is set
+- Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
 ```json
 {"type":"scatter","data":[{"id":"Request 1","model":"Large","cost":7,"ms":2400},{"id":"Request 2","model":"Medium","cost":6,"ms":1500},{"id":"Request 3","model":"Small","cost":3,"ms":660}],"encoding":{"x":"cost","y":"ms","series":"model","label":"id"},"options":{"highlight":"Large","xLabel":"Cost (¢)","yLabel":"Latency (ms)","unit":"ms","refLines":{"y":2000},"quadrants":["Slow and cheap","Slow and costly","Fast and cheap","Fast and costly"]},"card":{"number":"36","title":"Scatter plot","subtitle":"Cost and latency per request by model","takeaway":"Only the large model goes over 2 s","level":"basic","legend":"auto"}}
+```
+
+## tileMap · Tile grid map (`<TileMap>`, Intermediate, Map)
+
+- What: One equal tile per region, placed roughly where it is and shaded by its value
+- Use when: Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones
+- Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them
+- encoding: region, value
+- Chart options: map, legend, legendLabels, colorReverse, colorSteps, labels: auto|ko|en
+- Default highlight: the largest value
+
+```json
+{"type":"tileMap","data":[{"sido":"Seoul","rate":96},{"sido":"Busan","rate":91},{"sido":"Daegu","rate":89}],"encoding":{"region":"sido","value":"rate"},"options":{"map":"kr-sido","unit":"%"},"card":{"number":"37","title":"Tile grid map","subtitle":"Addresses with next-day delivery, by region (%)","takeaway":"Sejong leads at 98%","level":"intermediate"}}
 ```
 
 ## Common options

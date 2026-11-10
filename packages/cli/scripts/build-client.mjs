@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 // 새 의존성 없이 tsup 이 쓰는 esbuild 를 빌려요
 const esbuild = createRequire(require.resolve("tsup"))("esbuild");
-// 작업 공간의 라이브러리 소스를 묶어요. package.json 의 "sideEffects": false 덕에 쓰지 않는 차트 35종은 빠져요
+// 작업 공간의 라이브러리 소스를 묶어요. package.json 의 "sideEffects": false 덕에 쓰지 않는 차트 36종은 빠져요
 const lib = dirname(require.resolve("ztd-charts/package.json"));
 const out = join(root, "dist/client");
 rmSync(out, { recursive: true, force: true });

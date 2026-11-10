@@ -18,6 +18,7 @@ export const GROUPS: readonly LabelDef<ChartGroup>[] = [
   { id: "relationship", en: "Relationship", ko: "관계" },
   { id: "flow", en: "Flow", ko: "흐름" },
   { id: "hierarchy", en: "Hierarchy", ko: "계층" },
+  { id: "map", en: "Map", ko: "지도" },
   { id: "kpi", en: "KPI", ko: "KPI" },
 ];
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildTree, leaves, partitionAngles, squarify } from "../src/layout/hierarchy";
 import { sankeyLayout } from "../src/layout/sankey";
 import { chordLayout } from "../src/layout/chord";
-import { insideOut, stack } from "../src/layout/stack";
+import { divergingStack, insideOut, stack } from "../src/layout/stack";
 import { beeswarm, boxStats, kde, ranks } from "../src/layout/stats";
 import { allocateCells } from "../src/charts/waffle";
 import { TAU } from "../src/core/geometry";
@@ -100,6 +100,69 @@ describe("stack", () => {
     const s = stack(vals, "wiggle");
     for (let k = 0; k < 5; k++) expect(s.y1[2][k] - s.y0[0][k]).toBeCloseTo(vals[0][k] + vals[1][k] + vals[2][k], 9);
     expect([...insideOut(vals)].sort()).toEqual([0, 1, 2]);
+  });
+});
+
+describe("divergingStack (양쪽 막대)", () => {
+  /** 줄 k의 [왼쪽 길이, 오른쪽 길이] */
+  const sides = (s: ReturnType<typeof divergingStack>, k: number) => {
+    const ends = s.y0.flatMap((row, i) => [row[k], s.y1[i][k]]);
+    return [-Math.min(0, ...ends), Math.max(0, ...ends)];
+  };
+  // 계열: 매우 반대, 반대, 보통, 찬성, 매우 찬성 (줄마다)
+  const likert = [
+    [4, 22, -3],
+    [8, 28, 6],
+    [14, 20, 0],
+    [46, 22, 9],
+    [28, 8, -12],
+  ];
+  it("1: 왼쪽 길이 + 오른쪽 길이 = 그 줄 절댓값 합 (percent면 100)", () => {
+    for (const percent of [false, true]) {
+      const s = divergingStack(likert, { negative: [1, 0], neutral: 2, percent });
+      for (let k = 0; k < 3; k++) {
+        const [l, r] = sides(s, k);
+        expect(l + r).toBeCloseTo(percent ? 100 : likert.reduce((a, row) => a + Math.abs(row[k]), 0), 9);
+        expect(s.neg[k] + s.pos[k] + Math.abs(likert[2][k])).toBeCloseTo(l + r, 9);
+      }
+    }
+  });
+  it("2: [10, -4]는 오른쪽 10, 왼쪽 4 (percent면 71.4%, 28.6%). 음수 조각이 0 길이면 실패", () => {
+    for (const [percent, right, left] of [
+      [false, 10, 4],
+      [true, 71.43, 28.57],
+    ] as const) {
+      const s = divergingStack([[10], [-4]], { percent });
+      expect([s.y0[0][0], s.y1[0][0]]).toEqual([0, expect.closeTo(right, 2)]);
+      expect([s.y0[1][0], s.y1[1][0]]).toEqual([0, expect.closeTo(-left, 2)]);
+      expect(s.y0[1][0] - s.y1[1][0]).toBeGreaterThan(0);
+      expect([s.neg[0], s.pos[0]]).toEqual([expect.closeTo(left, 2), expect.closeTo(right, 2)]);
+    }
+  });
+  it("3: 가운데 계열의 두 반쪽을 더하면 그 값이에요", () => {
+    const s = divergingStack(likert, { negative: [1, 0], neutral: 2 });
+    for (let k = 0; k < 3; k++) {
+      expect(-s.y0[2][k]).toBeCloseTo(s.y1[2][k], 9);
+      expect(s.y1[2][k] - s.y0[2][k]).toBeCloseTo(Math.abs(likert[2][k]), 9);
+    }
+    // 반대 두 칸은 보통의 왼쪽 끝부터 바깥으로 (반대가 0선 쪽), 찬성 두 칸은 오른쪽 끝부터 데이터 순서로
+    expect([s.y0[1][1], s.y1[1][1], s.y1[0][1]]).toEqual([-10, -38, -60]);
+    expect([s.y0[3][1], s.y1[3][1], s.y1[4][1]]).toEqual([10, 32, 40]);
+  });
+  it("4: 모두 양수인 만족도 줄도 negative로 정한 두 계열은 왼쪽이에요. 숨긴 계열은 자리만 비워요", () => {
+    const row = [[5], [15], [20], [40], [20]];
+    const s = divergingStack(row, { negative: [1, 0], neutral: 2 });
+    expect(s.y1[0][0]).toBeLessThan(s.y1[1][0]);
+    expect(Math.max(s.y0[0][0], s.y1[0][0], s.y0[1][0], s.y1[1][0])).toBeLessThanOrEqual(-10);
+    expect([s.neg[0], s.pos[0]]).toEqual([20, 60]);
+    // 찬성을 숨기면 오른쪽만 다시 쌓이고 왼쪽과 percent 분모는 그대로예요
+    const full = divergingStack(row, { negative: [1, 0], neutral: 2, percent: true });
+    const hid = divergingStack(row, { negative: [1, 0], neutral: 2, percent: true, skip: new Set([3]) });
+    for (const i of [0, 1, 2]) expect([hid.y0[i][0], hid.y1[i][0]]).toEqual([full.y0[i][0], full.y1[i][0]]);
+    expect(hid.y0[4][0]).toBe(10);
+    // 이미 음수인 값은 부호대로 왼쪽, 데이터 순서가 왼쪽부터 읽혀요
+    const signed = divergingStack([[-3], [-7], [5]]);
+    expect([signed.y1[0][0], signed.y1[1][0], signed.y1[2][0]]).toEqual([-10, -7, 5]);
   });
 });
 

@@ -10,7 +10,7 @@ import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter } from "../data/accessor";
 import { langOf, plural, type ChartLang } from "../core/i18n";
-import { useChartLocale } from "../theme/context";
+import { useChartLocale, type Painter } from "../theme/context";
 
 const en = {
   pie: "Pie chart",
@@ -87,6 +87,11 @@ interface Slice<T> {
   datum: T;
 }
 
+/** 파이, 도넛 조각의 색: colorMode "emphasis"면 강조만 accent, 아니면 categorical. 차트와 카드 범례(autoLegend)가 같이 써요 */
+export function sliceSwatches(p: Painter, n: number, hi: ReadonlySet<number>, colorMode?: "categorical" | "emphasis"): Swatch[] {
+  return colorMode === "emphasis" ? emphasis(p, n, hi) : categorical(p, n, hi);
+}
+
 function useSlices<T>(props: PieChartProps<T>) {
   const { data } = props;
   const lang = langOf(useChartLocale(props.locale));
@@ -137,7 +142,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
   const start = ((props.startAngle ?? 0) * Math.PI) / 180;
 
   const slices = useMemo(() => {
-    const colors = props.colorMode === "emphasis" ? emphasis(p, rows.length, new Set(rows.map((r, k) => (hi.has(k) ? k : -1)).filter((k) => k >= 0))) : categorical(p, rows.length, hi);
+    const colors = sliceSwatches(p, rows.length, hi, props.colorMode);
     let acc = 0;
     return rows.map((r, k): Slice<T> => {
       const a = total > 0 ? (r.value / total) * TAU : 0;

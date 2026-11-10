@@ -21,6 +21,7 @@ import { uniq } from "../data/accessor";
 import { lttb } from "../data/parse";
 import { stack } from "../layout/stack";
 import { plural, type ChartLang } from "../core/i18n";
+import type { Painter } from "../theme/context";
 
 const en = {
   line: "Line chart",
@@ -106,6 +107,14 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps, DayFirs
   connectNulls?: boolean;
   /** 숨길 계열 이름. 색과 강조는 모든 계열로 정해서 숨겨도 남은 계열 색이 그대로예요. y축은 보이는 계열에 맞추고 x는 그대로예요. 모든 계열을 숨기면 빈 차트예요 */
   hidden?: readonly string[];
+  /** 날짜, 숫자 x의 범위 고정 [처음, 끝] (날짜는 ms). 범주 x와 확대한 구간에서는 쓰지 않아요. 작은 여러 개(ChartFacets)가 패널의 x를 맞출 때 써요 */
+  xDomain?: [number, number];
+  /** xDomain과 함께: 이 x 값과 글자를 그대로 x 눈금으로 써요(솎지 않아요). 작은 여러 개가 x 값이 적을 때 모든 패널에 같은 눈금을 넘겨요 */
+  xTicks?: readonly { value: number; label: string }[];
+  /** x축 글자. 기본 true. false면 글자만 빼고 자리는 둬요(짚은 자리 이름표는 그대로) */
+  showXAxis?: boolean;
+  /** 값 축(y) 글자와 yLabel. 기본 true. false면 글자와 그 자리를 빼요(격자선은 그대로) */
+  showYAxis?: boolean;
 }
 
 /** 모델에서 x 인덱스 a~b(양끝 포함)만 남겨요 */
@@ -196,23 +205,39 @@ interface SeriesDraw {
   out?: number[];
 }
 
-function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number): ((k: number) => number) & { v?: (t: number) => number } {
+function xScaleFor(model: SeriesModel<unknown>, x0: number, x1: number, domain?: readonly [number, number]): ((k: number) => number) & { v?: (t: number) => number } {
   const n = model.keys.length;
   if (model.type === "band") {
     const step = n > 1 ? (x1 - x0) / (n - 1) : 0;
     return (k: number) => (n > 1 ? x0 + k * step : (x0 + x1) / 2);
   }
-  const [lo, hi] = extent(model.xnum);
+  const [lo, hi] = domain ?? extent(model.xnum);
   const s = scaleLinear([lo, hi === lo ? lo + 1 : hi], [x0, x1]);
   // v: x 값(날짜 ms, 숫자) → 픽셀. 주석이 데이터와 같은 자로 재요
   return Object.assign((k: number) => s(model.xnum[k]), { v: s });
 }
 
-function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (k: number) => number; x0: number; x1: number; y: number }) {
-  const { c, model, xs, x0, x1, y } = props;
+function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (k: number) => number; x0: number; x1: number; y: number; domain?: readonly [number, number]; fixed?: XYProps["xTicks"] }) {
+  const { c, model, xs, x0, x1, y, domain } = props;
   const p = c.p;
   let ticks: { x: number; label: string }[];
-  if (model.type === "date" && model.keys.length > 1) {
+  if (domain && model.type !== "band" && props.fixed) {
+    // 넘겨받은 눈금 그대로 (작은 여러 개가 모든 패널에 같은 목록을 넘겨요)
+    const real = scaleLinear(domain[1] === domain[0] ? [domain[0], domain[0] + 1] : [domain[0], domain[1]], [x0, x1]);
+    ticks = props.fixed.map((t) => ({ x: real(t.value), label: t.label }));
+  } else if (domain && model.type !== "band") {
+    // 고정 x 범위(작은 여러 개의 같은 축): 눈금 값, 글자 꼴, 남길 눈금을 범위와 오른쪽 끝으로만 정해서 범위가 같은 패널은 모두 같은 눈금이에요.
+    // 왼쪽 값 축 글자가 있어 그림이 좁은 패널도 글자가 없는 패널(x0 = 6) 기준으로 골라요. 데이터가 짧은 패널은 선만 짧아요
+    const [a, b] = domain[1] === domain[0] ? [domain[0], domain[0] + 1] : domain;
+    const isDate = model.type === "date";
+    const count = Math.max(2, Math.floor((x1 - 6) / (isDate ? 64 : 70)));
+    const xf = a >= 1000 && b <= 9999 ? String : makeTickFormatter(undefined, c.locale, Math.max(-a, b));
+    const vals = isDate ? timeTicks(a, b, count, c.locale).map((t) => ({ v: t.t, label: t.label })) : scaleLinear([a, b], [0, 1]).ticks(count).map((v) => ({ v, label: xf(v) }));
+    const canon = scaleLinear([a, b], [6, x1]);
+    const real = scaleLinear([a, b], [x0, x1]);
+    // 첫 눈금 글자는 왼쪽으로 6px(패널 사이 간격의 절반)까지 나가도 돼요. 그래서 범위 첫날("Jan")이 남아요
+    ticks = fitTickLabels(vals.map((t) => ({ ...t, x: canon(t.v) })), -6, c.width + 2).map((t) => ({ x: real(t.v), label: t.label }));
+  } else if (model.type === "date" && model.keys.length > 1) {
     const t0 = model.xnum[0];
     const t1 = model.xnum[model.xnum.length - 1];
     const maxT = Math.max(2, Math.floor((x1 - x0) / 64));
@@ -233,7 +258,8 @@ function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (
     const centers = model.keys.map((_, k) => xs(k));
     ticks = thinLabels(centers, model.labels).map((k) => ({ x: centers[k], label: model.labels[k] }));
   }
-  const keep = fitTickLabels(ticks, -2, c.width + 2);
+  // 고정 범위의 눈금은 위에서 이미 골랐어요 (그 패널 자리로 다시 고르면 패널마다 달라져요)
+  const keep = domain && model.type !== "band" ? ticks : fitTickLabels(ticks, -2, c.width + 2);
   return (
     <g aria-hidden="true">
       {keep.map((t, i) => (
@@ -243,6 +269,18 @@ function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (
       ))}
     </g>
   );
+}
+
+/**
+ * 라인, 영역의 계열 색. 영역은 넓은 면이라 기본이 ramp, 라인은 강조만 accent이고 나머지는 neutralStrong. colorMode "categorical"이면 categorical.
+ * 차트와 카드 범례(autoLegend)가 같이 써요
+ */
+export function lineSwatches(p: Painter, n: number, hi: ReadonlySet<number>, area: boolean, colorMode?: "highlight" | "categorical"): Swatch[] {
+  if (area) return colorMode === "categorical" ? categorical(p, n, hi) : ramp(p, n, hi);
+  if (colorMode === "categorical") return categorical(p, n, hi);
+  const rest = swatch(p, "strong");
+  const acc = swatch(p, "accent");
+  return Array.from({ length: n }, (_, s) => (hi.has(s) ? acc : rest));
 }
 
 function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "line" | "area" }) {
@@ -310,13 +348,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     return resolveHighlight(props.highlight as never, all.series as never[], all.series, totals, "first");
   }, [all, props.highlight]);
 
-  const colorsAll: Swatch[] = useMemo(() => {
-    if (isArea) return props.colorMode === "categorical" ? categorical(p, nS, hiAll) : ramp(p, nS, hiAll);
-    if (props.colorMode === "categorical") return categorical(p, nS, hiAll);
-    const rest = swatch(p, "strong");
-    const acc = swatch(p, "accent");
-    return all.series.map((_, s) => (hiAll.has(s) ? acc : rest));
-  }, [isArea, props.colorMode, p, nS, hiAll, all.series]);
+  const colorsAll: Swatch[] = useMemo(() => lineSwatches(p, nS, hiAll, isArea, props.colorMode), [isArea, props.colorMode, p, nS, hiAll]);
   // 보이는 계열 자리로 옮겨요 (숨긴 게 없으면 그대로)
   const hi = useMemo(() => (model === all ? hiAll : new Set(keep.flatMap((i, j) => (hiAll.has(i) ? [j] : [])))), [model, all, hiAll, keep]);
   const colors = useMemo(() => (model === all ? colorsAll : keep.map((i) => colorsAll[i])), [model, all, colorsAll, keep]);
@@ -327,7 +359,8 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   // 띠도 그림 안에 (그리는 x만)
   allY.push(...bandYs);
   // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게. 로그 눈금에서 0 이하 기준선과 주석 값은 범위에도 그림에도 넣지 않아요 (데이터의 0 이하 값은 이미 뺐어요)
-  const refLines = isLog ? props.referenceLines?.filter((r) => r.y > 0) : props.referenceLines;
+  // 값(y)이 숫자가 아닌 기준선({ value: 30 }처럼 키를 틀린 것)은 그리지 않아요. NaN 좌표를 쓰지 않게
+  const refLines = props.referenceLines?.filter((r) => typeof r?.y === "number" && Number.isFinite(r.y) && (!isLog || r.y > 0));
   refLines?.forEach((r) => allY.push(r.y));
   allY.push(...annotationYs(props.annotations).filter((v) => !isLog || v > 0));
   const baseline = props.baseline ?? 0;
@@ -345,7 +378,8 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
   const y = (isLog ? scaleLog : scaleLinear)(dom, [H - bottom, top]);
   const yTicks = y.ticks(yCount);
-  const left = yAxisWidth(yTicks, tickFmt, c.locale);
+  const showY = props.showYAxis !== false;
+  const left = showY ? yAxisWidth(yTicks, tickFmt, c.locale) : 0;
   const endLabels = props.endLabels ?? nS > 1;
   const lastIdx = (s: number) => {
     for (let k = model.keys.length - 1; k >= 0; k--) if (Number.isFinite(model.values[s][k])) return k;
@@ -355,10 +389,12 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const endW = endLabels ? Math.min(W * 0.28, Math.max(...all.series.map((s) => textWidth(s, 11, 700)), 20) + 14) : 10;
   const x0 = left + 6;
   const x1 = W - endW;
-  const xs = xScaleFor(model as SeriesModel<unknown>, x0, x1);
+  // 고정 x 범위는 확대한 구간에서는 쓰지 않아요 (확대한 구간에 맞춰요)
+  const xd = view ? undefined : props.xDomain;
+  const xs = xScaleFor(model as SeriesModel<unknown>, x0, x1, xd);
   // 포인터가 움직일 때마다 만들지 않아요 (1만 점이면 한 번에 1만 칸)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1]);
+  const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1, xd?.[0], xd?.[1]]);
   const maxPts = props.maxPoints ?? Math.max(60, Math.round((x1 - x0) * 2));
   const curve = props.curve ?? "smooth";
   // 영역의 바닥: 0을 축 범위 안으로 (값이 모두 음수면 위 끝, 모두 양수면 아래 끝)
@@ -433,7 +469,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     });
     // xs, y는 아래 값들로 정해져요
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, stacked, colors, hi, x0, x1, H, dom[0], dom[1], maxPts, isArea, bands, props.outside, breaks, isLog]);
+  }, [model, stacked, colors, hi, x0, x1, xd?.[0], xd?.[1], H, dom[0], dom[1], maxPts, isArea, bands, props.outside, breaks, isLog]);
 
   const stg = c.motion.stagger ?? 120;
   const order = useMemo(() => [...draws].sort((a, b) => Number(a.hi) - Number(b.hi)), [draws]);
@@ -747,12 +783,12 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         ) : null
       }
     >
-      {props.yLabel ? (
+      {props.yLabel && showY ? (
         <Txt x={left} y={6} anchor="start" size={10.5} fill={p.paint("muted")}>
           {props.yLabel}
         </Txt>
       ) : null}
-      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} locale={c.locale} />
+      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} locale={c.locale} labels={showY} />
       <AnnotationsUnder list={props.annotations} g={geom} />
       {signOn ? <line x1={x0} x2={x1} y1={yb} y2={yb} stroke={p.paint("dim")} pointerEvents="none" /> : null}
       {refLines?.map((r, i) => (
@@ -791,7 +827,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
         </Txt>
       ))}
       {brushLayer}
-      <XAxis c={c as ChartCtx<unknown>} model={model as SeriesModel<unknown>} xs={xs} x0={x0} x1={x1} y={H - bottom + 13} />
+      {props.showXAxis === false ? null : <XAxis c={c as ChartCtx<unknown>} model={model as SeriesModel<unknown>} xs={xs} x0={x0} x1={x1} y={H - bottom + 13} domain={xd} fixed={props.xTicks} />}
       {activeK !== null && model.keys[activeK] !== undefined && !brush.dragging ? <AxisPill p={p} x={xs(activeK)} y={H - bottom + 13} label={model.labels[activeK]} width={W} /> : null}
     </ChartFrame>
   );

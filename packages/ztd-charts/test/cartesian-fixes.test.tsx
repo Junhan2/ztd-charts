@@ -1613,3 +1613,162 @@ describe("숨긴 계열 (차례 4 ⑫)", () => {
     }
   });
 });
+
+describe("기준선 값이 숫자가 아니면 (referenceLines 키 틀림)", () => {
+  const rows = [{ m: "1월", v: 10 }, { m: "2월", v: 40 }, { m: "3월", v: 25 }];
+  const bad = [{ value: 30, label: "기준" }] as unknown as { y: number; label?: string }[];
+  it("검사기가 기대하는 키(y)를 적은 오류를 내요 (영어, 한국어)", () => {
+    const spec: ChartSpec = { type: "line", data: rows, encoding: { x: "m", y: "v" }, options: { referenceLines: bad } };
+    const en = validateSpec(spec).errors.find((e) => e.code === "bad_reference_line");
+    expect(en?.path).toBe("options.referenceLines[0]");
+    expect(en?.message).toContain("needs a number y");
+    expect(validateSpec(spec, { lang: "ko" }).errors.find((e) => e.code === "bad_reference_line")?.message).toContain("숫자 y가 있어야");
+    expect(validateSpec({ ...spec, options: { referenceLines: [{ y: 30, label: "기준" }] } }).errors).toEqual([]);
+  });
+  it("라인과 영역은 그 기준선을 건너뛰고 NaN 좌표를 쓰지 않아요", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const htmls = [
+      renderToStaticMarkup(<LineChart data={rows} x="m" y="v" width={480} animate={false} referenceLines={bad} />),
+      renderToStaticMarkup(<AreaChart data={rows} x="m" y="v" width={480} animate={false} referenceLines={bad} />),
+    ];
+    for (const h of htmls) expect(h).not.toContain("NaN");
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
+    // 숫자 y인 기준선은 그대로 그려요
+    expect(renderToStaticMarkup(<LineChart data={rows} x="m" y="v" width={480} animate={false} referenceLines={[{ y: 30, label: "기준" }]} />)).toContain("기준");
+  });
+});
+
+describe("양쪽 막대 (layout diverging)", () => {
+  const LIKERT = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"];
+  const survey = [
+    { q: "Support", "Strongly disagree": 16, Disagree: 30, Neutral: 22, Agree: 20, "Strongly agree": 12 },
+    { q: "Price", "Strongly disagree": 5, Disagree: 10, Neutral: 15, Agree: 40, "Strongly agree": 30 },
+  ];
+  const likert = (extra: Record<string, unknown> = {}) => r(<BarChart data={survey} x="q" y={LIKERT} layout="diverging" negative={["Disagree", "Strongly disagree"]} neutral="Neutral" width={560} animate={false} {...extra} />);
+  /** 조각 path의 [왼쪽 x, 오른쪽 x] (M, H, 호의 끝 x) */
+  const xBounds = (d: string) => {
+    const xs = [...d.matchAll(/(?:M|H)(-?[\d.]+)|A[\d.]+,[\d.]+ \d \d \d (-?[\d.]+),/g)].map((m) => +(m[1] ?? m[2]));
+    return [Math.min(...xs), Math.max(...xs)];
+  };
+  const segPaths = (h: string) => markGroups(h).map((g) => /<path d="([^"]+)"/.exec(g)![1]);
+  const segX = (h: string) => segPaths(h).map(xBounds);
+  const zeroX = (h: string) => +/<line x1="([\d.]+)" x2="\1"[^>]*stroke-width="1.5"/.exec(h)![1];
+
+  it("2: [10, -4]는 0선 오른쪽에 10, 왼쪽에 4 길이로 그려요. percent도 같은 비율(71%, 29%)이에요", () => {
+    const data = [{ x: "Support", a: 10, b: -4 }];
+    for (const percent of [false, true]) {
+      const h = r(<BarChart data={data} x="x" y={["a", "b"]} layout="diverging" percent={percent} width={480} height={160} animate={false} />);
+      const z = zeroX(h) - 0.5;
+      // 왼쪽부터: b(음수), a
+      const [[l0, l1], [r0, r1]] = segX(h);
+      expect(l1).toBeCloseTo(z, 0);
+      expect(r0).toBeCloseTo(z, 0);
+      expect(l1 - l0).toBeGreaterThan(1);
+      expect((l1 - l0) / (r1 - r0)).toBeCloseTo(0.4, 2);
+      expect(tds(h)).toEqual(percent ? ["Support · b=-4 (29%)", "Support · a=10 (71%)"] : ["Support · b=-4", "Support · a=10"]);
+      // 양쪽 끝 합계, 눈금은 크기만
+      const unit = percent ? "%" : "";
+      expect(textOf(h, `${percent ? 29 : 4}${unit}`).find((t) => t.anchor === "end")!.x).toBeLessThan(l0);
+      expect(textOf(h, `${percent ? 71 : 10}${unit}`).find((t) => t.anchor === "start")!.x).toBeGreaterThan(r1);
+      const bottomY = Math.max(...texts(h).map((q) => q.y));
+      const ticks = texts(h).filter((t) => t.y === bottomY);
+      expect(ticks.length).toBeGreaterThan(2);
+      expect(ticks.some((t) => /[-−]/.test(t.text))).toBe(false);
+    }
+  });
+  it("4: 모두 양수인 만족도 줄에서 negative로 정한 두 계열은 0선 왼쪽, 보통은 0선 양쪽 반씩이에요", () => {
+    const h = likert();
+    const z = zeroX(h) - 0.5;
+    const row = segX(h).slice(0, 5);
+    expect(row[0][1]).toBeCloseTo(row[1][0], 0);
+    expect(row[1][1]).toBeLessThan(z);
+    // 0선은 픽셀에 맞춰 반올림해서 1px 안이에요
+    expect(Math.abs((row[2][0] + row[2][1]) / 2 - z)).toBeLessThanOrEqual(1);
+    expect(row[3][0]).toBeGreaterThan(z);
+    // 0선에서 양 끝까지 길이 비율: (46 + 11) : (32 + 11)
+    expect((z - row[0][0]) / (row[4][1] - z)).toBeCloseTo(57 / 43, 1);
+  });
+  it("키보드는 왼쪽부터, 라이브 문장과 설명은 양쪽 합계를 먼저 읽어요. 쪽 합계로 정렬해요", () => {
+    const h = atKey(0, () => likert({ percent: true }));
+    expect(liveText(h)).toBe("Support: negative 46%, positive 32%. Strongly disagree: 16 (16%) (1/10)");
+    expect(tds(h).slice(0, 5)).toEqual(["Support · Strongly disagree=16 (16%)", "Support · Disagree=30 (30%)", "Support · Neutral=22 (22%)", "Support · Agree=20 (20%)", "Support · Strongly agree=12 (12%)"]);
+    expect(desc(h)).toContain("Support: negative 46%, positive 32%; Price: negative 15%, positive 70%");
+    expect(liveText(atKey(1, () => likert({ percent: true, locale: "ko-KR" })))).toMatch(/^Support: 음수 쪽 46%, 양수 쪽 32%\. Disagree: 30/);
+    expect(tds(likert({ sort: "positive" }))[0]).toMatch(/^Price/);
+    expect(tds(likert({ sort: "negative" }))[0]).toMatch(/^Support/);
+  });
+  it("계열을 숨기면 그쪽만 다시 쌓여요 (다른 쪽, 0선, 값 축은 그대로)", () => {
+    for (const percent of [false, true]) {
+      const full = likert({ percent });
+      const hid = likert({ percent, hidden: ["Agree"] });
+      expect(zeroX(hid)).toBe(zeroX(full));
+      expect(segPaths(hid).slice(0, 2)).toEqual(segPaths(full).slice(0, 2));
+      expect(segPaths(hid)).toHaveLength(8);
+    }
+  });
+  it("스펙: 서버 그림은 언제나 같고, 켜고 끄는 범례가 그대로 돼요", () => {
+    const spec: ChartSpec = { type: "bar", data: survey, encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral", percent: true }, card: { title: "Survey", legend: "toggle" } };
+    expect(validateSpec(spec).errors).toEqual([]);
+    const a = r(<Chart spec={spec} width={560} animate={false} />);
+    expect(r(<Chart spec={spec} width={560} animate={false} />)).toBe(a);
+    expect(a).toContain('aria-pressed="true"');
+    expect(renderSpecToSVG(spec, { width: 560, theme: "light" })).not.toContain("NaN");
+  });
+  it("기본 강조는 가장 바깥 긍정 계열이에요 (negative가 있을 때만). 정한 highlight와 범례도 그대로 따라요", () => {
+    const fill = (h: string, k: number) => /<path d="[^"]+" fill="([^"]+)"/.exec(markGroups(h)[k])![1];
+    // 첫 줄 조각은 왼쪽부터 매우 반대, 반대, 보통, 찬성, 매우 찬성
+    const h = likert();
+    expect(fill(h, 4)).toContain("--ztd-accent");
+    expect(fill(h, 0)).toContain("--ztd-ink");
+    expect(likert({ highlight: "none" })).not.toContain("--ztd-accent");
+    expect(fill(likert({ highlight: "Disagree" }), 1)).toContain("--ztd-accent");
+    // 부호 있는 데이터에 negative가 없으면 예전처럼 첫 계열(a, 왼쪽부터 b, a)
+    expect(fill(r(<BarChart data={[{ x: "S", a: 10, b: -4 }]} x="x" y={["a", "b"]} layout="diverging" width={480} animate={false} />), 1)).toContain("--ztd-accent");
+    const spec: ChartSpec = { type: "bar", data: survey, encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral" }, card: { legend: "auto" } };
+    expect(autoLegend(spec, survey, "en-US").map((i) => i.color)).toEqual(["ink", expect.any(String), expect.any(String), "neutral", "accent"]);
+  });
+  it("값 축은 양쪽 데이터 끝에 맞춰요: 가장 긴 두 막대가 막대 자리의 80% 넘게 쓰고, 끝 합계 글자는 잘리거나 범주 이름에 겹치지 않아요", () => {
+    const KO = ["매우 불만", "불만", "보통", "만족", "매우 만족"];
+    const data = ([["검색", [3, 8, 17, 44, 28]], ["결제", [4, 9, 19, 41, 27]], ["고객센터", [19, 27, 22, 21, 11]]] as const).map(([q, v]) => ({ q, ...Object.fromEntries(KO.map((k, i) => [k, v[i]])) }));
+    for (const W of [280, 390, 720]) {
+      const h = r(<BarChart data={data} x="q" y={KO} layout="diverging" negative={["불만", "매우 불만"]} neutral="보통" percent width={W} animate={false} />);
+      const xs = segX(h);
+      const span = Math.max(...xs.map((b) => b[1])) - Math.min(...xs.map((b) => b[0]));
+      const catRight = textOf(h, "검색")[0].x;
+      const lefts = texts(h).filter((t) => t.anchor === "end" && t.text.endsWith("%"));
+      const rights = texts(h).filter((t) => t.anchor === "start" && t.text.endsWith("%"));
+      const lw = Math.max(...lefts.map((t) => textWidth(t.text, 11, 600)));
+      const rw = Math.max(...rights.map((t) => textWidth(t.text, 11, 600)));
+      expect(span / (W - catRight - 6 - (lw + 10) - Math.max(8, rw + 10)), `${W}`).toBeGreaterThanOrEqual(0.8);
+      for (const t of lefts) expect(t.x - textWidth(t.text, 11, 600), `${W} ${t.text}`).toBeGreaterThan(catRight);
+      for (const t of rights) expect(t.x + textWidth(t.text, 11, 600), `${W} ${t.text}`).toBeLessThanOrEqual(W);
+    }
+  });
+  it("줄이 촘촘하면(60줄) 끝 합계와 조각 안 글자를 모두 빼고, 24줄이면 그대로 써요. 값은 표에 남아요", () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ q: `Q${i}`, a: 10 + (i % 5), b: 20, c: 5 }));
+    const draw = (n: number) => r(<BarChart data={rows(n)} x="q" y={["a", "b", "c"]} layout="diverging" negative={["a"]} width={720} animate={false} />);
+    const numbers = (h: string) => {
+      const bottomY = Math.max(...texts(h).map((t) => t.y));
+      return texts(h).filter((t) => /^\d/.test(t.text) && t.y !== bottomY);
+    };
+    const dense = draw(60);
+    expect(numbers(dense)).toEqual([]);
+    expect(tds(dense)[0]).toBe("Q0 · a=10");
+    expect(numbers(draw(24)).length).toBeGreaterThan(24);
+  });
+  it("자동 범례의 색은 계열마다 그 조각의 색과 같아요 (계열 5개, 중간 단계 섞은 색까지)", () => {
+    // 한 줄이라 조각이 왼쪽부터 계열 순서예요: 매우 반대, 반대, 보통, 찬성, 매우 찬성
+    const spec: ChartSpec = { type: "bar", data: survey.slice(0, 1), encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral", percent: true, highlight: "Strongly agree" }, card: { title: "Survey", legend: "auto" } };
+    for (const theme of ["light", "dark"] as const) {
+      const svg = renderSpecToSVG(spec, { width: 560, theme });
+      // 서버 범례는 줄마다 오른쪽부터 놓아서 이름표와 짝지어 계열 순서로 읽어요
+      const byLabel = new Map([...svg.matchAll(/<text [^>]*>([^<]*)<\/text><rect [^>]*width="9" height="9"[^>]*fill="([^"]+)"/g)].map((m) => [m[1], m[2]]));
+      const legend = LIKERT.map((s) => byLabel.get(s));
+      const segs = [...svg.matchAll(/<path d="M[^"]+" fill="([^"]+)" stroke="[^"]+" stroke-width="1"/g)].map((m) => m[1]);
+      expect(segs, theme).toHaveLength(5);
+      expect(new Set(segs).size, theme).toBe(5);
+      expect(legend, theme).toEqual(segs);
+    }
+  });
+});

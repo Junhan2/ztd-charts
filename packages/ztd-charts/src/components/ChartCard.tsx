@@ -6,7 +6,8 @@ import { SyncContext } from "../core/sync";
 import { langOf, type ChartLang } from "../core/i18n";
 import { levelBadge } from "../spec/labels";
 import type { ChartLevel } from "../spec/types";
-import { useChartLocale, useChartTheme, isColorToken, type Painter } from "../theme/context";
+import { legendFill } from "../core/palette";
+import { useChartLocale, useChartTheme, type Painter } from "../theme/context";
 import type { ChartTheme } from "../theme/tokens";
 import { ReplayContext } from "./replay";
 
@@ -134,7 +135,8 @@ export function Legend(props: LegendProps) {
 }
 
 function LegendSwatch({ p, item, off }: { p: Painter; item: LegendItem; off?: boolean }) {
-  const color = item.color ? (isColorToken(item.color) ? p.paint(item.color) : item.color) : p.paint("neutral");
+  // 토큰은 테마 색, 섞은 색("mix:비율")은 차트 조각과 같은 섞은 색, 그 밖은 그대로
+  const color = legendFill(p, item.color);
   const shape = item.shape ?? "square";
   if (shape === "line" || shape === "dash")
     return (

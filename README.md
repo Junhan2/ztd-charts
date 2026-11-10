@@ -9,7 +9,7 @@
 
 <p align="center">
   Animated, accessible React charts that read like a report.<br>
-  36 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+  37 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 </p>
 
 <p align="center">
@@ -87,9 +87,9 @@ import { Chart } from "ztd-charts";
 />;
 ```
 
-## 36 charts
+## 37 charts
 
-<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 36 charts in the light theme, from pie and donut to histogram and scatter plot"></a>
+<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 37 charts in the light theme, from pie and donut to scatter plot and tile grid map"></a>
 
 | Group | Charts |
 |---|---|
@@ -100,6 +100,7 @@ import { Chart } from "ztd-charts";
 | Trend | Line (range band too) · Area · Streamgraph · Sparkline · Calendar heatmap · Bump · Candlestick · Skyline |
 | Distribution | Box plot (violin too) · Beeswarm · Ridgeline · Histogram |
 | Relationship | Heatmap · Bubble · Scatter · Parallel coordinates |
+| Map | Tile grid map |
 | KPI | Gauge · Bullet · Radial bar |
 
 Each chart has a page with a live demo, its props and copyable code in the [gallery](https://charts.ztd.app/docs/). Why each one made the cut, and what was left out, is in the [chart catalog](docs/catalog.md).

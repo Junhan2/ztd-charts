@@ -546,3 +546,41 @@ function scatterRows(names: readonly string[], request: string) {
 /** 모델별 요청 비용(센트)과 응답 시간(ms) */
 export const scatterSample = /* @__PURE__ */ scatterRows(["Large", "Medium", "Small"], "Request");
 export const scatterSampleKo = /* @__PURE__ */ scatterRows(["대형", "중형", "소형"], "요청");
+
+/** 광역 지자체 16곳(2026-07-01 통합 뒤)의 다음 날 배송이 되는 주소 비율(%) */
+export const tileMapSample = [
+  { sido: "Seoul", rate: 96 },
+  { sido: "Busan", rate: 91 },
+  { sido: "Daegu", rate: 89 },
+  { sido: "Incheon", rate: 94 },
+  { sido: "Daejeon", rate: 90 },
+  { sido: "Ulsan", rate: 86 },
+  { sido: "Sejong", rate: 98 },
+  { sido: "Gyeonggi", rate: 93 },
+  { sido: "Gangwon", rate: 71 },
+  { sido: "Chungbuk", rate: 80 },
+  { sido: "Chungnam", rate: 78 },
+  { sido: "Jeonbuk", rate: 74 },
+  { sido: "Jeonnam-Gwangju", rate: 76 },
+  { sido: "Gyeongbuk", rate: 72 },
+  { sido: "Gyeongnam", rate: 82 },
+  { sido: "Jeju", rate: 64 },
+];
+export const tileMapSampleKo = /* @__PURE__ */ relabel(tileMapSample, {
+  Seoul: "서울",
+  Busan: "부산",
+  Daegu: "대구",
+  Incheon: "인천",
+  Daejeon: "대전",
+  Ulsan: "울산",
+  Sejong: "세종",
+  Gyeonggi: "경기",
+  Gangwon: "강원",
+  Chungbuk: "충북",
+  Chungnam: "충남",
+  Jeonbuk: "전북",
+  "Jeonnam-Gwangju": "전남광주",
+  Gyeongbuk: "경북",
+  Gyeongnam: "경남",
+  Jeju: "제주",
+});

@@ -183,6 +183,41 @@ export function Revenue() {
 - 서버 렌더는 `ztd-charts/server`: `renderSpecToSVG`(PNG 변환용 독립 SVG, ChartCard 포함), `renderSpecToHTML`, `resolveSpecData`.
 - `validateSpec(spec, { lang: "ko" })`은 틀린 필드에 비슷한 이름을 알려줘요: `"revenu" 필드가 데이터에 없어요. "revenue"인가요?`
 
+### 작은 여러 개 (`facet`)
+
+한 차트에 계열이 너무 많아 읽기 어려울 때(라인 차트 하나에 지역 8곳) 필드 하나만 더하면 같은 차트를 묶음마다 한 칸씩 격자로 그려요.
+
+```json
+{
+  "type": "line",
+  "data": [{ "week": "1주", "region": "서울", "orders": 520 }, { "week": "1주", "region": "부산", "orders": 330 }],
+  "encoding": { "x": "week", "y": "orders" },
+  "options": { "highlight": "인천", "locale": "ko-KR" },
+  "facet": { "by": "region" },
+  "card": { "title": "지역별 주간 주문" }
+}
+```
+
+- `facet.by`: 나눌 필드. 값마다 패널 하나이고 값이 처음 나오는 순서예요. 24개까지 그리고, 값이 더 많으면 앞의 24개만 그리면서 `validateSpec`이 몇 개가 빠졌는지 경고해요.
+- `facet.columns`: 한 줄 패널 수의 최대값. 없으면 패널 폭 140px 이상으로 들어가는 만큼(390px 휴대폰 폭에서 두 칸)이고, 마지막 줄에 패널이 혼자 남지 않게 고르게 나눠요.
+- `facet.scale`: `"shared"`(기본)면 값 범위를 모든 행으로 한 번 재고, 날짜나 숫자 x면 x 범위도 그렇게 재서 패널끼리 높이를 견줄 수 있어요. 값 축 글자는 첫 열에만, x 글자는 맨 아래 줄에만 둬요. `"free"`면 패널마다 자기 데이터에 맞추고 축 글자를 모두 그려서, 패널끼리 잘못 견주지 않게 해요.
+- `line`, `area`, `bar`, `scatter`에서 써요. 다른 차트면 `validateSpec`이 이 넷을 적은 오류를 돌려줘요.
+- `options.highlight`가 facet 값이면 그 패널을 강조색으로, 나머지 패널을 무채색으로 그려요. 다른 highlight 값은 패널마다 그대로 넘겨요.
+- 한 패널에서 x 자리를 짚거나 키보드로 고르면 모든 패널이 같은 자리를 보여 줘요(묶음 전체가 `syncId` 하나: `options.syncId`, 없으면 스펙으로 정한 이름). 산점도 패널은 함께 짚을 x 자리가 없어서 묶이지 않아요.
+- 패널마다 온전한 차트(키보드 탐색, 라이브 영역, 숨긴 표)이고 이름은 "<카드 제목>, <값>"이에요. Tab은 읽는 순서대로 패널을 옮겨요. 묶음 전체에는 모든 패널로 만든 설명 한 문장이 붙어요.
+- `renderSpecToSVG`는 카드 틀과 모든 패널을 담은 독립 SVG 하나를 돌려줘서 CLI `render` 명령(PNG, SVG, HTML)과 MCP `render_chart` 도구도 facet 스펙을 그려요.
+- 스펙 없이 React로 쓰려면 `<ChartFacets>`를 써요.
+
+```tsx
+import { ChartCard, ChartFacets, LineChart } from "ztd-charts";
+
+<ChartCard title="지역별 주간 주문">
+  <ChartFacets chart={LineChart} type="line" data={rows} by="region" highlight="인천" chartProps={{ x: "week", y: "orders" }} />
+</ChartCard>
+```
+
+`<ChartFacets>` 프롭: `chart`(되풀이할 차트 컴포넌트: `LineChart`, `AreaChart`, `BarChart`, `ScatterChart`. 직접 넘겨서 쓰지 않는 차트는 번들에 들어가지 않아요), `type`(`"line" | "area" | "bar" | "scatter"`, 같은 값 범위를 그 차트와 같은 규칙으로 재요), `data`, `by`, `columns`, `scale`, `chartProps`(패널마다 넘길 프롭: `x`, `y`, `series`, `format`, `unit` 등), `highlight`, `syncId`, `width`(격자 전체, 없으면 부모 폭), `height`(패널 하나, 없으면 패널 폭에 맞춰 120~180px), `title`(패널 이름의 앞부분, 없으면 카드 제목), `description`, `locale`, `className`, `style`. 패널은 직접 써도 되는 차트 프롭 셋을 써요: `yDomain`(라인, 영역, 산점도는 `xDomain`도)은 범위를 고정하고, `showXAxis={false}`나 `showYAxis={false}`는 그 축 글자를 빼요.
+
 ## CLI
 
 ```bash

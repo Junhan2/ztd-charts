@@ -1,3 +1,4 @@
+import { FACET_TYPES } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef } from "./registry";
 import type { ChartDef, OptionDef } from "./types";
 
@@ -36,6 +37,8 @@ export interface SchemaText {
   formatObject: string;
   /** annotations 항목의 필드 설명 */
   annotation: { type: string; x: string; y: string; from: string };
+  /** spec.facet(작은 여러 개)과 그 키의 설명 */
+  facet: { spec: string; by: string; columns: string; scale: string };
 }
 
 export const SCHEMA_TEXT_EN: SchemaText = {
@@ -64,9 +67,30 @@ export const SCHEMA_TEXT_EN: SchemaText = {
     y: "line: the y value. band: [low, high] on y",
     from: "forecast: the x value where the forecast starts",
   },
+  facet: {
+    spec: "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+    by: 'Field to split by, for example "region". One panel per value in first-appearance order, up to 24',
+    columns: "Most panels per row. Without it, as many as fit at a panel width of 140px or more",
+    scale: '"shared" (default) puts every panel on one value scale (and one date or number x range) so heights compare. "free" fits each panel to its own data and labels every value axis',
+  },
 };
 
-/** data, card, theme, tooltip 정의. tooltip은 차트 36종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
+/** spec.facet 스키마. facet을 그리는 차트(line, area, bar, scatter)의 스키마에만 넣어요 */
+function facetSchema(t: SchemaText): JSONSchema {
+  return {
+    type: "object",
+    description: t.facet.spec,
+    required: ["by"],
+    properties: {
+      by: { type: "string", description: t.facet.by },
+      columns: { type: "integer", minimum: 1, description: t.facet.columns },
+      scale: { enum: ["shared", "free"], default: "shared", description: t.facet.scale },
+    },
+    additionalProperties: false,
+  };
+}
+
+/** data, card, theme, tooltip 정의. tooltip은 차트 37종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
 function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" | "theme" | "tooltip", JSONSchema> {
   const tip = common.find((o) => o.type === "tooltip");
   return {
@@ -198,6 +222,7 @@ export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS,
       options: { type: "object", properties: opts, additionalProperties: false },
       card: { $ref: "#/$defs/card" },
       theme: { $ref: "#/$defs/theme" },
+      ...(FACET_TYPES.includes(def.type) ? { facet: facetSchema(t) } : {}),
     },
     additionalProperties: false,
   };

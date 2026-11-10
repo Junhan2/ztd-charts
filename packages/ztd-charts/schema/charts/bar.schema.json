@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/ztd-charts/schema/charts/bar.schema.json",
   "title": "Bar chart",
-  "description": "Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
+  "description": "Grouped, stacked, 100%, diverging and horizontal bars, with optional lines on the same axis. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
   "type": "object",
   "required": [
     "type",
@@ -70,16 +70,17 @@
       "type": "object",
       "properties": {
         "layout": {
-          "description": "How series are arranged",
+          "description": "How series are arranged. \"diverging\" stacks the negative series left of a zero line and the rest right of it, for Likert surveys, agree and disagree splits and population pyramids",
           "default": "grouped",
           "enum": [
             "grouped",
             "stacked",
-            "percent"
+            "percent",
+            "diverging"
           ]
         },
         "orientation": {
-          "description": "Direction",
+          "description": "Direction. Horizontal by default with layout \"diverging\"",
           "default": "vertical",
           "enum": [
             "vertical",
@@ -87,7 +88,22 @@
           ]
         },
         "sort": {
-          "description": "Sort by value (single series)",
+          "description": "true sorts by value (single series). With layout \"diverging\", \"positive\" or \"negative\" sorts rows by that side's total, largest first",
+          "default": false
+        },
+        "negative": {
+          "description": "Layout \"diverging\": series drawn left of zero (below when vertical), from the zero line outward. A y field name for wide data or a series value for long data. Other series go right in data order, and values that are already negative stay left. For example [\"Disagree\", \"Strongly disagree\"]",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "neutral": {
+          "description": "Layout \"diverging\": one series split in half across the zero line, such as \"Neutral\"",
+          "type": "string"
+        },
+        "percent": {
+          "description": "Layout \"diverging\": each segment is its share of the row's total of absolute values",
           "default": false,
           "type": "boolean"
         },
@@ -278,6 +294,33 @@
     },
     "theme": {
       "$ref": "#/$defs/theme"
+    },
+    "facet": {
+      "type": "object",
+      "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+      "required": [
+        "by"
+      ],
+      "properties": {
+        "by": {
+          "type": "string",
+          "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+        },
+        "scale": {
+          "enum": [
+            "shared",
+            "free"
+          ],
+          "default": "shared",
+          "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

@@ -1,10 +1,12 @@
 import { parseCSV } from "../data/parse";
-import { hasField, numGetter, toNumber } from "../data/accessor";
+import { hasField, numGetter, strGetter, toNumber, uniq } from "../data/accessor";
 import { markPercentile } from "../data/percentile";
 import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
+import { mergedAway, resolveGrid, TILE_MAPS, tileMatcher, tileNames, type TileDef } from "../layout/tileGrid";
+import { HIGHLIGHT_KEYWORDS } from "../core/highlight";
 import { DMY_RE, ISO_DATE_RE, TEMPLATE_NAMES, TEMPLATE_SLOT, isDateText, isoDay, toDate } from "../core/format";
 import { plural } from "../core/i18n";
-import { META, legendToggles, specTemplate } from "./meta";
+import { FACET_MAX, FACET_TYPES, META, legendToggles, specTemplate } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
@@ -171,7 +173,7 @@ function checkBand(type: string, enc: Record<string, unknown>, opts: Record<stri
  * 같은 x(긴 표는 같은 x와 계열)가 여러 행이면 차트는 더해서 그려요. 비율, 평균처럼 더하면 안 되는 값일 수 있어 알려요.
  * aggregate를 정했으면 묻지 않아요. 큰 표는 앞 10만 행만 봐요
  */
-function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report, facetBy?: string): void {
   if (!rows || rows.length < 2 || opts.aggregate !== undefined) return;
   const xf = fieldOf(enc, "x");
   const sf = !Array.isArray(enc.y) && typeof enc.series === "string" ? enc.series : null;
@@ -185,7 +187,9 @@ function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unkn
     if (isBlank(xv)) continue;
     const x = String(xv);
     // 계열이 있으면 x 길이를 앞에 붙여 이어요 (x와 계열 이름의 경계가 어디든 다른 짝과 겹치지 않게)
-    const key = sf ? `${x.length}:${x}${String(r[sf] ?? "")}` : x;
+    // facet이 있으면 패널마다 따로 그려서 패널 값도 키 앞에 붙여요 (지역마다 같은 주는 더하지 않아요)
+    const panel = facetBy ? String(r[facetBy] ?? "") : "";
+    const key = `${facetBy ? `${panel.length}:${panel}` : ""}${sf ? `${x.length}:${x}${String(r[sf] ?? "")}` : x}`;
     const n = (seen.get(key) ?? 0) + 1;
     seen.set(key, n);
     if (n !== 2) continue;
@@ -351,6 +355,44 @@ function checkLogScale(enc: Record<string, unknown>, o: Record<string, unknown>,
   if (n) warn("options.yScale", "nonpositive_log", t(`${plural(n, "value")} at or below 0 ${n === 1 ? "is" : "are"} left out, because a log scale cannot show them (${listText(shown, n, t)})`, `로그 눈금은 0 이하를 그릴 수 없어서 0 이하 값 ${n}개는 빼고 그려요(${listText(shown, n, t)})`));
 }
 
+/**
+ * 막대의 sort 값과 양쪽 막대(layout "diverging") 검사. negative, neutral 이름이 계열(넓은 표는 y 필드, 긴 표는 series 값)에 없으면 오류예요.
+ * diverging이 아닌데 쓴 negative, neutral, percent, 쪽 정렬과 diverging에 그리지 않는 주석, 선은 알려요
+ */
+function checkDiverging(enc: Record<string, unknown>, o: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, err: Report, warn: Report): void {
+  const side = o.sort === "positive" || o.sort === "negative";
+  if (o.sort !== undefined && typeof o.sort !== "boolean" && !side) err("options.sort", "bad_option_type", t('options.sort must be true, false, "positive" or "negative"', 'options.sort 값은 true, false, "positive", "negative" 중 하나여야 해요'));
+  if (o.layout !== "diverging") {
+    for (const k of ["negative", "neutral", "percent"]) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is used only with layout "diverging"`, `options.${k} 옵션은 layout "diverging"에서만 써요`));
+    if (side) warn("options.sort", "ignored_option", t(`sort "${o.sort}" is used only with layout "diverging"`, `sort "${o.sort}" 값은 layout "diverging"에서만 써요`));
+    return;
+  }
+  if (o.orientation !== "horizontal" && Array.isArray(o.annotations) && o.annotations.length) warn("options.annotations", "annotations_ignored", t('Annotations are not drawn with layout "diverging"', '주석은 layout "diverging"에서 그리지 않아요'));
+  if (o.orientation !== "horizontal" && ([] as unknown[]).concat(enc.line ?? []).length) warn("encoding.line", "line_ignored", t('encoding.line is not drawn with layout "diverging"', 'encoding.line 선은 layout "diverging"에서 그리지 않아요'));
+  const sf = typeof enc.series === "string" ? enc.series : null;
+  if (!Array.isArray(enc.y) && !rows?.length) return;
+  const series = Array.isArray(enc.y) ? enc.y.map(String) : sf ? uniq((rows ?? []).map((r) => String(r?.[sf] ?? ""))) : [];
+  const names: [string, unknown][] = [...(Array.isArray(o.negative) ? o.negative.map((n, i): [string, unknown] => [`options.negative[${i}]`, n]) : []), ...(typeof o.neutral === "string" ? [["options.neutral", o.neutral] as [string, unknown]] : [])];
+  for (const [path, raw] of names) {
+    const name = String(raw);
+    // 가운데 계열은 0선 양쪽에 반씩이라 negative에 같이 넣으면 다른 계열 자리가 어긋나요
+    if (path !== "options.neutral" && name === o.neutral) {
+      err(path, "neutral_in_negative", t(`"${name}" is the neutral series, so it cannot also be in options.negative. Remove it from one of them`, `"${name}" 계열은 neutral이라 options.negative에 함께 넣을 수 없어요. 한쪽에서 빼 주세요`));
+      continue;
+    }
+    if (series.includes(name)) continue;
+    const near = closest(name, series);
+    const list = listText(series.slice(0, 8), series.length, t);
+    err(
+      path,
+      "series_not_found",
+      series.length
+        ? t(`"${name}" is not a series.${near ? ` Did you mean "${near}"?` : ""} Series: ${list}`, `"${name}" 계열이 없어요.${near ? ` "${near}"인가요?` : ""} 있는 계열: ${list}`)
+        : t(`"${name}" is not a series: this chart has one series. Set encoding.series, or y as an array of fields`, `"${name}" 계열이 없어요. 계열이 하나뿐이라 encoding.series나 y 필드 배열을 정해 주세요`),
+    );
+  }
+}
+
 /** 인코딩의 필드 이름. 문자열이 아니면 기본 이름(x, label, value 등) */
 function fieldOf(enc: Record<string, unknown>, k: string): string {
   return typeof enc[k] === "string" ? (enc[k] as string) : k;
@@ -399,6 +441,122 @@ function checkHistogram(rows: Record<string, unknown>[] | null, enc: Record<stri
   }
 }
 
+/** 글자 목록을 따옴표로 묶어 앞 5개만 (나머지는 개수로) */
+function quoted(names: string[], t: (en: string, ko: string) => string): string {
+  return listText(names.slice(0, 5).map(cellText), names.length, t);
+}
+
+/**
+ * 타일 격자 지도 검사: options.map(내장 이름이나 타일 배열), 타일에 맞지 않는 행(가장 가까운 이름을 제안), kr-sido 데이터의 광주, 전남(2026-07-01 통합),
+ * 같은 타일에 맞는 행이 여럿, 강조할 지역 이름
+ */
+function checkTileMap(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const map = o.map ?? "kr-sido";
+  const builtins = TILE_MAPS.map((m) => `"${m}"`).join(", ");
+  if (typeof map === "string") {
+    if (!TILE_MAPS.includes(map)) {
+      const near = closest(map, TILE_MAPS);
+      err("options.map", "unknown_tile_map", t(`There is no tile grid "${map}".${near ? ` Did you mean "${near}"?` : ""} Built-in grids: ${builtins}, or pass your own tiles [{ id, label, row, col }]`, `"${map}" 타일 격자는 없어요.${near ? ` "${near}"인가요?` : ""} 내장 격자: ${builtins}. 직접 만든 타일 [{ id, label, row, col }]도 받아요`));
+      return;
+    }
+  } else if (!Array.isArray(map) || !map.length) {
+    err("options.map", "bad_tile_map", t(`options.map must be a built-in grid (${builtins}) or a non-empty array of tiles [{ id, label, row, col }]`, `options.map 값은 내장 격자(${builtins})나 타일 배열 [{ id, label, row, col }]이어야 해요`));
+    return;
+  }
+  // 사용자 격자에서 차트가 빼는 타일을 그대로 오류로 알려요 (빼는 규칙은 resolveGrid 한 곳에 있어요)
+  let dropped = false;
+  const grid =
+    resolveGrid(map, ({ index: i, reason, other }) => {
+      dropped = true;
+      const tile = (map as TileDef[])[i];
+      if (reason === "shape") err(`options.map[${i}]`, "bad_tile", t("Each tile must be { id: string, row: integer from 0, col: integer from 0, label?: string, aliases?: string[] }", "타일마다 { id: 문자열, row: 0 이상 정수, col: 0 이상 정수, label?: 문자열, aliases?: 문자열 배열 } 꼴이어야 해요"));
+      else if (reason === "id") err(`options.map[${i}].id`, "duplicate_tile_id", t(`Tile id "${tile.id}" is used twice`, `타일 id "${tile.id}"가 두 번 나와요`));
+      else err(`options.map[${i}]`, "duplicate_tile_cell", t(`Tiles "${other}" and "${tile.id}" are both on row ${tile.row}, col ${tile.col}`, `"${other}" 타일과 "${tile.id}" 타일이 모두 ${tile.row}행 ${tile.col}열에 있어요`));
+    }) ?? [];
+  if (dropped) return;
+  const match = tileMatcher(grid);
+  const h = o.highlight;
+  if (typeof h === "string" && !HIGHLIGHT_KEYWORDS.includes(h) && match(h) < 0) warn("options.highlight", "highlight_not_found", t(`Could not find a tile named "${h}" to highlight`, `강조할 "${h}" 타일을 찾지 못했어요`));
+  if (!rows?.length) return;
+  const field = fieldOf(enc, "region");
+  // 이 격자에서 합쳐져 사라진 지역(kr-sido의 광주, 전남): 맞지 않는 행 대신 통합을 알려요
+  const merger = mergedAway(map);
+  const counts = new Array<number>(grid.length).fill(0);
+  const unmatched = new Set<string>();
+  const merged = new Set<string>();
+  for (const r of rows) {
+    const name = r && typeof r === "object" ? r[field] : undefined;
+    if (isBlank(name)) continue;
+    const k = match(name);
+    if (k >= 0) counts[k]++;
+    else if (merger?.is(name)) merged.add(String(name));
+    else unmatched.add(String(name));
+  }
+  if (merged.size)
+    warn(
+      "encoding.region",
+      "tile_merged_region",
+      t(
+        `${quoted([...merged], t)} ${merged.size === 1 ? "is" : "are"} drawn as no data: Gwangju and Jeollanam-do merged into Jeonnam-Gwangju (전남광주통합특별시) on 2026-07-01, so "kr-sido" has one tile for both. For data from before the merger, use options.map "${merger!.before}"`,
+        `${quoted([...merged], t)} 행은 빈 타일로 그려요. 광주와 전남은 2026-07-01에 전남광주통합특별시로 합쳐져서 "kr-sido"에는 타일이 하나예요. 통합 전 데이터면 options.map을 "${merger!.before}"로 정해 주세요`,
+      ),
+    );
+  if (unmatched.size) {
+    const names = grid.flatMap(tileNames);
+    const list = [...unmatched].map((name) => {
+      const near = closest(name, names);
+      return near ? t(`${cellText(name)} (did you mean "${near}"?)`, `${cellText(name)}("${near}"인가요?)`) : cellText(name);
+    });
+    const n = unmatched.size;
+    warn("encoding.region", "tile_unmatched", t(`${plural(n, "region matches", "regions match")} no tile and ${n === 1 ? "is" : "are"} left out: ${listText(list.slice(0, 5), n, t)}`, `타일에 맞지 않는 지역 ${n}개는 빼고 그려요: ${listText(list.slice(0, 5), n, t)}`));
+  }
+  const twice = grid.filter((_, i) => counts[i] > 1).map((tile) => tile.labelKo ?? tile.label ?? tile.id);
+  if (twice.length) warn("encoding.region", "tile_duplicate", t(`More than one row matches ${quoted(twice, t)}. The last row is drawn`, `${quoted(twice, t)}에 맞는 행이 여럿이에요. 마지막 행으로 그려요`));
+}
+
+/**
+ * spec.facet 검사: 객체 꼴, 그릴 수 있는 차트(line, area, bar, scatter), by 필드가 데이터에 있는지(가까운 이름을 권해요),
+ * columns, scale, 패널이 24개를 넘으면 빠지는 수. 쓸 수 있는 by 필드 이름을 돌려줘요 (중복 x 검사가 패널마다 봐요)
+ */
+function checkFacet(facet: unknown, type: string, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, fields: string[], t: (en: string, ko: string) => string, err: Report, warn: Report): string | undefined {
+  // 양쪽 막대는 양쪽을 각자 데이터 끝에 맞춰서 같은 값 축이 정해지지 않아요. 작은 여러 개는 쓰지 않아요 (<Chart>도 차트 하나로 그려요)
+  if (type === "bar" && opts.layout === "diverging") err("facet", "facet_unsupported", t('facet does not work with layout "diverging". Draw one diverging bar chart, or split by series', 'facet은 layout "diverging"과 함께 쓰지 않아요. 양쪽 막대 하나로 그리거나 계열로 나눠 주세요'));
+  if (!facet || typeof facet !== "object" || Array.isArray(facet)) {
+    err("facet", "bad_facet", t('facet must be an object such as { by: "region" }', 'facet은 { by: "region" } 같은 객체여야 해요'));
+    return undefined;
+  }
+  const list = FACET_TYPES.join(", ");
+  if (!FACET_TYPES.includes(type)) err("facet", "facet_unsupported", t(`facet works on ${list} charts, not on ${type}`, `facet은 ${list} 차트에서만 써요(지금 ${type})`));
+  const { by, columns, scale, ...rest } = facet as Record<string, unknown>;
+  for (const k of Object.keys(rest)) warn(`facet.${k}`, "unknown_facet_key", t(`facet has no key "${k}". Keys: by, columns, scale`, `facet에는 "${k}" 키가 없어요. 키: by, columns, scale`));
+  if (columns !== undefined && !(Number.isInteger(columns) && (columns as number) >= 1)) err("facet.columns", "bad_facet", t("facet.columns must be a whole number of 1 or more", "facet.columns 값은 1 이상의 정수여야 해요"));
+  if (scale !== undefined && scale !== "shared" && scale !== "free") err("facet.scale", "bad_enum", t('facet.scale must be "shared" or "free"', 'facet.scale 값은 "shared"나 "free"여야 해요'));
+  if (typeof by !== "string" || !by) {
+    err("facet.by", "bad_field", t("facet.by must be a field name (string)", "facet.by 값은 필드 이름(문자열)이어야 해요"));
+    return undefined;
+  }
+  if (!rows?.length) return by;
+  if (!rows.slice(0, 200).some((r) => r && typeof r === "object" && hasField(r, by))) {
+    const near = closest(by, fields);
+    err("facet.by", "field_not_found", t(`Field "${by}" is not in the data.${near ? ` Did you mean "${near}"?` : ""} Available fields: ${fields.join(", ")}`, `"${by}" 필드가 데이터에 없어요.${near ? ` "${near}"인가요?` : ""} 있는 필드: ${fields.join(", ")}`));
+    return undefined;
+  }
+  // 그리는 쪽(facetGroups)과 같은 읽기로 세요 (점 경로, 날짜 값)
+  // 빈 값("", null, 필드 없음)은 한 패널("(blank)")로 묶여요. 행이 빠지는 건 패널이 24개를 넘을 때뿐이라 그때 빠지는 값과 행 수를 알려요
+  const read = strGetter<Record<string, unknown>>(by, by);
+  const seen = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const v = read(r ?? {}, i);
+    seen.set(v, (seen.get(v) ?? 0) + 1);
+  });
+  const n = seen.size;
+  if (n > FACET_MAX) {
+    const left = [...seen.values()].slice(FACET_MAX).reduce((s, c) => s + c, 0);
+    warn("facet.by", "facet_many_panels", t(`"${by}" has ${n} values. Only the first ${FACET_MAX} panels are drawn, so ${plural(n - FACET_MAX, "value is", "values are")} (${plural(left, "row")}) left out`, `"${by}" 값이 ${n}개예요. 앞의 ${FACET_MAX}개 패널만 그려서 ${n - FACET_MAX}개 값(${left}행)은 빠져요`));
+  }
+  return by;
+}
+
 /**
  * 스펙 검사. 오류(렌더 불가)와 경고(동작은 하지만 의심)를 나눠 돌려줘요.
  * 메시지는 영어, { lang: "ko" }면 한글. code와 path는 언어와 상관없이 같아요.
@@ -419,7 +577,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   }
   const spec = input as Partial<ChartSpec> & Record<string, unknown>;
   for (const k of Object.keys(spec)) {
-    if (!["$schema", "type", "data", "encoding", "options", "card", "theme"].includes(k)) warn(k, "unknown_key", t(`Unknown key "${k}" is ignored`, `"${k}" 키는 알 수 없어서 무시해요`));
+    if (!["$schema", "type", "data", "encoding", "options", "card", "theme", "facet"].includes(k)) warn(k, "unknown_key", t(`Unknown key "${k}" is ignored`, `"${k}" 키는 알 수 없어서 무시해요`));
   }
 
   const types = CHARTS.map((c) => c.type).join(", ");
@@ -602,6 +760,12 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         }
       } else if (o.type === "highlight" && !(vt === "number" || vt === "string" || (vt === "array" && (v as unknown[]).every((x) => typeof x === "number" || typeof x === "string")))) bad("an index, a name or an array of them", "인덱스나 이름, 또는 그 배열이어야");
     }
+    // 기준선은 숫자 y가 있어야 그려요 ({ value: 30 }처럼 키를 틀리면 그리지 않아요)
+    if (Array.isArray(options.referenceLines) && def.options.some((o) => o.name === "referenceLines"))
+      options.referenceLines.forEach((r, i) => {
+        const y = r && typeof r === "object" ? (r as { y?: unknown }).y : undefined;
+        if (!(typeof y === "number" && Number.isFinite(y))) err(`options.referenceLines[${i}]`, "bad_reference_line", t('A reference line needs a number y, such as { y: 30, label: "Target" }, so this one is not drawn', '기준선에는 { y: 30, label: "목표" }처럼 숫자 y가 있어야 해요. 이 기준선은 그리지 않아요'));
+      });
     if (def.type === "bar" && options.orientation === "horizontal" && Array.isArray(options.annotations) && options.annotations.length)
       warn("options.annotations", "annotations_ignored", t("Annotations are drawn on vertical bars only", "주석은 세로 막대에서만 그려요"));
     // 툴팁 틀의 {이름}이 데이터 열에 없으면 그 줄은 늘 빠져요
@@ -622,7 +786,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         err("options.locale", "bad_locale", t(`options.locale "${options.locale}" is not a locale. Use a tag such as "en-US" or "ko-KR"`, `options.locale "${options.locale}" 값은 로캘이 아니에요. "en-US", "ko-KR" 같은 값을 써 주세요`));
       }
     }
-    if (rows && rows.length && typeof options.highlight === "string" && !["max", "min", "first", "last", "none"].includes(options.highlight)) {
+    // 타일 격자 지도는 지역 이름표로 강조할 타일을 찾아요 (checkTileMap)
+    if (rows && rows.length && def.type !== "tileMap" && typeof options.highlight === "string" && !HIGHLIGHT_KEYWORDS.includes(options.highlight)) {
       const h = options.highlight;
       // 넓은 표(y가 열 배열)에서는 열 이름이 계열 이름이에요. 데이터 값에 없어도 강조돼요
       const seriesColumn = Object.values(enc).some((v) => Array.isArray(v) && v.includes(h));
@@ -635,14 +800,17 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
     skylineIssues(rows, enc, options, fields, (isError, path, code, [en, ko]) => (isError ? err : warn)(path, code, t(en, ko)));
 
   const optsObj = options && typeof options === "object" && !Array.isArray(options) ? (options as Record<string, unknown>) : {};
+  const facetBy = spec.facet === undefined ? undefined : checkFacet(spec.facet, def.type, optsObj, rows, fields, t, err, warn);
   if (def.type === "line" || def.type === "area") checkBand(def.type, enc, optsObj, rows, t, err, warn);
   // 같은 x를 합쳐 그리는 차트는 aggregate 옵션이 있는 차트예요
-  if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn);
+  if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn, facetBy);
   if (def.type === "pie" || def.type === "donut") checkSlices(enc, optsObj, rows, t, warn);
   if (def.type === "slope") checkSlope(enc, optsObj, rows, t, warn);
   // 날짜를 읽는 차트는 dayFirst 옵션이 있는 차트예요
   if (def.options.some((o) => o.name === "dayFirst")) checkDates(def.type, enc, optsObj, rows, t, warn);
   if (def.type === "histogram") checkHistogram(rows, enc, optsObj, binned, err, warn, t);
+  if (def.type === "tileMap") checkTileMap(rows, enc, optsObj, err, warn, t);
+  if (def.type === "bar") checkDiverging(enc, optsObj, rows, t, err, warn);
   if (def.options.some((o) => o.name === "yScale")) checkLogScale(enc, optsObj, rows, t, warn);
 
   // card

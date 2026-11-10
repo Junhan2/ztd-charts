@@ -239,11 +239,18 @@ const ENTRIES: ChartEntry[] = [
     type: "bar",
     level: "basic",
     group: "comparison",
-    summary: "Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis",
+    summary: "Grouped, stacked, 100%, diverging and horizontal bars, with optional lines on the same axis",
     useWhen: "Comparing sizes across categories precisely",
     avoidWhen: "The flow over time is the point (a line works better)",
     why: "With one series only the largest bar gets color; with several, only the highlighted series.",
-    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), AGGREGATE, op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]"), HIDDEN],
+    options: [
+      op("layout", "enum", 'How series are arranged. "diverging" stacks the negative series left of a zero line and the rest right of it, for Likert surveys, agree and disagree splits and population pyramids', { enum: ["grouped", "stacked", "percent", "diverging"], default: "grouped" }),
+      op("orientation", "enum", 'Direction. Horizontal by default with layout "diverging"', { enum: ["vertical", "horizontal"], default: "vertical" }),
+      op("sort", "any", `true sorts by value (single series). With layout "diverging", "positive" or "negative" sorts rows by that side's total, largest first`, { default: false }),
+      op("negative", "array", 'Layout "diverging": series drawn left of zero (below when vertical), from the zero line outward. A y field name for wide data or a series value for long data. Other series go right in data order, and values that are already negative stay left. For example ["Disagree", "Strongly disagree"]', { items: "string" }),
+      op("neutral", "string", 'Layout "diverging": one series split in half across the zero line, such as "Neutral"'),
+      op("percent", "boolean", `Layout "diverging": each segment is its share of the row's total of absolute values`, { default: false }),
+      AGGREGATE, op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]"), HIDDEN],
     example: { data: S.barSample, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "Overseas" }, card: { subtitle: "Revenue by quarter (100M KRW)", takeaway: "Overseas grows its share every quarter", legend: "auto" } },
   },
   {
@@ -509,6 +516,24 @@ const ENTRIES: ChartEntry[] = [
     canvasAbove: 1500,
     scalable: true,
   },
+  {
+    type: "tileMap",
+    level: "intermediate",
+    group: "map",
+    summary: "One equal tile per region, placed roughly where it is and shaded by its value",
+    useWhen: "Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones",
+    avoidWhen: "Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
+    why: "Seoul and Sejong read at the same size as the largest provinces, which a geographic map cannot do. No boundary data and no projection, so it adds no dependency. One accent color in steps, and the highest tile gets an outline.",
+    options: [
+      op("map", "any", 'Tile grid. "kr-sido" is South Korea\'s 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; "kr-sido-2025" is the 17 regions before that. Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11', { default: "kr-sido" }),
+      op("legend", "boolean", "Show the color legend", { default: true }),
+      op("legendLabels", "array", "Names at both ends of the legend", { items: "string" }),
+      COLOR_REVERSE,
+      op("colorSteps", "number", "Number of color steps. The legend shows each step", { default: 5, min: 2, max: 12 }),
+      op("labels", "enum", 'Language of region names on the Korean grids: on tiles, in the tooltip, the screen reader sentence and the table. "auto" uses the Korean short names when a matched region value in the data contains Hangul, otherwise the locale\'s language. Numbers and other text follow locale, and custom grids keep their own labels', { enum: ["auto", "ko", "en"], default: "auto" }),
+    ],
+    example: { data: S.tileMapSample, encoding: { region: "sido", value: "rate" }, options: { map: "kr-sido", unit: "%" }, card: { subtitle: "Addresses with next-day delivery, by region (%)", takeaway: "Sejong leads at 98%" } },
+  },
 ];
 
 /** 키 순서는 ChartDef 그대로예요 (CLI, MCP, 스키마 파일이 이 순서로 써요) */
@@ -534,7 +559,7 @@ function fill({ type, level, group, summary, useWhen, avoidWhen, why, options, e
   };
 }
 
-/** 차트 34종. 글과 예시는 영어, 한글은 localizeDef(def, "ko") 또는 chartsIn("ko") */
+/** 차트 37종. 글과 예시는 영어, 한글은 localizeDef(def, "ko") 또는 chartsIn("ko") */
 export const CHARTS: ChartDef[] = /* @__PURE__ */ ENTRIES.map(fill);
 
 export const CHART_TYPES = /* @__PURE__ */ CHARTS.map((c) => c.type);

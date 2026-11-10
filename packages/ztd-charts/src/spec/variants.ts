@@ -61,6 +61,7 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
   skyline: [v("rate-strip", "Rate strip", { frontRate: "strip" }), v("shallow", "Shallow blocks", { depth: 0.16 }), v("no-wall", "Without wall", { wall: false }), v("textured", "Texture on every row", { texture: "all" })],
   histogram: [v("dots", "Dots", { variant: "dots" }), v("step", "Outline", { variant: "step" }), v("log", "Log bins", { log: true }), v("kde", "Density curve", { kde: true }), v("no-marks", "Without percentile lines", { marks: [] })],
   scatter: [v("fit", "Trend line", { fit: "linear" }), v("quadrants", "Quadrants", { refLines: { x: 5, y: 2000 } }), v("jitter", "Jitter", { jitter: { amount: 0.3 } })],
+  tileMap: [v("three-steps", "Three color steps", { colorSteps: 3 }), v("lowest-dark", "Lowest value darkest", { colorReverse: true }), v("no-legend", "Without legend", { legend: false })],
 };
 
 /** 차트의 변형을 한 언어로. type은 정식 이름(레지스트리 type)이고, 없으면 빈 배열 */

@@ -33,4 +33,5 @@ export const VARIANT_NAMES_KO: Record<string, Record<string, string>> = {
   skyline: { "rate-strip": "비율 띠", shallow: "얕은 블록", "no-wall": "뒷벽 없이", textured: "모든 줄에 무늬" },
   histogram: { dots: "점", step: "윤곽", log: "로그 구간", kde: "밀도 곡선", "no-marks": "분위 선 없음" },
   scatter: { fit: "추세선", quadrants: "사분면", jitter: "흔들림" },
+  tileMap: { "three-steps": "색 3단계", "lowest-dark": "낮은 값을 진하게", "no-legend": "범례 없이" },
 };

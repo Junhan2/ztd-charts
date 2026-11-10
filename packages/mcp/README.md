@@ -1,12 +1,12 @@
 # ztd-charts-mcp
 
-A stdio MCP server for ztd charts, so an AI agent can look up the 36 charts, check a chart spec and render it.
+A stdio MCP server for ztd charts, so an AI agent can look up the 37 charts, check a chart spec and render it.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [GitHub](https://github.com/Junhan2/ztd-charts)
 
 ## Tools
 
-- `list_charts`: the 36 chart types with level, group, a one-line summary, when to use or avoid them, and their encoding channels.
+- `list_charts`: the 37 chart types with level, group, a one-line summary, when to use or avoid them, and their encoding channels.
 - `get_chart_schema`: the JSON Schema for one chart type, with a complete example spec and a React snippet.
 - `validate_spec`: errors and warnings with JSON paths, such as an unknown type, a missing field or a wrong option.
 - `render_chart`: a PNG image and SVG of the spec in its card, plus React code ready to paste. Data can be inline rows, CSV text or a URL.

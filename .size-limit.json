@@ -21,7 +21,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.9 KB"
+    "limit": "13.96 KB"
   },
   {
     "name": "FunnelChart",
@@ -45,7 +45,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "12.5 KB"
+    "limit": "12.54 KB"
   },
   {
     "name": "Treemap",
@@ -117,7 +117,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "14.2 KB"
+    "limit": "14.3 KB"
   },
   {
     "name": "RadarChart",
@@ -141,7 +141,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.2 KB"
+    "limit": "16.32 KB"
   },
   {
     "name": "LineChart",
@@ -153,7 +153,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "26.1 KB"
+    "limit": "26.35 KB"
   },
   {
     "name": "AreaChart",
@@ -165,7 +165,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "26.1 KB"
+    "limit": "26.24 KB"
   },
   {
     "name": "StreamGraph",
@@ -177,7 +177,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.3 KB"
+    "limit": "16.46 KB"
   },
   {
     "name": "BarChart",
@@ -189,7 +189,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "20.6 KB"
+    "limit": "21.9 KB"
   },
   {
     "name": "RadialBarChart",
@@ -225,7 +225,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "12.7 KB"
+    "limit": "12.8 KB"
   },
   {
     "name": "Sparkline",
@@ -369,7 +369,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.6 KB"
+    "limit": "13.62 KB"
   },
   {
     "name": "CandlestickChart",
@@ -429,7 +429,19 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.0 KB"
+    "limit": "19.11 KB"
+  },
+  {
+    "name": "TileMap",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ TileMap }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "14.9 KB"
   },
   {
     "name": "StatCard",
@@ -489,7 +501,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "90.7 KB"
+    "limit": "98.2 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -501,7 +513,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "116.7 KB"
+    "limit": "127.43 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -513,7 +525,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "29.3 KB"
+    "limit": "33.9 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",
@@ -521,6 +533,6 @@
       "packages/cli/dist/client/react.js",
       "packages/cli/dist/client/area.js"
     ],
-    "limit": "95.5 KB"
+    "limit": "99.12 KB"
   }
 ]

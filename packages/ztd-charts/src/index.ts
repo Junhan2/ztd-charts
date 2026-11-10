@@ -19,6 +19,8 @@ export { useChartData, fetchChartData, readResponse, type UseChartDataOptions, t
 export { ChartCard, ChartGrid, ChartState, Legend, Badge, type ChartCardProps, type ChartGridProps, type ChartStateProps, type LegendItem, type LegendProps, type Level } from "./components/ChartCard";
 export { DownloadButtons, type DownloadButtonsProps, type DownloadFormat } from "./components/download";
 export { StatCard, type StatCardProps } from "./components/StatCard";
+export { ChartFacets, type ChartFacetsProps } from "./components/ChartFacets";
+export type { FacetType, FacetScale } from "./core/facet";
 export { ReplayContext } from "./components/replay";
 
 export { PieChart, DonutChart, type PieChartProps, type DonutChartProps } from "./charts/pie";
@@ -54,11 +56,12 @@ export { CandlestickChart, type CandlestickChartProps } from "./charts/candlesti
 export { SegmentedBar, type SegmentedBarProps } from "./charts/segmented";
 export { SkylineChart, type SkylineChartProps } from "./charts/skyline";
 export { HistogramChart, type HistogramChartProps, type HistogramThreshold } from "./charts/histogram";
+export { TileMap, type TileMapProps } from "./charts/tileMap";
 export { type XRange } from "./core/brush";
 
 export { templateTooltip } from "./charts/tooltipTemplate";
 export { Chart, CHART_COMPONENTS, encodingToProps, autoLegend, resolveDef, type ChartProps } from "./charts/Chart";
-export type { ChartSpec, SpecCard, SpecData, ChartDef, ValidationResult, SpecIssue } from "./spec/types";
+export type { ChartSpec, SpecCard, SpecData, SpecFacet, ChartDef, ValidationResult, SpecIssue } from "./spec/types";
 // resolveDef 와 encodingToProps 의 타입에 나와요. 내보내지 않으면 쓰는 쪽의 선언 파일 생성이 TS2742 로 멈출 수 있어요
 export type { ChartMeta } from "./spec/meta";
 export { validateSpec, formatIssues } from "./spec/validate";
@@ -68,3 +71,4 @@ export { stack, insideOut, type StackOffset } from "./layout/stack";
 export { sankeyLayout, type SankeyNode, type SankeyLink } from "./layout/sankey";
 export { chordLayout } from "./layout/chord";
 export { kde, boxStats, beeswarm, ranks, binEdges, binCounts, binIndex, dotUnit, type BoxStats, type BinOptions } from "./layout/stats";
+export { resolveGrid, tileMatcher, tileNeighbor, TILE_MAPS, type TileDef } from "./layout/tileGrid";

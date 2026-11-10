@@ -49,7 +49,7 @@ export function capTipRows(rows: TooltipRow[], more: (n: number) => string): Too
   return rows.length > MAX_TIP_ROWS ? [...rows.slice(0, MAX_TIP_ROWS), { label: more(rows.length - MAX_TIP_ROWS), value: "" }] : rows;
 }
 /** 화면에서 숨기고 스크린리더만 읽게. 인라인이라 CSS가 들어오기 전(SSR, JS 없음)에도 숨어요 */
-const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
+export const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 
 export function ChartFrame<T>(props: ChartFrameProps<T>) {
   const { c, events } = props;

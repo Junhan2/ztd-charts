@@ -7,6 +7,7 @@ import { resolveHighlight } from "../core/highlight";
 import { lazyArray } from "../core/lazy";
 import type { Mark } from "../core/motion";
 import { colorScaleOf, scaleSwatch, scaleT } from "../core/palette";
+import { ScaleLegend } from "../core/scaleLegend";
 import { extent, robustMax } from "../core/scale";
 import { textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
@@ -222,21 +223,7 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
       }}
       underlay={useCanvas ? <CanvasLayer width={W} height={H} draw={draw} progress={prog} version={c.sig} /> : undefined}
     >
-      {props.legend !== false ? (
-        <g aria-hidden="true">
-          {Array.from({ length: nLegend }, (_, k) => {
-            const s = scaleSwatch(p, center === undefined ? k / (nLegend - 1) : (2 * k) / (nLegend - 1) - 1, 0.08, scale);
-            const lx = W - nLegend * 14 - textWidth(ll[1], 10) - 6 + k * 14;
-            return <rect key={k} x={lx} y={3} width={12} height={9} rx={2} fill={s.fill} opacity={s.opacity} />;
-          })}
-          <Txt x={W - nLegend * 14 - textWidth(ll[1], 10) - 10} y={7.5} anchor="end" size={10} fill={p.paint("muted")}>
-            {ll[0]}
-          </Txt>
-          <Txt x={W} y={7.5} anchor="end" size={10} fill={p.paint("muted")}>
-            {ll[1]}
-          </Txt>
-        </g>
-      ) : null}
+      {props.legend !== false ? <ScaleLegend p={p} right={W} steps={nLegend} scale={scale} labels={ll} min={0.08} /> : null}
       {!useCanvas
         ? m.items.map((it) => {
             const cl = it.data;

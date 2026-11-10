@@ -1,5 +1,8 @@
 import type { Highlight } from "./types";
 
+/** 이름 대신 쓰는 강조 낱말 (resolveHighlight가 받는 것과 같아요) */
+export const HIGHLIGHT_KEYWORDS: readonly string[] = ["max", "min", "first", "last", "none"];
+
 /**
  * 강조 대상을 인덱스 집합으로.
  * labels: 항목 라벨, values: 비교용 값

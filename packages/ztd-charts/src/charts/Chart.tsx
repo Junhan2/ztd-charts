@@ -1,19 +1,23 @@
 import { useMemo, useState, type ComponentType } from "react";
 import { ChartCard, ChartState, Legend, type LegendItem } from "../components/ChartCard";
+import { ChartFacets, type ChartFacetsProps } from "../components/ChartFacets";
+import type { FacetType } from "../core/facet";
 import { resolveHighlight } from "../core/highlight";
 import { langOf } from "../core/i18n";
-import { categoricalDotTokens, categoricalTokens } from "../core/palette";
+import { categorical, categoricalDots, legendColors } from "../core/palette";
+import { prepSeries, type Aggregate, type XType } from "../core/series";
 import type { ChartEvent, Highlight } from "../core/types";
 import { strGetter, uniq, numGetter } from "../data/accessor";
 import { useChartData } from "../data/useChartData";
 import { DownloadButtons } from "../components/download";
 import { templateTooltip } from "./tooltipTemplate";
-import { barLineFields, downloadFields, legendToggles, nameIn, resolveMeta, specLocale, specTemplate, TOGGLES, type ChartMeta } from "../spec/meta";
-import type { ChartSpec } from "../spec/types";
+import { barLineFields, downloadFields, FACET_TYPES, legendToggles, nameIn, resolveMeta, specLocale, specTemplate, TOGGLES, type ChartMeta } from "../spec/meta";
+import type { ChartSpec, SpecFacet } from "../spec/types";
 import { inlineRows } from "../spec/validate";
-import { ThemeProvider, useChartLocale, type ThemeInput } from "../theme/context";
-import { AreaChart, LineChart } from "./line";
+import { ThemeProvider, useChartLocale, type Painter, type ThemeInput } from "../theme/context";
+import { AreaChart, LineChart, lineSwatches } from "./line";
 import { BarChart, lineToken } from "./bar";
+import { divergingLead } from "../layout/stack";
 import { BeeswarmChart } from "./beeswarm";
 import { BoxPlot } from "./box";
 import { BubbleChart, ScatterChart } from "./bubble";
@@ -31,7 +35,7 @@ import { LollipopChart } from "./lollipop";
 import { MarimekkoChart } from "./marimekko";
 import { ParallelCoordinates } from "./parallel";
 import { ParetoChart } from "./pareto";
-import { DonutChart, groupOther, otherLabel, PieChart, sliceValue } from "./pie";
+import { DonutChart, groupOther, otherLabel, PieChart, sliceSwatches, sliceValue } from "./pie";
 import { GaugeChart, RadialBarChart } from "./radial";
 import { RadarChart } from "./radar";
 import { RidgelineChart } from "./ridgeline";
@@ -40,8 +44,9 @@ import { SegmentedBar } from "./segmented";
 import { SkylineChart } from "./skyline";
 import { SlopeChart } from "./slope";
 import { Sparkline } from "./sparkline";
-import { StreamGraph } from "./stream";
+import { StreamGraph, streamHighlight, streamOrder, streamSwatches } from "./stream";
 import { SunburstChart } from "./sunburst";
+import { TileMap } from "./tileMap";
 import { Treemap } from "./treemap";
 import { WaffleChart } from "./waffle";
 import { WaterfallChart } from "./waterfall";
@@ -84,6 +89,7 @@ export const CHART_COMPONENTS: Record<string, ComponentType<any>> = {
   skyline: SkylineChart,
   histogram: HistogramChart,
   scatter: ScatterChart,
+  tileMap: TileMap,
 };
 
 /**
@@ -130,7 +136,8 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const { kept, other } = isWaffle ? { kept: items, other: null } : groupOther(items, opt.other as number | undefined, (n, value) => ({ r: {}, label: otherLabel(langOf(locale), n), value }));
     const hi = resolveHighlight(h, kept.map((x) => x.r), kept.map((x) => x.label), kept.map((x) => x.value), isWaffle ? "first" : "max");
     const all = other ? [...kept, other] : kept;
-    const tokens = categoricalTokens(all.length, hi);
+    // 차트가 칠하는 색 함수 그대로 (와플은 categorical, 파이와 도넛은 colorMode에 따라)
+    const tokens = legendColors((p) => (isWaffle ? categorical(p, all.length, hi) : sliceSwatches(p, all.length, hi, opt.colorMode as "categorical" | "emphasis" | undefined)));
     return all.map((x, i) => ({ label: x.label, color: tokens[i] }));
   }
   if (def.type === "candlestick") {
@@ -145,7 +152,8 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const series = uniq(rows.map((r, i) => g(r, i)));
     if (series.length < 2) return [];
     // 차트와 같은 규칙: 색은 숨긴 계열까지 모든 계열로 정하고, 숨긴 계열은 범례에서만 빼요
-    const tokens = categoricalDotTokens(series.length, seriesHighlight(h, rows, series, g));
+    const dotHi = seriesHighlight(h, rows, series, g);
+    const tokens = legendColors((p) => categoricalDots(p, series.length, dotHi));
     return shown(series.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const })));
   }
   if (["marimekko", "area", "bar", "line", "stream", "radar"].includes(def.type)) {
@@ -158,17 +166,57 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     // 막대 위 선(차례 3 ⑪): 막대(highlight가 없으면 강조하지 않아요)와 선(첫 선 강조색, 나머지 회색)을 함께 적어요
     const lines = barLineFields(def.type, enc, opt);
     if (lines.length) {
-      const tokens = categoricalTokens(series.length, resolveHighlight(h as never, series as never[], series, series.map(() => 0), "none"));
+      const barHi = resolveHighlight(h as never, series as never[], series, series.map(() => 0), "none");
+      const tokens = legendColors((p) => categorical(p, series.length, barHi));
       const bars = series.length < 2 ? [{ label: String((Array.isArray(enc.y) ? enc.y[0] : enc.y) ?? "y"), color: "neutral" }] : series.map((s, i) => ({ label: s, color: tokens[i] }));
       return [...shown(bars), ...lines.map((label, i) => ({ label, color: lineToken(i), shape: "line" as const }))];
     }
     if (series.length < 2) return [];
-    const hi = resolveHighlight(h as never, series as never[], series, series.map(() => 0), "first");
-    if (def.type === "line" || def.type === "radar") return shown(series.map((s, i) => ({ label: s, color: hi.has(i) ? "accent" : "neutralStrong", shape: def.type === "line" ? ("line" as const) : ("square" as const) })));
-    const tokens = categoricalTokens(series.length, hi);
-    return shown(series.map((s, i) => ({ label: s, color: tokens[i] })));
+    // 양쪽 막대는 차트와 같은 기본 강조(가장 바깥 긍정 계열)
+    const diverging = def.type === "bar" && opt.layout === "diverging";
+    const lead = diverging && h === undefined ? divergingLead(series.length, Array.isArray(opt.negative) ? opt.negative.map((n) => series.indexOf(String(n))) : [], typeof opt.neutral === "string" ? series.indexOf(opt.neutral) : -1) : -1;
+    const hi = lead >= 0 ? new Set([lead]) : resolveHighlight(h as never, series as never[], series, series.map(() => 0), "first");
+    // 레이더는 강조만 accent 면, 나머지는 neutralStrong 테두리로 그려요
+    if (def.type === "radar") return shown(series.map((s, i) => ({ label: s, color: hi.has(i) ? "accent" : "neutralStrong", shape: "square" as const })));
+    // 범례 색은 차트가 칠하는 색 함수 그대로예요 (섞은 중간 단계까지): 라인, 영역은 lineSwatches, 스트림은 층 순서와 기본 강조(합이 가장 큰 계열)까지 같이, 막대와 마리메코는 categorical
+    const cm = opt.colorMode as "highlight" | "categorical" | undefined;
+    let draw = (p: Painter) => categorical(p, series.length, hi);
+    if (def.type === "line" || def.type === "area") draw = (p) => lineSwatches(p, series.length, hi, def.type === "area", cm);
+    if (def.type === "stream") {
+      const m = prepSeries(rows, enc.x as string | undefined, enc.y as never, enc.series as string | undefined, { xType: opt.xType as XType | undefined, locale, aggregate: opt.aggregate as Aggregate | undefined, dayFirst: opt.dayFirst as boolean | undefined });
+      const order = streamOrder(m.values, opt.reorder as boolean | undefined);
+      const sh = streamHighlight(h, m.series, m.values);
+      draw = (p) => streamSwatches(p, order, sh);
+    }
+    const tokens = legendColors(draw);
+    return shown(series.map((s, i) => ({ label: s, color: tokens[i], ...(def.type === "line" && { shape: "line" as const }) })));
   }
   return [];
+}
+
+/** 스펙의 facet이 그릴 수 있는 것이면 그 facet (line, area, bar, scatter. 양쪽 막대는 빼요). 아니면 undefined라 예전처럼 차트 하나를 그려요 */
+export function specFacet(spec: Pick<ChartSpec, "facet" | "options">, type: string): SpecFacet | undefined {
+  const f = spec.facet;
+  return f && typeof f === "object" && typeof f.by === "string" && FACET_TYPES.includes(type) && !(type === "bar" && spec.options?.layout === "diverging") ? f : undefined;
+}
+
+/** 스펙 facet과 차트 프롭(Chart가 만든 것)으로 <ChartFacets> 프롭. 크기, 강조, 묶음, 이름, 설명은 패널마다 정하려고 빼요. <Chart>와 서버 SVG가 같이 써요 */
+export function facetPropsOf(type: string, facet: SpecFacet, chartProps: Record<string, unknown>): Omit<ChartFacetsProps, "chart"> {
+  const { data, width, height, highlight, syncId, ariaLabel, description, ...rest } = chartProps;
+  return {
+    type: type as FacetType,
+    data: (data ?? []) as Record<string, unknown>[],
+    by: facet.by,
+    columns: facet.columns,
+    scale: facet.scale,
+    chartProps: rest,
+    width: width as number | undefined,
+    height: height as number | undefined,
+    highlight: highlight as Highlight,
+    syncId: syncId as string | undefined,
+    title: ariaLabel as string | undefined,
+    description: description as string | undefined,
+  };
 }
 
 export interface ChartProps {
@@ -248,7 +296,16 @@ export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONE
     });
   const h = (chartProps.height as number | undefined) ?? 220;
   // 데이터를 가진 채 다시 불러올 때(refreshMs)는 차트를 그대로 둬요. 다시 불러오기가 한 번 실패해도 이전 데이터가 있으면 차트를 보여 줘요
-  let body = remote && !rows.length && (st.loading || st.error || st.empty) ? <ChartState loading={st.loading} error={st.error} empty={st.empty} onRetry={st.reload} height={h} locale={explicit} /> : <Comp {...chartProps} />;
+  // 작은 여러 개(spec.facet): by 값마다 같은 차트를 한 칸씩. facet이 없으면 예전 그대로 차트 하나예요
+  const facet = specFacet(spec, def.type);
+  let body =
+    remote && !rows.length && (st.loading || st.error || st.empty) ? (
+      <ChartState loading={st.loading} error={st.error} empty={st.empty} onRetry={st.reload} height={h} locale={explicit} />
+    ) : facet ? (
+      <ChartFacets chart={Comp} {...facetPropsOf(def.type, facet, chartProps)} />
+    ) : (
+      <Comp {...chartProps} />
+    );
   if (spec.card) {
     const c = spec.card;
     const items = c.legend === "auto" || c.legend === "toggle" ? autoLegend(spec, rows, locale, toggle) : c.legend;

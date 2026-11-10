@@ -15,6 +15,18 @@ export interface ChartSpec {
   card?: SpecCard;
   /** "dark" | "light" 또는 토큰 객체 */
   theme?: string | Record<string, unknown>;
+  /** 작은 여러 개: by 값마다 같은 차트를 한 칸씩 그려요 (line, area, bar, scatter) */
+  facet?: SpecFacet;
+}
+
+/** spec.facet: 한 필드의 값마다 패널 하나 */
+export interface SpecFacet {
+  /** 패널을 나눌 필드. 값이 처음 나오는 순서로, 24개까지 */
+  by: string;
+  /** 한 줄 패널 수의 최대값. 없으면 패널이 140px 이상으로 들어가는 만큼 */
+  columns?: number;
+  /** "shared"(기본)면 모든 패널이 같은 값 축(날짜, 숫자 x도)을 써서 높이를 견줄 수 있어요. "free"면 패널마다 자기 데이터에 맞추고 값 축을 모두 그려요 */
+  scale?: "shared" | "free";
 }
 
 export type SpecData =
@@ -80,7 +92,7 @@ export interface OptionDef {
 export type Lang = ChartLang;
 
 /** 차트 묶음 id. 표시 이름은 GROUPS (labels.ts) */
-export type ChartGroup = "proportion" | "trend" | "comparison" | "distribution" | "relationship" | "flow" | "hierarchy" | "kpi";
+export type ChartGroup = "proportion" | "trend" | "comparison" | "distribution" | "relationship" | "flow" | "hierarchy" | "map" | "kpi";
 
 /** 수준 id. 표시 이름은 LEVELS (labels.ts) */
 export type ChartLevel = "basic" | "intermediate" | "advanced";

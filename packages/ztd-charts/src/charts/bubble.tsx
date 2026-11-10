@@ -57,6 +57,14 @@ interface PointChartProps<T> extends BaseChartProps<T> {
   xFormat?: BaseChartProps<T>["format"];
   /** "log"면 y축이 로그 눈금이에요(10, 100, 1,000이 같은 간격). 0 이하 값은 빼고 설명에 그 수를 적어요. 기본 "linear" */
   yScale?: "linear" | "log";
+  /** x 범위 고정 [처음, 끝]. 작은 여러 개(ChartFacets)가 패널의 축을 맞출 때 써요 */
+  xDomain?: [number, number];
+  /** y 범위 고정 [아래, 위]. 로그 눈금은 양 끝이 0보다 클 때만 써요 */
+  yDomain?: [number, number];
+  /** x축 눈금 글자. 기본 true. false면 글자만 빼고 자리는 둬요 */
+  showXAxis?: boolean;
+  /** y축 눈금 글자와 yLabel. 기본 true. false면 글자와 그 자리를 빼요 */
+  showYAxis?: boolean;
 }
 
 export interface BubbleChartProps<T = Row> extends PointChartProps<T> {
@@ -208,8 +216,9 @@ function PointChart<T>(props: PointProps<T>) {
   const [xmn, xmx] = ext.x;
   const [ymn, ymx] = ext.y;
   const yCount = Math.max(2, Math.round(H / 70));
-  const yDom = isLog ? fitLogDomain(plotExt.y[0], plotExt.y[1], yCount) : fitDomain(plotExt.y[0], plotExt.y[1], yCount, { zero: props.zero ?? false, pad: 0.08 });
-  const xDom = fitDomain(plotExt.x[0], plotExt.x[1], Math.max(2, Math.round(W / 110)), { zero: props.zero ?? false, pad: 0.06 });
+  const fixedY = props.yDomain && (!isLog || (props.yDomain[0] > 0 && props.yDomain[1] > 0)) ? props.yDomain : undefined;
+  const yDom = fixedY ?? (isLog ? fitLogDomain(plotExt.y[0], plotExt.y[1], yCount) : fitDomain(plotExt.y[0], plotExt.y[1], yCount, { zero: props.zero ?? false, pad: 0.08 }));
+  const xDom = props.xDomain ?? fitDomain(plotExt.x[0], plotExt.x[1], Math.max(2, Math.round(W / 110)), { zero: props.zero ?? false, pad: 0.06 });
   const yMaxAbs = Math.max(Math.abs(yDom[0]), Math.abs(yDom[1]));
   const xMaxAbs = Math.max(Math.abs(xDom[0]), Math.abs(xDom[1]));
   const yFmt = useMemo(() => makeTickFormatter(props.format, c.locale, yMaxAbs), [props.format, c.locale, yMaxAbs]);
@@ -221,7 +230,8 @@ function PointChart<T>(props: PointProps<T>) {
   // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
   const y = (isLog ? scaleLog : scaleLinear)(yDom, [H - bottom - pad, top + pad]);
   const yTicks = y.ticks(yCount);
-  const left = yAxisWidth(yTicks, yFmt, c.locale);
+  const showY = props.showYAxis !== false;
+  const left = showY ? yAxisWidth(yTicks, yFmt, c.locale) : 0;
   const x = scaleLinear(xDom, [left + 6 + pad, W - 8 - pad]);
   const [smn, smx] = ext.s;
   const rs = hasSize ? scaleSqrt([Math.min(0, smn), smx || 1], [rMin, rMax]) : () => rMin;
@@ -460,14 +470,14 @@ function PointChart<T>(props: PointProps<T>) {
       onKey={onKey}
       underlay={useCanvas ? <CanvasLayer width={W} height={H} draw={drawCanvas} progress={prog} version={c.sig} /> : undefined}
     >
-      {props.yLabel ? (
+      {props.yLabel && showY ? (
         <Txt x={left} y={6} size={10.5} fill={p.paint("muted")}>
           {props.yLabel}
         </Txt>
       ) : null}
-      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={W} fmt={yFmt} locale={c.locale} zero={false} />
+      <GridY p={p} ticks={yTicks} y={y} x0={left} x1={W} fmt={yFmt} locale={c.locale} zero={false} labels={showY} />
       <g aria-hidden="true">
-        {xTicks.map((t) => (
+        {(props.showXAxis === false ? [] : xTicks).map((t) => (
           <Txt key={t} x={x(t)} y={H - bottom + 13} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>
             {xFmt(t)}
           </Txt>

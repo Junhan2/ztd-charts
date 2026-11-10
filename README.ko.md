@@ -9,7 +9,7 @@
 
 <p align="center">
   보고서처럼 읽히는 React 애니메이션 차트예요.<br>
-  순수 SVG 차트 36종, 런타임 의존성 0, AI 에이전트가 바로 쓰는 JSON 스펙.
+  순수 SVG 차트 37종, 런타임 의존성 0, AI 에이전트가 바로 쓰는 JSON 스펙.
 </p>
 
 <p align="center">
@@ -89,9 +89,9 @@ import { Chart } from "ztd-charts";
 />;
 ```
 
-## 차트 36종
+## 차트 37종
 
-<a href="https://charts.ztd.app/docs/?lang=ko"><img src="docs/readme/gallery-ko.png" width="100%" alt="라이트 테마로 그린 차트 36종 전체, 파이와 도넛부터 히스토그램과 산점도까지"></a>
+<a href="https://charts.ztd.app/docs/?lang=ko"><img src="docs/readme/gallery-ko.png" width="100%" alt="라이트 테마로 그린 차트 37종 전체, 파이와 도넛부터 산점도와 타일 격자 지도까지"></a>
 
 | 묶음 | 차트 |
 |---|---|
@@ -102,6 +102,7 @@ import { Chart } from "ztd-charts";
 | 추이 | 라인(범위 띠 포함) · 영역 · 스트림그래프 · 스파크라인 · 캘린더 히트맵 · 범프 · 캔들스틱 · 스카이라인 |
 | 분포 | 박스 플롯(바이올린 포함) · 비스웜 · 릿지라인 · 히스토그램 |
 | 관계 | 히트맵 · 버블 · 산점도 · 평행 좌표 |
+| 지도 | 타일 격자 지도 |
 | KPI | 게이지 · 불릿 · 방사형 막대 |
 
 차트마다 바로 만져 보는 예시, 프롭, 복사할 코드가 있는 페이지가 [갤러리](https://charts.ztd.app/docs/?lang=ko)에 있어요. 왜 이 차트들을 골랐고 무엇을 뺐는지는 [차트 카탈로그](docs/catalog.ko.md)에 있어요.

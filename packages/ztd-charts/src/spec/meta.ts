@@ -51,6 +51,7 @@ const CH_skyline: ChannelDef[] = [
   ch("front", "number", false, "Front row fields: a smaller outcome in the same unit as y (wide tables only)", { multi: true }),
 ];
 const CH_histogram: ChannelDef[] = [ch("value", "number", false, "Sample value field (raw rows)"), ch("group", "string", false, "Group field. Up to 2 groups overlap"), ch("x0", "number", false, "Bin start (pre-binned rows)"), ch("x1", "number", false, "Bin end (pre-binned rows)"), ch("count", "number", false, "Samples in the bin (pre-binned rows)")];
+const CH_tileMap: ChannelDef[] = [ch("region", "string", true, "Region name or code, matched to a tile of options.map"), VALUE];
 const CH_scatter: ChannelDef[] = [ch("x", "number", true, "x value"), ch("y", "number", true, "y value"), ch("series", "string", false, "Series field (one color per series)"), ch("label", "string", false, "Name")];
 
 export const CHANNELS: Record<string, ChannelDef[]> = {
@@ -90,6 +91,7 @@ export const CHANNELS: Record<string, ChannelDef[]> = {
   skyline: CH_skyline,
   histogram: CH_histogram,
   scatter: CH_scatter,
+  tileMap: CH_tileMap,
 };
 
 /** 타입 -> 컴포넌트 이름, 영어 이름, 한글 이름. 한글 이름은 여기 한 곳에만 둬요 (localizeDef, 한글 검증 메시지가 같이 써요) */
@@ -130,6 +132,7 @@ export const META: Record<string, { component: string; name: string; nameKo: str
   skyline: { component: "SkylineChart", name: "Skyline", nameKo: "스카이라인" },
   histogram: { component: "HistogramChart", name: "Histogram", nameKo: "히스토그램" },
   scatter: { component: "ScatterChart", name: "Scatter plot", nameKo: "산점도" },
+  tileMap: { component: "TileMap", name: "Tile grid map", nameKo: "타일 격자 지도" },
 };
 
 /** 차트 이름을 한 언어로. 예: nameIn(META.pie, "ko") === "파이 차트" */
@@ -144,12 +147,18 @@ export function specLocale(spec: Pick<ChartSpec, "options">, override?: string):
   return typeof l === "string" && l ? l.replace(/_/g, "-") : undefined;
 }
 
+/** 작은 여러 개(spec.facet)로 나눠 그릴 수 있는 차트. 검사기, <Chart>, 서버 그림이 같이 써요 */
+export const FACET_TYPES = ["line", "area", "bar", "scatter"];
+
+/** facet 패널 최대 수. 넘는 값은 앞에서부터 이만큼만 그리고 검사기가 뺀 수를 알려요 */
+export const FACET_MAX = 24;
+
 /** 계열을 숨길 수 있는(hidden) 차트. card.legend "toggle"이 켜고 끄는 차트이기도 해요 */
 export const TOGGLES = ["line", "area", "bar", "scatter"];
 
-/** 막대 위에 그리는 선의 필드(차례 3 ⑪). 세로 막대에만, 100% 막대가 아닐 때만 그려요 */
+/** 막대 위에 그리는 선의 필드(차례 3 ⑪). 세로 막대에만, 100% 막대와 양쪽 막대가 아닐 때만 그려요 */
 export function barLineFields(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): string[] {
-  return type === "bar" && opt.orientation !== "horizontal" && opt.layout !== "percent" ? ([] as unknown[]).concat(enc.line ?? []).map(String) : [];
+  return type === "bar" && opt.orientation !== "horizontal" && opt.layout !== "percent" && opt.layout !== "diverging" ? ([] as unknown[]).concat(enc.line ?? []).map(String) : [];
 }
 
 /** card.legend "toggle"로 켜고 끌 수 있는지: 범례 항목이 모두 숨길 수 있는 계열일 때만 (막대 위 선이 있으면 보통 범례). <Chart>와 검사기가 같이 써요 */
@@ -191,6 +200,9 @@ export const TYPE_ALIASES: Record<string, string> = {
   proportionBar: "segmented",
   stackedBar100: "segmented",
   hist: "histogram",
+  tilemap: "tileMap",
+  tileGrid: "tileMap",
+  cartogram: "tileMap",
 };
 
 export interface ChartMeta {

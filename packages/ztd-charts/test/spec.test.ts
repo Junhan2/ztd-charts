@@ -14,10 +14,10 @@ const KO = chartsIn("ko");
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
 describe("레지스트리", () => {
-  it("36종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
-    expect(CHARTS).toHaveLength(36);
-    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(36);
-    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(36);
+  it("37종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
+    expect(CHARTS).toHaveLength(37);
+    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(37);
+    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(37);
   });
   it("차트별 스키마 파일을 패키지 이름으로 불러와요 (README에 적은 경로)", () => {
     const req = createRequire(import.meta.url);
@@ -101,7 +101,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
   it("예시 데이터: 한글판은 영어판과 숫자, 필드, 행 수가 같아요", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
-    expect(koNames.length).toBe(31);
+    expect(koNames.length).toBe(32);
     // 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름까지 한글이에요. 그 표는 값만 같은 순서로 견줘요
     const WIDE = new Set(["skylineSampleKo"]);
     const shape = (rows: Record<string, unknown>[], wide: boolean) => JSON.stringify(wide ? rows.map((r) => Object.values(r)) : rows, (_k, v) => (typeof v === "string" ? "" : v));
@@ -114,7 +114,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     expect(samples.barSample.map((r) => r.team)).toEqual(["Domestic", "Overseas", "Domestic", "Overseas", "Domestic", "Overseas", "Domestic", "Overseas"]);
   });
   it("묶음과 수준은 id, 영어, 한글 이름이 모두 있어요", () => {
-    expect(GROUPS.map((g) => g.id)).toEqual(["proportion", "trend", "comparison", "distribution", "relationship", "flow", "hierarchy", "kpi"]);
+    expect(GROUPS.map((g) => g.id)).toEqual(["proportion", "trend", "comparison", "distribution", "relationship", "flow", "hierarchy", "map", "kpi"]);
     expect(LEVELS.map((l) => l.id)).toEqual(["basic", "intermediate", "advanced"]);
     for (const l of [...GROUPS, ...LEVELS]) {
       expect(l.en, l.id).toMatch(/^[A-Z]/);
@@ -350,6 +350,42 @@ describe("highlight by wide-table column, slope periods", () => {
     const r = validateSpec({ type: "slope", data, encoding: { label: "k", x: "p", value: "v" } });
     expect(r.warnings.map((w) => `${w.code} ${w.message}`)).toEqual(["slope_periods Only the first and last periods are drawn (3 periods: 2023, 2024, 2025)", 'slope_incomplete 1 item lacks a value in the first (2023) or last (2025) period and is left out ("B")']);
     expect(validateSpec({ type: "slope", data, encoding: { label: "k", x: "p", value: "v" } }, { lang: "ko" }).warnings.map((w) => w.message)).toEqual(["처음과 마지막 기간만 그려요(기간 3개: 2023, 2024, 2025)", '처음(2023)이나 마지막(2025) 기간 값이 없는 항목 1개는 빼고 그려요("B")']);
+  });
+});
+
+describe("bar layout diverging", () => {
+  const wide = { type: "bar", data: [{ q: "Support", Disagree: 30, Neutral: 22, Agree: 20 }], encoding: { x: "q", y: ["Disagree", "Neutral", "Agree"] } };
+  const long = { type: "bar", data: [{ q: "A", sex: "Male", n: -4 }, { q: "A", sex: "Female", n: 6 }], encoding: { x: "q", y: "n", series: "sex" } };
+  const issues = (spec: unknown, lang: "en" | "ko" = "en") => {
+    const r = validateSpec(spec, { lang });
+    return [...r.errors.map((e) => `${e.path} ${e.code}: ${e.message}`), ...r.warnings.map((w) => `!${w.path} ${w.code}: ${w.message}`)];
+  };
+  it("5: negative, neutral 이름이 계열(넓은 표는 y 필드, 긴 표는 series 값)에 없으면 거절하고 비슷한 이름을 알려요", () => {
+    expect(issues({ ...wide, options: { layout: "diverging", negative: ["Disagree"], neutral: "Neutral", percent: true, sort: "positive" } })).toEqual([]);
+    expect(issues({ ...long, options: { layout: "diverging", negative: ["Male"] } })).toEqual([]);
+    const bad = { ...wide, options: { layout: "diverging", negative: ["Disagre"], neutral: "Netural" } };
+    expect(validateSpec(bad).valid).toBe(false);
+    expect(issues(bad)).toEqual([
+      'options.negative[0] series_not_found: "Disagre" is not a series. Did you mean "Disagree"? Series: Disagree, Neutral, Agree',
+      'options.neutral series_not_found: "Netural" is not a series. Did you mean "Neutral"? Series: Disagree, Neutral, Agree',
+    ]);
+    expect(issues(bad, "ko")).toEqual([
+      'options.negative[0] series_not_found: "Disagre" 계열이 없어요. "Disagree"인가요? 있는 계열: Disagree, Neutral, Agree',
+      'options.neutral series_not_found: "Netural" 계열이 없어요. "Neutral"인가요? 있는 계열: Disagree, Neutral, Agree',
+    ]);
+    expect(issues({ ...long, options: { layout: "diverging", negative: ["Women"] } })).toEqual(['options.negative[0] series_not_found: "Women" is not a series. Series: Male, Female']);
+    expect(issues({ type: "bar", data: [{ x: "a", y: 1 }], options: { layout: "diverging", negative: ["y"] } })[0]).toBe('options.negative[0] series_not_found: "y" is not a series: this chart has one series. Set encoding.series, or y as an array of fields');
+  });
+  it("neutral 계열을 negative에도 넣으면 그 계열 이름과 함께 거절해요", () => {
+    const both = { ...wide, options: { layout: "diverging", negative: ["Neutral", "Disagree"], neutral: "Neutral" } };
+    expect(issues(both)).toEqual(['options.negative[0] neutral_in_negative: "Neutral" is the neutral series, so it cannot also be in options.negative. Remove it from one of them']);
+    expect(issues(both, "ko")).toEqual(['options.negative[0] neutral_in_negative: "Neutral" 계열은 neutral이라 options.negative에 함께 넣을 수 없어요. 한쪽에서 빼 주세요']);
+  });
+  it("sort 값, diverging 밖에서 쓴 옵션, 그리지 않는 주석과 선을 알려요", () => {
+    expect(issues({ ...wide, options: { sort: "both" } })).toEqual(['options.sort bad_option_type: options.sort must be true, false, "positive" or "negative"']);
+    expect(issues({ ...wide, options: { sort: "positive", negative: ["Disagree"] } }, "ko")).toEqual(['!options.negative ignored_option: options.negative 옵션은 layout "diverging"에서만 써요', '!options.sort ignored_option: sort "positive" 값은 layout "diverging"에서만 써요']);
+    expect(issues({ ...wide, options: { layout: "diverging", annotations: [{ type: "line", y: 5 }] } }).map((i) => i.split(":")[0])).toEqual(["!options.annotations annotations_ignored"]);
+    expect(issues({ ...wide, encoding: { ...wide.encoding, line: "Agree" }, options: { layout: "diverging" } }).map((i) => i.split(":")[0])).toEqual(["!encoding.line line_ignored"]);
   });
 });
 

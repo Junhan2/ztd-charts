@@ -82,6 +82,71 @@ export function stack(values: readonly (readonly number[])[], offset: StackOffse
   return { y0, y1 };
 }
 
+export interface DivergingOptions {
+  /** 0선 아래(가로 막대면 왼쪽)에 놓을 계열 자리. 0선에서 바깥 순서예요 */
+  negative?: readonly number[];
+  /** 0선 양쪽에 반씩 놓는 계열 자리 */
+  neutral?: number;
+  /** 조각을 그 줄 절댓값 합의 몫(%)으로 */
+  percent?: boolean;
+  /** 자리는 차지하지 않고 percent의 분모에만 드는 계열 (숨긴 계열). 숨겨도 다른 쪽이 움직이지 않아요 */
+  skip?: ReadonlySet<number>;
+}
+
+/**
+ * 양쪽으로 쌓기 (리커트, 인구 피라미드). values[s][k]. y0은 0선 쪽 끝, y1은 바깥 끝이에요(가운데 계열은 왼쪽 끝, 오른쪽 끝).
+ * negative 계열은 값 크기만큼 0선 아래로, 나머지는 데이터 순서로 위로 쌓아요. 이미 음수인 값은 부호대로 아래로 가고,
+ * 아래쪽에서는 데이터 순서가 왼쪽부터 읽히게 바깥부터 놓아요. neg, pos는 줄마다 양쪽 합계(가운데 계열은 빼요)
+ */
+export function divergingStack(values: readonly (readonly number[])[], opts: DivergingOptions = {}): { y0: number[][]; y1: number[][]; neg: number[]; pos: number[] } {
+  const ns = values.length;
+  const nk = ns ? values[0].length : 0;
+  const y0 = values.map(() => new Array<number>(nk).fill(0));
+  const y1 = values.map(() => new Array<number>(nk).fill(0));
+  const neg = new Array<number>(nk).fill(0);
+  const pos = new Array<number>(nk).fill(0);
+  const mid = opts.neutral !== undefined && opts.neutral >= 0 && opts.neutral < ns ? opts.neutral : -1;
+  const listed = [...new Set(opts.negative ?? [])].filter((s) => s >= 0 && s < ns && s !== mid);
+  const rest = values.map((_, s) => s).filter((s) => s !== mid && !listed.includes(s));
+  for (let k = 0; k < nk; k++) {
+    let sum = 0;
+    for (let s = 0; s < ns; s++) if (Number.isFinite(values[s][k])) sum += Math.abs(values[s][k]);
+    const f = opts.percent ? (sum ? 100 / sum : 0) : 1;
+    const size = (s: number) => (Number.isFinite(values[s][k]) && !opts.skip?.has(s) ? Math.abs(values[s][k]) * f : 0);
+    const h = mid >= 0 ? size(mid) / 2 : 0;
+    if (mid >= 0) {
+      y0[mid][k] = -h;
+      y1[mid][k] = h;
+    }
+    // 0 - h: 가운데 계열이 없을 때 -0이 아니라 0에서 시작해요
+    let lo = 0 - h;
+    let hi = h;
+    const down = (s: number) => {
+      y0[s][k] = lo;
+      lo -= size(s);
+      y1[s][k] = lo;
+    };
+    listed.forEach(down);
+    for (const s of rest) {
+      if (values[s][k] < 0) continue;
+      y0[s][k] = hi;
+      hi += size(s);
+      y1[s][k] = hi;
+    }
+    for (let j = rest.length - 1; j >= 0; j--) if (values[rest[j]][k] < 0) down(rest[j]);
+    neg[k] = 0 - lo - h;
+    pos[k] = hi - h;
+  }
+  return { y0, y1, neg, pos };
+}
+
+/** 양쪽 쌓기의 기본 강조 계열: negative가 있으면 가장 바깥 긍정 계열(negative도 neutral도 아닌 마지막 계열), 없으면 -1. 차트와 자동 범례가 같이 써요 */
+export function divergingLead(n: number, negative: readonly number[], neutral = -1): number {
+  if (!negative.some((s) => s >= 0)) return -1;
+  for (let s = n - 1; s >= 0; s--) if (s !== neutral && !negative.includes(s)) return s;
+  return -1;
+}
+
 /** 스트림그래프에 보기 좋은 계열 순서 (inside-out): 일찍 큰 값이 나오는 계열을 가운데로 */
 export function insideOut(values: readonly (readonly number[])[]): number[] {
   const n = values.length;

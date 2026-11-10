@@ -46,7 +46,8 @@
         "segmented",
         "skyline",
         "histogram",
-        "scatter"
+        "scatter",
+        "tileMap"
       ]
     }
   },
@@ -2741,6 +2742,33 @@
         },
         "theme": {
           "$ref": "#/$defs/theme"
+        },
+        "facet": {
+          "type": "object",
+          "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+          "required": [
+            "by"
+          ],
+          "properties": {
+            "by": {
+              "type": "string",
+              "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+            },
+            "scale": {
+              "enum": [
+                "shared",
+                "free"
+              ],
+              "default": "shared",
+              "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -3102,6 +3130,33 @@
         },
         "theme": {
           "$ref": "#/$defs/theme"
+        },
+        "facet": {
+          "type": "object",
+          "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+          "required": [
+            "by"
+          ],
+          "properties": {
+            "by": {
+              "type": "string",
+              "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+            },
+            "scale": {
+              "enum": [
+                "shared",
+                "free"
+              ],
+              "default": "shared",
+              "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -3331,7 +3386,7 @@
     },
     {
       "title": "Bar chart",
-      "description": "Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
+      "description": "Grouped, stacked, 100%, diverging and horizontal bars, with optional lines on the same axis. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
       "type": "object",
       "required": [
         "type",
@@ -3399,16 +3454,17 @@
           "type": "object",
           "properties": {
             "layout": {
-              "description": "How series are arranged",
+              "description": "How series are arranged. \"diverging\" stacks the negative series left of a zero line and the rest right of it, for Likert surveys, agree and disagree splits and population pyramids",
               "default": "grouped",
               "enum": [
                 "grouped",
                 "stacked",
-                "percent"
+                "percent",
+                "diverging"
               ]
             },
             "orientation": {
-              "description": "Direction",
+              "description": "Direction. Horizontal by default with layout \"diverging\"",
               "default": "vertical",
               "enum": [
                 "vertical",
@@ -3416,7 +3472,22 @@
               ]
             },
             "sort": {
-              "description": "Sort by value (single series)",
+              "description": "true sorts by value (single series). With layout \"diverging\", \"positive\" or \"negative\" sorts rows by that side's total, largest first",
+              "default": false
+            },
+            "negative": {
+              "description": "Layout \"diverging\": series drawn left of zero (below when vertical), from the zero line outward. A y field name for wide data or a series value for long data. Other series go right in data order, and values that are already negative stay left. For example [\"Disagree\", \"Strongly disagree\"]",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "neutral": {
+              "description": "Layout \"diverging\": one series split in half across the zero line, such as \"Neutral\"",
+              "type": "string"
+            },
+            "percent": {
+              "description": "Layout \"diverging\": each segment is its share of the row's total of absolute values",
               "default": false,
               "type": "boolean"
             },
@@ -3607,6 +3678,33 @@
         },
         "theme": {
           "$ref": "#/$defs/theme"
+        },
+        "facet": {
+          "type": "object",
+          "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+          "required": [
+            "by"
+          ],
+          "properties": {
+            "by": {
+              "type": "string",
+              "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+            },
+            "scale": {
+              "enum": [
+                "shared",
+                "free"
+              ],
+              "default": "shared",
+              "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -7389,6 +7487,234 @@
             "jitter": {
               "description": "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render",
               "type": "object"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        },
+        "facet": {
+          "type": "object",
+          "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+          "required": [
+            "by"
+          ],
+          "properties": {
+            "by": {
+              "type": "string",
+              "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+            },
+            "scale": {
+              "enum": [
+                "shared",
+                "free"
+              ],
+              "default": "shared",
+              "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Tile grid map",
+      "description": "One equal tile per region, placed roughly where it is and shaded by its value. Use when: Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones. Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tileMap"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "Region name or code, matched to a tile of options.map (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Value field (number)"
+            }
+          },
+          "required": [
+            "region",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "map": {
+              "description": "Tile grid. \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; \"kr-sido-2025\" is the 17 regions before that. Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11",
+              "default": "kr-sido"
+            },
+            "legend": {
+              "description": "Show the color legend",
+              "default": true,
+              "type": "boolean"
+            },
+            "legendLabels": {
+              "description": "Names at both ends of the legend",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "colorReverse": {
+              "description": "Darkest color for the smallest value, for rankings where 1st should stand out. The default highlight moves to the smallest value too",
+              "default": false,
+              "type": "boolean"
+            },
+            "colorSteps": {
+              "description": "Number of color steps. The legend shows each step",
+              "default": 5,
+              "type": "number",
+              "minimum": 2,
+              "maximum": 12
+            },
+            "labels": {
+              "description": "Language of region names on the Korean grids: on tiles, in the tooltip, the screen reader sentence and the table. \"auto\" uses the Korean short names when a matched region value in the data contains Hangul, otherwise the locale's language. Numbers and other text follow locale, and custom grids keep their own labels",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "ko",
+                "en"
+              ]
             },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",

@@ -162,12 +162,12 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     example: { data: S.streamSampleKo, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "예능" }, card: { subtitle: "주별 장르 시청 시간(만 시간)", takeaway: "예능이 여름을 지배했어요" } },
   },
   bar: {
-    summary: "묶은, 쌓은, 100% 막대와 가로 막대. 같은 축에 선을 더할 수 있어요",
+    summary: "묶은, 쌓은, 100%, 양쪽 막대와 가로 막대. 같은 축에 선을 더할 수 있어요",
     useWhen: "범주끼리 크기를 정확히 비교할 때",
     avoidWhen: "시간 흐름이 핵심일 때(라인 차트가 나아요)",
     why: "계열이 하나면 가장 큰 막대만, 여럿이면 강조 계열만 색으로 칠해요.",
     channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드", line: "세로 막대 위에 같은 축으로 그리는 선(목표, 작년 등). 여럿이면 배열. highlight를 정하지 않으면 막대는 회색이고, 계열 필드가 있으면 같은 x의 값을 평균해요" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)", annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]", hidden: HIDDEN },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: '계열 배치 방식. "diverging"은 negative 계열을 0선 왼쪽, 나머지를 오른쪽에 쌓아요(리커트 설문, 찬반, 인구 피라미드)', orientation: '방향. layout "diverging"이면 기본이 가로예요', sort: 'true면 값 순 정렬(계열 하나일 때). layout "diverging"에서 "positive"나 "negative"면 그쪽 합계가 큰 줄부터', negative: 'layout "diverging": 0선 왼쪽(세로면 아래)에 놓을 계열, 0선에서 바깥 순서. 넓은 표는 y 필드 이름, 긴 표는 series 값. 나머지 계열은 데이터 순서로 오른쪽에 놓고, 이미 음수인 값은 왼쪽에 둬요. 예: ["반대", "매우 반대"]', neutral: 'layout "diverging": 0선 양쪽에 반씩 놓는 계열. 예: "보통"', percent: 'layout "diverging": 조각마다 그 줄 절댓값 합의 몫(%)', annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]", hidden: HIDDEN },
     example: { data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", legend: "auto" } },
   },
   radialBar: {
@@ -332,6 +332,22 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     options: { depth: "칸 폭 대비 뒷줄 깊이. 0.1~0.32이고, 밖의 값은 범위 안으로 묶어요", wall: "뒷벽 눈금과 오른쪽 눈금 글자", texture: "빗금을 그릴 줄. 인쇄할 때나 회색 단계를 구분하기 어려운 사용자에게", frontRate: '앞줄 합계가 뒷줄의 몇 %인지: "label"은 라벨과 툴팁에, "strip"은 바닥 아래 비율 띠로, false면 숨겨요', dayFirst: DAY_FIRST },
     example: { data: S.skylineSampleKo, encoding: { x: "day", y: ["입력", "캐시", "출력", "추론"], front: ["실패", "재시도"] }, options: { format: "compact" }, card: { subtitle: "일별 토큰(최근 14일)", takeaway: "11월 5일이 가장 많았어요" } },
   },
+  tileMap: {
+    summary: "지역마다 같은 크기 타일 하나를 대략의 자리에 두고 값으로 칠한 지도",
+    useWhen: "시도별 비율처럼 한 나라의 지역들을 한 값으로 비교하고, 작은 지역도 큰 지역만큼 중요할 때",
+    avoidWhen: "정확한 경계, 거리, 넓이가 중요할 때, 또는 내장 격자에 없는 지역인데 배치가 없을 때",
+    why: "서울과 세종도 가장 큰 도와 같은 크기로 읽혀요. 실제 지도로는 할 수 없어요. 경계 데이터와 투영이 없어서 의존성이 늘지 않아요. 강조색 하나를 단계로 칠하고, 가장 높은 타일에 테두리를 둘러요.",
+    channels: { region: "지역 이름이나 코드 필드. options.map의 타일과 맞춰요", value: "값 필드" },
+    options: {
+      map: '타일 격자. "kr-sido"는 광주와 전남이 합쳐진 2026-07-01부터의 광역 지자체 16곳, "kr-sido-2025"는 그 전의 17곳이에요. 직접 만든 타일 [{ id, label, row, col, aliases }]도 받아요. 한국 격자는 짧은 이름, 공식 이름, 예전 이름, 영어 이름, KR-11 같은 ISO 3166-2 코드를 모두 맞춰요',
+      legend: "색 범례 표시",
+      legendLabels: "범례 양끝 이름",
+      colorReverse: "가장 작은 값을 가장 진하게 칠해요(1위가 진해야 하는 순위 데이터). 기본 강조도 가장 작은 값으로 옮겨요",
+      colorSteps: "색 단계 수. 범례도 단계마다 보여요",
+      labels: '한국 격자의 지역 이름 언어. 타일, 툴팁, 스크린리더 문장과 표가 같이 따라요. "auto"면 타일에 맞은 지역 값에 한글이 있을 때 한국어 이름("서울"), 아니면 locale 언어예요. 숫자와 나머지 글자는 locale을 따르고, 직접 만든 격자는 자기 label을 써요',
+    },
+    example: { data: S.tileMapSampleKo, encoding: { region: "sido", value: "rate" }, options: { map: "kr-sido", unit: "%" }, card: { subtitle: "시도별 다음 날 배송이 되는 주소 비율(%)", takeaway: "세종이 98%로 가장 높아요" } },
+  },
   histogram: {
     summary: "원시 표본의 분포, 꼬리, 기준 초과 비율",
     useWhen: "요청 지연 시간처럼 원시 표본 30개 이상의 분포, 꼬리, 기준 초과를 볼 때",
@@ -426,5 +442,11 @@ export const SCHEMA_TEXT_KO: SchemaText = {
     x: "event: x 값. band: x 구간 [시작, 끝]",
     y: "line: y 값. band: y 구간 [아래, 위]",
     from: "forecast: 예측이 시작하는 x 값",
+  },
+  facet: {
+    spec: "작은 여러 개: 필드 하나의 값마다 같은 차트를 한 칸씩 격자로 그리고, 짚은 자리를 모든 칸이 함께 보여 줘요. 계열이 너무 많아 한 차트로 읽기 어려울 때 써요",
+    by: '나눌 필드. 예: "region". 값이 처음 나오는 순서로 값마다 패널 하나, 24개까지',
+    columns: "한 줄 패널 수의 최대값. 없으면 패널 폭 140px 이상으로 들어가는 만큼",
+    scale: '"shared"(기본)면 모든 패널이 같은 값 축(날짜, 숫자 x 범위도)을 써서 높이를 견줄 수 있어요. "free"면 패널마다 자기 데이터에 맞추고 값 축 글자를 모두 그려요',
   },
 };

@@ -382,6 +382,33 @@
     },
     "theme": {
       "$ref": "#/$defs/theme"
+    },
+    "facet": {
+      "type": "object",
+      "description": "Small multiples: the same chart once per value of one field, in a grid, with hover shared across panels. For when one chart would hold too many series to read",
+      "required": [
+        "by"
+      ],
+      "properties": {
+        "by": {
+          "type": "string",
+          "description": "Field to split by, for example \"region\". One panel per value in first-appearance order, up to 24"
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most panels per row. Without it, as many as fit at a panel width of 140px or more"
+        },
+        "scale": {
+          "enum": [
+            "shared",
+            "free"
+          ],
+          "default": "shared",
+          "description": "\"shared\" (default) puts every panel on one value scale (and one date or number x range) so heights compare. \"free\" fits each panel to its own data and labels every value axis"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

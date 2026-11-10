@@ -183,6 +183,41 @@ Example code is in [examples/data/](../examples/data) (REST, CSV, Supabase, Goog
 - Server rendering is in `ztd-charts/server`: `renderSpecToSVG` (standalone SVG for PNG conversion, card frame included), `renderSpecToHTML`, `resolveSpecData`.
 - `validateSpec` suggests a similar name for a wrong field: `Field "revenu" is not in the data. Did you mean "revenue"?`
 
+### Small multiples (`facet`)
+
+When one chart would hold too many series to read (eight regions on one line chart), add one field and the same chart is drawn once per group, in a grid:
+
+```json
+{
+  "type": "line",
+  "data": [{ "week": "W1", "region": "Seoul", "orders": 520 }, { "week": "W1", "region": "Busan", "orders": 330 }],
+  "encoding": { "x": "week", "y": "orders" },
+  "options": { "highlight": "Incheon" },
+  "facet": { "by": "region" },
+  "card": { "title": "Weekly orders by region" }
+}
+```
+
+- `facet.by`: the field to split by. One panel per value, in first-appearance order. Up to 24 panels; with more values the first 24 are drawn and `validateSpec` warns how many were left out.
+- `facet.columns`: the most panels per row. By default as many as fit at a panel width of 140px or more (two at a 390px phone width), spread so no row is left with a single panel.
+- `facet.scale`: `"shared"` (default) computes the value range once over all rows, and the x range too for date or number x, so heights compare across panels. Value-axis labels then appear on the first column only and x labels on the bottom row only. `"free"` fits each panel to its own data and labels every axis, so nobody compares across panels by mistake.
+- Works on `line`, `area`, `bar` and `scatter`. For any other type `validateSpec` returns an error that names these four.
+- `options.highlight` set to a facet value draws that panel in the accent color and the others in neutral. Any other highlight goes to every panel unchanged.
+- Hover or keyboard focus on an x position shows the same position in every panel (one `syncId` for the group: `options.syncId`, or one derived from the spec). Scatter panels have no shared x position, so they do not sync.
+- Each panel is a full chart (keyboard navigation, live region, hidden table) named "<card title>, <value>", and Tab moves through the panels in reading order. The group gets one description sentence built from all panels.
+- `renderSpecToSVG` returns one standalone SVG with the card frame and every panel, so the CLI `render` command (PNG, SVG, HTML) and the MCP `render_chart` tool draw faceted specs too.
+- In React without a spec, use `<ChartFacets>`:
+
+```tsx
+import { ChartCard, ChartFacets, LineChart } from "ztd-charts";
+
+<ChartCard title="Weekly orders by region">
+  <ChartFacets chart={LineChart} type="line" data={rows} by="region" highlight="Incheon" chartProps={{ x: "week", y: "orders" }} />
+</ChartCard>
+```
+
+`<ChartFacets>` props: `chart` (the chart component to repeat: `LineChart`, `AreaChart`, `BarChart` or `ScatterChart`; passing it keeps unused charts out of your bundle), `type` (`"line" | "area" | "bar" | "scatter"`, used to measure the shared scale the way that chart does), `data`, `by`, `columns`, `scale`, `chartProps` (props for every panel such as `x`, `y`, `series`, `format`, `unit`), `highlight`, `syncId`, `width` (the whole grid; fits the parent when omitted), `height` (one panel; 120 to 180px from the panel width when omitted), `title` (the start of each panel's name; the card title when omitted), `description`, `locale`, `className`, `style`. The panels use three chart props that you can also set yourself: `yDomain` (and `xDomain` on line, area and scatter) fixes a range, and `showXAxis={false}` or `showYAxis={false}` hides that axis's labels.
+
 ## CLI
 
 ```bash

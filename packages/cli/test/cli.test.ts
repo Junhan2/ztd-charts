@@ -47,18 +47,18 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.6.0");
+    expect((await run("--version")).out.trim()).toBe("0.7.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
   });
-  it("list: 36종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
+  it("list: 37종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
     const t = await run("list");
-    expect(t.out).toContain("36 charts");
+    expect(t.out).toContain("37 charts");
     expect(t.out).toContain("Intermediate");
-    expect((await run("list", "--locale=ko")).out).toContain("36종");
+    expect((await run("list", "--locale=ko")).out).toContain("37종");
     const j = JSON.parse((await run("list", "--json")).out);
-    expect(j).toHaveLength(36);
+    expect(j).toHaveLength(37);
     const adv = JSON.parse((await run("list", "--level", "심화", "--json")).out);
     expect(adv.length).toBeGreaterThan(0);
     expect(adv.every((c: { level: string }) => c.level === "advanced")).toBe(true);
@@ -67,7 +67,7 @@ describe("ztd-charts CLI", () => {
   it("info, schema, example", async () => {
     expect((await run("info", "sankey")).out).toContain("<SankeyChart");
     const all = JSON.parse((await run("schema")).out);
-    expect(all.oneOf).toHaveLength(36);
+    expect(all.oneOf).toHaveLength(37);
     await run("schema", "pie", "--out", "pie.schema.json");
     expect(JSON.parse(readFileSync(join(dir, "pie.schema.json"), "utf8")).properties.type.const).toBe("pie");
     await run("example", "donut", "--out", "donut.json");
@@ -185,7 +185,7 @@ describe("CLI API", () => {
     expect((await render({ type: "bar", data: [{ k: "배", v: 5 }], encoding: { x: "k", y: "v" } }, { format: "png" })).notes).toBeUndefined();
   });
   it("listCharts, getChartSchema, validate, reactSnippet", () => {
-    expect(listCharts()).toHaveLength(36);
+    expect(listCharts()).toHaveLength(37);
     expect(listCharts({ group: "flow" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(listCharts({ group: "흐름" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(getChartSchema("violin")).toMatchObject({ properties: { type: { const: "box" } } });
@@ -206,10 +206,21 @@ describe("CLI API", () => {
     const tipped = reactSnippet({ type: "line", data: [{ m: "1월", v: 1 }], encoding: { x: "m", y: "v" }, options: { tooltip: { template: "{label} · {value}" }, locale: "ko" } });
     expect(tipped).toContain('tooltip={templateTooltip("{label} · {value}", "ko")}');
     expect(tipped).toContain('import { LineChart, templateTooltip } from "ztd-charts";');
+    // 작은 여러 개(spec.facet)는 <ChartFacets>로: highlight는 패널을 고르고 다른 프롭은 chartProps로
+    const faceted = reactSnippet({ type: "line", data: [{ w: "W1", r: "A", v: 1 }], encoding: { x: "w", y: "v" }, options: { highlight: "A", unit: "건" }, facet: { by: "r", columns: 4 } });
+    expect(faceted).toContain('import { ChartFacets, LineChart } from "ztd-charts";');
+    expect(faceted).toContain('<ChartFacets chart={LineChart} type="line" data={data} by="r" columns={4} highlight="A" chartProps={{ x: "w", y: "v", unit: "건" }} />');
+    // 스펙은 믿을 수 없는 입력: 양의 정수가 아닌 columns와 두 값이 아닌 scale은 코드에서 빼고, by는 이스케이프해요
+    const hostile = reactSnippet({ type: "line", data: [{ w: "W1", r: "A", v: 1 }], encoding: { x: "w", y: "v" }, facet: { by: 'r" onFocus={alert(3)} x="', columns: "2} onLoad={alert(1)" as unknown as number, scale: "free} onClick={alert(2)" as "free" } });
+    expect(hostile).not.toMatch(/columns=|scale=/);
+    expect(hostile).not.toContain("alert(1)");
+    expect(hostile).not.toContain("alert(2)");
+    // by는 JSX 속성이 아니라 문자열 식 안에만 들어가요
+    expect(hostile).toContain('by={"r\\" onFocus={alert(3)} x=\\""}');
     // 막대 위 선(차례 3 ⑪)도 채널이라 그대로 넘어가요
     expect(reactSnippet({ type: "bar", data: [{ m: "1월", 올해: 1, 작년: 2 }], encoding: { x: "m", y: "올해", line: "작년" } })).toContain('line="작년"');
   });
-  it("render는 36종 모두 PNG로 그려요", async () => {
+  it("render는 37종 모두 PNG로 그려요", async () => {
     for (const c of CHARTS) {
       const r = await render(c.example, { format: "png", width: 560, scale: 1 });
       expect(r.png!.subarray(1, 4).toString(), c.type).toBe("PNG");

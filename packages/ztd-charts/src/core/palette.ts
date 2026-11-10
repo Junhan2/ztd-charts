@@ -8,7 +8,7 @@ function compositeHex(top: string, under: string, opacity: number): string {
   return toHex(composite([a[0], a[1], a[2], opacity], b));
 }
 import type { Painter } from "../theme/context";
-import { cssVarName, type ColorToken } from "../theme/tokens";
+import { cssVarName, lightTheme, type ColorToken } from "../theme/tokens";
 
 export type Role = "accent" | "ink" | "strong" | "neutral" | "soft";
 
@@ -86,22 +86,21 @@ export function categorical(p: Painter, n: number, hi: ReadonlySet<number>): Swa
   return out;
 }
 
-/** categorical과 같은 순서의 토큰 이름 (범례용) */
-export function categoricalTokens(n: number, hi: ReadonlySet<number>): string[] {
-  const out: string[] = new Array(n);
-  const rest: number[] = [];
-  for (let i = 0; i < n; i++) {
-    if (hi.has(i)) out[i] = "accent";
-    else rest.push(i);
-  }
-  const k = rest.length;
-  rest.forEach((idx, j) => {
-    if (k === 1) out[idx] = "neutral";
-    else if (j === 0) out[idx] = "ink";
-    else if (j === k - 1) out[idx] = "neutral";
-    else out[idx] = "neutralStrong";
-  });
-  return out;
+/** 섞은 색(midSwatch)을 범례 색 글자로: "mix:0.5". legendFill이 칠할 색으로 바꿔요 */
+const MIX_PREFIX = "mix:";
+
+/**
+ * 차트가 그리는 색 함수 그대로의 범례 색 글자 (토큰 이름, 섞은 색은 "mix:비율"). 카드 범례(autoLegend)가 모두 이걸 써요.
+ * 칠할 색 대신 토큰 이름과 섞는 비율을 돌려주는 painter를 차트의 색 함수(categorical, ramp, emphasis …)에 넘겨서, 범례와 그림이 같은 규칙에서 나와요
+ */
+export function legendColors(draw: (p: Painter) => Swatch[]): string[] {
+  const names: Painter = { theme: lightTheme, cssVars: false, paint: (t) => t, color: (c) => c ?? "neutral", raw: (c) => c ?? "neutral", mix: (_a, _b, t) => `${MIX_PREFIX}${t}` };
+  return draw(names).map((sw) => sw.fill);
+}
+
+/** 범례 색 글자를 칠할 색으로: "mix:비율"이면 midSwatch와 같은 섞은 색, 아니면 p.color (토큰은 테마 색, 그 밖은 그대로, 없으면 neutral) */
+export function legendFill(p: Painter, c: string | undefined): string {
+  return c?.startsWith(MIX_PREFIX) ? p.mix("neutralStrong", "neutral", Number(c.slice(MIX_PREFIX.length))) : p.color(c);
 }
 
 /**
@@ -110,11 +109,6 @@ export function categoricalTokens(n: number, hi: ReadonlySet<number>): string[] 
  */
 export function categoricalDots(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   return categorical(p, n + 1, hi).slice(0, n);
-}
-
-/** categoricalDots와 같은 순서의 토큰 이름 (범례용) */
-export function categoricalDotTokens(n: number, hi: ReadonlySet<number>): string[] {
-  return categoricalTokens(n + 1, hi).slice(0, n);
 }
 
 /** 강조만 accent, 나머지는 모두 neutral (기본 디자인 언어) */

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
-import { CHARTS, commonOptionsIn, downloadFields, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, specTemplate, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
+import { CHARTS, commonOptionsIn, downloadFields, FACET_TYPES, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, specTemplate, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
 import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
 import { langOf, renderSpecToHTML, renderSpecToSVG, resolveDef, resolveSpecData } from "ztd-charts/server";
 import { CLI_TEXT, type CliText } from "./messages";
@@ -104,6 +104,32 @@ function jsxValue(v: unknown): string {
 /** JSX 속성 이름으로 쓸 수 있는 옵션 키만 (공백 같은 글자가 있으면 코드가 깨져요) */
 const JSX_NAME = /^[A-Za-z_$][\w$-]*$/;
 
+/** 차트 프롭(JSX 속성 글, 첫 번째는 data)을 <ChartFacets> 코드로. highlight와 data는 ChartFacets가 받고 나머지는 chartProps 객체로 */
+function facetElement(component: string, type: string, facet: NonNullable<ChartSpec["facet"]>, props: string[]): string {
+  const own: string[] = [props[0]];
+  const fields: string[] = [];
+  for (const p of props.slice(1)) {
+    const at = p.indexOf("=");
+    const name = p.slice(0, at);
+    const value = p.slice(at + 1);
+    if (name === "highlight") own.push(p);
+    // JSX 속성 값("글" 또는 {식}, 둘 다 jsxValue가 만든 것)을 객체 값(식)으로. 이름에 -가 있으면 따옴표로 감싸요
+    else fields.push(`${/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)}: ${value.startsWith("{") ? value.slice(1, -1) : value}`);
+  }
+  // 스펙은 믿을 수 없는 입력이라 facet 값도 다른 프롭처럼 jsxValue로만 써요. columns는 양의 정수, scale은 두 값 중 하나일 때만 (아니면 코드에서 빼요)
+  const { columns, scale } = facet as { columns?: unknown; scale?: unknown };
+  const head = [
+    `chart={${component}}`,
+    `type=${jsxValue(type)}`,
+    own[0],
+    `by=${jsxValue(facet.by)}`,
+    ...(Number.isInteger(columns) && (columns as number) >= 1 ? [`columns=${jsxValue(columns)}`] : []),
+    ...(scale === "shared" || scale === "free" ? [`scale=${jsxValue(scale)}`] : []),
+    ...own.slice(1),
+  ];
+  return `<ChartFacets ${head.join(" ")} chartProps={{ ${fields.join(", ")} }} />`;
+}
+
 /** 스펙을 React 코드로 (컴포넌트를 직접 쓰는 방식). locale "ko"면 주석이 한글 */
 export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineData?: boolean; locale?: string } = {}): string {
   const ko = langOf(opts.locale) === "ko";
@@ -124,9 +150,12 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
     if (k === "tooltip" && template) props.push(`tooltip={templateTooltip(${JSON.stringify(template)}${tipLocale ? `, ${JSON.stringify(tipLocale)}` : ""})}`);
     else props.push(`${k}=${jsxValue(v)}`);
   }
-  const chartEl = `<${def.component} ${props.join(" ")} />`;
+  // 작은 여러 개(spec.facet)는 <ChartFacets>가 by 값마다 차트를 한 칸씩 그려요. highlight는 패널을 고르고, 다른 프롭은 chartProps로 패널마다 넘겨요
+  // 양쪽 막대(layout "diverging")는 작은 여러 개로 그리지 않아요 (검사기가 오류로 알려요)
+  const facet = spec.facet && typeof spec.facet.by === "string" && FACET_TYPES.includes(def.type) && !(def.type === "bar" && spec.options?.layout === "diverging") ? spec.facet : undefined;
+  const chartEl = facet ? facetElement(def.component, def.type, facet, props) : `<${def.component} ${props.join(" ")} />`;
   const card = spec.card;
-  const imports = [card && "ChartCard", card?.download && "DownloadButtons", def.component, template && "templateTooltip"].filter(Boolean).join(", ");
+  const imports = [card && "ChartCard", card?.download && "DownloadButtons", facet && "ChartFacets", def.component, template && "templateTooltip"].filter(Boolean).join(", ");
   const more = rows && rows.length > 12 ? (ko ? ` // 외 ${rows.length - 12}행` : ` // and ${rows.length - 12} more rows`) : "";
   const dataLine = rows && opts.inlineData !== false ? `const ${dataVar} = ${JSON.stringify(rows.slice(0, 12), null, 2)}${more};\n\n` : `// ${dataVar}: ${ko ? "객체 배열 (REST, CSV, DB 행 등)" : "an array of objects (REST, CSV, database rows and so on)"}\n`;
   let body = chartEl;

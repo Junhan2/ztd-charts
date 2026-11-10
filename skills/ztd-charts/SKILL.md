@@ -1,11 +1,11 @@
 ---
 name: ztd-charts
-description: "Use when building React charts with ztd-charts: picking a chart that fits the data (36 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
+description: "Use when building React charts with ztd-charts: picking a chart that fits the data (37 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
 ---
 
 # ztd charts skill
 
-36 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
+37 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
 
 ## Steps
 
@@ -32,11 +32,13 @@ Decide the question first, then the form.
 | Rank changes | period + item + rank | `bump` | `slope` (two periods only) |
 | Two points in time | item + before/after | `dumbbell` | `slope` |
 | Comparing category sizes | category + value | `bar` | `lollipop` (many items), `pareto` (concentration) |
+| Opinion split (Likert, for/against, population pyramid) | item + ordered answers or two sides | `bar` with `layout: "diverging"`: `negative` lists the series drawn left of zero, `neutral` splits one across it, `percent: true` for shares of each row | `bar` `layout: "percent"` (when there is no natural midpoint) |
 | Why it went up or down | start + drivers (±) + end | `waterfall` | |
 | Drop-off by stage | stage + people (shrinking) | `funnel` | `sankey` (when paths split) |
 | Flow, movement | source + target + value | `sankey` | `chord` (two-way relationships) |
 | Distribution | group + many values | `box` | `histogram` (one measure's shape, p95 and a limit), `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
 | Finding patterns | category × category + value | `heatmap` | `calendar` (daily, one year) |
+| Comparing regions | region (name or code) + value | `tileMap` (`kr-sido`: Korea's 16 regions from 2026-07-01; `kr-sido-2025` for older data with Gwangju and Jeonnam apart; or your own grid) | `bar` (exact ranking matters more than place) |
 | Two or three metrics together | 2 or 3 numbers + name | `scatter` (two numbers) | `bubble` (a third number as size) |
 | Comparing several metrics | item × metrics (4 to 8) | `radar` (1 or 2 series) | `parallel` (many items) |
 | Against a target | value + target | `gauge` (one), `bullet` (several) | `radialBar` (3 to 6 goals) |
@@ -62,6 +64,7 @@ Channels, options and an example for every chart are in [references/charts.md](r
 - `encoding`: channel → field name. For wide tables use an array, such as `"y": ["Search", "Social"]`.
 - `options.highlight`: sets the one highlight. A name (`"Mobile"`), an index, `"max"`, `"min"`, `"first"`, `"last"` or `"none"`. Without it, each chart picks a smart default (funnel: the stage with the lowest conversion, bump: the item that climbed the most, bullet: the row furthest below target).
 - `options.format`: `"number"`, `"integer"`, `"percent"` (values are already %), `"ratio"` (0 to 1), `"compact"` (1.2K, 3.4M), `"currency"` ($, or ₩ in a Korean locale) or Intl options. `unit` is text appended to each value (`"%"`, `" users"`).
+- `facet`: `{ "by": "region" }` draws the same chart once per value of that field (up to 24 panels) on a shared scale. Use it when one chart would hold too many series to read, or when the request says "split by region". Only `line`, `area`, `bar` and `scatter` take it, and it does not combine with `layout: "diverging"` or `tileMap` (`validateSpec` returns an error). `"scale": "free"` when the groups differ a lot in size.
 - `options.locale`: `"ko-KR"` switches number formats (1.2만, 3.4억) and the chart's own text to Korean. The default is `"en-US"`, or the `locale` of the surrounding `ThemeProvider`.
 
 ## Card copy

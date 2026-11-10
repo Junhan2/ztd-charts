@@ -38,7 +38,7 @@ export function localizeDef(def: ChartDef, lang: Lang): ChartDef {
   };
 }
 
-/** 차트 34종을 한 언어로. 예: chartsIn("ko")[0].name === "파이 차트" */
+/** 차트 37종을 한 언어로. 예: chartsIn("ko")[0].name === "파이 차트" */
 export function chartsIn(lang: Lang): ChartDef[] {
   return lang === "ko" ? CHARTS.map((c) => localizeDef(c, "ko")) : CHARTS;
 }

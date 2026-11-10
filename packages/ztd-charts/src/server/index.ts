@@ -1,18 +1,20 @@
 import { createElement } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
-import { Chart, autoLegend, resolveDef } from "../charts/Chart";
+import { Chart, autoLegend, encodingToProps, facetPropsOf, resolveDef, specFacet } from "../charts/Chart";
+import { FACET_GAP, FACET_ROW_GAP, FACET_TITLE_H, FACET_TITLE_SIZE, planFacets, type FacetInput } from "../core/facet";
 import { CARD_INSET, CARD_TEXT } from "../components/ChartCard";
 import { ThemeProvider, makePainter, resolveThemeInput } from "../theme/context";
 import { baseCss } from "../core/css";
+import { legendFill } from "../core/palette";
 import { DEFAULT_LOCALE } from "../core/format";
 import { langOf, type ChartLang } from "../core/i18n";
 import { textWidth, truncate } from "../core/text";
 import { fetchChartData, readResponse } from "../data/useChartData";
 import { themeToCss, type ChartTheme } from "../theme/tokens";
 import { levelBadge } from "../spec/labels";
-import { nameIn, specLocale } from "../spec/meta";
+import { nameIn, specLocale, type ChartMeta } from "../spec/meta";
 import { inlineRows, validateSpec } from "../spec/validate";
-import type { ChartSpec } from "../spec/types";
+import type { ChartSpec, SpecFacet } from "../spec/types";
 
 export interface RenderOptions {
   /** 전체 폭(px). 기본 720 */
@@ -84,6 +86,57 @@ function wrapWords(s: string, max: number, size: number): string[] {
   return out;
 }
 
+/** 마크업 속 차트 svg(class="ztd-svg")마다 안쪽과 viewBox 크기. 작은 여러 개는 패널마다 하나예요. 닫는 태그는 안에 든 svg까지 짝을 세어 찾아요 */
+function extractPanels(markup: string): { inner: string; vw: number; vh: number }[] {
+  const out: { inner: string; vw: number; vh: number }[] = [];
+  const open = /<svg\b[^>]*class="ztd-svg"[^>]*>/g;
+  const tag = /<svg\b|<\/svg>/g;
+  for (let m = open.exec(markup); m; m = open.exec(markup)) {
+    let depth = 1;
+    let t: RegExpExecArray | null = null;
+    tag.lastIndex = open.lastIndex;
+    while (depth && (t = tag.exec(markup))) depth += t[0] === "</svg>" ? -1 : 1;
+    if (!t) break;
+    const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(m[0]);
+    out.push({ inner: markup.slice(open.lastIndex, t.index), vw: vb ? Number(vb[1]) : 0, vh: vb ? Number(vb[2]) : 0 });
+    open.lastIndex = tag.lastIndex;
+  }
+  return out;
+}
+
+/**
+ * 작은 여러 개(spec.facet)를 SVG 조각으로: 브라우저의 <ChartFacets>와 같은 배치(planFacets)로 패널 제목 줄과 패널 차트를 놓아요.
+ * 패널 차트는 한 번에 그린 마크업에서 꺼내서 패널마다 그라데이션, 자르기 id가 겹치지 않아요. at(x, y)는 그 자리에 그린 글이에요
+ */
+function facetBody(spec: ChartSpec, facet: SpecFacet, def: ChartMeta, rows: Record<string, unknown>[], width: number, height: number | undefined, theme: ChartTheme, locale: string | undefined, T: Record<keyof ChartTheme, string>): { height: number; at: (x: number, y: number) => string } {
+  const type = def.type;
+  const panels = extractPanels(chartMarkup({ ...spec, data: rows }, width, height, theme, false, false, locale));
+  const loc = locale ?? DEFAULT_LOCALE;
+  // <Chart>가 만드는 차트 프롭과 같은 순서: 채널, options, 행, 폭(높이) 프롭, 로캘
+  const chartProps = { ...encodingToProps(def, spec.encoding), ...(spec.options ?? {}), data: rows, width, ...(height !== undefined ? { height } : {}), locale };
+  const plan = planFacets({ ...facetPropsOf(type, facet, chartProps), width, locale: loc, lang: langOf(loc) } as FacetInput);
+  const rowsN = Math.ceil(plan.panels.length / plan.cols);
+  const at = (ox: number, oy: number) =>
+    plan.panels
+      .map((pn, i) => {
+        const x = ox + (i % plan.cols) * (plan.pw + FACET_GAP);
+        const y = oy + Math.floor(i / plan.cols) * (FACET_TITLE_H + plan.ph + FACET_ROW_GAP);
+        const fill = pn.isPicked ? T.accentText : plan.isPanelPick ? T.muted : T.ink;
+        const lastW = pn.last !== undefined ? textWidth(pn.last, FACET_TITLE_SIZE, 700) + 8 : 0;
+        const svg = panels[i];
+        const text = (tx: number, s: string, end?: boolean) => `<text x="${tx}" y="${y + 14}"${end ? ' text-anchor="end"' : ""} font-size="${FACET_TITLE_SIZE}" font-weight="700" fill="${fill}">${esc(s)}</text>`;
+        return (
+          `<g data-facet="${esc(pn.value)}">` +
+          text(x, truncate(pn.label, plan.pw - lastW, FACET_TITLE_SIZE, 700)) +
+          (pn.last !== undefined ? text(x + plan.pw, pn.last, true) : "") +
+          (svg ? `<svg x="${x}" y="${y + FACET_TITLE_H}" width="${plan.pw}" height="${plan.ph}" viewBox="0 0 ${svg.vw || plan.pw} ${svg.vh || plan.ph}" overflow="visible">${svg.inner}</svg>` : "") +
+          `</g>`
+        );
+      })
+      .join("");
+  return { height: rowsN * (FACET_TITLE_H + plan.ph) + Math.max(0, rowsN - 1) * FACET_ROW_GAP, at };
+}
+
 function extractSvg(markup: string): { attrs: string; inner: string; vw: number; vh: number } | null {
   const m = /<svg([^>]*class="ztd-svg"[^>]*)>([\s\S]*?)<\/svg><\/div>/.exec(markup) ?? /<svg([^>]*)>([\s\S]*)<\/svg>/.exec(markup);
   if (!m) return null;
@@ -110,18 +163,20 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const card = spec.card ?? {};
   const def = resolveDef(spec.type, spec.encoding);
   const inner = frame ? W - pad * 2 - 40 : W - pad * 2;
+  // 작은 여러 개(spec.facet)는 패널을 격자로 놓은 조각이에요. facet이 없으면 예전과 같은 글자 그대로예요
+  const facet = def ? specFacet(spec, def.type) : undefined;
+  const grid = facet && def ? facetBody(spec, facet, def, rows, inner, opts.height, theme, locale, T) : null;
   // { csv }를 한 번만 읽도록 행으로 바꿔 넘겨요
-  const markup = chartMarkup({ ...spec, data: rows }, inner, opts.height, theme, false, false, locale);
-  const svg = extractSvg(markup);
+  const svg = grid ? { inner: "", vw: inner, vh: grid.height } : extractSvg(chartMarkup({ ...spec, data: rows }, inner, opts.height, theme, false, false, locale));
   if (!svg) throw new Error(lang === "ko" ? "차트 SVG를 만들지 못했어요" : "Couldn't build the chart SVG");
   const chartH = svg.vh || Number(opts.height) || 240;
   const font = theme.fontFamily.replace(/"/g, "'");
   const mono = theme.monoFamily.replace(/"/g, "'");
-  const bodyOpen = (x: number, y: number) => `<svg x="${x}" y="${y}" width="${inner}" height="${chartH}" viewBox="0 0 ${svg.vw || inner} ${chartH}" overflow="visible">`;
+  const body = (x: number, y: number) => (grid ? grid.at(x, y) : `<svg x="${x}" y="${y}" width="${inner}" height="${chartH}" viewBox="0 0 ${svg.vw || inner} ${chartH}" overflow="visible">${svg.inner}</svg>`);
 
   if (!frame) {
     const H = Math.round(chartH + pad * 2);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${bodyOpen(pad, pad)}${svg.inner}</svg></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${body(pad, pad)}</svg>`;
   }
 
   // 카드 틀
@@ -170,8 +225,9 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
         lx -= tw;
         parts.push(`<text x="${lx}" y="${ly + 12}" font-size="11.5" fill="${T.muted}">${esc(label)}</text>`);
         lx -= 15;
-        // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게)
-        const col = esc(paint.raw(it.color));
+        // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게). 섞은 색("mix:비율")은 차트 조각과 같은 색이에요.
+        // 이 painter는 CSS 변수를 쓰지 않아서 legendFill이 raw와 같은 테마 색을 돌려줘요
+        const col = esc(legendFill(paint, it.color));
         if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${ly + 8}" y2="${ly + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${ly + 8}" r="2.2" fill="${col}"/>`);
         // 원(circle)은 브라우저 카드 범례와 같게 둥근 모서리를 반지름까지 키워요
         else parts.push(`<rect x="${lx}" y="${ly + 3.5}" width="9" height="9" rx="${it.shape === "circle" ? 4.5 : 2.5}" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
@@ -217,9 +273,8 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
     (opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.bg}"/>`) +
     `<rect x="${cx0 + 0.5}" y="${cy0 + 0.5}" width="${cw - 1}" height="${ch - 1}" rx="${T.radius}" fill="${T.panel}" stroke="${T.line}"/>` +
     parts.join("") +
-    bodyOpen(cx0 + ip, chartY) +
-    svg.inner +
-    `</svg></svg>`
+    body(cx0 + ip, chartY) +
+    `</svg>`
   );
 }
 
@@ -249,11 +304,13 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   const shown = withCard ? (opts.interactive || !spec.card ? spec : { ...spec, card: { ...spec.card, replay: false, download: undefined, ...(spec.card.legend === "toggle" ? { legend: "auto" as const } : {}) } }) : { ...spec, card: undefined };
   const hydrate = opts.interactive && "script" in opts.interactive ? opts.interactive.script : null;
   if (hydrate !== null && /<\/script|<!--/i.test(hydrate)) throw new Error(lang === "ko" ? "interactive.script에는 </script나 <!--가 들어갈 수 없어요" : "interactive.script must not contain </script or <!--");
-  // 이어받는 차트는 .wrap 의 내용 폭(W)으로 그려요. 브라우저의 첫 그림도 같은 폭이라 그림이 움직이지 않아요 (renderToStaticMarkup 결과는 이어받을 수 없어요)
-  const width = hydrate !== null && spec.options?.width === undefined ? W - (shown.card ? CARD_INSET : 0) : undefined;
+  // 이어받는 차트는 .wrap 의 내용 폭(W)으로 그려요. 브라우저의 첫 그림도 같은 폭이라 그림이 움직이지 않아요 (renderToStaticMarkup 결과는 이어받을 수 없어요).
+  // 작은 여러 개는 정적 HTML에서도 그 폭으로 칸 수를 정해요 (스크립트가 없으면 다시 재지 못해요)
+  const def = resolveDef(spec.type, spec.encoding);
+  const isFacet = !!def && !!specFacet(spec, def.type);
+  const width = (hydrate !== null || isFacet) && spec.options?.width === undefined ? W - (shown.card ? CARD_INSET : 0) : undefined;
   const tree = createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, width, height: opts.height, animate: false, locale }));
   const markup = hydrate !== null ? renderToString(tree) : renderToStaticMarkup(tree);
-  const def = resolveDef(spec.type, spec.encoding);
   const title = opts.title ?? spec.card?.title ?? (def ? nameIn(def, lang) : "Chart");
   const legacy = opts.interactive && "libraryUrl" in opts.interactive ? opts.interactive : null;
   const rv = legacy?.reactVersion ?? "19";
