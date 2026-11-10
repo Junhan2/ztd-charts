@@ -125,7 +125,7 @@
 - Use when: Finding patterns such as orders by weekday × hour
 - Avoid when: Exact value comparison matters
 - encoding: x, y, value
-- Chart options: showValues, legend, legendLabels, canvasThreshold
+- Chart options: showValues, legend, legendLabels, canvasThreshold, colorReverse, colorCenter, colorSteps
 - Default highlight: the largest value
 
 ```json
@@ -151,7 +151,7 @@
 - Use when: How three metrics relate, such as CPC, ROAS and spend by campaign
 - Avoid when: Dots overlap and sizes get hard to compare
 - encoding: x, y, size?, label?
-- Chart options: sizeRange, xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat
+- Chart options: sizeRange, xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log
 - Default highlight: the largest value
 
 ```json
@@ -164,7 +164,7 @@
 - Use when: A metric over time, such as monthly users, alone or against other series
 - Avoid when: x is a category with no order
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: curve: smooth|linear|step, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count, dots, area, zero, endLabels, colorMode: highlight|categorical, yDomain, yScale: linear|log, maxPoints, referenceLines, yLabel, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls, hidden
 - Default highlight: the first series or item
 
 ```json
@@ -177,7 +177,7 @@
 - Use when: Seeing how each channel's traffic changes within the total
 - Avoid when: The exact value of each series matters
 - encoding: x, y[], series?, lower?[], upper?[]
-- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls
+- Chart options: stack: none|stacked|percent, curve: smooth|linear|step, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count, zero, endLabels, yDomain, maxPoints, brush, annotations, signColors, baseline, downColor, bandFrom: start|forecast, outside, connectNulls, hidden
 - Default highlight: the first series or item
 
 ```json
@@ -190,7 +190,7 @@
 - Use when: 5 or more series where the rhythm of the flow matters, such as viewing by genre
 - Avoid when: You need to read exact values
 - encoding: x, y[], series?
-- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band, aggregate: sum|mean|last|count
+- Chart options: offset: wiggle|silhouette, reorder, curve: smooth|linear|step, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count
 - Default highlight: the largest value
 
 ```json
@@ -199,11 +199,11 @@
 
 ## bar · Bar chart (`<BarChart>`, Basic, Comparison)
 
-- What: Grouped, stacked, 100% and horizontal bars
+- What: Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
-- encoding: x, y[], series?
-- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, aggregate: sum|mean|last|count, annotations
+- encoding: x, y[], series?, line?[]
+- Chart options: layout: grouped|stacked|percent, orientation: vertical|horizontal, sort, aggregate: sum|mean|last|count, annotations, hidden
 - Default highlight: the first series or item
 
 ```json
@@ -255,7 +255,7 @@
 - Use when: The trend matters more than exact values
 - Avoid when: You need to read axis values
 - encoding: x?, y
-- Chart options: variant: line|area|bar, showValue, showExtremes, mark: last|max|min|none
+- Chart options: variant: line|area|bar, showValue, showExtremes, mark: last|max|min|none, dayFirst
 - Default highlight: the largest value
 
 ```json
@@ -359,7 +359,7 @@
 - Use when: The rhythm of daily activity, such as commits or orders
 - Avoid when: The period is shorter than a month
 - encoding: date, value
-- Chart options: weekStart, gap, canvasThreshold
+- Chart options: weekStart, gap, canvasThreshold, dayFirst, colorReverse, colorCenter, colorSteps
 - Default highlight: the largest value
 
 ```json
@@ -411,7 +411,7 @@
 - Use when: Stocks, exchange rates or coins, where the swing within each period matters
 - Avoid when: A trend with only one value (a line chart is cleaner)
 - encoding: x, open, high, low, close, volume?
-- Chart options: ma, upColor, downColor, maxCandles, brush, yDomain, annotations
+- Chart options: ma, upColor, downColor, maxCandles, brush, yDomain, annotations, dayFirst
 - Default highlight: the largest value
 
 ```json
@@ -437,7 +437,7 @@
 - Use when: 7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard
 - Avoid when: Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)
 - encoding: x, y[], series?, front?[]
-- Chart options: depth, wall, texture: front|all|none, frontRate
+- Chart options: depth, wall, texture: front|all|none, frontRate, dayFirst
 - Default highlight: the largest value
 
 ```json
@@ -463,7 +463,7 @@
 - Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series
 - Avoid when: x is time (a line works better), or there are more than 50,000 dots
 - encoding: x, y, series?, label?
-- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, hidden, fit: linear, refLines, quadrants, jitter
+- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter
 - Default highlight: none, or the first series when a series channel is set
 
 ```json
@@ -485,7 +485,7 @@
 - `reducedMotion` (any, default "auto"): "auto" follows the OS setting. true always turns motion off
 - `animateOnView` (boolean, default true): Play when the chart scrolls into view
 - `showLabels` (boolean, default true): Labels drawn on the chart (values and names)
-- `tooltip` (boolean, default true): Show tooltips
+- `tooltip` (tooltip, default true): Show tooltips. { template: "{label} · {value} · owner {owner}" } writes them: {label}, {value}, {series} or any other column of the row. \n starts a new line, and a line with an empty value is left out
 - `syncId` (string): Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it
 - `ariaLabel` (string): Name for screen readers
 - `description` (string): Description for screen readers. Built from the data when omitted

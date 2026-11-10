@@ -145,10 +145,43 @@ export function ramp(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   return out;
 }
 
-/** 0~1 값을 강조색 진하기로 (히트맵) */
-export function sequential(p: Painter, t: number, min = 0.1): { fill: string; opacity: number; text: string; raw: string } {
+/** 0~1 값을 강조색(token) 진하기로 (히트맵) */
+export function sequential(p: Painter, t: number, min = 0.1, token: "accent" | "neutralStrong" = "accent"): { fill: string; opacity: number; text: string; raw: string } {
   const k = Math.max(0, Math.min(1, t));
   const opacity = min + (1 - min) * k;
-  const raw = compositeHex(p.theme.accent, p.theme.panel, opacity);
-  return { fill: p.paint("accent"), opacity, text: readableOn(p, raw), raw };
+  const raw = compositeHex(p.theme[token], p.theme.panel, opacity);
+  return { fill: p.paint(token), opacity, text: readableOn(p, raw), raw };
+}
+
+/** 색 척도 옵션: reverse 뒤집기, center 가운데 값(그보다 작으면 회색), steps 단계 수(2~12) */
+export interface ColorScaleOptions {
+  reverse?: boolean;
+  center?: number;
+  steps?: number;
+}
+
+/**
+ * 색 척도 옵션으로 바꾼 위치. t는 0~1, 가운데 값이 있으면 -1~1이에요.
+ * 뒤집으면 1-t(가운데 값이 있으면 -t), 단계가 있으면 그 수만큼 묶어요(가운데 값과 홀수 단계면 가운데 칸이 0, 가장 옅어요).
+ * 0보다 작으면 회색(neutralStrong) 쪽, 크면 강조색 쪽이고 진하기는 절댓값이에요
+ */
+export function scaleT(t: number, o: ColorScaleOptions): number {
+  let k = o.reverse ? (o.center === undefined ? 1 - t : -t) : t;
+  if (o.steps) {
+    const lo = o.center === undefined ? 0 : -1;
+    const i = Math.max(0, Math.min(o.steps - 1, Math.floor(((k - lo) / (1 - lo)) * o.steps)));
+    k = lo + ((1 - lo) * i) / (o.steps - 1);
+  }
+  return k;
+}
+
+/** 색 척도 옵션으로 바꾼 칸 색 (scaleT의 부호로 회색이나 강조색, 절댓값으로 진하기) */
+export function scaleSwatch(p: Painter, t: number, min: number, o: ColorScaleOptions): ReturnType<typeof sequential> {
+  const k = scaleT(t, o);
+  return sequential(p, Math.abs(k), min, k < 0 ? "neutralStrong" : "accent");
+}
+
+/** 색 척도 옵션 묶음 (단계는 2~12). 아무것도 안 정하면 scaleT는 t 그대로, scaleSwatch는 sequential과 같아요 */
+export function colorScaleOf(reverse: boolean | undefined, center: number | undefined, steps: number | undefined): ColorScaleOptions {
+  return { reverse, center, steps: steps === undefined ? undefined : Math.max(2, Math.min(12, Math.round(steps))) };
 }

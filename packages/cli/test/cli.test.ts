@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { findFonts, getChartSchema, listCharts, reactSnippet, render, specSnippet, stripEmoji, suggest, validate } from "../src/api";
 import { CHARTS } from "ztd-charts/spec";
@@ -46,7 +47,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.5.1");
+    expect((await run("--version")).out.trim()).toBe("0.6.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
@@ -97,7 +98,17 @@ describe("ztd-charts CLI", () => {
     await run("render", "donut.json", "--out", "d.html", "--interactive");
     const html = readFileSync(join(dir, "d.html"), "utf8");
     expect(html).toContain("<!doctype html>");
-    expect(html).toContain('"ztd-charts":"data:text/javascript;base64,');
+    // 서버 그림을 이어받는 코드(React와 도넛 하나)를 글자 그대로 넣어요. CDN도 base64도 없어요
+    expect(html).toContain('id="ztd-chart-config"');
+    expect(html).not.toContain("esm.sh");
+    expect(html).not.toContain("data:text/javascript;base64,");
+    expect(gzipSync(html).length).toBeLessThan(120_000);
+  });
+  it("dist/client: React 한 파일과 차트마다 한 파일, HTML 안에서 깨지는 글자가 없어요", () => {
+    const client = fileURLToPath(new URL("../dist/client", import.meta.url));
+    const files = readdirSync(client).sort();
+    expect(files).toEqual(["react.js", ...CHARTS.map((d) => `${d.type}.js`)].sort());
+    for (const f of files) expect(readFileSync(join(client, f), "utf8"), f).not.toMatch(/<\/script|<!--/i);
   });
   it("render --locale ko: 차트 글자와 배지가 한국어", async () => {
     expect((await run("render", "donut.json", "--out", "d-en.svg")).code).toBe(0);
@@ -184,6 +195,19 @@ describe("CLI API", () => {
     expect(code).toContain('label="device"');
     // card.legend: "auto"가 string으로 넓어지지 않게 타입을 달아요 (TS에서 바로 컴파일)
     expect(specSnippet(CHARTS[0].example)).toContain("const spec: ChartSpec = {");
+    const sourced = reactSnippet({ ...CHARTS[0].example, card: { title: "올해 기기 비중", source: "앱 로그", note: "10월", accent: "올해" } });
+    for (const s of ['source="앱 로그"', 'note="10월"', 'accent="올해"']) expect(sourced).toContain(s);
+    // 내려받기: <Chart spec>처럼 차트가 그리는 열만, 고른 형식만
+    const dl = reactSnippet({ ...CHARTS[0].example, card: { title: "기기 비중", download: ["csv"] } });
+    expect(dl).toContain('import { ChartCard, DownloadButtons, PieChart } from "ztd-charts";');
+    expect(dl).toContain('actions={<DownloadButtons data={data} columns={["device","sales"]} filename="기기 비중" formats={["csv"]} />}');
+    expect(reactSnippet(CHARTS[0].example)).not.toContain("DownloadButtons");
+    // 스펙 툴팁 틀(차례 3 ⑩)은 templateTooltip(…) 함수로
+    const tipped = reactSnippet({ type: "line", data: [{ m: "1월", v: 1 }], encoding: { x: "m", y: "v" }, options: { tooltip: { template: "{label} · {value}" }, locale: "ko" } });
+    expect(tipped).toContain('tooltip={templateTooltip("{label} · {value}", "ko")}');
+    expect(tipped).toContain('import { LineChart, templateTooltip } from "ztd-charts";');
+    // 막대 위 선(차례 3 ⑪)도 채널이라 그대로 넘어가요
+    expect(reactSnippet({ type: "bar", data: [{ m: "1월", 올해: 1, 작년: 2 }], encoding: { x: "m", y: "올해", line: "작년" } })).toContain('line="작년"');
   });
   it("render는 36종 모두 PNG로 그려요", async () => {
     for (const c of CHARTS) {

@@ -121,7 +121,8 @@ export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOC
 /** 축 눈금용: 큰 수는 짧게 */
 export function makeTickFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOCALE, maxAbs = 0): ValueFormatter {
   if (spec !== undefined) return makeFormatter(spec, locale);
-  if (maxAbs >= 1e5) return (v) => formatCompact(v, { locale });
+  // 짧은 표기는 소수 한 자리라 0.05보다 작은 눈금이 "0"이 돼요. 그런 값은 유효숫자 두 자리로 (로그 축)
+  if (maxAbs >= 1e5) return (v) => (isTiny(v) ? formatTiny(v, locale) : formatCompact(v, { locale }));
   return (v) => formatNumber(v, { locale });
 }
 
@@ -134,8 +135,94 @@ function ymd(y: string | number, m: string | number, d: string | number = 1): Da
 /** 4자리 정수라 연도로 읽는 값인지 */
 export const isYear = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1000 && (v as number) <= 9999;
 
-/** 날짜로 바꿔요. "2024-03", "2024-03-15", 20240315(YYYYMMDD), 타임스탬프, Date */
-export function toDate(v: unknown): Date | null {
+/** ISO 꼴 날짜 글자 ("2024-03", "2024-03-05", "2024-03-05 14:00", "2024-03-05T14:00Z") */
+export const ISO_DATE_RE = /^\d{4}-\d{1,2}(-\d{1,2})?([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+/** 영어 월 이름(세 글자 넘는 앞부분도)의 월. 아니면 0 ("Marketing", "Mayday"는 월이 아니에요) */
+export const monthOf = (w: string) => {
+  const s = w.toLowerCase();
+  return s.length < 3 ? 0 : MONTHS.findIndex((n) => n.startsWith(s)) + 1;
+};
+/** 두 자리 연도 (엑셀과 같게 00~29는 20xx, 30~99는 19xx) */
+const yy = (s: string) => +s + (+s < 30 ? 2000 : 1900);
+
+/** 날짜를 읽는 차트(선, 영역, 스트림, 스파크라인, 스카이라인, 캔들, 캘린더)의 dayFirst 프롭 */
+export interface DayFirstProps {
+  /** "05/03/2024"처럼 일, 월이 모두 될 수 있는 날짜를 일이 앞으로 읽어요. 없으면 열의 분명한 날짜가 정하고, 아니면 월이 앞 */
+  dayFirst?: boolean;
+}
+
+/** 시각(ms)의 로컬 날짜 "YYYY-MM-DD" */
+export function isoDay(t: number): string {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** 날짜 글자의 [연, 월, 일, 종류]. 종류 1 날, 2 달, 3 분기. 날짜 표기가 아니면 null */
+export type DateParts = [number, number, number, 1 | 2 | 3];
+
+/** 연이 앞인 표기: ISO 날짜와 달, 점이나 빗금, 8자리 숫자, 한국식. 일이 없으면 달(종류 2) */
+const YEAR_FIRST = [/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/, /^(\d{4})[./]\s*(\d{1,2})[./]\s*(\d{1,2})\.?$/, /^(19\d\d|20\d\d|2100)(\d\d)(\d\d)$/, /^(\d{4})년\s*(\d{1,2})월(?:\s*(\d{1,2})일)?$/];
+/** 연이 끝에 있는 "05/03/2024" (같은 구분자 두 번). 1, 3번째 묶음이 일과 월 후보, 4번째가 연 */
+export const DMY_RE = /^(\d{1,2})([./-])(\d{1,2})\2(\d{4})$/;
+/** 툴팁 틀(options.tooltip.template)의 칸 {이름}. TEMPLATE_NAMES는 짚은 항목에서, 다른 이름은 그 행의 열에서 읽어요 (templateTooltip과 검사기가 같이 써요) */
+export const TEMPLATE_SLOT = /\{([^{}]+)\}/g;
+export const TEMPLATE_NAMES = ["label", "value", "series"];
+
+/**
+ * 표에서 흔한 날짜 표기를 엄격하게 읽어요 (시간이 붙은 ISO는 빼고).
+ * "2024-03-05" "2024.03.05" "2024. 3. 5." "2024/03/05" 20240305 "2024년 3월 5일" "2024년 3월" "24.03.05"
+ * "2024Q1" "Q1 2024" "2024년 1분기" "05/03/2024" "Mar 5, 2024" "5 Mar 2024" "Apr 2024".
+ * 연이 끝에 있는 "05/03/2024"는 앞이 12보다 크면 일, 둘 다 12 이하면 dayFirst일 때만 일이 앞이에요
+ */
+export function dateParts(s: string, dayFirst?: boolean): DateParts | null {
+  let m: RegExpExecArray | null;
+  for (const re of YEAR_FIRST) if ((m = re.exec(s))) return [+m[1], +m[2], +(m[3] ?? 1), m[3] ? 1 : 2];
+  // 시간이 붙은 ISO("2024-03-05T14:00Z")는 아래 표기 어느 것도 아니에요. 큰 표에서 정규식 여덟 개를 더 돌리지 않게 여기서 끝내요
+  if (/^\d{4}-\d/.test(s)) return null;
+  if ((m = /^(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/.exec(s))) return dayFirst ? [yy(m[3]), +m[2], +m[1], 1] : [yy(m[1]), +m[2], +m[3], 1];
+  if ((m = /^(?:(\d{4})\s*-?\s*Q([1-4])|Q([1-4])\s*-?\s*(\d{4})|(\d{4})년\s*([1-4])분기)$/i.exec(s))) return [+(m[1] ?? m[4] ?? m[5]), +(m[2] ?? m[3] ?? m[6]) * 3 - 2, 1, 3];
+  if ((m = DMY_RE.exec(s))) {
+    const a = +m[1];
+    const b = +m[3];
+    const df = a > 12 || (b <= 12 && dayFirst === true);
+    return [+m[4], df ? b : a, df ? a : b, 1];
+  }
+  if ((m = /^(\d{1,2})[\s-]+([a-z]{3,9})\.?[\s-]+(\d{4})$/i.exec(s))) {
+    const mo = monthOf(m[2]);
+    return mo ? [+m[3], mo, +m[1], 1] : null;
+  }
+  if ((m = /^([a-z]{3,9})\.?\s+(?:(\d{1,2}),?\s+)?(\d{4})$/i.exec(s))) {
+    const mo = monthOf(m[1]);
+    return mo ? [+m[3], mo, +(m[2] ?? 1), m[2] ? 1 : 2] : null;
+  }
+  return null;
+}
+
+/** 날짜 축으로 읽는 글자인지 (ISO, 시간이 붙은 ISO, 위 표기) */
+export const isDateText = (s: string): boolean => ISO_DATE_RE.test(s) || dateParts(s) !== null;
+
+/**
+ * 연이 끝에 있는 날짜("05/03/2024") 열의 일, 월 순서. 앞이 12보다 큰 값이 있으면 true(일이 앞),
+ * 뒤가 12보다 큰 값이 있으면 false, 둘 다 없으면(모두 모호) undefined
+ */
+export function dayFirstOf(values: readonly unknown[]): boolean | undefined {
+  let out: boolean | undefined;
+  for (const v of values) {
+    const m = typeof v === "string" ? DMY_RE.exec(v.trim()) : null;
+    if (!m) continue;
+    if (+m[1] > 12) return true;
+    if (+m[3] > 12) out = false;
+  }
+  return out;
+}
+
+/**
+ * 날짜로 바꿔요. 위 날짜 표기, 20240315(YYYYMMDD), 타임스탬프(10자리는 유닉스 초, 13자리는 ms), Date.
+ * dayFirst는 "05/03/2024"처럼 일, 월이 모두 될 수 있을 때 일을 앞으로 읽을지예요
+ */
+export function toDate(v: unknown, dayFirst?: boolean): Date | null {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
   if (typeof v === "number") {
     if (!Number.isFinite(v)) return null;
@@ -145,12 +232,13 @@ export function toDate(v: unknown): Date | null {
       // 8자리 19000101~21001231은 YYYYMMDD로 (그 범위의 ms는 1970-01-01 새벽이라 실제 타임스탬프와 겹치지 않아요)
       if (v >= 19000101 && v <= 21001231) return toDate(`${v}`);
     }
-    return new Date(v);
+    // 10자리는 유닉스 초 (10자리 ms는 1970년 1~4월뿐이라 실제 데이터와 겹치지 않아요)
+    return new Date(Math.abs(v) >= 1e9 && Math.abs(v) < 1e10 ? v * 1000 : v);
   }
   if (typeof v === "string" && v.trim()) {
     const s = v.trim();
-    const m = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/.exec(s) ?? /^(\d{4})[./](\d{1,2})[./](\d{1,2})\.?$/.exec(s) ?? /^(19\d\d|20\d\d|2100)(\d\d)(\d\d)$/.exec(s);
-    if (m) return ymd(m[1], m[2], m[3]);
+    const p = dateParts(s, dayFirst);
+    if (p) return ymd(p[0], p[1], p[2]);
     if (/^\d{4}$/.test(s)) return new Date(Number(s), 0, 1);
     if (!/\d{4}/.test(s)) return null;
     const d = new Date(s);

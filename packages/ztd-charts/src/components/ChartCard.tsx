@@ -20,6 +20,9 @@ const en = {
   retry: "Try again",
   loading: "Loading",
   empty: "No data to show",
+  source: "Source",
+  /** 켜고 끄는 범례를 누른 뒤 화면 낭독기가 읽는 문장 */
+  shown: (visible: number, total: number) => `${visible} of ${total} series shown`,
 };
 export const CARD_TEXT: Record<ChartLang, typeof en> = {
   en,
@@ -32,8 +35,16 @@ export const CARD_TEXT: Record<ChartLang, typeof en> = {
     retry: "다시 시도",
     loading: "불러오는 중",
     empty: "표시할 데이터가 없어요",
+    source: "출처",
+    shown: (visible, total) => `${total}개 중 ${visible}개 보임`,
   },
 };
+
+/** 카드 안쪽 여백: 좌우 padding 20px과 테두리 1px씩(아래 ChartCard 스타일). 서버 HTML이 이어받는 차트를 카드 안 내용 폭으로 그릴 때 빼요. padding이나 border를 바꾸면 같이 바꿔요 */
+export const CARD_INSET = 42;
+
+/** 화면에는 안 보이고 화면 낭독기만 읽는 글 (ChartFrame과 같은 값. 그 파일에서 옮기면 다른 차트 묶음 크기가 흔들려서 따로 둬요) */
+const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 
 /** 로캘에 맞는 카드 문구 */
 const useCardText = (locale?: string) => CARD_TEXT[langOf(useChartLocale(locale))];
@@ -46,31 +57,88 @@ export interface LegendItem {
   shape?: "square" | "line" | "dash" | "circle";
 }
 
-export function Legend(props: { items: LegendItem[]; align?: "start" | "end"; theme?: Partial<ChartTheme>; size?: number; locale?: string }) {
+export interface LegendProps {
+  items: LegendItem[];
+  align?: "start" | "end";
+  theme?: Partial<ChartTheme>;
+  size?: number;
+  locale?: string;
+  /** 숨긴 계열(항목 label). onToggle과 같이 줘요 */
+  hidden?: readonly string[];
+  /**
+   * 주면 항목이 켜고 끄는 단추가 돼요(aria-pressed, Space와 Enter). 마지막 남은 계열은 끌 수 없고(aria-disabled), 누른 뒤 보이는 수를 화면 낭독기에 알려요.
+   * 예: <Legend items={items} hidden={hidden} onToggle={(s) => setHidden((h) => (h.includes(s) ? h.filter((x) => x !== s) : [...h, s]))} /> 와 차트의 hidden={hidden}
+   */
+  onToggle?: (label: string) => void;
+}
+
+export function Legend(props: LegendProps) {
   const p = useChartTheme(props.theme);
   const text = useCardText(props.locale);
+  // 한 번 누른 뒤부터 지금 보이는 수를 알려요. 처음 그릴 때는 비워 둬서 서버 그림과 같아요
+  const [touched, setTouched] = useState(false);
   const size = props.size ?? 11.5;
-  return (
+  const toggle = props.onToggle;
+  // 숨긴 계열은 켜고 끄는 범례에서만 봐요
+  const off = new Set(toggle ? props.hidden : undefined);
+  const shown = props.items.filter((it) => !off.has(it.label)).length;
+  const list = (
     <ul
       aria-label={text.legend}
       style={{ display: "flex", flexWrap: "wrap", justifyContent: props.align === "start" ? "flex-start" : "flex-end", gap: "4px 12px", margin: 0, padding: 0, listStyle: "none" }}
     >
-      {props.items.map((it, i) => (
-        <li key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, color: p.paint("muted"), lineHeight: 1.3 }}>
-          <LegendSwatch p={p} item={it} />
-          <span>{it.label}</span>
-        </li>
-      ))}
+      {props.items.map((it, i) => {
+        const on = !off.has(it.label);
+        const last = on && shown === 1;
+        const body = (
+          <>
+            <LegendSwatch p={p} item={it} off={!on} />
+            <span style={on ? undefined : { textDecoration: "line-through" }}>{it.label}</span>
+          </>
+        );
+        return (
+          <li key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, color: p.paint("muted"), lineHeight: 1.3 }}>
+            {toggle ? (
+              // 이름은 상태와 상관없이 같고 상태는 aria-pressed가 알려요. 숨긴 항목은 줄을 긋고 색 칸을 옅게 해요(색만으로 알리지 않아요). 누를 자리는 24px 이상
+              <button
+                type="button"
+                className="ztd-btn"
+                aria-pressed={on}
+                aria-disabled={last || undefined}
+                onClick={() => {
+                  if (last) return;
+                  toggle(it.label);
+                  setTouched(true);
+                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 24, minWidth: 24, padding: "0 2px", margin: 0, border: 0, borderRadius: 4, background: "transparent", color: "inherit", fontSize: "inherit", lineHeight: "inherit", cursor: last ? "default" : undefined }}
+              >
+                {body}
+              </button>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
     </ul>
+  );
+  if (!toggle) return list;
+  return (
+    <>
+      {list}
+      <span aria-live="polite" aria-atomic="true" style={SR_ONLY}>
+        {touched ? text.shown(shown, props.items.length) : ""}
+      </span>
+    </>
   );
 }
 
-function LegendSwatch({ p, item }: { p: Painter; item: LegendItem }) {
+function LegendSwatch({ p, item, off }: { p: Painter; item: LegendItem; off?: boolean }) {
   const color = item.color ? (isColorToken(item.color) ? p.paint(item.color) : item.color) : p.paint("neutral");
   const shape = item.shape ?? "square";
   if (shape === "line" || shape === "dash")
     return (
-      <svg width={14} height={8} aria-hidden="true" style={{ flex: "none" }}>
+      <svg width={14} height={8} aria-hidden="true" style={{ flex: "none", opacity: off ? 0.35 : undefined }}>
         <line x1={1} x2={13} y1={4} y2={4} stroke={color} strokeWidth={2} strokeDasharray={shape === "dash" ? "3 2" : undefined} strokeLinecap="round" />
         {shape === "line" ? <circle cx={7} cy={4} r={2.2} fill={color} /> : null}
       </svg>
@@ -85,6 +153,7 @@ function LegendSwatch({ p, item }: { p: Painter; item: LegendItem }) {
         borderRadius: shape === "circle" ? 9 : 2.5,
         background: color,
         boxShadow: item.color === "neutral" || item.color === "neutralSoft" || !item.color ? `inset 0 0 0 1px ${p.paint("line2")}` : undefined,
+        opacity: off ? 0.35 : undefined,
       }}
     />
   );
@@ -118,6 +187,12 @@ export interface ChartCardProps {
   actions?: ReactNode;
   /** 아래 한 줄 요약 */
   takeaway?: ReactNode;
+  /** 차트 아래 출처 줄. "Source: "(한국어 "출처: ") 뒤에 붙어요 */
+  source?: ReactNode;
+  /** 출처 줄의 메모(기준일 등). 출처 뒤에 " · "로 이어요 */
+  note?: ReactNode;
+  /** 강조색으로 칠할 제목 속 낱말(글자 제목에서 처음 나오는 곳). 범례 대신 써요 */
+  accent?: string;
   /** 수준 배지: "basic" | "intermediate" | "advanced" (예전 "기본" | "중급" | "심화"도 돼요). 글자는 로캘에 맞춰요 */
   level?: Level | string;
   /** 예시 데이터 표시. 문자열이면 그 문구로 */
@@ -133,7 +208,21 @@ export interface ChartCardProps {
   children?: ReactNode;
 }
 
-/** 차트 카드: 번호, 제목, 부제, 범례, 한 줄 요약, 수준 배지 */
+/** 글자 제목 속 첫 accent 낱말을 color로. 없거나 글자 제목이 아니면 제목 그대로 */
+function accentTitle(title: ReactNode, accent: string | undefined, color: string): ReactNode {
+  if (typeof title !== "string" || !accent) return title;
+  const i = title.indexOf(accent);
+  if (i < 0) return title;
+  return (
+    <>
+      {title.slice(0, i)}
+      <span style={{ color }}>{accent}</span>
+      {title.slice(i + accent.length)}
+    </>
+  );
+}
+
+/** 차트 카드: 번호, 제목, 부제, 범례, 출처 줄, 한 줄 요약, 수준 배지 */
 export function ChartCard(props: ChartCardProps) {
   const p = useChartTheme(props.theme);
   const text = useCardText(props.locale);
@@ -147,6 +236,25 @@ export function ChartCard(props: ChartCardProps) {
   const H = props.as ?? "h3";
   const num = props.number === undefined ? null : typeof props.number === "number" ? String(props.number).padStart(2, "0") : props.number;
   const showReplay = props.replay || props.onReplay;
+  const sourceLine =
+    props.source !== undefined || props.note !== undefined ? (
+      <p style={{ margin: 0, fontSize: 12, color: p.paint("muted"), lineHeight: 1.4 }}>
+        {props.source !== undefined ? `${text.source}: ` : null}
+        {props.source}
+        {props.source !== undefined && props.note !== undefined ? " · " : null}
+        {props.note}
+      </p>
+    ) : null;
+  const footer =
+    props.takeaway !== undefined || props.level || props.sample ? (
+      <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }}>
+        <span style={{ fontSize: 17, fontWeight: 800, color: p.paint("ink"), letterSpacing: -0.3, lineHeight: 1.3, minWidth: 0 }}>{props.takeaway}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "none" }}>
+          {props.sample ? <span style={{ fontSize: 11.5, color: p.paint("muted"), whiteSpace: "nowrap" }}>{typeof props.sample === "string" ? props.sample : text.sample}</span> : null}
+          {props.level ? <Badge level={props.level} theme={props.theme} locale={props.locale} /> : null}
+        </span>
+      </footer>
+    ) : null;
   return (
     <section
       id={props.id}
@@ -174,7 +282,7 @@ export function ChartCard(props: ChartCardProps) {
           {num ? (
             <span style={{ fontFamily: p.cssVars ? `var(--ztd-mono, ${p.theme.monoFamily})` : p.theme.monoFamily, fontSize: 17, fontWeight: 700, color: p.paint("accentText"), letterSpacing: -0.2, flex: "none" }}>{num}</span>
           ) : null}
-          <H style={{ margin: 0, fontSize: 22, fontWeight: 800, color: p.paint("ink"), letterSpacing: -0.5, lineHeight: 1.25, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{props.title}</H>
+          <H style={{ margin: 0, fontSize: 22, fontWeight: 800, color: p.paint("ink"), letterSpacing: -0.5, lineHeight: 1.25, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{accentTitle(props.title, props.accent, p.paint("accentText"))}</H>
           {props.actions}
           {showReplay ? (
             <button
@@ -205,15 +313,15 @@ export function ChartCard(props: ChartCardProps) {
           <CardTitleContext.Provider value={typeof props.title === "string" || typeof props.title === "number" ? String(props.title) : undefined}>{props.children}</CardTitleContext.Provider>
         </ReplayContext.Provider>
       </div>
-      {props.takeaway !== undefined || props.level || props.sample ? (
-        <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }}>
-          <span style={{ fontSize: 17, fontWeight: 800, color: p.paint("ink"), letterSpacing: -0.3, lineHeight: 1.3, minWidth: 0 }}>{props.takeaway}</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "none" }}>
-            {props.sample ? <span style={{ fontSize: 11.5, color: p.paint("muted"), whiteSpace: "nowrap" }}>{typeof props.sample === "string" ? props.sample : text.sample}</span> : null}
-            {props.level ? <Badge level={props.level} theme={props.theme} locale={props.locale} /> : null}
-          </span>
-        </footer>
-      ) : null}
+      {/* 출처 줄과 아랫줄은 한 자리에 둬요. 자리가 하나 늘면 안쪽 차트의 useId 값이 바뀌어 예전 마크업과 달라져요 */}
+      {sourceLine ? (
+        <>
+          {sourceLine}
+          {footer}
+        </>
+      ) : (
+        footer
+      )}
     </section>
   );
 }

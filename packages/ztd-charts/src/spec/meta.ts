@@ -26,7 +26,7 @@ const UPPER = ch("upper", "number", false, "Upper bound of the range band. Same 
 const CH_line: ChannelDef[] = [ch("x", "any", true, "x field (date, number or category)"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field (long tables)"), ch("lower", "number", false, "Lower bound of the range band. In wide tables an array in the order of y", { multi: true }), UPPER];
 const CH_area: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field"), ch("lower", "number", false, 'Lower bound of the range band, with stack "none" only. In wide tables an array in the order of y', { multi: true }), UPPER];
 const CH_stream: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field", { multi: true }), ch("series", "string", false, "Series field")];
-const CH_bar: ChannelDef[] = [ch("x", "string", true, "Category field"), ch("y", "number", true, "Value field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field")];
+const CH_bar: ChannelDef[] = [ch("x", "string", true, "Category field"), ch("y", "number", true, "Value field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field"), ch("line", "number", false, "Lines over vertical bars on the same axis, such as a target or last year. An array for several. Bars stay gray unless highlight is set, and with series the line averages rows of the same x", { multi: true })];
 const CH_radialBar: ChannelDef[] = [LABEL, VALUE];
 const CH_gauge: ChannelDef[] = [ch("value", "number", true, "Value field", { prop: "valueKey" }), ch("target", "number", false, "Target field", { prop: "targetKey" })];
 const CH_bullet: ChannelDef[] = [LABEL, ch("value", "number", true, "Actual value field"), ch("target", "number", false, "Target field")];
@@ -144,6 +144,25 @@ export function specLocale(spec: Pick<ChartSpec, "options">, override?: string):
   return typeof l === "string" && l ? l.replace(/_/g, "-") : undefined;
 }
 
+/** 계열을 숨길 수 있는(hidden) 차트. card.legend "toggle"이 켜고 끄는 차트이기도 해요 */
+export const TOGGLES = ["line", "area", "bar", "scatter"];
+
+/** 막대 위에 그리는 선의 필드(차례 3 ⑪). 세로 막대에만, 100% 막대가 아닐 때만 그려요 */
+export function barLineFields(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): string[] {
+  return type === "bar" && opt.orientation !== "horizontal" && opt.layout !== "percent" ? ([] as unknown[]).concat(enc.line ?? []).map(String) : [];
+}
+
+/** card.legend "toggle"로 켜고 끌 수 있는지: 범례 항목이 모두 숨길 수 있는 계열일 때만 (막대 위 선이 있으면 보통 범례). <Chart>와 검사기가 같이 써요 */
+export function legendToggles(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): boolean {
+  return TOGGLES.includes(type) && !barLineFields(type, enc, opt).length;
+}
+
+/** 스펙의 툴팁 틀(options.tooltip.template). 글자가 아니거나 비었으면 undefined */
+export function specTemplate(spec: Pick<ChartSpec, "options">): string | undefined {
+  const t = (spec.options?.tooltip as { template?: unknown } | undefined)?.template;
+  return typeof t === "string" && t ? t : undefined;
+}
+
 /** 차트 이름 별칭 (AI가 자주 쓰는 이름) */
 export const TYPE_ALIASES: Record<string, string> = {
   doughnut: "donut",
@@ -189,4 +208,21 @@ export function resolveMeta(type: string): ChartMeta | undefined {
   const t = CHANNELS[type] ? type : TYPE_ALIASES[type] ?? Object.keys(META).find((k) => k.toLowerCase() === type.toLowerCase() || META[k].component.toLowerCase() === type.toLowerCase());
   if (!t || !META[t]) return undefined;
   return { type: t, component: META[t].component, name: META[t].name, nameKo: META[t].nameKo, encoding: CHANNELS[t] };
+}
+
+/**
+ * 차트가 그리는 열: encoding(채널 순서, 배열은 펼쳐서)과 열 이름을 받는 옵션(dimensions, start, end, ranges), 겹치지 않게.
+ * 내려받기 CSV가 페이지가 넘긴 다른 열까지 내보내지 않게 써요. 하나도 없으면 빈 배열(내려받기 단추는 모든 열을 써요)
+ */
+export function downloadFields(spec: Pick<ChartSpec, "type" | "encoding" | "options">): string[] {
+  const out = new Set<string>();
+  const add = (v: unknown): void => {
+    if (Array.isArray(v)) v.forEach(add);
+    else if (typeof v === "string" && v) out.add(v);
+  };
+  const enc = (spec.encoding ?? {}) as Record<string, unknown>;
+  for (const k of resolveMeta(spec.type)?.encoding.map((c) => c.name) ?? Object.keys(enc)) add(enc[k]);
+  const o = (spec.options ?? {}) as Record<string, unknown>;
+  for (const k of ["dimensions", "start", "end", "ranges"]) add(o[k]);
+  return [...out];
 }

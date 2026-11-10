@@ -1,7 +1,7 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { Chart, autoLegend, resolveDef } from "../charts/Chart";
-import { CARD_TEXT } from "../components/ChartCard";
+import { CARD_INSET, CARD_TEXT } from "../components/ChartCard";
 import { ThemeProvider, makePainter, resolveThemeInput } from "../theme/context";
 import { baseCss } from "../core/css";
 import { DEFAULT_LOCALE } from "../core/format";
@@ -69,6 +69,21 @@ function chartMarkup(spec: ChartSpec, width: number, height: number | undefined,
   return renderToStaticMarkup(createElement(ThemeProvider, { theme, cssVars }, createElement(Chart, { spec: s, width, height, animate: false, locale })));
 }
 
+/** 낱말 단위로 max 폭 안에 들어가게 줄을 나눠요 (한 낱말이 더 길면 그 낱말만 한 줄). wrapLines는 긴 낱말(출처 URL)을 말줄임으로 자르고 뒤를 버려서 따로 둬요 */
+function wrapWords(s: string, max: number, size: number): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const w of s.split(/\s+/)) {
+    const next = line ? `${line} ${w}` : w;
+    if (line && textWidth(next, size) > max) {
+      out.push(line);
+      line = w;
+    } else line = next;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
 function extractSvg(markup: string): { attrs: string; inner: string; vw: number; vh: number } | null {
   const m = /<svg([^>]*class="ztd-svg"[^>]*)>([\s\S]*?)<\/svg><\/div>/.exec(markup) ?? /<svg([^>]*)>([\s\S]*)<\/svg>/.exec(markup);
   if (!m) return null;
@@ -120,9 +135,13 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const num = card.number ? `${card.number}` : "";
   const numW = num ? textWidth(num, 17, 700) + 10 : 0;
   parts.push(`<text x="${cx0 + ip}" y="${y + 18}" font-family="${esc(mono)}" font-size="17" font-weight="700" fill="${T.accentText}">${esc(num)}</text>`);
-  parts.push(`<text x="${cx0 + ip + numW}" y="${y + 19}" font-size="22" font-weight="800" letter-spacing="-0.5" fill="${T.ink}">${esc(title)}</text>`);
+  // 제목 속 card.accent 낱말은 강조색으로. 모든 조각을 tspan에 넣어요 (PNG에서 이모지를 뺄 때 조각마다 봐요)
+  const at = card.accent ? title.indexOf(card.accent) : -1;
+  const titleBody = at < 0 || !card.accent ? esc(title) : `<tspan>${esc(title.slice(0, at))}</tspan><tspan fill="${T.accentText}">${esc(card.accent)}</tspan><tspan>${esc(title.slice(at + card.accent.length))}</tspan>`;
+  parts.push(`<text x="${cx0 + ip + numW}" y="${y + 19}" font-size="22" font-weight="800" letter-spacing="-0.5" fill="${T.ink}">${titleBody}</text>`);
   y += 30;
-  const legend = card.legend === "auto" ? autoLegend(spec, rows, locale ?? DEFAULT_LOCALE) : card.legend ?? [];
+  // 켜고 끄는 범례(toggle)는 이미지에서 "auto"와 같아요 (숨긴 계열은 차트와 범례에서 빠져요)
+  const legend = card.legend === "auto" || card.legend === "toggle" ? autoLegend(spec, rows, locale ?? DEFAULT_LOCALE) : card.legend ?? [];
   if (card.subtitle || legend.length) {
     parts.push(`<text x="${cx0 + ip}" y="${y + 12}" font-size="12.5" fill="${T.muted}">${esc(card.subtitle ?? "")}</text>`);
     // 범례는 브라우저 카드처럼 줄을 바꾸고 오른쪽에 붙여요: 항목은 색 9px + 6px + 글자, 항목 사이 12px, 줄 사이 18px.
@@ -166,6 +185,13 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   y += 6;
   const chartY = y;
   y += chartH + 14;
+  // 출처 줄: "Source: 출처 · 메모", 카드 폭에 맞춰 낱말 단위로 줄을 바꿔요 (줄 사이 17px)
+  const sourceLine = [card.source ? `${CARD_TEXT[lang].source}: ${card.source}` : "", card.note ?? ""].filter(Boolean).join(" · ");
+  if (sourceLine) {
+    const lines = wrapWords(sourceLine, cw - ip * 2, 12);
+    lines.forEach((l, i) => parts.push(`<text x="${cx0 + ip}" y="${y + 12 + 17 * i}" font-size="12" fill="${T.muted}">${esc(l)}</text>`));
+    y += 17 * lines.length + 10;
+  }
   const hasFooter = !!(card.takeaway || card.level || card.sample);
   if (hasFooter) {
     parts.push(`<text x="${cx0 + ip}" y="${y + 17}" font-size="17" font-weight="800" letter-spacing="-0.3" fill="${T.ink}">${esc(card.takeaway ?? "")}</text>`);
@@ -201,11 +227,14 @@ export interface HTMLOptions extends RenderOptions {
   /** 문서 제목 */
   title?: string;
   /**
-   * 브라우저에서 다시 그려 애니메이션과 인터랙션을 살려요.
-   * 값은 ztd-charts ESM 번들 주소 또는 내용(data: URL)이에요. 없으면 정적 SSR만.
+   * 브라우저에서 움직이게 해요. 없으면 정적 SSR만.
+   * `{ script }`: 서버가 그린 차트를 그대로 이어받는 코드(CLI가 React와 그 차트 하나를 넣어요). 깜빡이지 않고 글꼴 말고는 네트워크가 필요 없어요.
+   * `{ libraryUrl }`: 예전 방식. ztd-charts ESM 번들 주소(또는 data: URL)로 지우고 다시 그려요.
    */
-  interactive?: { libraryUrl: string; reactVersion?: string } | false;
+  interactive?: { script: string } | { libraryUrl: string; reactVersion?: string } | false;
 }
+
+const json = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
 
 /** 서버 렌더한 카드와 차트를 담은 HTML 문서 */
 export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): string {
@@ -215,22 +244,32 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   const theme = resolveThemeInput((opts.theme ?? (spec.theme as never)) || "dark");
   const W = Math.max(240, Math.round(opts.width ?? 720));
   const withCard = opts.frame ?? true;
-  // 정적 HTML 에는 스크립트가 없어 다시 재생 버튼이 눌러도 아무 일도 안 해요. 그래서 interactive 일 때만 버튼을 그려요
-  const shown = withCard ? (opts.interactive || !spec.card ? spec : { ...spec, card: { ...spec.card, replay: false } }) : { ...spec, card: undefined };
-  const markup = renderToStaticMarkup(createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, height: opts.height, animate: false, locale })));
+  // 정적 HTML 에는 스크립트가 없어 다시 재생, 내려받기 버튼이 눌러도 아무 일도 안 해요. 그래서 interactive 일 때만 버튼을 그려요
+  // 켜고 끄는 범례도 스크립트가 있어야 해서 정적 HTML에서는 "auto"로 그려요
+  const shown = withCard ? (opts.interactive || !spec.card ? spec : { ...spec, card: { ...spec.card, replay: false, download: undefined, ...(spec.card.legend === "toggle" ? { legend: "auto" as const } : {}) } }) : { ...spec, card: undefined };
+  const hydrate = opts.interactive && "script" in opts.interactive ? opts.interactive.script : null;
+  if (hydrate !== null && /<\/script|<!--/i.test(hydrate)) throw new Error(lang === "ko" ? "interactive.script에는 </script나 <!--가 들어갈 수 없어요" : "interactive.script must not contain </script or <!--");
+  // 이어받는 차트는 .wrap 의 내용 폭(W)으로 그려요. 브라우저의 첫 그림도 같은 폭이라 그림이 움직이지 않아요 (renderToStaticMarkup 결과는 이어받을 수 없어요)
+  const width = hydrate !== null && spec.options?.width === undefined ? W - (shown.card ? CARD_INSET : 0) : undefined;
+  const tree = createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, width, height: opts.height, animate: false, locale }));
+  const markup = hydrate !== null ? renderToString(tree) : renderToStaticMarkup(tree);
   const def = resolveDef(spec.type, spec.encoding);
   const title = opts.title ?? spec.card?.title ?? (def ? nameIn(def, lang) : "Chart");
-  const rv = opts.interactive ? opts.interactive.reactVersion ?? "19" : "19";
-  const script = opts.interactive
-    ? `<script type="importmap">${JSON.stringify({ imports: { react: `https://esm.sh/react@${rv}`, "react/jsx-runtime": `https://esm.sh/react@${rv}/jsx-runtime`, "react-dom/client": `https://esm.sh/react-dom@${rv}/client?deps=react@${rv}`, "ztd-charts": opts.interactive.libraryUrl } })}</script>
+  const legacy = opts.interactive && "libraryUrl" in opts.interactive ? opts.interactive : null;
+  const rv = legacy?.reactVersion ?? "19";
+  const script = hydrate !== null
+    ? `<script type="application/json" id="ztd-chart-config">${json({ spec: shown, theme, width, height: opts.height, locale })}</script>
+<script type="module">${hydrate}</script>`
+    : legacy
+    ? `<script type="importmap">${JSON.stringify({ imports: { react: `https://esm.sh/react@${rv}`, "react/jsx-runtime": `https://esm.sh/react@${rv}/jsx-runtime`, "react-dom/client": `https://esm.sh/react-dom@${rv}/client?deps=react@${rv}`, "ztd-charts": legacy.libraryUrl } })}</script>
 <script type="module">
 import { createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { Chart, ThemeProvider } from "ztd-charts";
-const spec = ${JSON.stringify(withCard ? spec : { ...spec, card: undefined }).replace(/</g, "\\u003c")};
+const spec = ${json(withCard ? spec : { ...spec, card: undefined })};
 const el = document.getElementById("chart");
 el.innerHTML = "";
-createRoot(el).render(h(ThemeProvider, { theme: ${JSON.stringify(theme).replace(/</g, "\\u003c")} }, h(Chart, { spec${opts.height ? `, height: ${opts.height}` : ""}${locale ? `, locale: ${JSON.stringify(locale).replace(/</g, "\\u003c")}` : ""} })));
+createRoot(el).render(h(ThemeProvider, { theme: ${json(theme)} }, h(Chart, { spec${opts.height ? `, height: ${opts.height}` : ""}${locale ? `, locale: ${json(locale)}` : ""} })));
 </script>`
     : "";
   return `<!doctype html>
@@ -256,6 +295,7 @@ ${script}
 }
 
 export { validateSpec } from "../spec/validate";
+export { resolveDef } from "../charts/Chart";
 export { langOf, plural, type ChartLang } from "../core/i18n";
 export { DEFAULT_LOCALE } from "../core/format";
 export { specSchema, schemaFor } from "../spec/schema";

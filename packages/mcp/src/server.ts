@@ -4,7 +4,7 @@ import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSni
 import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.5.1";
+export const SERVER_VERSION = "0.6.0";
 /** 설명에 쓰는 차트 수. 차트를 더해도 손으로 고치지 않게 목록에서 세요 */
 const N = CHARTS.length;
 

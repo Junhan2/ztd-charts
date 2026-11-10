@@ -2,15 +2,15 @@ import { useId, useMemo, type ReactNode } from "react";
 import { AXIS_FONT, AxisPill, fitTickLabels, GridY, HoverLine, thinLabels, yAxisWidth } from "../core/axis";
 import { BrushBand, changeRatio, ExtremeTags, signedPercent, useChartBrush, useZoom, type BrushProps } from "../core/brush";
 import { capTipRows, ChartFrame, Txt } from "../core/ChartFrame";
-import { makeTickFormatter } from "../core/format";
+import { makeTickFormatter, type DayFirstProps } from "../core/format";
 import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, forecastFrom, forecastX, type Annotation, type AnnotationGeom } from "../core/annotations";
 import { bandBounds, bandPath, bandShape, boundField, isOutside, type BandShape, type BoundField } from "../core/band";
 import { areaPath, linePath, nearestIndex, r2, type Curve } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { categorical, ramp, swatch, type Swatch } from "../core/palette";
-import { extent, fitDomain, scaleLinear, timeTicks } from "../core/scale";
-import { bucketSeries, prepSeries, xNum, type Aggregate, type SeriesModel, type XType } from "../core/series";
+import { extent, fitDomain, fitLogDomain, scaleLinear, scaleLog, timeTicks } from "../core/scale";
+import { bucketSeries, prepSeries, visibleSeries, xNum, type Aggregate, type SeriesModel, type XType } from "../core/series";
 import { dodgeVertical, textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { lazyArray } from "../core/lazy";
@@ -38,6 +38,8 @@ const en = {
   outside: (n: number, where: string) => (n ? ` ${plural(n, "point")} outside the range: ${where}.` : " No points outside the range."),
   /** 범위 밖 점 하나: x 이름표와 계열 */
   where: (label: string, series: string) => `${label} (${series})`,
+  /** 설명: 로그 눈금이라 뺀 0 이하 값 */
+  logDropped: (n: number) => ` ${plural(n, "value")} at or below 0 ${n === 1 ? "is" : "are"} not shown on the log scale.`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
@@ -52,10 +54,11 @@ const MSG: Record<ChartLang, typeof en> = {
     range: (lo, hi) => `${lo}~${hi}`,
     outside: (n, where) => (n ? ` 범위 밖 ${n}개 지점: ${where}.` : " 범위 밖 지점 없음."),
     where: (label, series) => `${label}(${series})`,
+    logDropped: (n) => ` 로그 눈금이라 0 이하 값 ${n}개는 뺐어요.`,
   },
 };
 
-export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
+export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps, DayFirstProps {
   /** x 필드. 날짜("2025-03"), 숫자, 범주 모두 돼요. 기본 "x" */
   x?: Accessor<T, unknown>;
   /** y 필드. 배열이면 넓은 표의 여러 열을 계열로. 기본 "y" */
@@ -101,6 +104,8 @@ export interface XYProps<T = Row> extends BaseChartProps<T>, BrushProps {
   outside?: boolean;
   /** 빠진 값(null, NaN, 그 x에 그 계열의 행이 없음)을 건너 이웃 점을 이어요. 기본 false: 선과 면이 그 자리에서 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역은 상관없어요 */
   connectNulls?: boolean;
+  /** 숨길 계열 이름. 색과 강조는 모든 계열로 정해서 숨겨도 남은 계열 색이 그대로예요. y축은 보이는 계열에 맞추고 x는 그대로예요. 모든 계열을 숨기면 빈 차트예요 */
+  hidden?: readonly string[];
 }
 
 /** 모델에서 x 인덱스 a~b(양끝 포함)만 남겨요 */
@@ -165,6 +170,8 @@ export interface LineChartProps<T = Row> extends XYProps<T> {
   dots?: boolean | "auto";
   /** 강조 계열 아래 그라데이션 면. 기본 false */
   area?: boolean;
+  /** "log"면 y축이 로그 눈금이에요(10, 100, 1,000이 같은 간격). 0 이하 값은 빼고 설명에 그 수를 적어요. 기본 "linear" */
+  yScale?: "linear" | "log";
 }
 
 export interface AreaChartProps<T = Row> extends XYProps<T> {
@@ -240,12 +247,21 @@ function XAxis(props: { c: ChartCtx<unknown>; model: SeriesModel<unknown>; xs: (
 
 function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "line" | "area" }) {
   const isArea = props.kind === "area";
+  // 영역은 0부터의 길이가 값이라 로그 눈금이 없어요
+  const isLog = !isArea && props.yScale === "log";
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.5)), duration: 1100, stagger: 120 });
   const { p, width: W, height: H } = c;
   const msg = MSG[c.lang];
   const gid = useId().replace(/:/g, "");
 
-  const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale, aggregate: props.aggregate }), [props.data, props.x, props.y, props.series, props.xType, c.locale, props.aggregate]);
+  const prepped = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale, aggregate: props.aggregate, dayFirst: props.dayFirst }), [props.data, props.x, props.y, props.series, props.xType, c.locale, props.aggregate, props.dayFirst]);
+  // 로그 눈금은 0 이하 값을 그릴 수 없어서 빈 값처럼 빼요(선이 끊기고 툴팁, 표, 설명도 건너뛰어요). 뺀 수는 설명에 적어요
+  const [model0, logDropped] = useMemo((): [typeof prepped, number] => {
+    if (!isLog) return [prepped, 0];
+    let n = 0;
+    const values = prepped.values.map((row) => row.map((v) => (v <= 0 ? (n++, Number.NaN) : v)));
+    return n ? [{ ...prepped, values }, n] : [prepped, 0];
+  }, [prepped, isLog]);
   const nS = model0.series.length;
   const stackMode = isArea ? props.stack ?? (nS > 1 ? "stacked" : "none") : "none";
   // 확대한 구간 (model0의 x 인덱스)
@@ -254,7 +270,10 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const viewed = useMemo(() => (view ? sliceModel(model0, view[0], view[1]) : model0), [model0, view]);
   // 쌓은 영역은 층이 같은 x를 써야 해서 LTTB 대신 구간 평균으로 줄여요 (2px에 한 점이면 곡선이 충분히 고와요)
   const areaBudget = Math.max(40, Math.round(props.maxPoints ?? W / 2));
-  const model = useMemo(() => (stackMode !== "none" ? bucketSeries(viewed, areaBudget) : viewed), [viewed, stackMode, areaBudget]);
+  const all = useMemo(() => (stackMode !== "none" ? bucketSeries(viewed, areaBudget) : viewed), [viewed, stackMode, areaBudget]);
+  // 숨긴 계열(hidden)을 뺀 그릴 계열. 강조, 색, 범위 띠는 모든 계열(all)로 정한 뒤 고르고, x 키는 모두 둬요. 배열은 렌더마다 새로 올 수 있어서 글자로 비교해요
+  const hiddenKey = props.hidden?.join("\u0001") ?? "";
+  const [model, keep] = useMemo(() => visibleSeries(all, hiddenKey), [all, hiddenKey]);
   // 툴팁, 이벤트의 값: 줄였으면 구간 평균이 아니라 대표 행(이름표, datum과 같은 행)의 실제 값
   const rowVals = model.rowValues ?? model.values;
 
@@ -268,9 +287,17 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   // 그릴 경계가 하나도 없으면(예: 예측 주석 없는 bandFrom "forecast") 띠가 없는 차트와 똑같이 그려요
   const bands = useMemo(() => {
     if (lower === undefined || upper === undefined || stackMode !== "none") return null;
-    const b = bandBounds(model.rows, lower, upper, Array.isArray(props.y), props.data, bandStart);
+    // 넓은 표는 경계 필드를 y와 자리로 짝지어서, 모든 계열로 구한 뒤 보이는 계열을 골라요
+    const b0 = bandBounds(all.rows, lower, upper, Array.isArray(props.y), props.data, bandStart);
+    const b = model === all ? b0 : keep.map((i) => b0[i]);
+    // 로그 눈금은 0 이하 경계를 그릴 수 없어서 그 x에서 띠가 끊겨요
+    if (isLog)
+      for (const s of b)
+        s.lo.forEach((v, k) => {
+          if (!(v > 0 && s.hi[k] > 0)) s.lo[k] = s.hi[k] = Number.NaN;
+        });
     return b.some((s) => s.lo.some(Number.isFinite)) ? b : null;
-  }, [model, lower, upper, props.y, props.data, stackMode, bandStart]);
+  }, [all, model, keep, lower, upper, props.y, props.data, stackMode, bandStart, isLog]);
   // 띠 값의 양끝은 띠가 바뀔 때만 구해요 (매 프레임 1만 칸을 allY에 넣지 않게)
   const bandYs = useMemo(() => {
     const ys: number[] = [];
@@ -278,46 +305,56 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     return ys.length ? extent(ys) : ys;
   }, [bands]);
 
-  const hi = useMemo(() => {
-    const totals = model.values.map((row) => row.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
-    return resolveHighlight(props.highlight as never, model.series as never[], model.series, totals, "first");
-  }, [model, props.highlight]);
+  const hiAll = useMemo(() => {
+    const totals = all.values.map((row) => row.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
+    return resolveHighlight(props.highlight as never, all.series as never[], all.series, totals, "first");
+  }, [all, props.highlight]);
 
-  const colors: Swatch[] = useMemo(() => {
-    if (isArea) return props.colorMode === "categorical" ? categorical(p, nS, hi) : ramp(p, nS, hi);
-    if (props.colorMode === "categorical") return categorical(p, nS, hi);
+  const colorsAll: Swatch[] = useMemo(() => {
+    if (isArea) return props.colorMode === "categorical" ? categorical(p, nS, hiAll) : ramp(p, nS, hiAll);
+    if (props.colorMode === "categorical") return categorical(p, nS, hiAll);
     const rest = swatch(p, "strong");
     const acc = swatch(p, "accent");
-    return model.series.map((_, s) => (hi.has(s) ? acc : rest));
-  }, [isArea, props.colorMode, p, nS, hi, model.series]);
+    return all.series.map((_, s) => (hiAll.has(s) ? acc : rest));
+  }, [isArea, props.colorMode, p, nS, hiAll, all.series]);
+  // 보이는 계열 자리로 옮겨요 (숨긴 게 없으면 그대로)
+  const hi = useMemo(() => (model === all ? hiAll : new Set(keep.flatMap((i, j) => (hiAll.has(i) ? [j] : [])))), [model, all, hiAll, keep]);
+  const colors = useMemo(() => (model === all ? colorsAll : keep.map((i) => colorsAll[i])), [model, all, colorsAll, keep]);
 
   const allY: number[] = [];
   if (stacked) stacked.y1.forEach((r) => r.forEach((v) => allY.push(v)));
   else model.values.forEach((r) => r.forEach((v) => Number.isFinite(v) && allY.push(v)));
   // 띠도 그림 안에 (그리는 x만)
   allY.push(...bandYs);
-  // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게
-  props.referenceLines?.forEach((r) => allY.push(r.y));
-  allY.push(...annotationYs(props.annotations));
-  const signOn = !!props.signColors && stackMode === "none";
+  // 기준선(목표 등)이 데이터 밖이어도 그림 안에 들어오게. 로그 눈금에서 0 이하 기준선과 주석 값은 범위에도 그림에도 넣지 않아요 (데이터의 0 이하 값은 이미 뺐어요)
+  const refLines = isLog ? props.referenceLines?.filter((r) => r.y > 0) : props.referenceLines;
+  refLines?.forEach((r) => allY.push(r.y));
+  allY.push(...annotationYs(props.annotations).filter((v) => !isLog || v > 0));
   const baseline = props.baseline ?? 0;
+  // 로그 눈금에서는 baseline이 0보다 클 때만 위아래 색을 나눠요 (아니면 모든 값이 baseline 위예요)
+  const signOn = !!props.signColors && stackMode === "none" && (!isLog || baseline > 0);
   if (signOn) allY.push(baseline);
   const [mn, mx] = extent(allY);
-  const dom: [number, number] = props.yDomain ?? (stackMode === "percent" ? [0, 100] : fitDomain(mn, mx, Math.max(2, Math.round(H / 70)), { zero: props.zero ?? isArea }));
+  // 로그 눈금은 양 끝이 0보다 큰 yDomain만 써요(zero는 쓰지 않아요)
+  const yd = props.yDomain && (!isLog || (props.yDomain[0] > 0 && props.yDomain[1] > 0)) ? props.yDomain : undefined;
+  const top = props.yLabel ? 22 : 10;
+  const bottom = 22;
+  const yCount = Math.max(2, Math.round(H / 70));
+  const dom: [number, number] = yd ?? (isLog ? fitLogDomain(mn, mx, yCount) : stackMode === "percent" ? [0, 100] : fitDomain(mn, mx, yCount, { zero: props.zero ?? isArea }));
   const tickFmt = stackMode === "percent" ? (v: number) => `${v}%` : makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
-  const yTicks = scaleLinear(dom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
+  // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
+  const y = (isLog ? scaleLog : scaleLinear)(dom, [H - bottom, top]);
+  const yTicks = y.ticks(yCount);
   const left = yAxisWidth(yTicks, tickFmt, c.locale);
   const endLabels = props.endLabels ?? nS > 1;
   const lastIdx = (s: number) => {
     for (let k = model.keys.length - 1; k >= 0; k--) if (Number.isFinite(model.values[s][k])) return k;
     return -1;
   };
-  const endW = endLabels ? Math.min(W * 0.28, Math.max(...model.series.map((s) => textWidth(s, 11, 700)), 20) + 14) : 10;
-  const top = props.yLabel ? 22 : 10;
-  const bottom = 22;
+  // 계열을 켜고 꺼도 그림 폭이 뛰지 않게 이름표 자리는 모든 계열로 재요
+  const endW = endLabels ? Math.min(W * 0.28, Math.max(...all.series.map((s) => textWidth(s, 11, 700)), 20) + 14) : 10;
   const x0 = left + 6;
   const x1 = W - endW;
-  const y = scaleLinear(dom, [H - bottom, top]);
   const xs = xScaleFor(model as SeriesModel<unknown>, x0, x1);
   // 포인터가 움직일 때마다 만들지 않아요 (1만 점이면 한 번에 1만 칸)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -396,7 +433,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
     });
     // xs, y는 아래 값들로 정해져요
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, stacked, colors, hi, x0, x1, H, dom[0], dom[1], maxPts, isArea, bands, props.outside, breaks]);
+  }, [model, stacked, colors, hi, x0, x1, H, dom[0], dom[1], maxPts, isArea, bands, props.outside, breaks, isLog]);
 
   const stg = c.motion.stagger ?? 120;
   const order = useMemo(() => [...draws].sort((a, b) => Number(a.hi) - Number(b.hi)), [draws]);
@@ -425,12 +462,14 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const bandText = useMemo(() => {
     if (!bands) return null;
     const wide = Array.isArray(props.y);
-    const names = model.series.map((_, si) => [boundName(lower, si, wide, msg.lower), boundName(upper, si, wide, msg.upper)] as const);
+    const names = model.series.map((_, si) => [boundName(lower, keep[si], wide, msg.lower), boundName(upper, keep[si], wide, msg.upper)] as const);
     // 툴팁, 라이브 영역, 숨긴 표의 범위 글: " (p5 410 ~ p95 2,300)". 단위는 값에만 붙여요. 범위가 없는 x는 빈 글자
     const range = (si: number, k: number) => (Number.isFinite(bands[si].lo[k]) ? ` (${names[si][0]} ${fmt(bands[si].lo[k])} ~ ${names[si][1]} ${fmt(bands[si].hi[k])})` : "");
     return { range, unnamed: typeof props.y === "string" ? props.y : undefined, desc: describeBand(model, bands, names, props.outside === true, msg) };
-  }, [bands, props.y, model, lower, upper, msg, fmt, props.outside]);
+  }, [bands, props.y, model, keep, lower, upper, msg, fmt, props.outside]);
   const events: ChartEvent<T>[] = useMemo(() => {
+    // 모든 계열을 숨기면 빈 차트예요 (막대, 산점도처럼 빈 상태 글을 읽어요)
+    if (!model.series.length) return [];
     const hs = [...hi][0] ?? 0;
     // 툴팁과 같은 순서: 값 다음에 범위
     const line = (s: string, si: number, k: number) => {
@@ -558,7 +597,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
   const dots = props.dots ?? "auto";
   const showDots = dots === true || (dots === "auto" && !isArea && model.keys.length <= 16);
   const kindName = isArea ? msg.area : msg.line;
-  const desc = props.description ?? `${kindName}. ${msg.desc(nS, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.${bandText?.desc ?? ""}${describeAnnotations(props.annotations, c.lang, c.fv, xText)}`;
+  const desc = props.description ?? `${kindName}. ${msg.desc(model.series.length, model.series.filter(Boolean).join(", ") || c.t.value, model.labels[0] ?? "", model.labels[model.labels.length - 1] ?? "", model.keys.length)}.${bandText?.desc ?? ""}${describeAnnotations(props.annotations, c.lang, c.fv, xText)}${logDropped ? msg.logDropped(logDropped) : ""}`;
 
   const pieces: ReactNode[] = [];
   // 띠는 모든 선 아래 한 층에 깔아요 (다른 계열의 선을 덮지 않게)
@@ -716,7 +755,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
       <GridY p={p} ticks={yTicks} y={y} x0={left} x1={x1 + 4} fmt={tickFmt} locale={c.locale} />
       <AnnotationsUnder list={props.annotations} g={geom} />
       {signOn ? <line x1={x0} x2={x1} y1={yb} y2={yb} stroke={p.paint("dim")} pointerEvents="none" /> : null}
-      {props.referenceLines?.map((r, i) => (
+      {refLines?.map((r, i) => (
         <line key={i} x1={x0} x2={x1} y1={y(r.y)} y2={y(r.y)} stroke={p.paint("dim")} strokeDasharray="3 3" />
       ))}
       <rect x={x0} y={top} width={Math.max(0, x1 - x0)} height={Math.max(0, H - bottom - top)} fill="transparent" />
@@ -735,7 +774,7 @@ function XYChart<T>(props: (LineChartProps<T> & AreaChartProps<T>) & { kind: "li
           })}
         />
       ) : null}
-      {props.referenceLines?.map((r, i) =>
+      {refLines?.map((r, i) =>
         r.label ? (
           // 선이 지나갈 수 있어서 카드 바탕색 받침 위에 써요
           <g key={`rl${i}`} pointerEvents="none">

@@ -1,4 +1,5 @@
 import { useId, useMemo } from "react";
+import type { DayFirstProps } from "../core/format";
 import { ChartFrame, Txt } from "../core/ChartFrame";
 import { areaPath, argMax, argMin, evenIndex, linePath, roundRectPath } from "../core/geometry";
 import type { Mark } from "../core/motion";
@@ -22,7 +23,7 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "스파크라인", desc: (n, lo, hi, last) => `${n}개 지점, 최저 ${lo}, 최고 ${hi}, 마지막 ${last}` },
 };
 
-export interface SparklineProps<T = Row> extends BaseChartProps<T> {
+export interface SparklineProps<T = Row> extends BaseChartProps<T>, DayFirstProps {
   x?: Accessor<T, unknown>;
   y?: Accessor<T, number>;
   /** "line" | "area" | "bar". 기본 "area" */
@@ -40,7 +41,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
   const c = useChart(props, { height: 48, duration: 900 });
   const { p, width: W, height: H } = c;
   const gid = useId().replace(/:/g, "");
-  const model = useMemo(() => prepSeries(props.data, props.x, props.y as never, undefined, { locale: c.locale }), [props.data, props.x, props.y, c.locale]);
+  const model = useMemo(() => prepSeries(props.data, props.x, props.y as never, undefined, { locale: c.locale, dayFirst: props.dayFirst }), [props.data, props.x, props.y, c.locale, props.dayFirst]);
   const vals = useMemo(() => model.values[0] ?? [], [model]);
   const variant = props.variant ?? "area";
   // 마지막 값은 끝에서부터 첫 숫자 (끝 값이 비어도 글자와 점이 사라지지 않게)

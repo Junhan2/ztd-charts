@@ -2,9 +2,9 @@ import { parseCSV } from "../data/parse";
 import { hasField, numGetter, toNumber } from "../data/accessor";
 import { markPercentile } from "../data/percentile";
 import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
-import { toDate } from "../core/format";
+import { DMY_RE, ISO_DATE_RE, TEMPLATE_NAMES, TEMPLATE_SLOT, isDateText, isoDay, toDate } from "../core/format";
 import { plural } from "../core/i18n";
-import { META } from "./meta";
+import { META, legendToggles, specTemplate } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
@@ -263,6 +263,59 @@ function checkSlope(enc: Record<string, unknown>, opts: Record<string, unknown>,
   warn("encoding.label", "slope_incomplete", t(`${plural(n, "item lacks", "items lack")} a value in the first (${first}) or last (${last}) period and ${n === 1 ? "is" : "are"} left out (${names})`, `처음(${first})이나 마지막(${last}) 기간 값이 없는 항목 ${n}개는 빼고 그려요(${names})`));
 }
 
+/**
+ * 날짜 x(캘린더는 date)를 읽는 차트: 글자 x가 새 날짜 표기라 시간 축이 되면(선, 영역, 스트림, xType 없을 때),
+ * 그리고 "05/03/2024"처럼 일, 월 순서를 알 수 없으면 행 번호와 함께 알려요. 큰 표는 앞 10만 행만 봐요
+ */
+function checkDates(type: string, enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+  if (!rows || !rows.length) return;
+  const channel = type === "calendar" ? "date" : "x";
+  const field = typeof enc[channel] === "string" ? (enc[channel] as string) : type === "candlestick" ? "date" : channel;
+  const xs = rows.slice(0, 100_000).map((r) => r?.[field]);
+  // 한 번 훑어서: 모두 날짜 글자인지, ISO가 아닌 첫 값(odd)
+  let allText = true;
+  let odd: unknown;
+  let any = false;
+  for (const v of xs) {
+    if (isBlank(v)) continue;
+    any = true;
+    const s = typeof v === "string" ? v.trim() : null;
+    if (odd === undefined && !(s !== null && ISO_DATE_RE.test(s))) odd = v;
+    if (allText && !(s !== null && isDateText(s))) allText = false;
+    if (!allText && odd !== undefined) break;
+  }
+  if (!any || !(type === "calendar" || type === "candlestick" || opts.xType === "date" || (opts.xType === undefined && allText))) return;
+  // 연이 끝인 날짜("05/03/2024"): 일, 월 순서의 근거(dayFirstOf와 같은 규칙)와 모호한 행을 한 번에. 모두 ISO면 볼 것이 없어요
+  let evidence: boolean | undefined;
+  const amb: number[] = [];
+  for (let i = 0; odd !== undefined && i < xs.length && evidence !== true; i++) {
+    const m = typeof xs[i] === "string" ? DMY_RE.exec((xs[i] as string).trim()) : null;
+    if (!m) continue;
+    if (+m[1] > 12) evidence = true;
+    else if (+m[3] > 12) evidence = false;
+    else if (+m[1] !== +m[3]) amb.push(i);
+  }
+  if ((type === "line" || type === "area" || type === "stream") && opts.xType === undefined && allText) {
+    const d = odd === undefined ? null : toDate(odd, opts.dayFirst === true || (opts.dayFirst === undefined && evidence === true));
+    if (d) {
+      const ymd = isoDay(d.getTime());
+      warn("encoding.x", "x_read_as_date", t(`x values such as ${cellText(odd)} are read as dates (${ymd}) and placed by time. Set options.xType to "date" to keep this without the warning, or to "band" to space them evenly as text`, `${cellText(odd)} 같은 x 값을 날짜(${ymd})로 읽어 시간 간격대로 놓아요. 이대로 두려면 options.xType을 "date"로, 글자로 고르게 놓으려면 "band"로 정해 주세요`));
+    }
+  }
+  if (opts.dayFirst !== undefined || evidence !== undefined || !amb.length) return;
+  const shown = amb.slice(0, 3).map((i) => i + 1);
+  const more = amb.length > shown.length;
+  const v = cellText(xs[amb[0]]);
+  warn(
+    `encoding.${channel}`,
+    "date_order_ambiguous",
+    t(
+      `Dates such as ${v} (${shown.length === 1 ? "row" : "rows"} ${shown.join(", ")}${more ? ", …" : ""}) could be month first or day first, and are read month first. Set options.dayFirst to true if the day comes first`,
+      `${v} 같은 날짜(${shown.join(", ")}행${more ? " 등" : ""})는 월이 앞인지 일이 앞인지 알 수 없어서 월을 앞으로 읽었어요. 일이 앞이면 options.dayFirst를 true로 정해 주세요`,
+    ),
+  );
+}
+
 /** 경고 문구에 넣는 칸 값 (길면 줄여요) */
 function cellText(v: unknown): string {
   const s = typeof v === "string" ? JSON.stringify(v) : String(v);
@@ -272,6 +325,30 @@ function cellText(v: unknown): string {
 /** 경고 문구의 목록: 보여 줄 것을 쉼표로 잇고, 전체가 더 많으면 영어 ", …", 한국어 " 등"을 붙여요 */
 function listText(shown: string[], total: number, t: (en: string, ko: string) => string): string {
   return `${shown.join(", ")}${total > shown.length ? t(", …", " 등") : ""}`;
+}
+
+/**
+ * 로그 눈금(yScale "log"): 0 이하 y 값은 빼고 그려서 그 수와 앞의 행 3개까지 알려요(앞 10만 행, 넓은 표는 y 필드마다).
+ * 양 끝이 0보다 크지 않은 yDomain과 추세선(fit)은 쓰지 않아요
+ */
+function checkLogScale(enc: Record<string, unknown>, o: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report) {
+  if (o.yScale !== "log") return;
+  const yd = o.yDomain;
+  if (Array.isArray(yd) && !((yd[0] as number) > 0 && (yd[1] as number) > 0)) warn("options.yDomain", "ignored_option", t('yDomain needs both ends above 0 with yScale "log", so it is not used', 'yScale이 "log"면 yDomain 양 끝이 0보다 커야 해서 쓰지 않아요'));
+  if (o.fit !== undefined) warn("options.fit", "ignored_option", t('The trend line (fit) is not drawn with yScale "log"', 'yScale이 "log"면 추세선(fit)을 그리지 않아요'));
+  if (!rows?.length) return;
+  const ys = fieldList(enc.y ?? "y").filter((f): f is string => typeof f === "string");
+  let n = 0;
+  const shown: string[] = [];
+  rows.slice(0, 100_000).forEach((r, i) => {
+    for (const f of ys) {
+      const v = toNumber(r?.[f]);
+      if (!(v <= 0)) continue;
+      n++;
+      if (shown.length < 3) shown.push(t(`row ${i + 1} ${cellText(r[f])}`, `${i + 1}행 ${cellText(r[f])}`));
+    }
+  });
+  if (n) warn("options.yScale", "nonpositive_log", t(`${plural(n, "value")} at or below 0 ${n === 1 ? "is" : "are"} left out, because a log scale cannot show them (${listText(shown, n, t)})`, `로그 눈금은 0 이하를 그릴 수 없어서 0 이하 값 ${n}개는 빼고 그려요(${listText(shown, n, t)})`));
 }
 
 /** 인코딩의 필드 이름. 문자열이 아니면 기본 이름(x, label, value 등) */
@@ -477,6 +554,10 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
     const optNames = defs.map((o) => o.name);
     for (const [k, v] of Object.entries(options)) {
       const o = defs.find((d) => d.name === k);
+      if (!o && k === "yScale" && (def.type === "area" || def.type === "bar")) {
+        warn(`options.${k}`, "unknown_option", t(`${chartName} has no option "yScale": its length from 0 is the value, so it has no log scale. Use line, scatter or bubble with yScale "log"`, `${chartName}에는 "yScale" 옵션이 없어요. 0부터의 길이가 값이라 로그 눈금을 쓰지 않아요. 로그 눈금은 line, scatter, bubble에서 yScale "log"로 써요`));
+        continue;
+      }
       if (!o) {
         const near = closest(k, optNames);
         warn(`options.${k}`, "unknown_option", t(`${chartName} has no option "${k}"${near ? `. Did you mean "${near}"?` : ""}`, `${chartName}에는 "${k}" 옵션이 없어요${near ? `. "${near}"인가요?` : ""}`));
@@ -494,6 +575,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
       // upColor, downColor 같은 색 옵션은 범례에도 들어가서 범례 색과 같은 검사를 거쳐요
       else if (o.type === "string" && /Color$/.test(k) && !isSafeStyleValue(v)) err(`options.${k}`, "bad_option_color", t(`options.${k} must be a theme token ("accent") or a CSS color`, `options.${k} 값은 테마 토큰("accent")이나 CSS 색이어야 해요`));
       else if (o.type === "boolean" && vt !== "boolean") bad("true or false", "true나 false여야");
+      else if (o.type === "tooltip" && vt !== "boolean" && !(vt === "object" && Object.keys(v as object).length === 1 && typeof (v as { template?: unknown }).template === "string"))
+        bad('true, false or { template: "…" }', 'true, false, { template: "…" } 중 하나여야');
       else if (o.type === "array" && vt !== "array") bad("an array", "배열이어야");
       // 항목 수가 정해진 숫자 배열(상자 그림 whiskers 등)은 개수와 범위를 봐요. 순서는 쓰는 쪽에서 맞춰요
       else if (o.type === "array" && o.length !== undefined && !isNumberTuple(v as number[], o))
@@ -521,6 +604,17 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
     }
     if (def.type === "bar" && options.orientation === "horizontal" && Array.isArray(options.annotations) && options.annotations.length)
       warn("options.annotations", "annotations_ignored", t("Annotations are drawn on vertical bars only", "주석은 세로 막대에서만 그려요"));
+    // 툴팁 틀의 {이름}이 데이터 열에 없으면 그 줄은 늘 빠져요
+    const template = specTemplate(spec);
+    if (template && fields.length)
+      for (const [, raw] of template.matchAll(TEMPLATE_SLOT)) {
+        const n = raw.trim();
+        if (TEMPLATE_NAMES.includes(n) || fields.includes(n)) continue;
+        const near = closest(n, fields);
+        warn("options.tooltip", "tooltip_field_not_found", t(`{${n}} is not a column of data, so lines with it are left out.${near ? ` Did you mean {${near}}?` : ""}`, `{${n}} 열이 데이터에 없어서 그 칸이 든 줄은 빼요.${near ? ` {${near}}인가요?` : ""}`));
+      }
+    if (def.type === "bar" && (enc.line as string[] | undefined)?.length && (options.orientation === "horizontal" || options.layout === "percent"))
+      warn("encoding.line", "line_ignored", t('encoding.line is drawn on vertical bars only, not with layout "percent"', 'encoding.line 선은 세로 막대에만 그리고 layout "percent"에는 그리지 않아요'));
     if (typeof options.locale === "string") {
       try {
         Intl.getCanonicalLocales(options.locale.replace(/_/g, "-"));
@@ -546,23 +640,34 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn);
   if (def.type === "pie" || def.type === "donut") checkSlices(enc, optsObj, rows, t, warn);
   if (def.type === "slope") checkSlope(enc, optsObj, rows, t, warn);
+  // 날짜를 읽는 차트는 dayFirst 옵션이 있는 차트예요
+  if (def.options.some((o) => o.name === "dayFirst")) checkDates(def.type, enc, optsObj, rows, t, warn);
   if (def.type === "histogram") checkHistogram(rows, enc, optsObj, binned, err, warn, t);
+  if (def.options.some((o) => o.name === "yScale")) checkLogScale(enc, optsObj, rows, t, warn);
 
   // card
   if (spec.card !== undefined) {
     if (!spec.card || typeof spec.card !== "object" || Array.isArray(spec.card)) err("card", "bad_card", t("card must be an object", "card는 객체여야 해요"));
     else {
-      const allowed = ["number", "title", "subtitle", "takeaway", "level", "legend", "sample", "replay"];
+      const allowed = ["number", "title", "subtitle", "takeaway", "level", "legend", "sample", "replay", "source", "note", "accent", "download"];
       for (const [k, v] of Object.entries(spec.card)) {
         if (!allowed.includes(k)) warn(`card.${k}`, "unknown_card_key", t(`card has no key "${k}"`, `card에는 "${k}" 키가 없어요`));
-        else if (["number", "title", "subtitle", "takeaway", "level"].includes(k) && typeof v !== "string") err(`card.${k}`, "bad_card_value", t(`card.${k} must be a string`, `card.${k} 값은 문자열이어야 해요`));
-        else if (k === "legend" && v !== "auto" && !Array.isArray(v)) err("card.legend", "bad_legend", t('card.legend must be "auto" or an array of [{ label, color }]', 'card.legend는 "auto" 또는 [{ label, color }] 배열이어야 해요'));
+        else if (["number", "title", "subtitle", "takeaway", "level", "source", "note", "accent"].includes(k) && typeof v !== "string") err(`card.${k}`, "bad_card_value", t(`card.${k} must be a string`, `card.${k} 값은 문자열이어야 해요`));
+        else if (k === "download" && typeof v !== "boolean" && !(Array.isArray(v) && v.length && v.every((f) => f === "csv" || f === "svg" || f === "png")))
+          err("card.download", "bad_card_value", t('card.download must be true or an array of "csv", "svg", "png"', 'card.download 값은 true 또는 "csv", "svg", "png" 배열이어야 해요'));
+        else if (k === "legend" && v !== "auto" && v !== "toggle" && !Array.isArray(v)) err("card.legend", "bad_legend", t('card.legend must be "auto", "toggle" or an array of [{ label, color }]', 'card.legend는 "auto", "toggle" 또는 [{ label, color }] 배열이어야 해요'));
+        // 켜고 끄는 범례는 계열을 숨길 수 있는(hidden) 차트에서만. 막대 위 선이 있으면 선은 숨길 수 없어서 보통 범례로 그려요
+        else if (k === "legend" && v === "toggle" && !legendToggles(def.type, enc, optsObj))
+          warn("card.legend", "legend_toggle_ignored", t('card.legend "toggle" works on line, area, bar and scatter, so this chart draws a plain legend', 'card.legend "toggle"은 line, area, bar, scatter에서만 켜고 꺼요. 이 차트는 보통 범례로 그려요'));
         else if (k === "legend" && Array.isArray(v))
           v.forEach((it, i) => {
             const c = it && typeof it === "object" ? (it as { color?: unknown }).color : undefined;
             if (c !== undefined && (typeof c !== "string" || !isSafeStyleValue(c))) err(`card.legend[${i}].color`, "bad_legend_color", t('A legend color must be a theme token ("accent") or a CSS color', '범례 색은 테마 토큰("accent")이나 CSS 색이어야 해요'));
           });
       }
+      const { accent, title } = spec.card as { accent?: unknown; title?: unknown };
+      if (typeof accent === "string" && typeof title === "string" && !title.includes(accent))
+        warn("card.accent", "accent_not_in_title", t(`card.accent "${accent}" is not in the title, so nothing is colored. Use a word from the title`, `card.accent의 "${accent}" 단어가 제목에 없어서 칠하지 않아요. 제목 속 단어를 넣어 주세요`));
     }
   }
   if (spec.theme && typeof spec.theme === "object" && !Array.isArray(spec.theme)) {

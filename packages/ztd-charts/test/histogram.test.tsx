@@ -296,3 +296,14 @@ describe("HistogramChart", () => {
     }
   });
 });
+
+describe("작은 눈금 표기 (차례 4)", () => {
+  it("로그 히스토그램이 0.01부터 100만까지 퍼져도 첫 x 눈금을 0이 아니라 0.01로 써요", () => {
+    const data = Array.from({ length: 33 }, (_, i) => ({ v: 10 ** (-2 + 0.25 * i) }));
+    const all = texts(r(<HistogramChart data={data} value="v" log width={640} animate={false} />));
+    const bottom = Math.max(...all.map((t) => t.y));
+    const xTicks = all.filter((t) => t.y === bottom).map((t) => t.text);
+    expect(xTicks).toContain("0.01");
+    expect(xTicks).not.toContain("0");
+  });
+});

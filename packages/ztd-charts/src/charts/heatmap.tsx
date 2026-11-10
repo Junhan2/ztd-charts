@@ -6,7 +6,7 @@ import { roundRectPath } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import { lazyArray } from "../core/lazy";
 import type { Mark } from "../core/motion";
-import { sequential } from "../core/palette";
+import { colorScaleOf, scaleSwatch, scaleT } from "../core/palette";
 import { extent, robustMax } from "../core/scale";
 import { textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
@@ -39,6 +39,12 @@ export interface HeatmapProps<T = Row> extends BaseChartProps<T> {
   legendLabels?: [string, string];
   /** 이 칸 수보다 많으면 캔버스로 그려요. 기본 2500 */
   canvasThreshold?: number;
+  /** 가장 작은 값을 가장 진하게 칠해요 (1위가 진해야 하는 순위). 기본 false */
+  colorReverse?: boolean;
+  /** 가장 옅은 색이 되는 값. 그보다 크면 강조색, 작으면 회색 (손익의 0) */
+  colorCenter?: number;
+  /** 부드러운 색 대신 이 수만큼 단계로 나눠 칠해요 (2~12). 범례도 단계마다 */
+  colorSteps?: number;
 }
 
 interface CellInfo<T> {
@@ -94,22 +100,30 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
   const rad = Math.min(p.theme.radiusMark, Math.min(cw, ch) / 4);
   const top95 = useMemo(() => robustMax(model.vals), [model.vals]);
   const span = Math.max(1e-9, top95 - model.mn) || 1;
+  // 색 척도 옵션. 가운데 값이 있으면 t는 -1~1이고, 그 값에서 먼 쪽(95백분위)이 끝이에요
+  const scale = useMemo(() => colorScaleOf(props.colorReverse, props.colorCenter, props.colorSteps), [props.colorReverse, props.colorCenter, props.colorSteps]);
+  const center = scale.center;
+  const dev = useMemo(() => (center === undefined ? 0 : Math.max(1e-9, robustMax(Array.from(model.vals, (v) => Math.abs(v - center))))), [model.vals, center]);
+  const swatch = (t: number) => scaleSwatch(p, t, 0.08, scale);
 
   const hiSet = useMemo(() => {
     const labels = Array.from({ length: nCells }, (_, i) => `${model.xs[i % nx]}|${model.ys[Math.floor(i / nx)]}`);
-    return resolveHighlight(props.highlight as never, model.rows as never[], labels, Array.from(model.vals), "max");
-  }, [model, nCells, nx, props.highlight]);
+    // 색을 뒤집으면 기본 강조도 가장 진한 칸(가장 작은 값)으로
+    return resolveHighlight(props.highlight as never, model.rows as never[], labels, Array.from(model.vals), props.colorReverse ? "min" : "max");
+  }, [model, nCells, nx, props.highlight, props.colorReverse]);
 
   const cells = useMemo<CellInfo<T>[]>(() => {
     const out: CellInfo<T>[] = [];
     for (let i = 0; i < nCells; i++) {
       const v = model.vals[i];
       if (!Number.isFinite(v)) continue;
-      out.push({ i, col: i % nx, row: Math.floor(i / nx), value: v, t: Math.min(1, (v - model.mn) / span), datum: model.rows[i] });
+      out.push({ i, col: i % nx, row: Math.floor(i / nx), value: v, t: center === undefined ? Math.min(1, (v - model.mn) / span) : Math.max(-1, Math.min(1, (v - center) / dev)), datum: model.rows[i] });
     }
     return out;
-  }, [model, nCells, nx, span]);
+  }, [model, nCells, nx, span, center, dev]);
 
+  // 범례 칸 수: 단계를 정했으면 단계마다
+  const nLegend = scale.steps ?? 5;
   const D = c.motion.duration ?? 600;
   const marks = useMemo<Mark<CellInfo<T> | null>[]>(() => {
     if (useCanvas) return [{ key: "__p", to: [1], from: [0], data: null }];
@@ -150,17 +164,23 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, t: number, color: (v: string, fb: string) => string) => {
       const acc = color("--ztd-accent", p.theme.accent);
+      const neg = color("--ztd-neutral-strong", p.theme.neutralStrong);
+      let fill = acc;
       ctx.fillStyle = acc;
       for (const cl of cells) {
         const wave = (cl.col / Math.max(1, nx - 1)) * 0.6 + (cl.row / Math.max(1, ny - 1)) * 0.4;
         const o = Math.max(0, Math.min(1, (t * 1.25 - wave) * 4));
         if (o <= 0) continue;
-        ctx.globalAlpha = (0.08 + 0.92 * cl.t) * o;
+        // 가운데 값보다 작으면 회색. 칸이 수천 개라 색이 바뀔 때만 다시 정해요
+        const k = scaleT(cl.t, scale);
+        const col = k < 0 ? neg : acc;
+        if (col !== fill) ctx.fillStyle = fill = col;
+        ctx.globalAlpha = (0.08 + 0.92 * Math.min(1, Math.abs(k))) * o;
         ctx.fillRect(x0 + cl.col * cw + gap / 2, y0 + cl.row * ch + gap / 2, Math.max(0.5, cw - gap), Math.max(0.5, ch - gap));
       }
       ctx.globalAlpha = 1;
     },
-    [cells, nx, ny, x0, y0, cw, ch, gap, p.theme.accent],
+    [cells, nx, ny, x0, y0, cw, ch, gap, p.theme.accent, p.theme.neutralStrong, scale],
   );
 
   // 호버로 다시 그릴 때마다 글자 폭을 다시 재지 않아요
@@ -204,12 +224,12 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
     >
       {props.legend !== false ? (
         <g aria-hidden="true">
-          {Array.from({ length: 5 }, (_, k) => {
-            const s = sequential(p, k / 4, 0.08);
-            const lx = W - 5 * 14 - textWidth(ll[1], 10) - 6 + k * 14;
+          {Array.from({ length: nLegend }, (_, k) => {
+            const s = scaleSwatch(p, center === undefined ? k / (nLegend - 1) : (2 * k) / (nLegend - 1) - 1, 0.08, scale);
+            const lx = W - nLegend * 14 - textWidth(ll[1], 10) - 6 + k * 14;
             return <rect key={k} x={lx} y={3} width={12} height={9} rx={2} fill={s.fill} opacity={s.opacity} />;
           })}
-          <Txt x={W - 5 * 14 - textWidth(ll[1], 10) - 10} y={7.5} anchor="end" size={10} fill={p.paint("muted")}>
+          <Txt x={W - nLegend * 14 - textWidth(ll[1], 10) - 10} y={7.5} anchor="end" size={10} fill={p.paint("muted")}>
             {ll[0]}
           </Txt>
           <Txt x={W} y={7.5} anchor="end" size={10} fill={p.paint("muted")}>
@@ -221,7 +241,7 @@ export function Heatmap<T = Row>(props: HeatmapProps<T>) {
         ? m.items.map((it) => {
             const cl = it.data;
             if (!cl) return null;
-            const s = sequential(p, cl.t, 0.08);
+            const s = swatch(cl.t);
             const x = x0 + cl.col * cw + gap / 2;
             const y = y0 + cl.row * ch + gap / 2;
             const w = Math.max(0.5, cw - gap);

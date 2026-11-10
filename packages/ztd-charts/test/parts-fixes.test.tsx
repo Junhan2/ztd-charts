@@ -1,12 +1,16 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { CalendarHeatmap } from "../src/charts/calendar";
 import { FunnelChart } from "../src/charts/funnel";
+import { Heatmap } from "../src/charts/heatmap";
 import { DonutChart, PieChart } from "../src/charts/pie";
 import { allocateCells } from "../src/charts/waffle";
 import { chordLayout } from "../src/layout/chord";
 import { squarify } from "../src/layout/hierarchy";
 import { sankeyLayout } from "../src/layout/sankey";
 import { textWidth } from "../src/core/text";
+import { renderSpecToSVG } from "../src/server";
+import { darkTheme } from "../src/theme/tokens";
 
 const paths = (html: string) => [...html.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
 
@@ -112,5 +116,46 @@ describe("locale and date labels", () => {
     const html = renderToStaticMarkup(<SlopeChart data={data} label="k" x="x" value="v" width={480} animate={false} />);
     expect(html).not.toContain("GMT");
     expect(html).toContain("2024-01-01");
+  });
+});
+
+describe("색 척도 옵션: 뒤집기, 가운데 값, 단계 (차례 2 ⑬)", () => {
+  const cellOpacity = (html: string) => [...html.matchAll(/<path d="[^"]*" fill="([^"]*)" opacity="([\d.]+)" class="ztd-mark"/g)].map((m) => ({ fill: m[1], opacity: +m[2] }));
+  const heat = (vals: number[], props: Record<string, unknown> = {}) =>
+    renderToStaticMarkup(<Heatmap data={vals.map((v, i) => ({ x: `c${i}`, y: "r", v }))} x="x" y="y" value="v" width={480} animate={false} {...props} />);
+  it("colorReverse면 1위(가장 작은 값)가 가장 진해요", () => {
+    const cells = cellOpacity(heat([1, 2, 3, 4], { colorReverse: true }));
+    expect(cells[0].opacity).toBe(1);
+    expect(cells[3].opacity).toBeCloseTo(0.08, 5);
+  });
+  it("colorReverse면 기본 강조(테두리)도 가장 작은 값으로 가고, highlight를 주면 그걸 따라요", () => {
+    const vals = [3, 1, 4, 2];
+    expect(heat(vals, { colorReverse: true })).toBe(heat(vals, { colorReverse: true, highlight: "min" }));
+    expect(heat(vals, { colorReverse: true })).not.toBe(heat(vals, { colorReverse: true, highlight: "max" }));
+    expect(heat(vals)).toBe(heat(vals, { highlight: "max" }));
+    // 캘린더: 데이터가 없는 날(0)이 아니라 가장 작은 실제 값이 강조돼요
+    const cal = (props: Record<string, unknown>) => renderToStaticMarkup(<CalendarHeatmap data={[{ date: "2024-03-01", value: 7 }, { date: "2024-03-05", value: 2 }, { date: "2024-03-09", value: 9 }]} width={480} animate={false} {...props} />);
+    const outlined = (html: string) => [...html.matchAll(/<rect [^>]*stroke="var\(--ztd-ink[^"]*"[^>]*>/g)].length;
+    expect(outlined(cal({ colorReverse: true }))).toBe(1);
+    expect(cal({ colorReverse: true })).toBe(cal({ colorReverse: true, highlight: "2024-03-05" }));
+  });
+  it("colorCenter: 0보다 작은 칸은 회색, 같은 크기면 같은 진하기 (SVG 내보내기도 테마 색으로)", () => {
+    const cells = cellOpacity(heat([-4, -2, 2, 4], { colorCenter: 0 }));
+    expect(cells.map((c) => (c.fill.startsWith("var(--ztd-neutral-strong") ? "gray" : c.fill.startsWith("var(--ztd-accent") ? "accent" : c.fill))).toEqual(["gray", "gray", "accent", "accent"]);
+    expect(cells[0].opacity).toBeCloseTo(cells[3].opacity, 5);
+    expect(cells[1].opacity).toBeCloseTo(cells[2].opacity, 5);
+    const svg = renderSpecToSVG({ type: "heatmap", data: [-4, 4].map((v, i) => ({ x: `c${i}`, y: "r", v })), encoding: { x: "x", y: "y", value: "v" }, options: { colorCenter: 0 } });
+    expect(svg).toContain(`fill="${darkTheme.neutralStrong}"`);
+  });
+  it("colorSteps: 3이면 칸 진하기가 3가지, 범례도 3칸", () => {
+    const html = heat([1, 2, 3, 4, 5, 6, 7, 8, 9], { colorSteps: 3 });
+    expect(new Set(cellOpacity(html).map((c) => c.opacity)).size).toBe(3);
+    expect(html.match(/<rect x="[\d.]+" y="3" width="12" height="9" rx="2"/g)).toHaveLength(3);
+  });
+  it("캘린더도 가운데 값보다 작은 날은 회색, 큰 날은 강조색이에요", () => {
+    const html = renderToStaticMarkup(<CalendarHeatmap data={[{ date: "2024-03-01", value: -3 }, { date: "2024-03-02", value: 5 }]} colorCenter={0} width={480} animate={false} />);
+    const fills = [...html.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" rx="[\d.]+" fill="([^"]*)"/g)].map((m) => m[1]);
+    expect(fills.some((f) => f.startsWith("var(--ztd-neutral-strong"))).toBe(true);
+    expect(fills.some((f) => f.startsWith("var(--ztd-accent"))).toBe(true);
   });
 });

@@ -3,9 +3,9 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
-import { CHARTS, commonOptionsIn, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
+import { CHARTS, commonOptionsIn, downloadFields, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, specTemplate, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
 import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
-import { langOf, renderSpecToHTML, renderSpecToSVG, resolveSpecData } from "ztd-charts/server";
+import { langOf, renderSpecToHTML, renderSpecToSVG, resolveDef, resolveSpecData } from "ztd-charts/server";
 import { CLI_TEXT, type CliText } from "./messages";
 
 const require = createRequire(import.meta.url);
@@ -116,17 +116,30 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
     const v = spec.encoding?.[c.name];
     if (v !== undefined) props.push(`${c.prop ?? c.name}=${jsxValue(v)}`);
   }
-  for (const [k, v] of Object.entries(spec.options ?? {})) if (JSX_NAME.test(k)) props.push(`${k}=${jsxValue(v)}`);
+  // 스펙 툴팁 틀은 컴포넌트에 templateTooltip(…) 함수로 넘겨요 (객체 그대로면 컴포넌트가 무시해요)
+  const template = specTemplate(spec);
+  const tipLocale = specLocale(spec);
+  for (const [k, v] of Object.entries(spec.options ?? {})) {
+    if (!JSX_NAME.test(k)) continue;
+    if (k === "tooltip" && template) props.push(`tooltip={templateTooltip(${JSON.stringify(template)}${tipLocale ? `, ${JSON.stringify(tipLocale)}` : ""})}`);
+    else props.push(`${k}=${jsxValue(v)}`);
+  }
   const chartEl = `<${def.component} ${props.join(" ")} />`;
   const card = spec.card;
-  const imports = card ? `ChartCard, ${def.component}` : def.component;
+  const imports = [card && "ChartCard", card?.download && "DownloadButtons", def.component, template && "templateTooltip"].filter(Boolean).join(", ");
   const more = rows && rows.length > 12 ? (ko ? ` // 외 ${rows.length - 12}행` : ` // and ${rows.length - 12} more rows`) : "";
   const dataLine = rows && opts.inlineData !== false ? `const ${dataVar} = ${JSON.stringify(rows.slice(0, 12), null, 2)}${more};\n\n` : `// ${dataVar}: ${ko ? "객체 배열 (REST, CSV, DB 행 등)" : "an array of objects (REST, CSV, database rows and so on)"}\n`;
   let body = chartEl;
   if (card) {
     const cp: string[] = [];
-    for (const k of ["number", "title", "subtitle", "takeaway", "level"] as const) if (card[k]) cp.push(`${k}=${jsxValue(card[k])}`);
+    for (const k of ["number", "title", "subtitle", "takeaway", "level", "source", "note", "accent"] as const) if (card[k]) cp.push(`${k}=${jsxValue(card[k])}`);
     if (Array.isArray(card.legend)) cp.push(`legend=${jsxValue(card.legend)}`);
+    if (card.download) {
+      // <Chart spec>처럼 차트가 그리는 열만 CSV로
+      const cols = downloadFields(spec);
+      const dp = [`data={${dataVar}}`, cols.length ? `columns=${jsxValue(cols)}` : "", card.title ? `filename=${jsxValue(card.title)}` : "", Array.isArray(card.download) ? `formats=${jsxValue(card.download)}` : ""];
+      cp.push(`actions={<DownloadButtons ${dp.filter(Boolean).join(" ")} />}`);
+    }
     cp.push("replay");
     body = `<ChartCard ${cp.join(" ")}>\n      ${chartEl}\n    </ChartCard>`;
   }
@@ -211,15 +224,16 @@ export function stripEmoji(svg: string): { svg: string; removed: number } {
   return { svg: out, removed };
 }
 
-function standaloneUrl(): string | null {
-  try {
-    const p = require.resolve("ztd-charts/package.json");
-    const f = join(dirname(p), "dist/standalone.js");
-    if (!existsSync(f)) return null;
-    return `data:text/javascript;base64,${readFileSync(f).toString("base64")}`;
-  } catch {
-    return null;
+/** --interactive HTML의 브라우저 코드: React와 그 차트 하나 (scripts/build-client.mjs 가 dist/client 에 만들어요). 없으면 null → 정적 HTML */
+function clientScript(type: string): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // 빌드한 dist/ 에서는 옆의 client/, vitest 로 src/ 에서 돌 때는 ../dist/client/
+  for (const dir of [join(here, "client"), join(here, "../dist/client")]) {
+    const react = join(dir, "react.js");
+    const chart = join(dir, `${type}.js`);
+    if (existsSync(react) && existsSync(chart)) return `${readFileSync(react, "utf8")}\n${readFileSync(chart, "utf8")}`;
   }
+  return null;
 }
 
 /** 데이터 주소를 가져올 때 기다리는 시간과 받는 크기의 한도 */
@@ -304,8 +318,10 @@ export async function render(input: ChartSpec, opts: RenderOptions = {}): Promis
   }
   const format = opts.format ?? "svg";
   if (format === "html") {
-    const lib = opts.interactive ? standaloneUrl() : null;
-    const html = renderSpecToHTML(spec, { width: opts.width, height: opts.height, theme: opts.theme, frame: opts.frame, interactive: lib ? { libraryUrl: lib } : false, locale });
+    // 별칭과 채널로 실제 그릴 차트를 골라(scatter 에 size 가 있으면 bubble) 그 차트의 코드만 넣어요
+    const type = opts.interactive ? resolveDef(spec.type, spec.encoding)?.type : undefined;
+    const script = type ? clientScript(type) : null;
+    const html = renderSpecToHTML(spec, { width: opts.width, height: opts.height, theme: opts.theme, frame: opts.frame, interactive: script ? { script } : false, locale });
     return { format, html };
   }
   const svg = renderSpecToSVG(spec, { width: opts.width, height: opts.height, theme: opts.theme, frame: opts.frame, locale });

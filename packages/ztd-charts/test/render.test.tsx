@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BarChart, type BarChartProps } from "../src/charts/bar";
 import { Chart } from "../src/charts/Chart";
-import { ChartCard, ChartGrid, ChartState } from "../src/components/ChartCard";
+import { CARD_TEXT, ChartCard, ChartGrid, ChartState } from "../src/components/ChartCard";
+import { columnsOf, csvText, fileName } from "../src/components/download";
+import { downloadFields } from "../src/spec/meta";
+import { templateTooltip } from "../src/charts/tooltipTemplate";
 import { renderSpecToHTML, renderSpecToSVG } from "../src/server";
 import { CHARTS, VARIANTS, variantSpec } from "../src/spec";
 import { ThemeProvider } from "../src/theme/context";
@@ -88,6 +91,126 @@ describe("renderSpecToSVG (resvg용 독립 SVG)", () => {
   it("정적 HTML에는 동작하지 않는 다시 재생 버튼을 그리지 않아요", () => {
     expect(renderSpecToHTML(CHARTS[0].example)).not.toContain("Replay animation");
     expect(renderSpecToHTML(CHARTS[0].example, { interactive: { libraryUrl: "data:text/javascript,0" } })).toContain("Replay animation");
+  });
+});
+
+describe("카드 출처 줄과 제목 강조 (차례 2 ⑭)", () => {
+  const base = { type: "bar", data: [{ x: "A", y: 1 }, { x: "B", y: 2 }], encoding: { x: "x", y: "y" } };
+  const strip = (h: string) => h.replace(/<!-- -->/g, "");
+  it("출처와 메모는 차트 아래 한 줄, 서버 카드는 한 줄만큼(27px) 길어져요", () => {
+    const spec = { ...base, card: { title: "T", source: "통계청", note: "2025-10 기준" } };
+    expect(strip(ssr(<Chart spec={spec} animate={false} />))).toContain("Source: 통계청 · 2025-10 기준");
+    expect(strip(ssr(<Chart spec={{ ...spec, options: { locale: "ko" } }} animate={false} />))).toContain("출처: 통계청 · 2025-10 기준");
+    const height = (svg: string) => Number(/height="([\d.]+)"/.exec(svg)![1]);
+    const withLine = renderSpecToSVG(spec, { width: 560 });
+    expect(withLine).toContain("Source: 통계청 · 2025-10 기준");
+    expect(height(withLine) - height(renderSpecToSVG({ ...base, card: { title: "T" } }, { width: 560 }))).toBe(27);
+  });
+  it("제목 속 accent 낱말만 강조색이고, 차트 이름은 제목 그대로", () => {
+    const spec = { ...base, card: { title: "올해 매출이 가장 커요", accent: "올해" } };
+    const html = ssr(<Chart spec={spec} animate={false} />);
+    expect(html).toMatch(/<span style="color:var\(--ztd-accent-text[^"]*">올해<\/span>/);
+    expect(html).toContain('aria-label="올해 매출이 가장 커요"');
+    expect(renderSpecToSVG(spec, { width: 560, theme: "light" })).toContain(`<tspan fill="${lightTheme.accentText}">올해</tspan>`);
+  });
+  it("download: true면 단추 셋, 배열이면 고른 것만(순서는 CSV, SVG, PNG), 정적 HTML과 SVG에는 없어요", () => {
+    const labels = (h: string) => [...h.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]).filter((l) => /CSV|SVG|PNG/.test(l));
+    const card = (download?: unknown, locale?: string) => ssr(<Chart spec={{ ...base, card: { title: "T", download }, ...(locale ? { options: { locale } } : {}) } as never} animate={false} />);
+    expect(labels(card(true))).toEqual(["Download CSV", "Download SVG", "Download PNG"]);
+    expect(labels(card(["png", "csv"]))).toEqual(["Download CSV", "Download PNG"]);
+    expect(labels(card(true, "ko"))).toEqual(["CSV 내려받기", "SVG 내려받기", "PNG 내려받기"]);
+    expect(labels(card(undefined))).toEqual([]);
+    expect(labels(card(false))).toEqual([]);
+    const spec = { ...base, card: { title: "T", download: true as const } };
+    expect(labels(renderSpecToHTML(spec))).toEqual([]);
+    expect(labels(renderSpecToHTML(spec, { interactive: { libraryUrl: "https://example.test/ztd-charts.js" } }))).toHaveLength(3);
+    expect(renderSpecToSVG(spec, { width: 560 })).not.toMatch(/Download|<button/);
+  });
+  it("CSV: BOM, CRLF, 글자 칸은 모두 따옴표, 수식처럼 시작하는 글자는 앞에 '", () => {
+    // "+1 234"처럼 toNumber가 수로 읽는 글자는 수식이 될 수 없어 그대로 둬요
+    const row = { a: "=1+1", b: -5, c: "-5", d: "＝cmd", e: "x;y", f: 'say "hi"', g: null, h: new Date(2024, 2, 5), i: "+82-10-1234", j: Number.NaN, k: "+1 234" };
+    const text = csvText([row], Object.keys(row));
+    expect(text.charCodeAt(0)).toBe(0xfeff);
+    expect(text.slice(1)).toBe(`"a","b","c","d","e","f","g","h","i","j","k"\r\n"'=1+1",-5,"-5","'＝cmd","x;y","say ""hi""",,"2024-03-05","'+82-10-1234",,"+1 234"\r\n`);
+  });
+  it("CSV 열은 차트가 그리는 열만: 채널 순서, 배열은 펼치고, 열 이름 옵션도. 없으면 단추가 모든 열을 써요", () => {
+    expect(downloadFields({ type: "line", encoding: { series: "s", y: "v", x: "d" } })).toEqual(["d", "v", "s"]);
+    expect(downloadFields({ type: "line", encoding: { x: "d", y: ["a", "b"], lower: ["la", "lb"], upper: ["ua", "ub"] } })).toEqual(["d", "a", "b", "la", "lb", "ua", "ub"]);
+    expect(downloadFields({ type: "parallel", encoding: { label: "name" }, options: { dimensions: ["p", "q"] } })).toEqual(["name", "p", "q"]);
+    expect(downloadFields({ type: "bar", encoding: { x: "a", y: ["b", "a"] } })).toEqual(["a", "b"]);
+    expect(downloadFields({ type: "parallel" })).toEqual([]);
+    expect(columnsOf([{ a: 1 }, { b: 2, a: 3 }])).toEqual(["a", "b"]);
+    expect(fileName('매출 / 2025: "상반기"\n')).toBe("매출 - 2025- -상반기-");
+    expect(fileName("   ")).toBe("chart");
+  });
+});
+
+describe("서버 그림을 이어받는 대화형 HTML (차례 3 ⑨)", () => {
+  const bar = CHARTS.find((c) => c.type === "bar")!.example;
+  const cfgOf = (html: string) => JSON.parse(/<script type="application\/json" id="ztd-chart-config">([^<]*)<\/script>/.exec(html)![1]);
+  it("설정과 코드를 싣고, 차트는 .wrap 내용 폭으로 이어받을 수 있게 그려요", () => {
+    const html = renderSpecToHTML(bar, { interactive: { script: "/*x*/" }, theme: "light" });
+    const cfg = cfgOf(html);
+    expect(cfg.width).toBe(678);
+    expect(cfg.spec.type).toBe("bar");
+    expect(cfg.theme).toEqual(JSON.parse(JSON.stringify(lightTheme)));
+    expect(/<div id="chart">([\s\S]*?)<\/div><\/main>/.exec(html)![1]).toBe(
+      renderToString(
+        <ThemeProvider theme={lightTheme} cssVars>
+          <Chart spec={bar} width={678} animate={false} />
+        </ThemeProvider>,
+      ),
+    );
+    expect(html).toContain("<script type=\"module\">/*x*/</script>");
+    expect(html).not.toMatch(/esm\.sh|importmap/);
+    expect(cfgOf(renderSpecToHTML(bar, { interactive: { script: "" }, frame: false })).width).toBe(720);
+    expect(cfgOf(renderSpecToHTML({ ...bar, options: { ...bar.options, width: 500 } }, { interactive: { script: "" } }))).not.toHaveProperty("width");
+  });
+  it("코드에 </script나 <!--가 있으면 막아요", () => {
+    expect(() => renderSpecToHTML(bar, { interactive: { script: "a</script>b" } })).toThrow("interactive.script must not contain </script or <!--");
+    expect(() => renderSpecToHTML({ ...bar, options: { ...bar.options, locale: "ko" } }, { interactive: { script: "<!-- x" } })).toThrow("interactive.script에는 </script나 <!--가 들어갈 수 없어요");
+  });
+});
+
+describe("툴팁 틀 (차례 3 ⑩)", () => {
+  const ev = (over: Record<string, unknown> = {}) => ({ datum: { rate: 2.94, owner: "준호" }, index: 0, key: "8월", label: "8월", value: 605, formatted: "605", ...over }) as never;
+  const html = (template: string, e: never, locale = "ko-KR") => ssr(<>{templateTooltip(template, locale)(e)}</>);
+  it("짚은 항목과 그 행의 다른 열로 한 줄씩 써요", () => {
+    expect(html("{label} · 가입 {value}명 · 전환율 {rate}% · 담당 {owner}", ev())).toBe("<div>8월 · 가입 605명 · 전환율 2.9% · 담당 준호</div>");
+    expect(html("{series} {value}", ev({ series: "올해" }))).toBe("<div>올해 605</div>");
+  });
+  it("빈 칸이 든 줄은 빼고, 모두 빠지면 null(기본 툴팁)이에요", () => {
+    expect(templateTooltip("담당 {owner}")(ev({ datum: { owner: "" } }))).toBeNull();
+    expect(html("{label}\n담당 {owner}", ev({ datum: { owner: null } }))).toBe("<div>8월</div>");
+    expect(html("{label}\n전환율 {rate}", ev({ datum: null }))).toBe("<div>8월</div>");
+  });
+  it("수는 차트의 기본 수 표기로 써요", () => {
+    expect(html("{n}", ev({ datum: { n: 12345 } }), "en-US")).toBe("<div>12,345</div>");
+    expect(html("{n}", ev({ datum: { n: 0.000012 } }), "en-US")).toBe("<div>0.000012</div>");
+  });
+});
+
+describe("범례 켜고 끄기 (차례 4 ⑫)", () => {
+  const CH = ["Search", "Social", "Ads", "Referral", "Direct"];
+  const data = ["Jan", "Feb", "Mar", "Apr"].flatMap((m, k) => CH.map((ch, s) => ({ m, ch, v: 40 + s * 10 + k * 3 })));
+  const spec = (legend: "toggle" | "auto", hidden: string[]) => ({ type: "line", data, encoding: { x: "m", y: "v", series: "ch" }, options: { highlight: "Social", hidden }, card: { title: "Visits", legend } }) as const;
+  const pressed = (h: string) => [...h.matchAll(/<button type="button" class="ztd-btn" aria-pressed="(true|false)"( aria-disabled="true")?/g)].map((m) => m[1] + (m[2] ? "!" : ""));
+  const strokes = (h: string) => (h.match(/<path d="M[^"]*" fill="none" stroke="/g) ?? []).length;
+  it("보는 사람이 계열을 골라 봐요: 단추마다 눌림 상태, 처음엔 빈 알림 자리, 보이는 선만", () => {
+    const h = renderToString(<Chart spec={spec("toggle", ["Search", "Ads", "Direct"])} width={560} animate={false} />);
+    expect(pressed(h)).toEqual(["false", "true", "false", "true", "false"]);
+    expect(h.match(/<span aria-live="polite" aria-atomic="true" style="[^"]*"><\/span>/g)).toHaveLength(1);
+    expect(strokes(h)).toBe(2);
+    expect(pressed(renderToString(<Chart spec={spec("toggle", ["Search", "Ads", "Referral", "Direct"])} width={560} animate={false} />))).toEqual(["false", "true!", "false", "false", "false"]);
+  });
+  it('이미지와 정적 HTML은 "auto"처럼, 대화형 HTML은 단추로 그려요', () => {
+    expect(renderSpecToSVG(spec("toggle", ["Ads"]), { width: 560 })).toBe(renderSpecToSVG(spec("auto", ["Ads"]), { width: 560 }));
+    expect(renderSpecToHTML(spec("toggle", ["Ads"]))).not.toContain("aria-pressed");
+    expect(renderSpecToHTML(spec("toggle", ["Ads"]), { interactive: { script: "/*x*/" } })).toContain('aria-pressed="true"');
+  });
+  it("누른 뒤 화면 낭독기가 읽는 문장 (영어, 한국어)", () => {
+    expect(CARD_TEXT.en.shown(2, 5)).toBe("2 of 5 series shown");
+    expect(CARD_TEXT.ko.shown(2, 5)).toBe("5개 중 2개 보임");
   });
 });
 

@@ -1454,3 +1454,162 @@ describe("scatter", () => {
     for (const s of ["S0", "S1", "S2", "S3", "S4"]) expect(textOf(five, s), s).toHaveLength(0);
   });
 });
+
+describe("스펙 툴팁 틀이 차트에 함수로 가요 (차례 3 ⑩)", () => {
+  const data = [{ m: "1월", v: 300, owner: "민지" }, { m: "2월", v: 340, owner: "" }];
+  const spec = (tooltip: unknown): ChartSpec => ({ type: "line", data, encoding: { x: "m", y: "v" }, options: { tooltip } as never });
+  it("template이면 그 틀로 쓰는 함수, false면 그대로 false", () => {
+    r(<Chart spec={spec({ template: "{label} · 담당 {owner}" })} width={480} animate={false} />);
+    const tip = frame().renderTip as (e: unknown) => ReactElement;
+    expect(typeof tip).toBe("function");
+    expect(r(<>{tip({ label: "1월", formatted: "300", datum: data[0] })}</>)).toBe("<div>1월 · 담당 민지</div>");
+    r(<Chart spec={spec(false)} width={480} animate={false} />);
+    expect(frame().renderTip).toBe(false);
+  });
+});
+
+describe("막대와 선 (차례 3 ⑪)", () => {
+  const months = Array.from({ length: 12 }, (_, i) => ({ m: `${i + 1}월`, 올해: 100 + i * 4, 작년: 70 + i * 5 }));
+  const dots = (h: string) => [...h.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="3" fill="([^"]+)"/g)].map((m) => ({ cx: +m[1], cy: +m[2], fill: m[3] }));
+  const linePath = (h: string) => /<path d="([^"]+)" fill="none" stroke="var\(--ztd-accent[^"]*" stroke-width="2"/.exec(h)?.[1];
+  const tableRows = (h: string) => [...h.matchAll(/<tr><th scope="row">([^<]*)<\/th><td>([^<]*)<\/td><\/tr>/g)].map((m) => [m[1], m[2]]);
+  const bar = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<BarChart data={data} x="m" y="올해" line="작년" width={600} animate={false} {...extra} />);
+
+  it("선 하나는 막대 칸 가운데를 지나는 강조색 선과 점이고, 막대는 회색이에요", () => {
+    const h = bar(months);
+    expect(linePath(h)).toBeDefined();
+    const centers = [...h.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" fill="transparent"/g)].map((m) => +m[1] + +m[2] / 2);
+    const pts = dots(h);
+    expect(pts).toHaveLength(12);
+    pts.forEach((p, i) => expect(Math.abs(p.cx - centers[i]), `${i}`).toBeLessThan(0.1));
+    expect(h).not.toMatch(/fill="var\(--ztd-accent[^"]*" stroke="none"/);
+    expect(r(<BarChart data={months} x="m" y="올해" width={600} animate={false} />)).not.toBe(h);
+  });
+  it("선 값으로 축 범위를 넓혀 점이 잘리지 않아요", () => {
+    const h = r(<BarChart data={[{ m: "A", 올해: 100, 작년: 200 }, { m: "B", 올해: 150, 작년: 120 }]} x="m" y="올해" line="작년" width={500} height={300} animate={false} />);
+    expect(h).toMatch(/>200<\/text>/);
+    expect(Math.min(...dots(h).map((p) => p.cy))).toBeGreaterThanOrEqual(8);
+  });
+  it("빈 값에서 선이 끊기고, 혼자 남은 점은 점만 그려요", () => {
+    const gap = (idx: number[]) => months.map((d, i) => (idx.includes(i) ? { ...d, 작년: null } : d));
+    const h = bar(gap([3, 4, 9]));
+    expect(linePath(h)!.match(/M/g)).toHaveLength(3);
+    expect(dots(h)).toHaveLength(9);
+    const lone = bar(gap([3, 4, 9, 10]));
+    expect(linePath(lone)!.match(/M/g)).toHaveLength(2);
+    expect(dots(lone)).toHaveLength(8);
+  });
+  it("키보드는 막대를 모두 지난 뒤 선을 지나요 (숨은 표도 막대 다음 선)", () => {
+    const rows = tableRows(bar(months));
+    expect(rows).toHaveLength(24);
+    expect(rows[12]).toEqual(["1월 · 작년", "70"]);
+  });
+  it("가로 막대와 100% 막대에는 그리지 않고 알려요", () => {
+    for (const extra of [{ orientation: "horizontal" }, { layout: "percent" }]) {
+      expect(linePath(bar(months, extra)), JSON.stringify(extra)).toBeUndefined();
+      expect(validateSpec({ type: "bar", data: months, encoding: { x: "m", y: "올해", line: "작년" }, options: extra }).warnings.map((w) => w.code), JSON.stringify(extra)).toContain("line_ignored");
+    }
+  });
+  it("긴 표에서는 같은 x의 선 값을 평균해요 (계열마다 되풀이한 목표가 두 배가 되지 않아요)", () => {
+    const long = ["1월", "2월"].flatMap((m) => ["A", "B"].map((team) => ({ m, team, v: 40, goal: 95 })));
+    const rows = tableRows(r(<BarChart data={long} x="m" y="v" series="team" line="goal" width={500} height={300} animate={false} />));
+    expect(rows.filter(([l]) => l.endsWith("· goal")).map(([, v]) => v)).toEqual(["95", "95"]);
+  });
+  it("카드 범례는 막대(회색)와 선(강조색 선 모양)을 함께 적어요", () => {
+    const spec: ChartSpec = { type: "bar", data: months, encoding: { x: "m", y: "올해", line: "작년" }, card: { title: "T", legend: "auto" } };
+    expect(autoLegend(spec, months, "ko-KR")).toEqual([
+      { label: "올해", color: "neutral" },
+      { label: "작년", color: "accent", shape: "line" },
+    ]);
+    const svg = renderSpecToSVG(spec, { width: 560 });
+    for (const s of [">올해<", ">작년<"]) expect(svg).toContain(s);
+    expect(svg).toMatch(/<line [^>]*stroke-width="2"/);
+  });
+  it("빈 선 목록(line: [])은 선이 없는 것과 같아요 (막대 색, 설명, 경고)", () => {
+    expect(bar(months, { line: [] })).toBe(r(<BarChart data={months} x="m" y="올해" width={600} animate={false} />));
+    expect(validateSpec({ type: "bar", data: months, encoding: { x: "m", y: "올해", line: [] }, options: { orientation: "horizontal" } }).warnings.map((w) => w.code)).not.toContain("line_ignored");
+  });
+});
+
+describe("로그 y축 (차례 4 ⑯)", () => {
+  const growth = Array.from({ length: 24 }, (_, i) => ({ m: `M${i + 1}`, users: Math.round(120 * 1.62 ** i) }));
+  const edge = [10, 100, 0, 1000, -50, 1e6, 0.001].map((y, i) => ({ x: i + 1, y }));
+  const yTicks = (h: string) => texts(h).filter((t) => t.anchor === "end").map((t) => t.text);
+  const dots = (h: string) => (h.match(/<circle /g) ?? []).length;
+  it("1,000배 넘게 퍼진 값도 읽혀요: 10배마다 같은 간격의 눈금과 고르게 오르는 선", () => {
+    const h = r(<LineChart data={growth} x="m" y="users" yScale="log" width={560} animate={false} />);
+    expect(yTicks(h)).toEqual(["100", "1K", "10K", "100K", "1M", "10M"]);
+    const pts = pairs(/<path d="(M[^"]+)" fill="none"/.exec(h)![1]);
+    const ys = pts.filter((_, i) => i % 3 === 0).map((pt) => pt[1]);
+    expect(ys).toHaveLength(24);
+    const steps = ys.slice(1).map((v, i) => v - ys[i]);
+    for (const s of steps) expect(Math.abs(s - steps[0])).toBeLessThan(0.6);
+    const svg = renderSpecToSVG({ type: "line", data: growth, encoding: { x: "m", y: "users" }, options: { yScale: "log" } }, { width: 560, frame: false });
+    expect(svg).not.toMatch(/NaN|Infinity/);
+    expect(svg).toContain(">10M<");
+  });
+  it("산점도·버블은 y가 0 이하인 점만 빼고, 그 수를 설명에 적어요", () => {
+    const h = r(<ScatterChart data={edge} x="x" y="y" yScale="log" width={480} height={320} animate={false} />);
+    expect(dots(h)).toBe(5);
+    expect(desc(h)).toContain("2 points with y at or below 0 are not shown on the log scale.");
+    expect(yTicks(h)).toContain("0.001");
+    expect(yTicks(h)).not.toContain("0");
+    expect(h).not.toMatch(/NaN|Infinity/);
+    expect(desc(r(<ScatterChart data={edge} x="x" y="y" yScale="log" locale="ko-KR" width={480} height={320} animate={false} />))).toContain("로그 눈금이라 y가 0 이하인 점 2개는 뺐어요.");
+    expect(dots(r(<BubbleChart data={edge} x="x" y="y" size="x" yScale="log" width={480} height={320} animate={false} />))).toBe(5);
+  });
+  it("선은 0 이하 값에서 끊기고, 그 수를 설명에 적어요", () => {
+    const h = r(<LineChart data={[5, 50, 0, 500, 5000].map((v, i) => ({ m: `p${i}`, v }))} x="m" y="v" yScale="log" curve="linear" width={480} animate={false} />);
+    expect(/<path d="(M[^"]+)" fill="none"/.exec(h)![1].match(/M/g)).toHaveLength(2);
+    expect(desc(h)).toContain("1 value at or below 0 is not shown on the log scale.");
+    expect(h).not.toMatch(/NaN|Infinity/);
+  });
+  it("영역 차트는 yScale이 있어도 그림이 같아요 (0부터의 길이가 값)", () => {
+    const data = growth.slice(0, 6);
+    expect(r(<AreaChart data={data} x="m" y="users" {...({ yScale: "log" } as object)} width={480} animate={false} />)).toBe(r(<AreaChart data={data} x="m" y="users" width={480} animate={false} />));
+  });
+});
+
+describe("숨긴 계열 (차례 4 ⑫)", () => {
+  const CH = ["Search", "Social", "Ads", "Referral", "Direct"];
+  const five = ["Jan", "Feb", "Mar", "Apr"].flatMap((m, k) => CH.map((ch, s) => ({ m, ch, v: 40 + s * 10 + k * 3 })));
+  const strokes = (h: string) => [...h.matchAll(/<path d="M[^"]*" fill="none" stroke="([^"]+)"/g)].map((m) => m[1]);
+  const line = (extra: Record<string, unknown> = {}) => r(<LineChart data={five} x="m" y="v" series="ch" width={560} animate={false} {...extra} />);
+  const bar = (extra: Record<string, unknown> = {}) => r(<BarChart data={five} x="m" y="v" series="ch" width={560} animate={false} {...extra} />);
+  const barFills = (h: string) => markGroups(h).map((g) => /<path d="[^"]+" fill="([^"]+)"/.exec(g)![1]);
+  const yTicks = (h: string) => texts(h).filter((t) => t.anchor === "end").map((t) => t.text);
+
+  it("숨겨도 남은 계열의 색이 그대로예요 (강조 계열을 숨기면 강조색이 없어요)", () => {
+    const full = strokes(line({ colorMode: "categorical" }));
+    expect(full).toHaveLength(5);
+    const accent = full.find((s) => s.includes("--ztd-accent"));
+    expect(accent).toBeDefined();
+    expect(strokes(line({ colorMode: "categorical", hidden: ["Search"] }))).toEqual(full.filter((s) => s !== accent));
+    const plain = strokes(line({ hidden: ["Search"] }));
+    expect(plain).toHaveLength(4);
+    expect(plain.some((s) => s.includes("--ztd-accent"))).toBe(false);
+    const fills = barFills(bar());
+    expect(new Set(barFills(bar({ hidden: ["Social"] })))).toEqual(new Set(fills.filter((f) => f !== fills[1])));
+  });
+  it("y축은 보이는 계열에 다시 맞추고, yDomain을 주면 그대로예요", () => {
+    const data = ["a", "b", "c"].flatMap((m, k) => [{ m, s: "big", v: 1000 + k * 250 }, { m, s: "small", v: 10 + k * 2.5 }]);
+    const draw = (extra: Record<string, unknown> = {}) => r(<LineChart data={data} x="m" y="v" series="s" width={480} height={240} animate={false} {...extra} />);
+    const top = (h: string) => Math.max(...yTicks(h).map((t) => Number(t.replace(/,/g, ""))));
+    expect(top(draw())).toBeGreaterThan(1000);
+    expect(top(draw({ hidden: ["big"] }))).toBeLessThan(100);
+    expect(yTicks(draw({ yDomain: [0, 2000], hidden: ["big"] }))).toEqual(yTicks(draw({ yDomain: [0, 2000] })));
+  });
+  it("자동 범례는 숨긴 계열을 빼고, 켜고 끄는 범례(all)는 모두 적어요", () => {
+    for (const type of ["line", "area", "bar"]) {
+      const spec = { type, data: five, encoding: { x: "m", y: "v", series: "ch" }, options: { hidden: ["Ads"] } } as ChartSpec;
+      expect(autoLegend(spec, five, "en-US").map((i) => i.label), type).toEqual(["Search", "Social", "Referral", "Direct"]);
+      expect(autoLegend(spec, five, "en-US", true).map((i) => i.label), type).toEqual(CH);
+    }
+  });
+  it("모든 계열을 숨기면 선과 영역도 막대, 산점도처럼 빈 차트예요", () => {
+    for (const h of [line({ hidden: CH }), r(<AreaChart data={five} x="m" y="v" series="ch" hidden={CH} width={560} animate={false} />)]) {
+      expect(desc(h)).toBe("No data.");
+      expect(tds(h)).toEqual([]);
+    }
+  });
+});

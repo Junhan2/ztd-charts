@@ -23,6 +23,11 @@ export interface SchemaText {
   select: string;
   card: string;
   number: string;
+  source: string;
+  note: string;
+  accent: string;
+  download: string;
+  legend: string;
   takeaway: string;
   level: string;
   sample: string;
@@ -41,8 +46,13 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   csv: "CSV text (the first line is the header)",
   url: "JSON or CSV address (REST API, Google Sheets CSV export and so on)",
   select: 'Path to the array inside the response JSON. For example "data.items"',
-  card: "Wraps the chart in a card with a number, title, legend, one-line takeaway and level badge",
+  card: "Wraps the chart in a card with a number, title, legend, one-line takeaway, level badge, source line and download buttons",
   number: 'For example "01"',
+  source: 'Source line under the chart, after "Source: "',
+  note: "Note on the same line, such as the as-of date",
+  accent: "A word of the title to color with the accent color, used instead of a legend",
+  download: "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML",
+  legend: '"auto" builds the legend from the data. "toggle" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like "auto"',
   takeaway: "Bold one-line takeaway at the bottom",
   level: '"basic" | "intermediate" | "advanced". The Korean "기본" | "중급" | "심화" also work',
   sample: "Marks the data as sample data",
@@ -56,9 +66,11 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   },
 };
 
-/** data, card, theme 정의 */
-function sharedDefs(t: SchemaText): Record<"data" | "card" | "theme", JSONSchema> {
+/** data, card, theme, tooltip 정의. tooltip은 차트 36종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
+function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" | "theme" | "tooltip", JSONSchema> {
+  const tip = common.find((o) => o.type === "tooltip");
   return {
+    tooltip: tip ? optionSchema(tip, t) : { type: "boolean" },
     data: {
       description: t.data,
       anyOf: [
@@ -87,8 +99,9 @@ function sharedDefs(t: SchemaText): Record<"data" | "card" | "theme", JSONSchema
         takeaway: { type: "string", description: t.takeaway },
         level: { type: "string", description: t.level },
         legend: {
+          description: t.legend,
           anyOf: [
-            { const: "auto" },
+            { enum: ["auto", "toggle"] },
             {
               type: "array",
               items: { type: "object", required: ["label"], properties: { label: { type: "string" }, color: { type: "string" }, shape: { enum: ["square", "line", "dash", "circle"] } }, additionalProperties: false },
@@ -97,6 +110,10 @@ function sharedDefs(t: SchemaText): Record<"data" | "card" | "theme", JSONSchema
         },
         sample: { anyOf: [{ type: "boolean" }, { type: "string" }], description: t.sample },
         replay: { type: "boolean", default: true },
+        source: { type: "string", description: t.source },
+        note: { type: "string", description: t.note },
+        accent: { type: "string", description: t.accent },
+        download: { anyOf: [{ type: "boolean" }, { type: "array", items: { enum: ["csv", "svg", "png"] }, minItems: 1 }], description: t.download },
       },
       additionalProperties: false,
     },
@@ -118,6 +135,8 @@ export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSON
       return { ...base, type: "string" };
     case "boolean":
       return { ...base, type: "boolean" };
+    case "tooltip":
+      return { ...base, anyOf: [{ type: "boolean" }, { type: "object", required: ["template"], properties: { template: { type: "string" } }, additionalProperties: false }] };
     case "enum":
       return { ...base, enum: [...(o.enum ?? [])] };
     case "array":
@@ -155,8 +174,8 @@ export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSON
   }
 }
 
-/** 차트 하나의 스펙 스키마. def, 공통 옵션, 글은 같은 언어로 맞춘 것을 넘겨요 */
-export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS, t: SchemaText = SCHEMA_TEXT_EN): JSONSchema {
+/** 차트 하나의 스펙 스키마. def, 공통 옵션, 글은 같은 언어로 맞춘 것을 넘겨요. shared면 tooltip을 $defs에서 가리켜요($defs를 같이 싣는 전체·차트별 스키마) */
+export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS, t: SchemaText = SCHEMA_TEXT_EN, shared = false): JSONSchema {
   const enc: Record<string, JSONSchema> = {};
   for (const c of def.encoding) {
     enc[c.name] = c.multi
@@ -164,7 +183,7 @@ export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS,
       : { type: "string", description: `${c.description} (${c.type})` };
   }
   const opts: Record<string, JSONSchema> = {};
-  for (const o of [...def.options, ...common]) opts[o.name] = optionSchema(o, t);
+  for (const o of [...def.options, ...common]) opts[o.name] = shared && o.type === "tooltip" ? { $ref: "#/$defs/tooltip" } : optionSchema(o, t);
   const required = def.encoding.filter((c) => c.required).map((c) => c.name);
   return {
     title: def.name === def.nameEn ? def.name : `${def.name} (${def.nameEn})`,
@@ -194,14 +213,14 @@ export function buildSpecSchema(charts: ChartDef[], common: OptionDef[], t: Sche
     type: "object",
     required: ["type", "data"],
     properties: { type: { enum: charts.map((c) => c.type) } },
-    oneOf: charts.map((c) => chartSchema(c, common, t)),
-    $defs: sharedDefs(t),
+    oneOf: charts.map((c) => chartSchema(c, common, t, true)),
+    $defs: sharedDefs(t, common),
   };
 }
 
 /** 차트 하나의 독립 스키마를 만들어요. schemaFor와 schemaForIn이 같이 써요 */
 export function buildSchemaFor(def: ChartDef, common: OptionDef[], t: SchemaText): JSONSchema {
-  return { $schema: "https://json-schema.org/draft/2020-12/schema", $id: SCHEMA_ID.replace(/chart-spec\.schema\.json$/, `charts/${def.type}.schema.json`), ...chartSchema(def, common, t), $defs: sharedDefs(t) };
+  return { $schema: "https://json-schema.org/draft/2020-12/schema", $id: SCHEMA_ID.replace(/chart-spec\.schema\.json$/, `charts/${def.type}.schema.json`), ...chartSchema(def, common, t, true), $defs: sharedDefs(t, common) };
 }
 
 /** 모든 차트를 담은 스펙 JSON Schema (draft 2020-12). 설명은 영어, 한글은 specSchemaIn("ko") */

@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { CanvasLayer } from "../core/CanvasLayer";
 import { ChartFrame, Txt } from "../core/ChartFrame";
-import { cssEntrance } from "../core/css";
-import { formatDate, toDate } from "../core/format";
+import { cssEntrance, useCssEntrance } from "../core/css";
+import { dayFirstOf, formatDate, isoDay, toDate, type DayFirstProps } from "../core/format";
 import { resolveHighlight } from "../core/highlight";
 import { lazyArray } from "../core/lazy";
 import type { Mark } from "../core/motion";
-import { sequential } from "../core/palette";
+import { colorScaleOf, scaleSwatch, scaleT } from "../core/palette";
 import { extent, robustMax } from "../core/scale";
 import { textWidth } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
@@ -24,7 +24,7 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "캘린더 히트맵", desc: (days, max) => `${days}일, 최대 ${max}` },
 };
 
-export interface CalendarHeatmapProps<T = Row> extends BaseChartProps<T> {
+export interface CalendarHeatmapProps<T = Row> extends BaseChartProps<T>, DayFirstProps {
   /** 날짜 필드. 기본 "date" */
   date?: Accessor<T, unknown>;
   value?: Accessor<T, number>;
@@ -34,6 +34,12 @@ export interface CalendarHeatmapProps<T = Row> extends BaseChartProps<T> {
   gap?: number;
   /** 이 일 수보다 많으면 캔버스로 그려요. 기본 4000 (약 11년) */
   canvasThreshold?: number;
+  /** 가장 작은 값을 가장 진하게 칠해요 (1위가 진해야 하는 순위). 기본 false */
+  colorReverse?: boolean;
+  /** 가장 옅은 색이 되는 값. 그보다 크면 강조색, 작으면 회색 (손익의 0). 0인 날은 그대로 빈 칸 색 */
+  colorCenter?: number;
+  /** 부드러운 색 대신 이 수만큼 단계로 나눠 칠해요 (2~12) */
+  colorSteps?: number;
 }
 
 interface Day<T> {
@@ -49,19 +55,15 @@ interface Day<T> {
 const DAY = 86400000;
 const MIN_OPACITY = 0.18;
 
-function isoDay(t: number): string {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 /** 캘린더 히트맵: 하루하루의 양을 주 단위 격자로 (1년이 넘으면 연도별로 줄을 나눠요) */
 export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
   const model = useMemo(() => {
     const gd = getter(props.date, "date");
     const gv = numGetter(props.value, "value");
     const byDay = new Map<number, { v: number; d: T }>();
+    const df = props.dayFirst ?? dayFirstOf(props.data.map((d, i) => gd(d, i)));
     props.data.forEach((d, i) => {
-      const dt = toDate(gd(d, i));
+      const dt = toDate(gd(d, i), df);
       if (!dt) return;
       const key = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
       const prev = byDay.get(key);
@@ -73,7 +75,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
     const keys = [...byDay.keys()].sort((a, b) => a - b);
     const years = keys.length ? [...new Set(keys.map((k) => new Date(k).getFullYear()))].sort() : [];
     return { byDay, keys, years };
-  }, [props.data, props.date, props.value]);
+  }, [props.data, props.date, props.value, props.dayFirst]);
 
   const nYears = Math.max(1, model.years.length);
   const multi = nYears > 1;
@@ -128,17 +130,23 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
   const gridW = weeks * step;
   const x0 = leftW + Math.max(0, (W - leftW - gridW) / 2);
   const span = Math.max(1e-9, top95 - Math.min(0, mn)) || 1;
-  const level = (v: number) => Math.min(1, (v - Math.min(0, mn)) / span);
+  // 색 척도 옵션. 가운데 값이 있으면 그 값에서 먼 쪽(95백분위)이 끝이에요
+  const scale = useMemo(() => colorScaleOf(props.colorReverse, props.colorCenter, props.colorSteps), [props.colorReverse, props.colorCenter, props.colorSteps]);
+  const center = scale.center;
+  const dev = useMemo(() => (center === undefined ? 0 : Math.max(1e-9, robustMax(days.filter((d) => d.value).map((d) => Math.abs(d.value - center))))), [days, center]);
+  /** 칸 색의 위치: 0~1(음수 날도 이어지는 눈금), 가운데 값이 있으면 -1~1. SVG 칸과 캔버스가 함께 써요 */
+  const tOf = useCallback((v: number) => (center === undefined ? Math.min(1, (v - Math.min(0, mn)) / span) : Math.max(-1, Math.min(1, (v - center) / dev))), [center, dev, mn, span]);
   const hi = useMemo(
     () =>
       resolveHighlight(
         props.highlight as never,
         days.map((d) => d.datum) as never[],
         lazyArray(days.length, (k) => isoDay(days[k].t)),
-        days.map((d) => d.value),
-        "max",
+        // 색을 뒤집으면 기본 강조도 가장 진한 날(가장 작은 값)로. 데이터가 없는 날(0)은 빼요
+        props.colorReverse ? days.map((d) => (d.datum ? d.value : NaN)) : days.map((d) => d.value),
+        props.colorReverse ? "min" : "max",
       ),
-    [days, props.highlight],
+    [days, props.highlight, props.colorReverse],
   );
 
   const D = c.motion.duration ?? 700;
@@ -189,7 +197,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
 
   const msg = MSG[c.lang];
   const desc = props.description ?? `${msg.kind}. ${msg.desc(days.length, c.fv(mx))}.`;
-  const enabled = c.motion.enabled && c.hydrated; // 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요
+  const enabled = useCssEntrance(c, m);
   // (연도, 주, 요일) 칸 → 날짜 번호. 문자열 키 1만 개를 만들지 않고 평평한 배열로 (-1은 빈 칸)
   const dayIndex = useMemo(() => {
     const idx = new Int32Array(nYears * weeks * 7).fill(-1);
@@ -211,8 +219,8 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
         <g key={k} style={cssEntrance(enabled, m.waiting, "fade", (w / Math.max(1, weeks - 1)) * D * 0.9, 320)}>
           {list.map((d) => {
             const q = { x: x0 + d.week * step, y: d.year * blockH + topH + d.wd * step };
-            // 음수도 색으로 (level은 음수까지 이어지는 눈금). 0만 빈 칸 색
-            const s = d.value ? sequential(p, level(d.value), MIN_OPACITY) : null;
+            // 음수도 색으로 (tOf는 음수까지 이어지는 눈금). 0만 빈 칸 색
+            const s = d.value ? scaleSwatch(p, tOf(d.value), MIN_OPACITY, scale) : null;
             const isHi = hi.has(d.i);
             return <rect key={d.i} x={q.x} y={q.y} width={cell} height={cell} rx={Math.min(2.5, cell / 3)} fill={s ? s.fill : p.paint("neutralSoft")} opacity={s ? s.opacity : undefined} stroke={isHi ? p.paint("ink") : "none"} strokeWidth={1.2} />;
           })}
@@ -221,7 +229,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
     });
     // 호버는 아래 덧그림으로 해서 1만 칸을 다시 그리지 않아요
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCanvas, pending, days, enabled, m.waiting, m.generation, weeks, D, x0, step, blockH, topH, cell, p, mn, span, hi]);
+  }, [useCanvas, pending, days, enabled, m.waiting, m.generation, weeks, D, x0, step, blockH, topH, cell, p, scale, tOf, hi]);
 
   // 라벨은 등장 중 프레임마다 다시 만들지 않아요 (27년이면 400개가 넘어요)
   const labels = useMemo(
@@ -256,19 +264,22 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
     // 다 그린 격자를 한 번만 그려 두고, 등장은 주(열) 단위로 잘라 투명도만 바꿔 옮겨요
     let bitmap: HTMLCanvasElement | null = null;
     let bitmapKey = "";
-    const paintAll = (ctx: CanvasRenderingContext2D, acc: string, soft: string, ink: string) => {
+    const paintAll = (ctx: CanvasRenderingContext2D, acc: string, soft: string, ink: string, neg: string) => {
       const rad = Math.min(2.5, cell / 3);
       const rounded = cell >= 5 && typeof ctx.roundRect === "function";
-      const lo = Math.min(0, mn);
       // 칸은 겹치지 않으니 투명도를 32단계로 묶어 단계마다 한 번만 칠해요
       const LEVELS = 32;
       const accBins: number[][] = Array.from({ length: LEVELS + 1 }, () => []);
+      // 가운데 값보다 작은 날(색 척도 옵션)은 회색으로 따로 묶어요
+      const negBins: number[][] = Array.from({ length: LEVELS + 1 }, () => []);
       const softBins: number[] = [];
       const marked: number[] = [];
       for (let k = 0; k < days.length; k++) {
         const d = days[k];
-        if (d.value) accBins[Math.round((MIN_OPACITY + (1 - MIN_OPACITY) * Math.min(1, (d.value - lo) / span)) * LEVELS)].push(k);
-        else softBins.push(k);
+        if (d.value) {
+          const pos = scaleT(tOf(d.value), scale);
+          (pos < 0 ? negBins : accBins)[Math.round((MIN_OPACITY + (1 - MIN_OPACITY) * Math.min(1, Math.abs(pos))) * LEVELS)].push(k);
+        } else softBins.push(k);
         if (hi.has(d.i)) marked.push(k);
       }
       const shapes = (list: number[]) => {
@@ -284,12 +295,14 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
       ctx.fillStyle = soft;
       shapes(softBins);
       ctx.fill();
-      ctx.fillStyle = acc;
-      for (let b = 1; b <= LEVELS; b++) {
-        if (!accBins[b].length) continue;
-        ctx.globalAlpha = b / LEVELS;
-        shapes(accBins[b]);
-        ctx.fill();
+      for (const [bins, col] of [[accBins, acc], [negBins, neg]] as const) {
+        ctx.fillStyle = col;
+        for (let b = 1; b <= LEVELS; b++) {
+          if (!bins[b].length) continue;
+          ctx.globalAlpha = b / LEVELS;
+          shapes(bins[b]);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
       if (marked.length) {
@@ -305,10 +318,11 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
       const acc = color("--ztd-accent", p.theme.accent);
       const soft = color("--ztd-neutral-soft", p.theme.neutralSoft);
       const ink = color("--ztd-ink", p.theme.ink);
+      const neg = color("--ztd-neutral-strong", p.theme.neutralStrong);
       const pw = ctx.canvas.width;
       const ph = ctx.canvas.height;
       const k = pw / Math.max(1, W);
-      const key = `${acc}|${soft}|${ink}|${pw}x${ph}`;
+      const key = `${acc}|${soft}|${ink}|${neg}|${pw}x${ph}`;
       if (!bitmap || bitmapKey !== key || !drawn) {
         bitmap = bitmap ?? document.createElement("canvas");
         bitmap.width = pw;
@@ -317,7 +331,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
         if (!b) return;
         b.setTransform(k, 0, 0, k, 0, 0);
         b.clearRect(0, 0, W, H);
-        paintAll(b, acc, soft, ink);
+        paintAll(b, acc, soft, ink, neg);
         bitmapKey = key;
         ctx.clearRect(0, 0, W, H);
         drawn = new Float32Array(weeks);
@@ -342,7 +356,7 @@ export function CalendarHeatmap<T = Row>(props: CalendarHeatmapProps<T>) {
       }
       ctx.globalAlpha = 1;
     };
-  }, [days, weeks, x0, step, gap, blockH, cell, mn, span, hi, W, H, p.theme.accent, p.theme.neutralSoft, p.theme.ink]);
+  }, [days, weeks, x0, step, gap, blockH, cell, hi, W, H, p.theme.accent, p.theme.neutralSoft, p.theme.ink, p.theme.neutralStrong, scale, tOf]);
 
   return (
     <ChartFrame

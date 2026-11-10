@@ -8,7 +8,7 @@ import { textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
-import { cssEntrance } from "../core/css";
+import { cssEntrance, useCssEntrance } from "../core/css";
 import { numGetter, strGetter } from "../data/accessor";
 import type { ChartLang } from "../core/i18n";
 
@@ -112,7 +112,7 @@ export function WaffleChart<T = Row>(props: WaffleChartProps<T>) {
   const mn = useMotion(numMarks, { ...c.motion, duration: cellMs + cells * stagger * 0.8 });
   const shown = mn.get("__n")?.[0] ?? pct;
   const { active, via, setActive, click } = c;
-  const enabled = c.motion.enabled && c.hydrated; // 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요
+  const enabled = useCssEntrance(c, mn);
   const cellNodes = useMemo(
     () =>
       Array.from({ length: cells }, (_, idx) => {

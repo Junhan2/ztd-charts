@@ -1,13 +1,15 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Chart } from "../src/charts/Chart";
 import { formatCompact, formatNumber, formatPercent, makeFormatter, toDate } from "../src/core/format";
+import { detectXType, prepSeries } from "../src/core/series";
 import { getter, strGetter, toNumber } from "../src/data/accessor";
 import { parseCSV } from "../src/data/parse";
 import { readResponse } from "../src/data/useChartData";
 import { renderSpecToHTML, renderSpecToSVG } from "../src/server";
-import { suggestCharts, validateSpec } from "../src/spec";
+import { CHARTS, suggestCharts, validateSpec } from "../src/spec";
 import { specLocale } from "../src/spec/meta";
 import { parseColor } from "../src/theme/color";
 import { DEFAULT_FONT, darkTheme, themeToCss } from "../src/theme/tokens";
@@ -93,6 +95,72 @@ describe("날짜 (YYYYMMDD, 없는 날)", () => {
     const texts = [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
     expect(texts).toContain("Mar");
     expect(texts).not.toContain("Jan");
+  });
+});
+
+describe("날짜 표기: 점, 한국식, 분기, 영어 월 이름, 유닉스 초 (차례 2 ①)", () => {
+  const days = (...ds: number[]) => ds.map((d) => new Date(2024, 2, d).getTime());
+  const xs = (vals: string[]) => vals.map((d, i) => ({ d, v: i + 1 }));
+  const warn = (spec: unknown, lang?: "ko") => validateSpec(spec, lang ? { lang } : {}).warnings;
+  it.each([
+    ["2024.03.05", ["2024.03.05", "2024.03.06", "2024.03.10"], days(5, 6, 10)],
+    ["24.03.05", ["24.03.05", "24.03.06", "24.03.10"], days(5, 6, 10)],
+    ["2024. 3. 5.", ["2024. 3. 5.", "2024. 3. 6.", "2024. 3. 10."], days(5, 6, 10)],
+    ["2024년 3월 5일", ["2024년 3월 5일", "2024년 3월 6일", "2024년 3월 10일"], days(5, 6, 10)],
+    ["2024/03/05", ["2024/03/05", "2024/03/06", "2024/03/10"], days(5, 6, 10)],
+    ["Mar 5, 2024", ["Mar 5, 2024", "Mar 6, 2024", "Mar 10, 2024"], days(5, 6, 10)],
+    ["5 Mar 2024", ["5 Mar 2024", "6 Mar 2024", "10 Mar 2024"], days(5, 6, 10)],
+    ["2024Q1", ["2024Q1", "2024Q2", "2024Q4"], [0, 3, 9].map((m) => new Date(2024, m, 1).getTime())],
+    ["2024-03", ["2024-01", "2024-02", "2024-06"], [0, 1, 5].map((m) => new Date(2024, m, 1).getTime())],
+    ["2024-03-05 14:00", ["2024-03-05 14:00", "2024-03-05 15:00", "2024-03-05 19:00"], [14, 15, 19].map((h) => new Date(2024, 2, 5, h).getTime())],
+  ])("%s 꼴은 시간 축이고 날짜만큼 벌어져요", (_, vals, want) => {
+    const m = prepSeries(xs(vals as string[]), "d", "v", undefined);
+    expect(m.type).toBe("date");
+    expect(m.xnum).toEqual(want);
+  });
+  it('연도가 없거나 월 이름이 아닌 글자("Marketing 2024", "Jan", "Q1", "1월")는 글자 축으로 남아요', () => {
+    for (const vals of [["Marketing 2024", "Sales 2024"], ["Jan", "Feb"], ["Q1", "Q2"], ["1월", "2월"]]) expect(detectXType(vals)).toBe("band");
+    expect(detectXType(["Mar 2024", "Apr 2024"])).toBe("date");
+  });
+  it('xType "date"의 10자리 숫자는 유닉스 초예요 (13자리 ms는 그대로)', () => {
+    expect(prepSeries([{ t: 1704067200, v: 1 }, { t: 1704153600, v: 2 }], "t", "v", undefined, { xType: "date" }).xnum[0]).toBe(1704067200000);
+    expect(toDate(1704067200)!.getTime()).toBe(1704067200000);
+    expect(toDate(1704067200000)!.getTime()).toBe(1704067200000);
+  });
+  it('일과 월이 모두 될 수 있는 "05/03/2024"는 월을 앞으로 읽고 행 번호와 함께 알려요. dayFirst나 분명한 날짜가 있으면 그 순서', () => {
+    const spec = (d: string[], options = {}) => ({ type: "line", data: xs(d), encoding: { x: "d", y: "v" }, options });
+    expect(prepSeries(xs(["05/03/2024", "06/03/2024"]), "d", "v", undefined).xnum).toEqual([new Date(2024, 4, 3).getTime(), new Date(2024, 5, 3).getTime()]);
+    const amb = warn(spec(["05/03/2024", "06/03/2024"])).find((w) => w.code === "date_order_ambiguous");
+    expect(amb?.message).toContain("rows 1, 2");
+    expect(warn(spec(["05/03/2024", "06/03/2024"]), "ko").find((w) => w.code === "date_order_ambiguous")?.message).toContain("1, 2행");
+    expect(prepSeries(xs(["05/03/2024", "06/03/2024"]), "d", "v", undefined, { dayFirst: true }).xnum).toEqual(days(5, 6));
+    expect(warn(spec(["05/03/2024", "06/03/2024"], { dayFirst: true })).map((w) => w.code)).not.toContain("date_order_ambiguous");
+    expect(prepSeries(xs(["05/03/2024", "25/03/2024"]), "d", "v", undefined).xnum).toEqual(days(5, 25));
+    expect(warn(spec(["05/03/2024", "25/03/2024"])).map((w) => w.code)).not.toContain("date_order_ambiguous");
+  });
+  it("글자로 읽히던 x가 날짜가 되면 알려요 (xType을 정했거나 ISO 날짜, 막대는 조용히)", () => {
+    const rows = xs(["2025.03.01", "2025.03.02", "2025.03.10"]);
+    expect(warn({ type: "line", data: rows, encoding: { x: "d", y: "v" } }).map((w) => w.code)).toContain("x_read_as_date");
+    expect(warn({ type: "line", data: rows, encoding: { x: "d", y: "v" }, options: { xType: "date" } }).map((w) => w.code)).not.toContain("x_read_as_date");
+    expect(warn({ type: "line", data: xs(["2025-03-01", "2025-03-02"]), encoding: { x: "d", y: "v" } }).map((w) => w.code)).not.toContain("x_read_as_date");
+    expect(warn({ type: "bar", data: rows, encoding: { x: "d", y: "v" } }).map((w) => w.code)).not.toContain("x_read_as_date");
+  });
+  it('"2025.03.01" 꼴 선 차트는 빈 날짜만큼 간격이 벌어져요 (스펙 경로)', () => {
+    const data = ["2025.03.01", "2025.03.02", "2025.03.03", "2025.03.10", "2025.03.11", "2025.03.31", "2025.04.01"].map((d, i) => ({ d, v: [120, 132, 128, 90, 95, 160, 170][i] }));
+    const svg = renderSpecToSVG({ type: "line", data, encoding: { x: "d", y: "v" }, options: { dots: true, curve: "linear" } }, { width: 720 });
+    const cx = [...svg.matchAll(/<circle cx="([\d.]+)" cy="[\d.]+" r="3"/g)].map((m) => +m[1]);
+    expect(cx).toHaveLength(7);
+    expect((cx[3] - cx[2]) / (cx[1] - cx[0])).toBeCloseTo(7, 1);
+  });
+  it('캘린더도 "2024년 3월 5일" 꼴을 날짜로 받아요', () => {
+    const spec = { type: "calendar", data: ["5", "6", "7"].map((d, i) => ({ day: `2024년 3월 ${d}일`, n: i + 1 })), encoding: { date: "day", value: "n" } };
+    expect(validateSpec(spec).valid).toBe(true);
+    const texts = [...renderSpecToSVG(spec as never).matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(texts).toContain("Mar");
+  });
+  it('분기 열은 "Q1 2024", 한국어는 "2024년 1분기"로 써요', () => {
+    expect(prepSeries(xs(["2024Q1", "2024Q2", "2024Q4"]), "d", "v", undefined).labels).toEqual(["Q1 2024", "Q2 2024", "Q4 2024"]);
+    expect(prepSeries(xs(["2024Q1", "2024Q2", "2024Q4"]), "d", "v", undefined, { locale: "ko-KR" }).labels).toEqual(["2024년 1분기", "2024년 2분기", "2024년 4분기"]);
   });
 });
 
@@ -223,6 +291,74 @@ describe("추천: 연도, YYYYMMDD, 1월~12월은 시간", () => {
   });
   it("이름이 연도가 아닌 4자리 숫자(가격)는 그대로 숫자", () => {
     expect(top("item,price\na,1500\nb,2300\nc,1800").kinds).toEqual(["category", "number"]);
+  });
+});
+
+describe("추천: 열 역할 (차례 2 ⑮)", () => {
+  const FIX = new URL("./fixtures/suggest/", import.meta.url);
+  const rowsOf = (f: string) => parseCSV(readFileSync(new URL(f, FIX), "utf8"));
+  // 1차 08, 09번(5만, 20만 행)과 같은 꼴: 순번 t와 무작위로 걷는 값 a, b, c 200행
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const walk = () => {
+    let v = 100;
+    return () => Math.round((v += rnd() * 4 - 2) * 1000) / 1000;
+  };
+  const [wa, wb, wc] = [walk(), walk(), walk()];
+  const big = Array.from({ length: 200 }, (_, t) => ({ t, a: wa(), b: wb(), c: wc() }));
+  type Want = { types: string[]; x?: string; y?: string[]; yAnyOf?: string[]; series?: string | null; none?: boolean };
+  // 사람이 고른 축, 값, 계열 (1차 csv_cases.mjs). 차트 종류는 받아들일 수 있는 무리로 넓혔어요 (5, 6번 파이, 12번 막대는 견뎌 보려고 고른 것)
+  const cases: [string, () => Record<string, unknown>[], Want][] = [
+    ["01 line gaps", () => rowsOf("01-line-gaps.csv"), { types: ["line", "area"], x: "month", y: ["Alpha", "Beta"] }],
+    ["02 formatted numbers", () => rowsOf("02-formatted-numbers.csv"), { types: ["bar", "lollipop"], x: "item", yAnyOf: ["plain", "thousands", "percent", "currency", "spaced"] }],
+    ["03 mixed dates", () => rowsOf("03-dates-mixed.csv"), { types: ["line", "area"], x: "date", y: ["value"] }],
+    ["04 300 long labels", () => rowsOf("04-long-labels-300.csv"), { types: ["bar", "lollipop"], x: "category", y: ["value"] }],
+    ["05 pie negative and zero", () => rowsOf("05-pie-neg-zero.csv"), { types: ["bar", "pie", "donut", "lollipop"], x: "slice", y: ["value"] }],
+    ["06 pie 40", () => rowsOf("06-pie-40.csv"), { types: ["bar", "pie", "donut", "lollipop", "pareto", "treemap"], x: "slice", y: ["value"] }],
+    ["07 scatter zero and negative", () => rowsOf("07-log-zero-neg.csv"), { types: ["scatter"], x: "x", y: ["y"] }],
+    ["08 big walk", () => big, { types: ["line"], x: "t", yAnyOf: ["a", "b", "c"] }],
+    ["09 big walk (as 08)", () => big.slice(0, 120), { types: ["line"], x: "t", yAnyOf: ["a", "b", "c"] }],
+    ["10 Korean won", () => rowsOf("10-korean-krw.csv"), { types: ["bar", "lollipop", "pie", "donut"], x: "지역", y: ["매출"] }],
+    ["11 duplicate unsorted", () => rowsOf("11-dup-unsorted.csv"), { types: ["line", "area"], x: "date", y: ["value"], series: "team" }],
+    ["12 single row", () => rowsOf("12-single-row.csv"), { types: ["gauge", "bar"], y: ["value"] }],
+    ["13 empty", () => rowsOf("13-empty.csv"), { types: [], none: true }],
+    ["14 huge and tiny", () => rowsOf("14-huge-tiny.csv"), { types: ["bar", "pie", "donut", "lollipop"], x: "label", yAnyOf: ["huge", "tiny"] }],
+    ["15 text in number", () => rowsOf("15-text-in-number.csv"), { types: ["bar", "lollipop"], x: "label", y: ["value"] }],
+  ];
+  it.each(cases)("%s: 첫 추천이 사람이 고른 배정과 같아요", (_, rows, want) => {
+    const s = suggestCharts(rows()).suggestions[0];
+    if (want.none) return expect(s).toBeUndefined();
+    expect(want.types).toContain(s?.type);
+    const enc = s.spec.encoding as Record<string, unknown>;
+    if (want.x && s.type !== "gauge") expect(["x", "label", "date", "axis", "group"].map((k) => enc[k]).find((v) => v !== undefined)).toBe(want.x);
+    const ys = [enc.y, enc.value].flat().filter((v) => v !== undefined);
+    if (want.y) expect([...ys].sort()).toEqual([...want.y].sort());
+    if (want.yAnyOf) expect(ys.length && ys.every((f) => want.yAnyOf!.includes(f as string))).toBe(true);
+    if (want.series !== undefined) expect(enc.series ?? null).toBe(want.series);
+    expect(validateSpec(s.spec).errors).toEqual([]);
+  });
+  it("달마다 채널이 하나인 표(swd): 날짜별 한 줄, 그다음 채널별 합계 막대", () => {
+    const [line, bar] = suggestCharts(rowsOf("swd.csv")).suggestions;
+    expect(line).toMatchObject({ type: "line", spec: { encoding: { x: "날짜", y: "가입" } } });
+    expect((line.spec.encoding as Record<string, unknown>).series).toBeUndefined();
+    expect(bar).toMatchObject({ type: "bar", spec: { encoding: { x: "유입 채널", y: "가입" }, options: { aggregate: "sum", sort: true } } });
+    const svg = renderSpecToSVG(bar.spec, { width: 560 });
+    for (const total of ["1,296", "1,176", "982"]) expect(svg).toContain(total);
+  });
+  it('항목이 많으면 큰 7개 가로 막대와 "기타", 나머지가 크면 큰 8개만', () => {
+    const many = suggestCharts(rowsOf("04-long-labels-300.csv")).suggestions[0];
+    expect(many).toMatchObject({ type: "bar", spec: { options: { orientation: "horizontal" } } });
+    expect(many.spec.data).toHaveLength(8);
+    const tail = [100, 90, 80, 70, 60, 50, 40, ...Array<number>(13).fill(1)].map((v, i) => ({ item: `item ${i + 1}`, v }));
+    const rows = (lang?: "ko") => suggestCharts(tail, lang ? { lang } : {}).suggestions[0].spec.data as Record<string, unknown>[];
+    expect(rows().at(-1)).toEqual({ item: "Other (13)", v: 13 });
+    expect(rows("ko").at(-1)).toEqual({ item: "기타 13개", v: 13 });
+  });
+  it("값이 줄어드는 지역 매출은 퍼널이 아니고, 시작과 끝이 없는 음수 조각은 폭포가 먼저 아니에요", () => {
+    expect(suggestCharts(rowsOf("10-korean-krw.csv")).suggestions.map((s) => s.type)).not.toContain("funnel");
+    expect(suggestCharts(rowsOf("05-pie-neg-zero.csv")).suggestions[0].type).not.toBe("waterfall");
+    const wf = CHARTS.find((c) => c.type === "waterfall")!.example.data as Record<string, unknown>[];
+    expect(suggestCharts(wf).suggestions[0].type).toBe("waterfall");
   });
 });
 

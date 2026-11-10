@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/ztd-charts/schema/charts/bar.schema.json",
   "title": "Bar chart",
-  "description": "Grouped, stacked, 100% and horizontal bars. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
+  "description": "Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis. Use when: Comparing sizes across categories precisely. Avoid when: The flow over time is the point (a line works better)",
   "type": "object",
   "required": [
     "type",
@@ -43,6 +43,21 @@
         "series": {
           "type": "string",
           "description": "Series field (string)"
+        },
+        "line": {
+          "description": "Lines over vertical bars on the same axis, such as a target or last year. An array for several. Bars stay gray unless highlight is set, and with series the line averages rows of the same x (number)",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
         }
       },
       "required": [
@@ -133,6 +148,13 @@
               }
             },
             "additionalProperties": false
+          }
+        },
+        "hidden": {
+          "description": "Series to hide. Colors stay as if every series were shown. With card.legend \"toggle\", viewers can show them again",
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
         "height": {
@@ -234,9 +256,7 @@
           "type": "boolean"
         },
         "tooltip": {
-          "description": "Show tooltips",
-          "default": true,
-          "type": "boolean"
+          "$ref": "#/$defs/tooltip"
         },
         "syncId": {
           "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
@@ -262,6 +282,27 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "tooltip": {
+      "description": "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out",
+      "default": true,
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "template": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "data": {
       "description": "An array of objects, or one of { values }, { csv }, { url }",
       "anyOf": [
@@ -328,7 +369,7 @@
     },
     "card": {
       "type": "object",
-      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway and level badge",
+      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway, level badge, source line and download buttons",
       "properties": {
         "number": {
           "type": "string",
@@ -349,9 +390,13 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
-              "const": "auto"
+              "enum": [
+                "auto",
+                "toggle"
+              ]
             },
             {
               "type": "array",
@@ -395,6 +440,37 @@
         "replay": {
           "type": "boolean",
           "default": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Source line under the chart, after \"Source: \""
+        },
+        "note": {
+          "type": "string",
+          "description": "Note on the same line, such as the as-of date"
+        },
+        "accent": {
+          "type": "string",
+          "description": "A word of the title to color with the accent color, used instead of a legend"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "csv",
+                  "svg",
+                  "png"
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML"
         }
       },
       "additionalProperties": false

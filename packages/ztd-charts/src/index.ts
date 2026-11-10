@@ -16,7 +16,8 @@ export { toNumber } from "./data/accessor";
 export { percentile, percentiles, type PercentilesOptions } from "./data/percentile";
 export { useChartData, fetchChartData, readResponse, type UseChartDataOptions, type ChartDataState, type DataSource } from "./data/useChartData";
 
-export { ChartCard, ChartGrid, ChartState, Legend, Badge, type ChartCardProps, type ChartGridProps, type ChartStateProps, type LegendItem, type Level } from "./components/ChartCard";
+export { ChartCard, ChartGrid, ChartState, Legend, Badge, type ChartCardProps, type ChartGridProps, type ChartStateProps, type LegendItem, type LegendProps, type Level } from "./components/ChartCard";
+export { DownloadButtons, type DownloadButtonsProps, type DownloadFormat } from "./components/download";
 export { StatCard, type StatCardProps } from "./components/StatCard";
 export { ReplayContext } from "./components/replay";
 
@@ -55,6 +56,7 @@ export { SkylineChart, type SkylineChartProps } from "./charts/skyline";
 export { HistogramChart, type HistogramChartProps, type HistogramThreshold } from "./charts/histogram";
 export { type XRange } from "./core/brush";
 
+export { templateTooltip } from "./charts/tooltipTemplate";
 export { Chart, CHART_COMPONENTS, encodingToProps, autoLegend, resolveDef, type ChartProps } from "./charts/Chart";
 export type { ChartSpec, SpecCard, SpecData, ChartDef, ValidationResult, SpecIssue } from "./spec/types";
 // resolveDef 와 encodingToProps 의 타입에 나와요. 내보내지 않으면 쓰는 쪽의 선언 파일 생성이 TS2742 로 멈출 수 있어요

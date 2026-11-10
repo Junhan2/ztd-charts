@@ -353,6 +353,59 @@ describe("highlight by wide-table column, slope periods", () => {
   });
 });
 
+describe("options.tooltip.template (차례 3 ⑩)", () => {
+  const data = [{ m: "1월", v: 300, owner: "민지" }];
+  const spec = (tooltip: unknown) => ({ type: "line", data, encoding: { x: "m", y: "v" }, options: { tooltip } });
+  it("true, false, { template }만 받아요", () => {
+    for (const tooltip of [true, false, { template: "{label} · {owner}" }]) {
+      expect(validateSpec(spec(tooltip)).errors, JSON.stringify(tooltip)).toEqual([]);
+      expect(validateAll(spec(tooltip)), JSON.stringify(tooltip)).toBe(true);
+    }
+    for (const tooltip of [{ template: 3 }, { template: "x", extra: 1 }, "x"]) {
+      expect(validateSpec(spec(tooltip)).errors.map((e) => e.code), JSON.stringify(tooltip)).toEqual(["bad_option_type"]);
+      expect(validateAll(spec(tooltip)), JSON.stringify(tooltip)).toBe(false);
+    }
+  });
+  it("없는 열 이름은 비슷한 열과 함께 알려요", () => {
+    const w = validateSpec(spec({ template: "{label} · 담당 {ownr}" })).warnings;
+    expect(w.map((x) => x.code)).toEqual(["tooltip_field_not_found"]);
+    expect(w[0].message).toContain("Did you mean {owner}?");
+    expect(validateSpec(spec({ template: "{label} {value} {series} {owner}" })).warnings).toEqual([]);
+  });
+  it("스키마는 툴팁 정의를 한 번 두고 차트마다 가리켜요", () => {
+    const s = JSON.stringify(specSchema());
+    expect(specSchema().$defs).toHaveProperty("tooltip");
+    expect(s.match(/"\$ref":"#\/\$defs\/tooltip"/g)).toHaveLength(CHARTS.length);
+    expect(JSON.stringify((specSchemaIn("ko").$defs as Record<string, unknown>).tooltip)).toContain("값이 없는 칸이 든 줄은 빼요");
+  });
+});
+
+describe("card.source, note, accent (차례 2 ⑭)", () => {
+  const spec = { type: "bar", data: [{ x: "A", y: 1 }], encoding: { x: "x", y: "y" }, card: { title: "올해 매출", source: "통계청", note: "2025-10 기준", accent: "올해" } };
+  it("알려진 키이고 스키마도 받아요", () => {
+    expect(validateSpec(spec).warnings).toEqual([]);
+    expect(validateAll(spec)).toBe(true);
+  });
+  it("accent가 제목에 없으면 알리고, 글자가 아니면 오류예요", () => {
+    expect(validateSpec({ ...spec, card: { ...spec.card, accent: "작년" } }).warnings.map((w) => w.code)).toEqual(["accent_not_in_title"]);
+    expect(validateSpec({ ...spec, card: { ...spec.card, source: 3 } }).errors.map((e) => e.code)).toEqual(["bad_card_value"]);
+  });
+  it("download는 true, false나 csv, svg, png 배열만 받아요", () => {
+    for (const download of [true, false, ["csv"], ["png", "svg", "csv"]]) {
+      const s = { ...spec, card: { ...spec.card, download } };
+      expect(validateSpec(s).warnings, JSON.stringify(download)).toEqual([]);
+      expect(validateSpec(s).errors, JSON.stringify(download)).toEqual([]);
+      expect(validateAll(s), JSON.stringify(download)).toBe(true);
+    }
+    for (const download of ["csv", [], ["jpg"], 1]) {
+      const s = { ...spec, card: { ...spec.card, download } };
+      expect(validateSpec(s).errors.map((e) => e.code), JSON.stringify(download)).toEqual(["bad_card_value"]);
+      expect(validateAll(s), JSON.stringify(download)).toBe(false);
+    }
+    expect(validateSpec({ ...spec, card: { ...spec.card, download: "csv" } }, { lang: "ko" }).errors[0].message).toBe('card.download 값은 true 또는 "csv", "svg", "png" 배열이어야 해요');
+  });
+});
+
 describe("pie and donut slices (options.other)", () => {
   it("warns about slices of 0 or less by name, and suggests options.other for many slices", () => {
     const data = [{ label: "검색", value: 40 }, { label: "환불", value: -8 }, { label: "보류", value: 0 }];
@@ -413,5 +466,41 @@ describe("variants", () => {
       }
     }
     expect(variantSpec(CHARTS[0], "nope")).toBeNull();
+  });
+});
+
+describe("로그 눈금 경고 (차례 4 ⑯)", () => {
+  const line = (ys: number[], options: Record<string, unknown>) => ({ type: "line", data: ys.map((v, i) => ({ m: `p${i}`, v })), encoding: { x: "m", y: "v" }, options });
+  const codes = (r: { warnings: { path: string; code: string }[] }) => r.warnings.map((w) => `${w.path}:${w.code}`).sort();
+  it("0 이하 값은 개수와 행으로 알리고, 쓸 수 없는 yDomain과 fit도 알려요", () => {
+    const spec = line([5, 0, -3, 40], { yScale: "log", yDomain: [0, 100] });
+    const en = validateSpec(spec);
+    expect(en.errors).toEqual([]);
+    expect(codes(en)).toEqual(["options.yDomain:ignored_option", "options.yScale:nonpositive_log"]);
+    expect(en.warnings.find((w) => w.code === "nonpositive_log")!.message).toBe("2 values at or below 0 are left out, because a log scale cannot show them (row 2 0, row 3 -3)");
+    expect(validateSpec(spec, { lang: "ko" }).warnings.find((w) => w.code === "nonpositive_log")!.message).toBe("로그 눈금은 0 이하를 그릴 수 없어서 0 이하 값 2개는 빼고 그려요(2행 0, 3행 -3)");
+    expect(codes(validateSpec({ type: "scatter", data: [{ x: 1, y: 2 }, { x: 2, y: 3 }], encoding: { x: "x", y: "y" }, options: { yScale: "log", fit: "linear" } }))).toEqual(["options.fit:ignored_option"]);
+    expect(validateSpec(line(Array.from({ length: 24 }, (_, i) => Math.round(120 * 1.62 ** i)), { yScale: "log" })).warnings).toEqual([]);
+  });
+  it("영역과 막대는 로그 눈금이 없다고 까닭과 함께 알려요", () => {
+    const w = validateSpec({ type: "area", data: [{ m: "a", v: 1 }, { m: "b", v: 2 }], encoding: { x: "m", y: "v" }, options: { yScale: "log" } }).warnings.find((x) => x.path === "options.yScale")!;
+    expect(w.code).toBe("unknown_option");
+    expect(w.message).toBe('Area chart has no option "yScale": its length from 0 is the value, so it has no log scale. Use line, scatter or bubble with yScale "log"');
+  });
+});
+
+describe("범례 켜고 끄기 검사 (차례 4 ⑫)", () => {
+  const CH = ["Search", "Social", "Ads", "Referral", "Direct"];
+  const data = ["Jan", "Feb"].flatMap((m, k) => CH.map((ch, s) => ({ m, ch, v: 40 + s * 10 + k * 3 })));
+  const line = { type: "line", data, encoding: { x: "m", y: "v", series: "ch" }, options: { highlight: "Social", hidden: ["Ads"] }, card: { title: "Visits", legend: "toggle" } };
+  it('"toggle"은 받고, 켜고 끌 수 없는 차트는 알리고, 틀린 값에는 쓸 수 있는 값을 알려요', () => {
+    const r = validateSpec(line);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toEqual([]);
+    expect(validateAll(line)).toBe(true);
+    const pie = validateSpec({ type: "pie", data: [{ label: "a", value: 1 }, { label: "b", value: 2 }], encoding: { label: "label", value: "value" }, card: { legend: "toggle" } }).warnings;
+    expect(pie.map((w) => w.code)).toEqual(["legend_toggle_ignored"]);
+    expect(pie[0].message).toBe('card.legend "toggle" works on line, area, bar and scatter, so this chart draws a plain legend');
+    expect(validateSpec({ ...line, card: { legend: "toggles" } }).errors.find((e) => e.code === "bad_legend")!.message).toContain('"toggle"');
   });
 });

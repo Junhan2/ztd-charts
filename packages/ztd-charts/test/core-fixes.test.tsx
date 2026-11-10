@@ -9,7 +9,7 @@ import { AxisPill, GridY, tickLabels, yAxisWidth } from "../src/core/axis";
 import { ChartFrame, type ChartFrameProps } from "../src/core/ChartFrame";
 import { makeFormatter } from "../src/core/format";
 import { MotionEngine } from "../src/core/motion";
-import { fitDomain, niceStep, scaleLinear, timeTicks } from "../src/core/scale";
+import { fitDomain, fitLogDomain, logTicks, niceStep, scaleLinear, scaleLog, timeTicks } from "../src/core/scale";
 import { prepSeries } from "../src/core/series";
 import { truncate } from "../src/core/text";
 import type { ChartCtx } from "../src/core/useChart";
@@ -325,6 +325,31 @@ describe("fitDomain (scale)", () => {
   });
 });
 
+describe("로그 축 범위와 눈금 (scale, 차례 4 ⑯)", () => {
+  /** 범위(유효숫자 5자리)와 그 범위의 눈금 */
+  const row = (lo: number, hi: number, px: number) => {
+    const d = fitLogDomain(lo, hi);
+    return [d.map((v) => +v.toPrecision(5)), logTicks(d[0], d[1], px)];
+  };
+  it("10배마다 눈금, 좁으면 k칸마다, 넓으면 1·2·5, 한 자리 안이면 1~9나 선형 눈금", () => {
+    expect(row(120, 7907270, 248)).toEqual([[100, 1e7], [100, 1e3, 1e4, 1e5, 1e6, 1e7]]);
+    expect(row(120, 7907270, 168)).toEqual([[100, 1e7], [100, 1e3, 1e4, 1e5, 1e6, 1e7]]);
+    expect(row(0.001, 1e6, 248)).toEqual([[0.001, 1e6], [0.001, 0.01, 0.1, 1, 10, 100, 1e3, 1e4, 1e5, 1e6]]);
+    expect(row(1e-3, 1e9, 248)).toEqual([[0.001, 1e9], [0.01, 1, 100, 1e4, 1e6, 1e8]]);
+    expect(row(3, 90, 286)).toEqual([[2.3644, 100], [5, 10, 20, 50, 100]]);
+    expect(row(900, 1100, 248)).toEqual([[887.45, 1115.6], [900, 1000]]);
+    expect(row(1000, 1050, 248)).toEqual([[1000, 1053.6], [1000, 1020, 1040]]);
+    expect(row(100, 100, 248)).toEqual([[31.623, 316.23], [50, 100, 200]]);
+    expect(fitLogDomain(-5, 0)).toEqual([1, 10]);
+  });
+  it("로그 자는 0 이하 값을 NaN으로 (그리지 않아요)", () => {
+    const s = scaleLog([1, 100], [0, 200]);
+    expect([s(0), s(-5)]).toEqual([NaN, NaN]);
+    expect(s(10)).toBeCloseTo(100);
+    expect(s.invert(100)).toBeCloseTo(10);
+  });
+});
+
 describe("timeTicks (scale)", () => {
   it("해가 바뀌는 월 눈금은 연도를 네 자리로 써요", () => {
     const labels = timeTicks(new Date(2023, 9, 1).getTime(), new Date(2024, 5, 1).getTime(), 6).map((t) => t.label);
@@ -368,6 +393,24 @@ describe("Legend", () => {
     renderToStaticMarkup(<Probe />);
     const keys = (el as unknown as ReactElement<{ children: ReactElement[] }>).props.children.map((li) => li.key);
     expect(new Set(keys).size).toBe(3);
+  });
+  it("onToggle을 주면 항목이 단추예요: 누르면 그 이름을 넘기고, 하나 남은 계열은 끌 수 없어요 (차례 4 ⑫)", () => {
+    const calls: string[] = [];
+    let el: unknown = null;
+    function Probe() {
+      el = Legend({ items: [{ label: "A" }, { label: "B" }, { label: "C" }], hidden: ["A", "C"], onToggle: (s) => calls.push(s) });
+      return el as ReactElement;
+    }
+    const html = renderToStaticMarkup(<Probe />);
+    expect((html.match(/<button /g) ?? []).length).toBe(3);
+    const kids = (e: unknown) => (e as ReactElement<{ children: unknown }>).props.children;
+    const items = kids((kids(el) as unknown[])[0]) as unknown[];
+    const button = (i: number) => kids(items[i]) as ReactElement<{ onClick: () => void; "aria-disabled"?: boolean }>;
+    button(0).props.onClick();
+    expect(calls).toEqual(["A"]);
+    expect(button(1).props["aria-disabled"]).toBe(true);
+    button(1).props.onClick();
+    expect(calls).toEqual(["A"]);
   });
 });
 

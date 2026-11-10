@@ -30,12 +30,20 @@ export interface SpecCard {
   takeaway?: string;
   /** 수준 배지. "basic" | "intermediate" | "advanced". 예전 한글 값("기본" …)도 받아요 */
   level?: ChartLevel | "기본" | "중급" | "심화" | string;
-  /** "auto"면 데이터로 범례를 만들어요 */
-  legend?: "auto" | { label: string; color?: string; shape?: "square" | "line" | "dash" | "circle" }[];
+  /** "auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter). 이미지와 정적 HTML에서는 "auto"와 같아요 */
+  legend?: "auto" | "toggle" | { label: string; color?: string; shape?: "square" | "line" | "dash" | "circle" }[];
   /** 예시 데이터 표시 */
   sample?: boolean | string;
   /** 다시 재생 버튼. 기본 true */
   replay?: boolean;
+  /** 차트 아래 출처 줄. "Source: "(한국어 "출처: ") 뒤에 붙어요 */
+  source?: string;
+  /** 출처 줄의 메모(기준일 등) */
+  note?: string;
+  /** 강조색으로 칠할 제목 속 낱말 */
+  accent?: string;
+  /** 브라우저의 내려받기 단추. true면 CSV, SVG, PNG, 배열이면 고른 것만. SVG, PNG, 정적 HTML에는 그리지 않아요 */
+  download?: boolean | ("csv" | "svg" | "png")[];
 }
 
 export type FieldType = "string" | "number" | "date" | "any";
@@ -52,7 +60,7 @@ export interface ChannelDef {
   description: string;
 }
 
-export type OptionType = "number" | "string" | "boolean" | "enum" | "array" | "object" | "highlight" | "format" | "annotations" | "any";
+export type OptionType = "number" | "string" | "boolean" | "enum" | "array" | "object" | "highlight" | "format" | "annotations" | "tooltip" | "any";
 
 export interface OptionDef {
   name: string;

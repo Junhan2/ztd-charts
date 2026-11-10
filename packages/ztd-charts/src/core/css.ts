@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { darkTheme } from "../theme/tokens";
 
 /** 인라인 스타일로 못 하는 규칙(포커스 링, 전환, 동작 줄이기)만 모은 CSS. 변수가 없으면 기본(다크) 테마 값을 써요 */
@@ -32,6 +33,15 @@ export function cssEntrance(enabled: boolean, waiting: boolean, kind: "pop" | "f
   if (!enabled) return undefined;
   if (waiting) return { opacity: 0 };
   return { animation: `ztd-${kind} ${Math.round(duration)}ms cubic-bezier(.22,.9,.3,1) ${Math.round(delay)}ms backwards` };
+}
+
+/**
+ * cssEntrance를 켤지. 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요.
+ * 움직임 없이 처음 그린 차트(서버 그림을 이어받은 대화형 HTML, 동작 줄이기)는 다시 재생할 때만 등장해요
+ */
+export function useCssEntrance(c: { motion: { enabled: boolean }; hydrated: boolean }, m: { waiting: boolean; generation: number }): boolean {
+  const [startedOff] = useState(!c.motion.enabled);
+  return c.motion.enabled && c.hydrated && (!startedOff || m.waiting || m.generation > 0);
 }
 
 let injected = false;

@@ -67,7 +67,7 @@ export function bandBounds<T>(rows: readonly (readonly (T | null)[])[], lower: B
 export const isOutside = (v: number, lo: number, hi: number): boolean => Number.isFinite(v) && Number.isFinite(lo) && (v < lo || v > hi);
 
 /** 경계가 모두 있는 x가 이어진 구간 [시작, 끝] (양끝 포함). 점 하나짜리는 면이 없어서 빼요 */
-function bandRuns(lo: readonly number[], hi: readonly number[]): [number, number][] {
+export function bandRuns(lo: readonly number[], hi: readonly number[]): [number, number][] {
   const out: [number, number][] = [];
   let a = -1;
   for (let k = 0; k <= lo.length; k++) {

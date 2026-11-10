@@ -83,6 +83,50 @@ export function scaleLinear(domain: [number, number], range: [number, number]): 
   return f;
 }
 
+/** 로그 축 범위: log10 공간에서 fitDomain(끝이 10배 눈금에 가까우면 눈금까지). 값이 하나면 위아래 반 자리, 0보다 큰 값이 없으면 [1, 10] */
+export function fitLogDomain(min: number, max: number, count = 4): [number, number] {
+  if (!(min > 0) || !(max > 0) || !Number.isFinite(min) || !Number.isFinite(max)) return [1, 10];
+  const a0 = Math.log10(min);
+  const b0 = Math.log10(max);
+  if (a0 === b0) return [10 ** (a0 - 0.5), 10 ** (a0 + 0.5)];
+  // 눈금 간격이 10배 한 칸이 되게 (끝이 10배 눈금에 붙어요)
+  const [a, b] = fitDomain(a0, b0, Math.max(count, Math.ceil(b0 - a0)), { zero: false });
+  return [10 ** a, 10 ** b];
+}
+
+/** 로그 축 눈금: 10배 한 칸이 110px 이상이면 1·2·5, 아니면 10의 거듭제곱(24px보다 좁으면 k칸마다). 둘이 안 되면 1~9, 그래도 안 되면 선형 눈금 */
+export function logTicks(lo: number, hi: number, px: number): number[] {
+  const l0 = Math.log10(lo);
+  const l1 = Math.log10(hi);
+  const per = px / Math.max(1e-9, l1 - l0);
+  const pick = (steps: number[], every = 1) => {
+    const out: number[] = [];
+    for (let d = Math.floor(l0); d <= Math.ceil(l1); d++) {
+      if (d % every) continue;
+      for (const m of steps) {
+        const v = Number((m * 10 ** d).toPrecision(12));
+        if (v >= lo * (1 - 1e-9) && v <= hi * (1 + 1e-9)) out.push(v);
+      }
+    }
+    return out;
+  };
+  const t = per >= 110 ? pick([1, 2, 5]) : pick([1], Math.max(1, Math.ceil(24 / per)));
+  if (t.length >= 2) return t;
+  const nine = pick([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  return nine.length >= 2 ? nine : ticksFor(lo, hi, 3);
+}
+
+/** 로그 자: 0 이하 값은 NaN(그리지 않아요). ticks는 자의 픽셀 길이로 고른 로그 눈금 */
+export function scaleLog(domain: [number, number], range: [number, number]): LinearScale {
+  const s = scaleLinear([Math.log10(domain[0]), Math.log10(domain[1])], range);
+  const f = ((v: number) => (v > 0 ? s(Math.log10(v)) : Number.NaN)) as LinearScale;
+  f.domain = domain;
+  f.range = range;
+  f.invert = (px: number) => 10 ** s.invert(px);
+  f.ticks = () => logTicks(domain[0], domain[1], Math.abs(range[1] - range[0]));
+  return f;
+}
+
 export function scaleSqrt(domain: [number, number], range: [number, number]): (v: number) => number {
   const [d0, d1] = domain;
   const [r0, r1] = range;

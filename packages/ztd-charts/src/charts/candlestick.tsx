@@ -3,7 +3,7 @@ import { AnnotationsOver, AnnotationsUnder, annotationYs, describeAnnotations, t
 import { AXIS_FONT, AxisPill, fitTickLabels, GridY, HoverLine, tickLabels, yAxisWidth } from "../core/axis";
 import { BrushBand, changeRatio, ExtremeTags, signedPercent, useChartBrush, useZoom, type BrushProps } from "../core/brush";
 import { ChartFrame, Txt } from "../core/ChartFrame";
-import { formatDate, makeTickFormatter, toDate } from "../core/format";
+import { dayFirstOf, formatDate, makeTickFormatter, toDate, type DayFirstProps } from "../core/format";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { readableOn } from "../core/palette";
@@ -59,7 +59,7 @@ export const CANDLE_TEXT: Record<ChartLang, typeof en> = {
   },
 };
 
-export interface CandlestickChartProps<T = Row> extends BaseChartProps<T>, BrushProps {
+export interface CandlestickChartProps<T = Row> extends BaseChartProps<T>, BrushProps, DayFirstProps {
   /** 날짜(시점) 필드. 기본 "date" */
   x?: Accessor<T, unknown>;
   /** 시가, 고가, 저가, 종가 필드. 기본 "open", "high", "low", "close" */
@@ -108,18 +108,19 @@ export function maPeriods(ma: readonly number[] | undefined, count: number): num
 }
 
 /** 행을 시점 순 봉으로. 종가가 없는 행은 빼고, 시가, 고가, 저가가 비면 이웃 값으로 채워요. dated는 모든 행이 날짜인지 */
-function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, "x" | "open" | "high" | "low" | "close" | "volume">, locale: string): { candles: Candle<T>[]; dated: boolean } {
+function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, "x" | "open" | "high" | "low" | "close" | "volume" | "dayFirst">, locale: string): { candles: Candle<T>[]; dated: boolean } {
   const gx = getter(props.x, "date");
   const go = numGetter(props.open, "open");
   const gh = numGetter(props.high, "high");
   const gl = numGetter(props.low, "low");
   const gc = numGetter(props.close, "close");
   const gv = props.volume === undefined ? null : numGetter(props.volume, "volume");
+  const df = props.dayFirst ?? dayFirstOf(data.map((d, i) => gx(d, i)));
   const raw = data.map((d, i) => {
     const xv = gx(d, i);
     // 숫자 x는 1e10보다 클 때만 시각(ms)으로 봐요. 작은 수(1, 2, 3이나 연도 2024)는 1970년 날짜가 아니라 그대로 이름표로
     // A four-digit year string ("2020") is a label too, not 1 January of that year.
-    const dt = (typeof xv === "number" && Math.abs(xv) <= 1e10) || (typeof xv === "string" && /^\d{4}$/.test(xv.trim())) ? null : toDate(xv);
+    const dt = (typeof xv === "number" && Math.abs(xv) <= 1e10) || (typeof xv === "string" && /^\d{4}$/.test(xv.trim())) ? null : toDate(xv, df);
     return { d, i, xv, dt, t: dt ? dt.getTime() : i, c: gc(d, i), o: go(d, i), h: gh(d, i), l: gl(d, i), v: gv ? gv(d, i) : NaN };
   });
   const dated = raw.every((r) => r.dt);
@@ -187,7 +188,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(240, Math.min(340, w * 0.55)), duration: 700, format: "number" });
   const { p, width: W, height: H } = c;
 
-  const all = useMemo(() => toCandles(props.data, props, c.locale), [props.data, props.x, props.open, props.high, props.low, props.close, props.volume, c.locale]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = useMemo(() => toCandles(props.data, props, c.locale), [props.data, props.x, props.open, props.high, props.low, props.close, props.volume, props.dayFirst, c.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const dated = all.dated;
   // 확대한 구간 (봉 순서)
   const zoom = useZoom(c.sig);

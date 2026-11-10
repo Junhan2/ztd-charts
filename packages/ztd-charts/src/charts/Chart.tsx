@@ -1,17 +1,19 @@
-import { useMemo, type ComponentType } from "react";
-import { ChartCard, ChartState, type LegendItem } from "../components/ChartCard";
+import { useMemo, useState, type ComponentType } from "react";
+import { ChartCard, ChartState, Legend, type LegendItem } from "../components/ChartCard";
 import { resolveHighlight } from "../core/highlight";
 import { langOf } from "../core/i18n";
 import { categoricalDotTokens, categoricalTokens } from "../core/palette";
 import type { ChartEvent, Highlight } from "../core/types";
 import { strGetter, uniq, numGetter } from "../data/accessor";
 import { useChartData } from "../data/useChartData";
-import { nameIn, resolveMeta, specLocale, type ChartMeta } from "../spec/meta";
+import { DownloadButtons } from "../components/download";
+import { templateTooltip } from "./tooltipTemplate";
+import { barLineFields, downloadFields, legendToggles, nameIn, resolveMeta, specLocale, specTemplate, TOGGLES, type ChartMeta } from "../spec/meta";
 import type { ChartSpec } from "../spec/types";
 import { inlineRows } from "../spec/validate";
 import { ThemeProvider, useChartLocale, type ThemeInput } from "../theme/context";
 import { AreaChart, LineChart } from "./line";
-import { BarChart } from "./bar";
+import { BarChart, lineToken } from "./bar";
 import { BeeswarmChart } from "./beeswarm";
 import { BoxPlot } from "./box";
 import { BubbleChart, ScatterChart } from "./bubble";
@@ -103,13 +105,19 @@ export function encodingToProps(def: Pick<ChartMeta, "encoding">, encoding: Char
   return out;
 }
 
-/** 스펙으로 범례 만들기 (card.legend: "auto"). locale은 차트를 그리는 로캘이고 캔들스틱 범례 글자에 써요 */
-export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], locale: string): LegendItem[] {
+/**
+ * 스펙으로 범례 만들기 (card.legend: "auto"). locale은 차트를 그리는 로캘이고 캔들스틱 범례 글자에 써요.
+ * options.hidden 계열은 빼요. withHidden이면 숨긴 계열까지 모두 적어요 (켜고 끄는 범례)
+ */
+export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], locale: string, withHidden = false): LegendItem[] {
   const def = resolveDef(spec.type, spec.encoding);
   if (!def || !rows.length) return [];
   const enc = spec.encoding ?? {};
   const opt = spec.options ?? {};
   const h = opt.highlight as Highlight | undefined;
+  // 숨긴 계열은 범례에서만 빼요(색은 모든 계열로 정해요)
+  const off = new Set(!withHidden && TOGGLES.includes(def.type) && Array.isArray(opt.hidden) ? opt.hidden.map(String) : []);
+  const shown = (items: LegendItem[]) => items.filter((it) => !off.has(it.label));
   const perItem = ["pie", "donut", "waffle"];
   // 도넛은 비중이 든 자기 범례(오른쪽이나 아래)를 그려요. 카드 범례까지 그리면 범례가 두 번 나와요
   if (def.type === "donut" && opt.legend !== "none") return [];
@@ -138,8 +146,7 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     if (series.length < 2) return [];
     // 차트와 같은 규칙: 색은 숨긴 계열까지 모든 계열로 정하고, 숨긴 계열은 범례에서만 빼요
     const tokens = categoricalDotTokens(series.length, seriesHighlight(h, rows, series, g));
-    const hidden = new Set(Array.isArray(opt.hidden) ? opt.hidden.map(String) : []);
-    return series.flatMap((s, i) => (hidden.has(s) ? [] : [{ label: s, color: tokens[i], shape: "circle" as const }]));
+    return shown(series.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const })));
   }
   if (["marimekko", "area", "bar", "line", "stream", "radar"].includes(def.type)) {
     let series: string[] = [];
@@ -148,11 +155,18 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
       const g = strGetter(enc.series, "series");
       series = uniq(rows.map((r, i) => g(r, i)));
     }
+    // 막대 위 선(차례 3 ⑪): 막대(highlight가 없으면 강조하지 않아요)와 선(첫 선 강조색, 나머지 회색)을 함께 적어요
+    const lines = barLineFields(def.type, enc, opt);
+    if (lines.length) {
+      const tokens = categoricalTokens(series.length, resolveHighlight(h as never, series as never[], series, series.map(() => 0), "none"));
+      const bars = series.length < 2 ? [{ label: String((Array.isArray(enc.y) ? enc.y[0] : enc.y) ?? "y"), color: "neutral" }] : series.map((s, i) => ({ label: s, color: tokens[i] }));
+      return [...shown(bars), ...lines.map((label, i) => ({ label, color: lineToken(i), shape: "line" as const }))];
+    }
     if (series.length < 2) return [];
     const hi = resolveHighlight(h as never, series as never[], series, series.map(() => 0), "first");
-    if (def.type === "line" || def.type === "radar") return series.map((s, i) => ({ label: s, color: hi.has(i) ? "accent" : "neutralStrong", shape: def.type === "line" ? "line" : "square" }));
+    if (def.type === "line" || def.type === "radar") return shown(series.map((s, i) => ({ label: s, color: hi.has(i) ? "accent" : "neutralStrong", shape: def.type === "line" ? ("line" as const) : ("square" as const) })));
     const tokens = categoricalTokens(series.length, hi);
-    return series.map((s, i) => ({ label: s, color: tokens[i] }));
+    return shown(series.map((s, i) => ({ label: s, color: tokens[i] })));
   }
   return [];
 }
@@ -176,6 +190,14 @@ export interface ChartProps {
 
 /** JSON 스펙 하나로 차트(와 카드)를 그려요 */
 export function Chart(props: ChartProps) {
+  return useSpecChart(props, CHART_COMPONENTS);
+}
+
+/**
+ * Chart의 몸통. 그릴 컴포넌트 표를 받아서, 대화형 HTML은 차트 하나만 실은 표로 같은 스펙을 그려요(서버 그림을 이어받아요).
+ * 컴포넌트로 감싸지 말고 함수로 불러요: 감싸는 층이 생기면 안쪽 차트의 useId 값이 바뀌어 서버 그림과 어긋나요
+ */
+export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONENTS) {
   const { spec } = props;
   const def = resolveDef(spec.type, spec.encoding);
   // { csv }는 렌더마다 다시 읽지 않아요
@@ -186,15 +208,25 @@ export function Chart(props: ChartProps) {
   const locale = useChartLocale(explicit);
   const lang = langOf(locale);
   const st = useChartData(remote?.url ?? null, { parse: remote?.format ?? "auto", select: remote?.select, init: props.fetchInit, locale });
+  // 스펙 툴팁 틀(options.tooltip.template): 그 행의 다른 열까지 툴팁에 써요. 훅이라 일찍 돌아가기 전에 둬요
+  const template = specTemplate(spec);
+  const tooltip = useMemo(() => (template ? templateTooltip(template, locale) : undefined), [template, locale]);
+  // 켜고 끄는 범례(card.legend "toggle")에서 보는 사람이 고른 숨긴 계열. 처음 값은 options.hidden이고, 스펙의 hidden이 바뀔 때만 처음 값으로 돌아가요
+  // (렌더마다 새 스펙 객체가 와도 그대로예요). 훅이라 일찍 돌아가기 전에 둬요
+  const optHidden = spec.options?.hidden;
+  const specHidden = Array.isArray(optHidden) ? optHidden.map(String) : [];
+  const hiddenKey = specHidden.join("\u0001");
+  const [viewer, setViewer] = useState<{ base: string; hidden: string[] } | null>(null);
   if (!def) {
     return <ChartState error={lang === "ko" ? `알 수 없는 차트 종류: ${spec.type}` : `Unknown chart type: ${spec.type}`} height={props.height ?? 200} locale={explicit} />;
   }
   const rows = inline ?? st.data;
-  const Comp = CHART_COMPONENTS[def.type];
+  const Comp = components[def.type];
   const options = { ...(spec.options ?? {}) };
   const chartProps: Record<string, unknown> = {
     ...encodingToProps(def, spec.encoding),
     ...options,
+    ...(tooltip ? { tooltip } : {}),
     data: rows,
     ...(props.width !== undefined ? { width: props.width } : {}),
     ...(props.height !== undefined ? { height: props.height } : {}),
@@ -205,14 +237,26 @@ export function Chart(props: ChartProps) {
     // 프롭, options.locale 순서로 고친 값("ko_KR" → "ko-KR"). 둘 다 없으면 ThemeProvider를 따라요
     locale: explicit,
   };
+  // 범례 항목이 모두 숨길 수 있는 계열일 때만 켜고 꺼요 (막대 위 선이 있으면 보통 범례)
+  const toggle = spec.card?.legend === "toggle" && legendToggles(def.type, spec.encoding ?? {}, options);
+  const hidden = viewer && viewer.base === hiddenKey ? viewer.hidden : specHidden;
+  if (toggle) chartProps.hidden = hidden;
+  const onToggle = (label: string) =>
+    setViewer((v) => {
+      const cur = v && v.base === hiddenKey ? v.hidden : specHidden;
+      return { base: hiddenKey, hidden: cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label] };
+    });
   const h = (chartProps.height as number | undefined) ?? 220;
   // 데이터를 가진 채 다시 불러올 때(refreshMs)는 차트를 그대로 둬요. 다시 불러오기가 한 번 실패해도 이전 데이터가 있으면 차트를 보여 줘요
   let body = remote && !rows.length && (st.loading || st.error || st.empty) ? <ChartState loading={st.loading} error={st.error} empty={st.empty} onRetry={st.reload} height={h} locale={explicit} /> : <Comp {...chartProps} />;
   if (spec.card) {
     const c = spec.card;
-    const legend = c.legend === "auto" ? autoLegend(spec, rows, locale) : c.legend;
+    const items = c.legend === "auto" || c.legend === "toggle" ? autoLegend(spec, rows, locale, toggle) : c.legend;
+    const legend = !items?.length ? undefined : toggle ? <Legend items={items} hidden={hidden} onToggle={onToggle} locale={explicit} /> : items;
+    // 내려받기 CSV는 차트가 그리는 열만 (페이지가 넘긴 다른 열은 빼요)
+    const download = c.download ? <DownloadButtons data={rows} columns={downloadFields(spec)} filename={c.title ?? def.type} formats={Array.isArray(c.download) ? c.download : undefined} locale={explicit} /> : undefined;
     body = (
-      <ChartCard number={c.number} title={c.title ?? nameIn(def, lang)} subtitle={c.subtitle} legend={legend && legend.length ? legend : undefined} takeaway={c.takeaway} level={c.level} sample={c.sample} replay={c.replay !== false} className={props.className} locale={explicit}>
+      <ChartCard number={c.number} title={c.title ?? nameIn(def, lang)} subtitle={c.subtitle} legend={legend} actions={download} source={c.source || undefined} note={c.note || undefined} accent={c.accent} takeaway={c.takeaway} level={c.level} sample={c.sample} replay={c.replay !== false} className={props.className} locale={explicit}>
         {body}
       </ChartCard>
     );

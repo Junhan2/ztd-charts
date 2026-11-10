@@ -7,7 +7,7 @@ import { resolveHighlight } from "../core/highlight";
 import { lazyArray } from "../core/lazy";
 import type { Mark } from "../core/motion";
 import { swatch } from "../core/palette";
-import { extent, fitDomain, scaleLinear, scaleSqrt } from "../core/scale";
+import { extent, fitDomain, fitLogDomain, scaleLinear, scaleLog, scaleSqrt } from "../core/scale";
 import { labelBox, overlaps, type Box } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData, TooltipRow } from "../core/types";
 import { useChart } from "../core/useChart";
@@ -24,6 +24,8 @@ const en = {
   nth: (i: number) => `#${i}`,
   /** r: x 최소, x 최대, y 최소, y 최대 */
   desc: (sized: boolean, n: number, r: string[]) => `${sized ? "Bubble chart" : "Scatter plot"}. ${plural(n, "point")}. x from ${r[0]} to ${r[1]}, y from ${r[2]} to ${r[3]}.`,
+  /** 설명: 로그 눈금이라 뺀 점 (y가 0 이하) */
+  logDropped: (n: number) => ` ${plural(n, "point")} with y at or below 0 ${n === 1 ? "is" : "are"} not shown on the log scale.`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
@@ -34,6 +36,7 @@ const MSG: Record<ChartLang, typeof en> = {
     sizeWord: "크기",
     nth: (i) => `${i}번`,
     desc: (sized, n, r) => `${sized ? "버블 차트" : "산점도"}. 점 ${n}개. x ${r[0]}~${r[1]}, y ${r[2]}~${r[3]}.`,
+    logDropped: (n) => ` 로그 눈금이라 y가 0 이하인 점 ${n}개는 뺐어요.`,
   },
 };
 
@@ -52,6 +55,8 @@ interface PointChartProps<T> extends BaseChartProps<T> {
   /** 이 개수보다 많으면 캔버스로 그려요. 기본 1500 */
   canvasThreshold?: number;
   xFormat?: BaseChartProps<T>["format"];
+  /** "log"면 y축이 로그 눈금이에요(10, 100, 1,000이 같은 간격). 0 이하 값은 빼고 설명에 그 수를 적어요. 기본 "linear" */
+  yScale?: "linear" | "log";
 }
 
 export interface BubbleChartProps<T = Row> extends PointChartProps<T> {
@@ -132,6 +137,7 @@ function PointChart<T>(props: PointProps<T>) {
   const kit = props.kit;
   const so: ScatterOptions<T> = kit ? props : {};
   const hasSize = !kit && props.size !== undefined;
+  const isLog = props.yScale === "log";
   // 행마다 계열 이름 (계열 필드를 한 번만 읽어요)
   const rowSeries = useMemo(() => {
     if (so.series === undefined) return null;
@@ -146,8 +152,10 @@ function PointChart<T>(props: PointProps<T>) {
   const jitterAmount = so.jitter ? Math.max(0, so.jitter.amount ?? 0.4) : 0;
   const jitterSeed = so.jitter?.seed ?? 1;
   const refX = finiteOrUndefined(so.refLines?.x);
-  const refY = finiteOrUndefined(so.refLines?.y);
-  const fitOn = so.fit === "linear";
+  // 로그 눈금에서 0 이하 y 기준선은 범위, 선, 사분면에 쓰지 않고, 추세선(값 단위 최소제곱이라 로그 축에서는 휘어요)은 그리지 않아요
+  const refYIn = finiteOrUndefined(so.refLines?.y);
+  const refY = isLog && refYIn !== undefined && refYIn <= 0 ? undefined : refYIn;
+  const fitOn = so.fit === "linear" && !isLog;
   // 산점도 옵션이 그림을 바꿀 때만 계열, 추세, 기준선 설명을 더해요. 옵션이 없거나 효과가 없으면(빈 hidden, 폭 0 흔들림) 버블 차트의 산점도와 같은 그림과 설명이에요
   const hasScatterOptions = rowSeries !== null || fitOn || refX !== undefined || refY !== undefined || jitterAmount > 0;
 
@@ -162,7 +170,7 @@ function PointChart<T>(props: PointProps<T>) {
         const vx = gx(d, i);
         return { d, i, x: vx, y: gy(d, i), s: gs ? Math.max(0, gs(d, i) || 0) : 1, label: gl(d, i), si: -1, px: vx };
       })
-      .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.y));
+      .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.y) && (!isLog || r.y > 0));
     // 버블 차트와 흔들림, 계열이 없는 산점도는 여기서 끝나요. 점이 많을 때 행을 한 번 더 돌지 않게요
     if (!kit || (jitterAmount <= 0 && !rowSeries)) return rows;
     // 흔들림 폭은 숨긴 계열까지 넣은 x 간격으로 재요. 계열을 숨겨도 남은 점이 제자리예요
@@ -180,7 +188,14 @@ function PointChart<T>(props: PointProps<T>) {
       out.push(r);
     }
     return out;
-  }, [props.data, props.x, props.y, props.size, props.label, hasSize, kit, rowSeries, seriesNames, hiddenKey, jitterAmount, jitterSeed]);
+  }, [props.data, props.x, props.y, props.size, props.label, hasSize, kit, rowSeries, seriesNames, hiddenKey, jitterAmount, jitterSeed, isLog]);
+  // 로그 눈금이라 뺀 점(y가 0 이하)의 수. 설명에 적어요
+  const logDropped = useMemo(() => {
+    if (!isLog) return 0;
+    const gx = numGetter(props.x, "x");
+    const gy = numGetter(props.y, "y");
+    return props.data.filter((d, i) => Number.isFinite(gx(d, i)) && gy(d, i) <= 0).length;
+  }, [isLog, props.data, props.x, props.y]);
 
   const n = raw.length;
   const useCanvas = c.hydrated && n > (props.canvasThreshold ?? 1500);
@@ -192,20 +207,22 @@ function PointChart<T>(props: PointProps<T>) {
   }, [ext, raw, jitterAmount, refX, refY]);
   const [xmn, xmx] = ext.x;
   const [ymn, ymx] = ext.y;
-  const yDom = fitDomain(plotExt.y[0], plotExt.y[1], Math.max(2, Math.round(H / 70)), { zero: props.zero ?? false, pad: 0.08 });
+  const yCount = Math.max(2, Math.round(H / 70));
+  const yDom = isLog ? fitLogDomain(plotExt.y[0], plotExt.y[1], yCount) : fitDomain(plotExt.y[0], plotExt.y[1], yCount, { zero: props.zero ?? false, pad: 0.08 });
   const xDom = fitDomain(plotExt.x[0], plotExt.x[1], Math.max(2, Math.round(W / 110)), { zero: props.zero ?? false, pad: 0.06 });
   const yMaxAbs = Math.max(Math.abs(yDom[0]), Math.abs(yDom[1]));
   const xMaxAbs = Math.max(Math.abs(xDom[0]), Math.abs(xDom[1]));
   const yFmt = useMemo(() => makeTickFormatter(props.format, c.locale, yMaxAbs), [props.format, c.locale, yMaxAbs]);
   const xFmt = useMemo(() => makeTickFormatter(props.xFormat, c.locale, xMaxAbs), [props.xFormat, c.locale, xMaxAbs]);
-  const yTicks = scaleLinear(yDom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
-  const left = yAxisWidth(yTicks, yFmt, c.locale);
   const top = props.yLabel ? 20 : 10;
   const bottom = 24;
   const [rMin, rMax] = props.sizeRange ?? (hasSize ? [4, Math.max(10, Math.min(28, W / 22))] : [n > 2000 ? 1.6 : n > 300 ? 2.6 : 4, 0]);
   const pad = hasSize ? rMax * 0.6 : 4;
+  // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
+  const y = (isLog ? scaleLog : scaleLinear)(yDom, [H - bottom - pad, top + pad]);
+  const yTicks = y.ticks(yCount);
+  const left = yAxisWidth(yTicks, yFmt, c.locale);
   const x = scaleLinear(xDom, [left + 6 + pad, W - 8 - pad]);
-  const y = scaleLinear(yDom, [H - bottom - pad, top + pad]);
   const [smn, smx] = ext.s;
   const rs = hasSize ? scaleSqrt([Math.min(0, smn), smx || 1], [rMin, rMax]) : () => rMin;
   const box = useMemo<PlotBox>(() => ({ x0: left, x1: W, y0: top, y1: H - bottom }), [left, W, top, H, bottom]);
@@ -422,7 +439,7 @@ function PointChart<T>(props: PointProps<T>) {
     const refs = [...(refX === undefined ? [] : [`x ${xFmt(refX)}`]), ...(refY === undefined ? [] : [`y ${fv(refY)}`])];
     return kit.describe(st, { points: raw, seriesNames, fit, xName: props.xLabel ?? "x", yName: props.yLabel ?? "y", refs, refX, refY, quadrants: quadrantNames });
   }, [kit, st, hasScatterOptions, refX, refY, xFmt, fv, raw, seriesNames, fit, props.xLabel, props.yLabel, quadrantNames]);
-  const desc = props.description ?? baseDesc + scatterDesc;
+  const desc = props.description ?? baseDesc + scatterDesc + (logDropped ? msg.logDropped(logDropped) : "");
 
   return (
     <ChartFrame

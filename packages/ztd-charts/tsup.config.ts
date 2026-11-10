@@ -33,7 +33,7 @@ export default defineConfig([
     esbuildOptions,
   },
   {
-    // 브라우저에서 import map으로 바로 쓰는 한 파일짜리 번들 (CLI의 --interactive HTML)
+    // 브라우저에서 import map으로 바로 쓰는 한 파일짜리 번들 (renderSpecToHTML의 예전 { libraryUrl } 방식. CLI --interactive는 이제 차트 하나만 실은 dist/client를 써요)
     entry: { standalone: "src/index.ts" },
     format: ["esm"],
     dts: false,

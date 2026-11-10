@@ -2,6 +2,12 @@ import * as S from "../samples";
 import type { SchemaText } from "../schema";
 import type { EntryExample } from "../registry";
 
+/** 날짜를 읽는 차트 일곱 곳과 x 종류를 고르는 차트 세 곳이 같은 글을 써요 */
+const DAY_FIRST = '"05/03/2024"처럼 일과 월이 모두 될 수 있는 날짜를 일이 앞으로 읽어요(3월 5일). 없으면 25/03/2024처럼 분명한 날짜가 있을 때 그 순서를 따르고, 아니면 월을 앞으로 읽어요. true면 "05.03.24"도 일.월.연으로 읽어요';
+const HIDDEN = '숨길 계열. 색은 모든 계열을 보일 때와 같아요. card.legend가 "toggle"이면 보는 사람이 다시 켤 수 있어요';
+const Y_SCALE = 'y축 눈금. "log"면 1, 10, 100, 1,000이 같은 간격이라 1,000배 넘게 퍼진 값도 읽혀요. 0 이하 값은 빼고 그려요';
+const X_TYPE = 'x 종류를 직접 정해요. 없으면 자동: ISO 날짜, "2025.03.01" 같은 점 표기, "2025년 3월 1일", "2024Q1" 같은 분기, 영어 월 이름을 날짜로 읽어요. "date"면 10자리 숫자는 유닉스 초예요';
+
 /**
  * 레지스트리의 한글 글과 예시. 영어 원문과 같은 내용을 한국어 화면 문구 기준(해요체, 괄호는 앞말에 붙임)으로 써요.
  * 차트 이름은 meta.ts의 nameKo 한 곳에 있어요. localizeDef(def, "ko")가 이 글로 바꿔요.
@@ -107,7 +113,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "정확한 값 비교가 중요할 때",
     why: "강조색 하나의 진하기만 써서 테마가 바뀌어도 일관돼요. 칸이 많으면 캔버스로 바꿔 1만 칸도 가볍게 그려요.",
     channels: { x: "열 필드", y: "행 필드", value: "값 필드" },
-    options: { showValues: '칸 안 숫자. "auto"면 들어갈 때만 보여요', legend: "색 범례 표시", legendLabels: "범례 양끝 이름", canvasThreshold: "칸이 이보다 많으면 캔버스로 그려요" },
+    options: { showValues: '칸 안 숫자. "auto"면 들어갈 때만 보여요', legend: "색 범례 표시", legendLabels: "범례 양끝 이름", canvasThreshold: "칸이 이보다 많으면 캔버스로 그려요", colorReverse: "가장 작은 값을 가장 진하게 칠해요(1위가 진해야 하는 순위 데이터). 기본 강조도 가장 작은 값으로 옮겨요", colorCenter: "가장 옅은 색이 되는 값. 그보다 크면 강조색, 작으면 회색으로 칠해서 손익처럼 그 값을 기준으로 나눠요(예: 0)", colorSteps: "부드러운 색 대신 이 수만큼 단계로 나눠 칠해요. 히트맵 범례도 단계마다 보여요" },
     example: { data: S.heatmapSampleKo, encoding: { x: "hour", y: "day", value: "orders" }, card: { subtitle: "요일 × 시간대 주문 수", takeaway: "금요일 밤이 가장 붐벼요" } },
   },
   radar: {
@@ -125,7 +131,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "점이 겹쳐 크기 비교가 어려울 때",
     why: "점이 많으면 캔버스로 전환하고 격자 색인으로 가장 가까운 점을 바로 찾아 1만 점에서도 호버가 부드러워요.",
     channels: { x: "x 값", y: "y 값", size: "원 크기", label: "이름" },
-    options: { sizeRange: "반지름 범위(px)", xLabel: "x축 이름", yLabel: "y축 이름", zero: "축에 0 포함", maxLabels: "점 라벨 최대 개수", canvasThreshold: "점이 이보다 많으면 캔버스로 그려요", xFormat: "x 값 포맷" },
+    options: { sizeRange: "반지름 범위(px)", xLabel: "x축 이름", yLabel: "y축 이름", zero: "축에 0 포함", maxLabels: "점 라벨 최대 개수", canvasThreshold: "점이 이보다 많으면 캔버스로 그려요", xFormat: "x 값 포맷", yScale: Y_SCALE },
     example: { data: S.bubbleSampleKo, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC(원)", yLabel: "ROAS(%)" }, card: { subtitle: "캠페인별 CPC, ROAS, 광고비", takeaway: "큰 원이 효율도 좋을까요?" } },
   },
   line: {
@@ -134,7 +140,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "x가 순서 없는 범주일 때",
     why: "강조 계열만 색으로, 나머지는 회색으로 칠하고 오른쪽에 이름표를 붙여요. 1만 점도 LTTB로 줄여 path 하나로 그려요.",
     channels: { x: "x 필드(날짜, 숫자, 범주)", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드(긴 표)", lower: "범위 띠의 아래 경계. 넓은 표에서는 y와 같은 순서의 배열", upper: "범위 띠의 위 경계. lower와 같은 꼴" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", dots: '점 표시. "auto" | true | false', area: "강조 계열 아래 그라데이션", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", colorMode: "강조 계열만 색 또는 계열마다 색", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", referenceLines: "가로 기준선 [{ y, label }]", yLabel: "y축 이름", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: "강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감)", baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', curve: "선 모양", xType: X_TYPE, dayFirst: DAY_FIRST, dots: '점 표시. "auto" | true | false', area: "강조 계열 아래 그라데이션", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", colorMode: "강조 계열만 색 또는 계열마다 색", yDomain: "y 범위 고정", yScale: Y_SCALE, maxPoints: "점이 이보다 많으면 LTTB로 줄여요", referenceLines: "가로 기준선 [{ y, label }]", yLabel: "y축 이름", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: "강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감)", baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요", hidden: HIDDEN },
     example: { data: S.lineSampleKo, encoding: { x: "month", y: "mau", series: "app" }, options: { unit: "만", area: true }, card: { subtitle: "월간 활성 사용자(만 명)", takeaway: "우리 앱만 꾸준히 올라요" } },
   },
   area: {
@@ -143,7 +149,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "계열 하나하나의 정확한 값이 중요할 때",
     why: "바닥에서 차오르며 등장해서 쌓이는 구성을 한눈에 볼 수 있어요.",
     channels: { x: "x 필드", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드", lower: '범위 띠의 아래 경계(stack "none"일 때만). 넓은 표에서는 y와 같은 순서의 배열', upper: "범위 띠의 위 경계. lower와 같은 꼴" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', stack: "쌓기 방식", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동", zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', stack: "쌓기 방식", curve: "선 모양", xType: X_TYPE, dayFirst: DAY_FIRST, zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요", hidden: HIDDEN },
     example: { data: S.areaSampleKo, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "SNS" }, card: { subtitle: "채널별 월 유입(천 명)", takeaway: "SNS 몫이 가장 빨리 커져요", legend: "auto" } },
   },
   stream: {
@@ -152,16 +158,16 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "정확한 값을 읽어야 할 때",
     why: "wiggle 기준선과 inside-out 정렬로 띠가 덜 출렁여요. 가장 두꺼운 곳에 이름을 넣어요.",
     channels: { x: "x 필드", y: "y 필드", series: "계열 필드" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', offset: "기준선 모양", reorder: "모양이 깔끔해지게 계열 순서 바꾸기", curve: "선 모양", xType: "x 종류를 직접 정해요. 없으면 자동" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', offset: "기준선 모양", reorder: "모양이 깔끔해지게 계열 순서 바꾸기", curve: "선 모양", xType: X_TYPE, dayFirst: DAY_FIRST },
     example: { data: S.streamSampleKo, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "예능" }, card: { subtitle: "주별 장르 시청 시간(만 시간)", takeaway: "예능이 여름을 지배했어요" } },
   },
   bar: {
-    summary: "묶은, 쌓은, 100% 막대와 가로 막대",
+    summary: "묶은, 쌓은, 100% 막대와 가로 막대. 같은 축에 선을 더할 수 있어요",
     useWhen: "범주끼리 크기를 정확히 비교할 때",
     avoidWhen: "시간 흐름이 핵심일 때(라인 차트가 나아요)",
     why: "계열이 하나면 가장 큰 막대만, 여럿이면 강조 계열만 색으로 칠해요.",
-    channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)", annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]" },
+    channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드", line: "세로 막대 위에 같은 축으로 그리는 선(목표, 작년 등). 여럿이면 배열. highlight를 정하지 않으면 막대는 회색이고, 계열 필드가 있으면 같은 x의 값을 평균해요" },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: "계열 배치 방식", orientation: "방향", sort: "값 순 정렬(계열 하나일 때)", annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]", hidden: HIDDEN },
     example: { data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", legend: "auto" } },
   },
   radialBar: {
@@ -197,7 +203,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "축 값을 읽어야 할 때",
     why: "글 사이에 넣는 작은 그래프예요. 축 없이 마지막 값을 글자로 보여 줘요.",
     channels: { x: "x 필드", y: "y 필드" },
-    options: { variant: "모양", showValue: "마지막 값을 글자로 표시", showExtremes: "최고점과 최저점 표시", mark: "강조 점을 찍을 위치" },
+    options: { variant: "모양", showValue: "마지막 값을 글자로 표시", showExtremes: "최고점과 최저점 표시", mark: "강조 점을 찍을 위치", dayFirst: DAY_FIRST },
     example: { data: S.sparklineSample, encoding: { x: "day", y: "revenue" }, options: { unit: "만", height: 120, showExtremes: true }, card: { subtitle: "6월 일 매출(만 원)", takeaway: "주말마다 튀어요" } },
   },
   slope: {
@@ -269,7 +275,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "기간이 한 달보다 짧을 때",
     why: "하루를 칸 하나로 그려요. 주 단위로 왼쪽부터 채워지고, 여러 해면 연도마다 줄을 나눠요.",
     channels: { date: "날짜 필드", value: "값 필드" },
-    options: { weekStart: "주 시작 요일(0 일요일, 1 월요일)", gap: "칸 간격(px)", canvasThreshold: "날짜가 이보다 많으면 캔버스로 그려요" },
+    options: { weekStart: "주 시작 요일(0 일요일, 1 월요일)", gap: "칸 간격(px)", canvasThreshold: "날짜가 이보다 많으면 캔버스로 그려요", dayFirst: DAY_FIRST, colorReverse: "가장 작은 값을 가장 진하게 칠해요(1위가 진해야 하는 순위 데이터). 기본 강조도 가장 작은 값으로 옮겨요", colorCenter: "가장 옅은 색이 되는 값. 그보다 크면 강조색, 작으면 회색으로 칠해서 손익처럼 그 값을 기준으로 나눠요(예: 0)", colorSteps: "부드러운 색 대신 이 수만큼 단계로 나눠 칠해요. 히트맵 범례도 단계마다 보여요" },
     example: { data: S.calendarSample, encoding: { date: "date", value: "commits" }, options: { unit: "회" }, card: { subtitle: "2025년 하루 커밋 수", takeaway: "주말은 조용해요" } },
   },
   bump: {
@@ -305,7 +311,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "값이 하나뿐인 추이일 때(라인 차트가 더 깔끔해요)",
     why: "상승 봉은 강조색, 하락 봉은 회색으로 칠해요. 끌어서 기간을 고르면 그 기간의 등락과 최고가, 최저가를 보여 줘요.",
     channels: { x: "날짜(시점) 필드", open: "시가 필드", high: "고가 필드", low: "저가 필드", close: "종가 필드", volume: "거래량 필드" },
-    options: { ma: "종가 이동평균선 기간. 예: [5, 20]", upColor: "오르는 봉 색(토큰 이름이나 CSS 색)", downColor: "내리는 봉 색", maxCandles: "봉이 이보다 많으면 이웃 봉을 합쳐요. 기본값은 그래프 폭 / 4", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', yDomain: "가격 축 범위 고정", annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 종가 추세선, 주말 음영. [{ type, x, y, from, label }]" },
+    options: { ma: "종가 이동평균선 기간. 예: [5, 20]", upColor: "오르는 봉 색(토큰 이름이나 CSS 색)", downColor: "내리는 봉 색", maxCandles: "봉이 이보다 많으면 이웃 봉을 합쳐요. 기본값은 그래프 폭 / 4", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', yDomain: "가격 축 범위 고정", annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 종가 추세선, 주말 음영. [{ type, x, y, from, label }]", dayFirst: DAY_FIRST },
     example: { data: S.candlestickSample, encoding: { x: "date", open: "open", high: "high", low: "low", close: "close", volume: "volume" }, options: { unit: "원", ma: [5, 20], brush: true }, card: { subtitle: "가상 종목 일봉(원)", takeaway: "10월 중순부터 고점을 높여요", legend: "auto" } },
   },
   segmented: {
@@ -323,7 +329,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "음수가 있을 때, 값을 정밀하게 비교할 때(막대가 더 정확해요), 단위가 다른 두 값일 때(차트를 나누고 syncId로 묶어요)",
     why: "수평 바닥에 기간마다 블록을 세워서 높은 블록이 늘 더 많은 값이에요. 강조 계열만 강조색으로 칠하고, 같은 단위의 작은 결과(실패, 재작업)는 같은 눈금의 앞줄에 따로 세워요.",
     channels: { x: "기간 필드(날짜나 범주)", y: "블록에 쌓을 뒷줄 필드. 넓은 표에서는 배열", series: "계열 필드(긴 표, 뒷줄만)", front: "앞줄 필드: y와 같은 단위의 작은 결과(넓은 표만)" },
-    options: { depth: "칸 폭 대비 뒷줄 깊이. 0.1~0.32이고, 밖의 값은 범위 안으로 묶어요", wall: "뒷벽 눈금과 오른쪽 눈금 글자", texture: "빗금을 그릴 줄. 인쇄할 때나 회색 단계를 구분하기 어려운 사용자에게", frontRate: '앞줄 합계가 뒷줄의 몇 %인지: "label"은 라벨과 툴팁에, "strip"은 바닥 아래 비율 띠로, false면 숨겨요' },
+    options: { depth: "칸 폭 대비 뒷줄 깊이. 0.1~0.32이고, 밖의 값은 범위 안으로 묶어요", wall: "뒷벽 눈금과 오른쪽 눈금 글자", texture: "빗금을 그릴 줄. 인쇄할 때나 회색 단계를 구분하기 어려운 사용자에게", frontRate: '앞줄 합계가 뒷줄의 몇 %인지: "label"은 라벨과 툴팁에, "strip"은 바닥 아래 비율 띠로, false면 숨겨요', dayFirst: DAY_FIRST },
     example: { data: S.skylineSampleKo, encoding: { x: "day", y: ["입력", "캐시", "출력", "추론"], front: ["실패", "재시도"] }, options: { format: "compact" }, card: { subtitle: "일별 토큰(최근 14일)", takeaway: "11월 5일이 가장 많았어요" } },
   },
   histogram: {
@@ -357,7 +363,8 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
       maxLabels: "점 라벨 최대 개수. 계열 채널이 있으면 계열 이름을 대신 붙이고 기본값은 0이에요",
       canvasThreshold: "점이 이보다 많으면 캔버스로 그려요",
       xFormat: "x 값 포맷",
-      hidden: "숨길 계열. 색은 모든 계열을 보일 때와 같아요",
+      yScale: Y_SCALE,
+      hidden: HIDDEN,
       fit: "보이는 점에 맞춘 추세선(최소제곱). 툴팁에 기울기와 R²를 보여 줘요",
       refLines: "기준선 { x, y }. 둘 다 있으면 그림을 사분면으로 나눠요",
       quadrants: "사분면 이름. refLines에 x와 y가 모두 있을 때 그려요. 순서는 왼쪽 위, 오른쪽 위, 왼쪽 아래, 오른쪽 아래",
@@ -387,7 +394,7 @@ export const KO_COMMON_OPTIONS: Record<string, string> = {
   reducedMotion: '"auto"면 OS 설정을 따르고, true면 항상 꺼요',
   animateOnView: "화면에 들어올 때 재생",
   showLabels: "차트 위 라벨(값, 이름) 표시",
-  tooltip: "툴팁 표시",
+  tooltip: '툴팁 표시. { template: "{label} · {value} · 담당 {owner}" }처럼 쓰면 내용을 바꿔요: {label}, {value}, {series}나 그 행의 다른 열. \\n마다 줄을 바꾸고, 값이 없는 칸이 든 줄은 빼요',
   syncId: "같은 syncId인 차트끼리 짚은 x를 함께 보여 줘요(라인, 영역, 막대, 캔들스틱). <ChartGrid sync>는 안의 차트에 하나씩 정해 줘요",
   ariaLabel: "스크린 리더용 이름",
   description: "스크린 리더용 설명. 없으면 데이터로 만들어요",
@@ -402,8 +409,13 @@ export const SCHEMA_TEXT_KO: SchemaText = {
   csv: "CSV 본문(첫 줄이 머리글)",
   url: "JSON 또는 CSV 주소(REST API, Google Sheets CSV 내보내기 등)",
   select: '응답 JSON 안쪽 배열 경로. 예: "data.items"',
-  card: "카드로 감싸서 번호, 제목, 범례, 한 줄 요약, 수준 배지를 붙여요",
+  card: "카드로 감싸서 번호, 제목, 범례, 한 줄 요약, 수준 배지, 출처 줄, 내려받기 단추를 붙여요",
   number: '예: "01"',
+  source: '차트 아래 출처 줄. "출처: " 뒤에 붙어요',
+  note: "같은 줄의 메모. 기준일 등",
+  accent: "강조색으로 칠할 제목 속 단어. 범례 대신 써요",
+  download: "브라우저의 내려받기 단추: true면 CSV, SVG, PNG, 또는 고른 목록. SVG, PNG, 정적 HTML에는 그리지 않아요",
+  legend: '"auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter). 이미지와 정적 HTML에서는 "auto"와 같아요',
   takeaway: "아래 굵은 한 줄 요약",
   level: '"basic" | "intermediate" | "advanced". 예전 한글 값 "기본" | "중급" | "심화"도 돼요',
   sample: "예시 데이터 표시",

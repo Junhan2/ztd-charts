@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { AXIS_FONT, thinLabels } from "../core/axis";
 import { ChartFrame, Txt } from "../core/ChartFrame";
-import { formatPercent, makeTickFormatter, type ValueFormatter } from "../core/format";
+import { formatPercent, makeTickFormatter, type DayFirstProps, type ValueFormatter } from "../core/format";
 import { evenIndex } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import { plural, type ChartLang } from "../core/i18n";
@@ -66,7 +66,7 @@ const MSG: Record<ChartLang, typeof en> = {
   },
 };
 
-export interface SkylineChartProps<T = Row> extends BaseChartProps<T> {
+export interface SkylineChartProps<T = Row> extends BaseChartProps<T>, DayFirstProps {
   /** 기간 필드. 날짜, 숫자, 범주 모두 돼요. 기본 "x" */
   x?: Accessor<T, unknown>;
   /** 뒷줄에 쌓을 값 필드. 배열이면 넓은 표의 여러 열 */
@@ -396,11 +396,11 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const [row, setRow] = useState<RowName>("back");
 
   const frontFields = useMemo(() => (props.front === undefined ? [] : Array.isArray(props.front) ? props.front : [props.front]), [props.front]);
-  const backModel = useMemo(() => prepSeries(props.data, props.x, props.y, props.series, { locale: c.locale }), [props.data, props.x, props.y, props.series, c.locale]);
+  const backModel = useMemo(() => prepSeries(props.data, props.x, props.y, props.series, { locale: c.locale, dayFirst: props.dayFirst }), [props.data, props.x, props.y, props.series, c.locale, props.dayFirst]);
   // 앞줄은 뒷줄과 같은 x 종류로 읽어요. 기간 키는 x로만 정해져서 뒷줄과 같아요
   const frontValues = useMemo(
-    () => (frontFields.length ? prepSeries(props.data, props.x, frontFields, undefined, { locale: c.locale, xType: backModel.type }).values : []),
-    [props.data, props.x, frontFields, c.locale, backModel],
+    () => (frontFields.length ? prepSeries(props.data, props.x, frontFields, undefined, { locale: c.locale, xType: backModel.type, dayFirst: props.dayFirst }).values : []),
+    [props.data, props.x, frontFields, c.locale, backModel, props.dayFirst],
   );
   const valueName = typeof props.y === "string" ? props.y : c.t.value;
   const names = useMemo(() => backModel.series.map((s) => s || valueName), [backModel, valueName]);

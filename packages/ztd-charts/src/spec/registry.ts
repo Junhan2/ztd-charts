@@ -18,7 +18,7 @@ export const COMMON_OPTIONS: OptionDef[] = [
   { name: "reducedMotion", type: "any", default: "auto", description: '"auto" follows the OS setting. true always turns motion off' },
   { name: "animateOnView", type: "boolean", default: true, description: "Play when the chart scrolls into view" },
   { name: "showLabels", type: "boolean", default: true, description: "Labels drawn on the chart (values and names)" },
-  { name: "tooltip", type: "boolean", default: true, description: "Show tooltips" },
+  { name: "tooltip", type: "tooltip", default: true, description: "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out" },
   { name: "syncId", type: "string", description: "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it" },
   { name: "ariaLabel", type: "string", description: "Name for screen readers" },
   { name: "description", type: "string", description: "Description for screen readers. Built from the data when omitted" },
@@ -28,10 +28,15 @@ export const COMMON_OPTIONS: OptionDef[] = [
 const op = (name: string, type: OptionDef["type"], description: string, extra: Partial<OptionDef> = {}): OptionDef => ({ name, type, description, ...extra });
 
 const CURVE = op("curve", "enum", "Line shape", { enum: ["smooth", "linear", "step"], default: "smooth" });
-const XTYPE = op("xType", "enum", "Sets the x type yourself. Automatic when omitted", { enum: ["number", "date", "band"] });
+const XTYPE = op("xType", "enum", 'Sets the x type yourself. Automatic when omitted: ISO dates, dotted dates such as "2025.03.01", Korean year-month-day dates, quarters such as "2024Q1" and English month names are read as dates. With "date", 10-digit numbers are Unix seconds', { enum: ["number", "date", "band"] });
+const DAY_FIRST = op("dayFirst", "boolean", 'Reads dates such as "05/03/2024", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads "05.03.24" as day.month.year');
 const OTHER = op("other", "number", 'Keep the n largest slices and group the rest into one "Other" slice. The Other slice is never highlighted', { min: 1 });
 const AGGREGATE = op("aggregate", "enum", 'How rows with the same x (and series) combine: "sum" adds them, "mean" averages, "last" keeps the last row, "count" counts rows', { enum: ["sum", "mean", "last", "count"], default: "sum" });
 const BRUSH = op("brush", "any", 'Drag to select a range. true shows the change and the high and low, "zoom" zooms into the range (keyboard: Shift+arrows, Enter)', { default: false });
+/** 숨길 계열 (라인, 영역, 막대, 산점도) */
+const HIDDEN = op("hidden", "array", 'Series to hide. Colors stay as if every series were shown. With card.legend "toggle", viewers can show them again', { items: "string" });
+/** 로그 y축 (라인, 산점도, 버블). 영역과 막대는 0부터의 길이가 값이라 없어요 */
+const Y_SCALE = op("yScale", "enum", 'y axis scale. "log" spaces 1, 10, 100 and 1,000 evenly, so values spread over 1,000 times or more stay readable. Values at or below 0 are left out', { enum: ["linear", "log"], default: "linear" });
 
 /** options.annotations 항목의 종류. 차트 쪽 Annotation 타입(core/annotations.tsx)과 맞는지 컴파일러가 봐요 */
 export const ANNOTATION_TYPES = ["band", "line", "event", "forecast", "trend", "weekends"] as const satisfies readonly Annotation["type"][];
@@ -41,6 +46,10 @@ const BAND_FROM = op("bandFrom", "enum", 'Where the range band starts. "forecast
 const OUTSIDE = op("outside", "boolean", "Mark points outside the range band and count them in the description", { default: false });
 /** 빠진 값에서 선을 끊을지 (라인, 영역) */
 const CONNECT_NULLS = op("connectNulls", "boolean", "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it", { default: false });
+/** 색 척도 옵션 (히트맵, 캘린더). 배열로 펼치면 번들에서 빠지지 않아서 하나씩 둬요 */
+const COLOR_REVERSE = op("colorReverse", "boolean", "Darkest color for the smallest value, for rankings where 1st should stand out. The default highlight moves to the smallest value too", { default: false });
+const COLOR_CENTER = op("colorCenter", "number", "Value that gets the lightest color. Values above take the accent color and values below take gray, so gains and losses split there (for example 0)");
+const COLOR_STEPS = op("colorSteps", "number", "Color in this many steps instead of a smooth scale. The heatmap legend shows each step", { min: 2, max: 12 });
 /** 강조 계열을 기준값 위아래 색으로 (라인, 영역) */
 const SIGN = [
   op("signColors", "boolean", "Colors the highlighted series differently above and below baseline (profit and loss)", { default: false }),
@@ -162,7 +171,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Finding patterns such as orders by weekday × hour",
     avoidWhen: "Exact value comparison matters",
     why: "Uses shades of one accent color, so it follows the theme. With many cells it switches to canvas, so even 10k cells stay fast.",
-    options: [op("showValues", "any", 'Numbers in cells. "auto" shows them when they fit', { default: "auto" }), op("legend", "boolean", "Show the color legend", { default: true }), op("legendLabels", "array", "Names at both ends of the legend", { items: "string" }), op("canvasThreshold", "number", "Cell count that switches to canvas", { default: 2500 })],
+    options: [op("showValues", "any", 'Numbers in cells. "auto" shows them when they fit', { default: "auto" }), op("legend", "boolean", "Show the color legend", { default: true }), op("legendLabels", "array", "Names at both ends of the legend", { items: "string" }), op("canvasThreshold", "number", "Cell count that switches to canvas", { default: 2500 }), COLOR_REVERSE, COLOR_CENTER, COLOR_STEPS],
     example: { data: S.heatmapSample, encoding: { x: "hour", y: "day", value: "orders" }, card: { subtitle: "Orders by weekday × hour", takeaway: "Friday nights are the busiest" } },
     canvasAbove: 2500,
     scalable: true,
@@ -186,7 +195,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "How three metrics relate, such as CPC, ROAS and spend by campaign",
     avoidWhen: "Dots overlap and sizes get hard to compare",
     why: "With many dots it switches to canvas and finds the nearest dot through a grid index, so hover stays smooth even at 10k dots.",
-    options: [op("sizeRange", "array", "Radius range (px)", { items: "number" }), op("xLabel", "string", "x axis title"), op("yLabel", "string", "y axis title"), op("zero", "boolean", "Include 0 on the axes", { default: false }), op("maxLabels", "number", "Maximum number of dot labels", { default: 6 }), op("canvasThreshold", "number", "Dot count that switches to canvas", { default: 1500 }), op("xFormat", "format", "x value format")],
+    options: [op("sizeRange", "array", "Radius range (px)", { items: "number" }), op("xLabel", "string", "x axis title"), op("yLabel", "string", "y axis title"), op("zero", "boolean", "Include 0 on the axes", { default: false }), op("maxLabels", "number", "Maximum number of dot labels", { default: 6 }), op("canvasThreshold", "number", "Dot count that switches to canvas", { default: 1500 }), op("xFormat", "format", "x value format"), Y_SCALE],
     example: { data: S.bubbleSample, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC (KRW)", yLabel: "ROAS (%)" }, card: { subtitle: "CPC, ROAS and spend by campaign", takeaway: "Are the big circles efficient too?" } },
     canvasAbove: 1500,
     scalable: true,
@@ -199,7 +208,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "A metric over time, such as monthly users, alone or against other series",
     avoidWhen: "x is a category with no order",
     why: "Only the highlighted series gets color; the rest stay gray, with name tags on the right. Even 10k points are reduced with LTTB and drawn as one path.",
-    options: [CURVE, XTYPE, AGGREGATE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN, BAND_FROM, OUTSIDE, CONNECT_NULLS],
+    options: [CURVE, XTYPE, DAY_FIRST, AGGREGATE, op("dots", "any", 'Show dots. "auto" | true | false', { default: "auto" }), op("area", "boolean", "Gradient under the highlighted series", { default: false }), op("zero", "boolean", "Include 0 on the y axis", { default: false }), op("endLabels", "boolean", "Series name tags at the right end"), op("colorMode", "enum", "Color only the highlight, or every series", { enum: ["highlight", "categorical"], default: "highlight" }), op("yDomain", "array", "Fixed y range", { items: "number" }), Y_SCALE, op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), op("referenceLines", "array", "Horizontal reference lines [{ y, label }]"), op("yLabel", "string", "y axis title"), BRUSH, ANNOTATIONS, ...SIGN, BAND_FROM, OUTSIDE, CONNECT_NULLS, HIDDEN],
     example: { data: S.lineSample, encoding: { x: "month", y: "mau", series: "app" }, options: { area: true }, card: { subtitle: "Monthly active users (10k)", takeaway: "Only our app keeps climbing" } },
     scalable: true,
   },
@@ -211,7 +220,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Seeing how each channel's traffic changes within the total",
     avoidWhen: "The exact value of each series matters",
     why: "Areas rise from the baseline as the chart enters, which shows the stacking at a glance.",
-    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, AGGREGATE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS],
+    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, DAY_FIRST, AGGREGATE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS, HIDDEN],
     example: { data: S.areaSample, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "Social" }, card: { subtitle: "Monthly visits by channel (thousands)", takeaway: "Social's share grows the fastest", legend: "auto" } },
     scalable: true,
   },
@@ -223,18 +232,18 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "5 or more series where the rhythm of the flow matters, such as viewing by genre",
     avoidWhen: "You need to read exact values",
     why: "A wiggle baseline and inside-out ordering keep the bands calm. Names go where each band is thickest.",
-    options: [op("offset", "enum", "Baseline shape", { enum: ["wiggle", "silhouette"], default: "wiggle" }), op("reorder", "boolean", "Reorder the series for a cleaner shape", { default: true }), CURVE, XTYPE, AGGREGATE],
+    options: [op("offset", "enum", "Baseline shape", { enum: ["wiggle", "silhouette"], default: "wiggle" }), op("reorder", "boolean", "Reorder the series for a cleaner shape", { default: true }), CURVE, XTYPE, DAY_FIRST, AGGREGATE],
     example: { data: S.streamSample, encoding: { x: "week", y: "hours", series: "genre" }, options: { highlight: "Variety" }, card: { subtitle: "Weekly viewing hours by genre (10k hours)", takeaway: "Variety ruled the summer" } },
   },
   {
     type: "bar",
     level: "basic",
     group: "comparison",
-    summary: "Grouped, stacked, 100% and horizontal bars",
+    summary: "Grouped, stacked, 100% and horizontal bars, with optional lines on the same axis",
     useWhen: "Comparing sizes across categories precisely",
     avoidWhen: "The flow over time is the point (a line works better)",
     why: "With one series only the largest bar gets color; with several, only the highlighted series.",
-    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), AGGREGATE, op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]")],
+    options: [op("layout", "enum", "How series are arranged", { enum: ["grouped", "stacked", "percent"], default: "grouped" }), op("orientation", "enum", "Direction", { enum: ["vertical", "horizontal"], default: "vertical" }), op("sort", "boolean", "Sort by value (single series)", { default: false }), AGGREGATE, op("annotations", "annotations", "Notes drawn on vertical bars: target band, period, reference line, event, forecast (later bars turn pale with a dashed outline), trend line. [{ type, x, y, from, label }]"), HIDDEN],
     example: { data: S.barSample, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "Overseas" }, card: { subtitle: "Revenue by quarter (100M KRW)", takeaway: "Overseas grows its share every quarter", legend: "auto" } },
   },
   {
@@ -278,7 +287,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "The trend matters more than exact values",
     avoidWhen: "You need to read axis values",
     why: "A word-sized graphic: no axes, and the last value shows as text.",
-    options: [op("variant", "enum", "Shape", { enum: ["line", "area", "bar"], default: "area" }), op("showValue", "boolean", "Show the last value as text", { default: true }), op("showExtremes", "boolean", "Mark the high and low points", { default: false }), op("mark", "enum", "Point that gets the highlight dot", { enum: ["last", "max", "min", "none"], default: "last" })],
+    options: [op("variant", "enum", "Shape", { enum: ["line", "area", "bar"], default: "area" }), op("showValue", "boolean", "Show the last value as text", { default: true }), op("showExtremes", "boolean", "Mark the high and low points", { default: false }), op("mark", "enum", "Point that gets the highlight dot", { enum: ["last", "max", "min", "none"], default: "last" }), DAY_FIRST],
     example: { data: S.sparklineSample, encoding: { x: "day", y: "revenue" }, options: { height: 120, showExtremes: true }, card: { subtitle: "Daily revenue in June (10k KRW)", takeaway: "Spikes every weekend" } },
     scalable: true,
   },
@@ -369,7 +378,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "The rhythm of daily activity, such as commits or orders",
     avoidWhen: "The period is shorter than a month",
     why: "One square per day, filled week by week from left to right, with one row per year for multiple years.",
-    options: [op("weekStart", "number", "First day of the week (0 Sunday, 1 Monday)", { default: 0, min: 0, max: 1 }), op("gap", "number", "Gap between cells (px)", { default: 2.5 }), op("canvasThreshold", "number", "Day count that switches to canvas", { default: 4000 })],
+    options: [op("weekStart", "number", "First day of the week (0 Sunday, 1 Monday)", { default: 0, min: 0, max: 1 }), op("gap", "number", "Gap between cells (px)", { default: 2.5 }), op("canvasThreshold", "number", "Day count that switches to canvas", { default: 4000 }), DAY_FIRST, COLOR_REVERSE, COLOR_CENTER, COLOR_STEPS],
     example: { data: S.calendarSample, encoding: { date: "date", value: "commits" }, card: { subtitle: "Daily commits in 2025", takeaway: "Weekends are quiet" } },
     canvasAbove: 4000,
     scalable: true,
@@ -417,7 +426,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Stocks, exchange rates or coins, where the swing within each period matters",
     avoidWhen: "A trend with only one value (a line chart is cleaner)",
     why: "Rising candles take the accent color and falling ones are gray. Drag over a period to see its change, high and low.",
-    options: [op("ma", "array", "Moving average periods on the close. For example [5, 20]", { items: "number" }), op("upColor", "string", "Rising candle color (token name or CSS color)", { default: "accent" }), op("downColor", "string", "Falling candle color", { default: "neutralStrong" }), op("maxCandles", "number", "Above this count, neighboring candles merge. Defaults to plot width / 4"), BRUSH, op("yDomain", "array", "Fixed price axis range", { items: "number" }), op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line on the close, weekend shading. [{ type, x, y, from, label }]")],
+    options: [op("ma", "array", "Moving average periods on the close. For example [5, 20]", { items: "number" }), op("upColor", "string", "Rising candle color (token name or CSS color)", { default: "accent" }), op("downColor", "string", "Falling candle color", { default: "neutralStrong" }), op("maxCandles", "number", "Above this count, neighboring candles merge. Defaults to plot width / 4"), BRUSH, op("yDomain", "array", "Fixed price axis range", { items: "number" }), op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line on the close, weekend shading. [{ type, x, y, from, label }]"), DAY_FIRST],
     example: { data: S.candlestickSample, encoding: { x: "date", open: "open", high: "high", low: "low", close: "close", volume: "volume" }, options: { ma: [5, 20], brush: true }, card: { subtitle: "Daily candles of a sample stock (KRW)", takeaway: "Higher highs since mid-October", legend: "auto" } },
     scalable: true,
   },
@@ -445,6 +454,7 @@ const ENTRIES: ChartEntry[] = [
       op("wall", "boolean", "Value grid on the back wall, with its labels on the right", { default: true }),
       op("texture", "enum", "Rows that get the hatch pattern, for print and for readers who cannot tell the grays apart", { enum: ["front", "all", "none"], default: "front" }),
       op("frontRate", "any", 'Front row total as a share of the back row: "label" in a label and the tooltip, "strip" as a rate strip under the floor, false hides it', { default: "label" }),
+      DAY_FIRST,
     ],
     example: { data: S.skylineSample, encoding: { x: "day", y: ["Input", "Cached", "Output", "Reasoning"], front: ["Failed", "Retried"] }, options: { format: "compact" }, card: { subtitle: "Daily tokens, last 14 days", takeaway: "Nov 5 was the busiest day" } },
   },
@@ -483,7 +493,8 @@ const ENTRIES: ChartEntry[] = [
       op("maxLabels", "number", "Maximum number of dot labels. With a series channel the series names are labeled instead, and this defaults to 0", { default: 6 }),
       op("canvasThreshold", "number", "Dot count that switches to canvas", { default: 1500 }),
       op("xFormat", "format", "x value format"),
-      op("hidden", "array", "Series to hide. Colors stay as if every series were shown", { items: "string" }),
+      Y_SCALE,
+      HIDDEN,
       op("fit", "enum", "Trend line over the visible dots (least squares). The tooltip shows its slope and R²", { enum: ["linear"] }),
       op("refLines", "object", "Reference lines { x, y }. With both, they split the plot into four quadrants"),
       op("quadrants", "array", "Quadrant names, drawn when refLines has both x and y. In reading order: top left, top right, bottom left, bottom right", { items: "string" }),

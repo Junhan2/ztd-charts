@@ -56,6 +56,25 @@
           "default": 4000,
           "type": "number"
         },
+        "dayFirst": {
+          "description": "Reads dates such as \"05/03/2024\", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads \"05.03.24\" as day.month.year",
+          "type": "boolean"
+        },
+        "colorReverse": {
+          "description": "Darkest color for the smallest value, for rankings where 1st should stand out. The default highlight moves to the smallest value too",
+          "default": false,
+          "type": "boolean"
+        },
+        "colorCenter": {
+          "description": "Value that gets the lightest color. Values above take the accent color and values below take gray, so gains and losses split there (for example 0)",
+          "type": "number"
+        },
+        "colorSteps": {
+          "description": "Color in this many steps instead of a smooth scale. The heatmap legend shows each step",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 12
+        },
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
@@ -155,9 +174,7 @@
           "type": "boolean"
         },
         "tooltip": {
-          "description": "Show tooltips",
-          "default": true,
-          "type": "boolean"
+          "$ref": "#/$defs/tooltip"
         },
         "syncId": {
           "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
@@ -183,6 +200,27 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "tooltip": {
+      "description": "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out",
+      "default": true,
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "template": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "data": {
       "description": "An array of objects, or one of { values }, { csv }, { url }",
       "anyOf": [
@@ -249,7 +287,7 @@
     },
     "card": {
       "type": "object",
-      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway and level badge",
+      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway, level badge, source line and download buttons",
       "properties": {
         "number": {
           "type": "string",
@@ -270,9 +308,13 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
-              "const": "auto"
+              "enum": [
+                "auto",
+                "toggle"
+              ]
             },
             {
               "type": "array",
@@ -316,6 +358,37 @@
         "replay": {
           "type": "boolean",
           "default": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Source line under the chart, after \"Source: \""
+        },
+        "note": {
+          "type": "string",
+          "description": "Note on the same line, such as the as-of date"
+        },
+        "accent": {
+          "type": "string",
+          "description": "A word of the title to color with the accent color, used instead of a legend"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "csv",
+                  "svg",
+                  "png"
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML"
         }
       },
       "additionalProperties": false
