@@ -94,7 +94,8 @@ jobs:
     name: Publish
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 패키지마다 npm 에 보일 때까지 최대 15분을 기다려요. 0.7.0 때는 셋을 합쳐 10분쯤 걸렸을 길이예요
+    timeout-minutes: 50
     permissions:
       contents: read
       id-token: write
@@ -108,19 +109,32 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
       # 라이브러리를 먼저 올려요. CLI 와 MCP 가 같은 버전의 라이브러리를 필요로 해서요.
+      # npm 은 게시를 받고 나서 몇 분 뒤에야 그 버전을 보여 줘요(0.7.0 때 라이브러리 4분 10초, MCP 1분 16초).
+      # 그래서 올린 버전이 npm 에 보일 때까지 기다렸다가 다음 패키지를 올려요. 기다리지 않으면 MCP 가 먼저 보여서 그동안 설치가 깨져요.
       # 이미 npm 에 있는 버전은 건너뛰어요. 그래서 중간에 멈춘 실행을 다시 돌려도 되고,
       # 이미 게시된 버전에서 손으로 돌려도 실패하지 않아요(npm 은 게시된 버전의 --dry-run 도 거절해요)
       - name: Publish, or only try it on a manual run
         run: |
           echo "npm $(npm --version)"
+          on_npm() { [ -n "$(npm view "$1" version --prefer-online 2>/dev/null)" ]; }
           for name in ztd-charts ztd-charts-cli ztd-charts-mcp; do
             tarball=$(ls "$name"-[0-9]*.tgz)
             version=${tarball#"$name"-}
             version=${version%.tgz}
-            if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+            if on_npm "$name@$version"; then
               echo "::notice::$name@$version is already on npm, skipped"
             elif [ "$GITHUB_EVENT_NAME" = push ]; then
               npm publish "$tarball"
+              waited=0
+              until on_npm "$name@$version"; do
+                if [ "$waited" -ge 900 ]; then
+                  echo "::error::npm accepted $name@$version but still does not show it after 15 minutes"
+                  exit 1
+                fi
+                sleep 15
+                waited=$((waited + 15))
+              done
+              echo "$name@$version is visible on npm after about ${waited}s"
             else
               npm publish "$tarball" --dry-run
             fi
