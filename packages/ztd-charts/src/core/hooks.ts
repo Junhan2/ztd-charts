@@ -14,11 +14,20 @@ function thresholdsUpTo(t: number): number[] {
   return [...new Set([0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, t].filter((v) => v <= t))].sort((a, b) => a - b);
 }
 
-/** 기준 비율만큼 보이거나, 화면 절반을 채우면 보이는 걸로 쳐요 */
-function isShown(e: IntersectionObserverEntry, threshold: number): boolean {
+/**
+ * 기준 비율만큼 보이거나, 보이는 높이가 화면 절반 또는 enoughPx 이상이면 보이는 걸로 쳐요.
+ * enoughPx가 있으면 화면보다 작아도 키가 큰 차트(타일 지도, 트리)가 위쪽 띠만 보여도 시작해요
+ */
+export function isShown(e: Pick<IntersectionObserverEntry, "isIntersecting" | "intersectionRatio" | "intersectionRect" | "rootBounds">, threshold: number, enoughPx = Infinity): boolean {
   const rootH = e.rootBounds?.height ?? window.innerHeight;
-  return e.isIntersecting && (e.intersectionRatio >= threshold || e.intersectionRect.height >= rootH * 0.5);
+  return e.isIntersecting && (e.intersectionRatio >= threshold || e.intersectionRect.height >= Math.min(rootH * 0.5, enoughPx));
 }
+
+/**
+ * 차트 등장 기준: 차트의 4분의 1이나 96px 중 작은 쪽이 화면에 보이면 시작해요.
+ * 화면 아래 띠는 빼지 않아요. 빼면 카드 위쪽만 보이는 키 큰 차트가 보이는 채로 비어 있었어요
+ */
+export const CHART_VIEW = { threshold: 0.25, enoughPx: 96, rootMargin: "0px" } as const;
 
 /** 요소가 한 번이라도 화면에 들어왔는지 */
 export function useInView<T extends Element>(el: T | null, options: UseInViewOptions = {}): boolean {
@@ -47,7 +56,7 @@ export function useInView<T extends Element>(el: T | null, options: UseInViewOpt
 }
 
 /**
- * 지금 보이는지(visible, 25% 또는 화면 절반 기준)와 곧 보일지(near, 위아래 240px 안)를 계속 따라가요.
+ * 지금 보이는지(visible, CHART_VIEW 기준)와 곧 보일지(near, 위아래 240px 안)를 계속 따라가요.
  * near는 화면 밖 차트의 다시 재생을 미뤄 두었다가 들어오기 직전에 준비할 때 써요.
  */
 export function useViewport<T extends Element>(el: T | null, enabled = true): { visible: boolean; near: boolean } {
@@ -65,10 +74,10 @@ export function useViewport<T extends Element>(el: T | null, enabled = true): { 
     const vis = new IntersectionObserver(
       (entries) => {
         // 화면보다 몇 배 큰 차트는 25%가 한 번에 안 보여요
-        const on = isShown(entries[entries.length - 1], 0.25);
+        const on = isShown(entries[entries.length - 1], CHART_VIEW.threshold, CHART_VIEW.enoughPx);
         setState((s) => (s.visible === on ? s : { ...s, visible: on, near: s.near || on }));
       },
-      { threshold: thresholdsUpTo(0.25), rootMargin: "0px 0px -8% 0px" },
+      { threshold: thresholdsUpTo(CHART_VIEW.threshold), rootMargin: CHART_VIEW.rootMargin },
     );
     const near = new IntersectionObserver(
       (entries) => {

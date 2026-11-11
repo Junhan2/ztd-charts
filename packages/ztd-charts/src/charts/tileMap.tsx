@@ -12,7 +12,8 @@ import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData 
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter } from "../data/accessor";
-import { resolveGrid, tileMatcher, tileNeighbor, type TileDef } from "../layout/tileGrid";
+import { gridName, resolveGrid, tileMatcher, tileNeighbor, type TileDef } from "../layout/tileGrid";
+import { HANGUL } from "../layout/regions";
 
 const en = {
   kind: "Tile map",
@@ -43,7 +44,7 @@ export interface TileMapProps<T = Row> extends BaseChartProps<T> {
   region?: Accessor<T, string>;
   /** 값 필드. 기본 "value" */
   value?: Accessor<T, number>;
-  /** 내장 격자 이름("kr-sido", "kr-sido-2025")이나 타일 배열 [{ id, label, row, col, aliases }]. 기본 "kr-sido" */
+  /** "auto"(지역 값이 가장 많이 맞는 내장 격자), 내장 격자 이름("us-states", "kr-sido", "kr-sido-2025")이나 타일 배열 [{ id, label, row, col, aliases }]. 기본 "auto" */
   map?: string | readonly TileDef[];
   /** 위쪽 색 범례. 기본 true */
   legend?: boolean;
@@ -65,14 +66,14 @@ const MAX_TILE_H = 64;
 const MAX_RATIO = 1.6;
 /** 가장 옅은 단계의 불투명도. 빈 타일(회색)과 구분돼요 */
 const MIN_OPACITY = 0.14;
+/** 첫 타일과 마지막 타일 등장 사이의 상한(ms). 한국 시도 격자(16칸, 448ms)는 그대로, 미국 주 격자(2,352ms)는 이만큼으로 줄어요 */
+const STAGGER_SPREAD = 480;
 /**
  * 값 글자의 좌우 여백(px)과 폭 여유. 크롬에서 굵은 숫자는 textWidth 추정보다 최대 6.5% 넓게 그려져서(3,400,000,000: 추정 92.2, 실제 98.2)
  * 추정 폭의 1.1배가 안쪽 폭에 들어갈 때만 적어요
  */
 const VALUE_PAD = 4;
 const WIDTH_SAFETY = 1.1;
-/** 한글 (지역 이름 언어를 고를 때) */
-const HANGUL = /[가-힣ㄱ-ㆎ]/;
 
 interface TileInfo<T> {
   i: number;
@@ -100,7 +101,11 @@ function fitName(label: string, w: number): { lines: string[]; size: number; cut
  * 경계 데이터와 투영이 없어서 작은 지역(서울, 세종)도 큰 도와 같은 크기로 읽혀요
  */
 export function TileMap<T = Row>(props: TileMapProps<T>) {
-  const grid = useMemo(() => resolveGrid(props.map ?? "kr-sido") ?? [], [props.map]);
+  // "auto"(기본)는 지역 값이 가장 많이 맞는 내장 격자예요 (한국 시도 데이터면 예전 기본값 kr-sido 그대로)
+  const grid = useMemo(() => {
+    const gr = strGetter(props.region, "region");
+    return resolveGrid(gridName(props.map, () => props.data.map((d, i) => gr(d, i)))) ?? [];
+  }, [props.map, props.data, props.region]);
   const nRows = grid.reduce((m, t) => Math.max(m, t.row + 1), 0);
   const nCols = grid.reduce((m, t) => Math.max(m, t.col + 1), 0);
   const legendH = props.legend === false ? 0 : 22;
@@ -172,39 +177,48 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
   // 긴 값의 다음 후보: 로캘의 짧은 꼴(1.2B, 12억). format을 정했으면 그 꼴을 지켜서 줄이지 않고 빼요
   const userFormat = props.format !== undefined;
   const short = useMemo(() => (userFormat ? null : makeFormatter("compact", locale)), [userFormat, locale]);
-  const looks = useMemo(
-    () =>
-      tiles.map((t) => {
-        const b = { x: x0 + t.tile.col * cw + gap / 2, y: y0 + t.tile.row * ch + gap / 2, w: Math.max(0.5, cw - gap), h: Math.max(0.5, ch - gap) };
-        const sw = t.rank ? scaleSwatch(p, mx > mn ? (t.value - mn) / (mx - mn) : 1, MIN_OPACITY, scale) : null;
-        // 이름이 먼저예요: 값은 이름이 다 들어가고 그 아래 자리가 있을 때만 적어요
-        const name = fitName(t.label, b.w - 6);
-        const lineH = name.size + 2;
-        // 값은 전체 숫자, 짧은 꼴, 없음 순서. 추정 폭의 1.1배가 안쪽 폭(좌우 4px 뺀 폭)에 들어가는 가장 큰 크기로 적어요 (툴팁과 표는 늘 전체 숫자)
-        const sizeFor = (s: string) => [13, 11.5].find((size) => textWidth(s, size, 700) * WIDTH_SAFETY <= b.w - VALUE_PAD * 2 && name.lines.length * lineH + size + 3 + 8 <= b.h);
-        let valueText = sw && showLabels && !name.cut ? fmt(t.value) : "";
-        let valueSize = valueText ? sizeFor(valueText) : undefined;
-        if (valueText && valueSize === undefined && short) valueSize = sizeFor((valueText = short(t.value)));
-        if (valueSize === undefined) valueText = "";
-        const blockH = name.lines.length * lineH + (valueSize ? valueSize + 3 : 0);
-        return {
-          b,
-          d: roundRectPath(b.x, b.y, b.w, b.h, rad),
-          ring: roundRectPath(b.x - 1.5, b.y - 1.5, b.w + 3, b.h + 3, rad + 1.5),
-          sw,
-          ink: sw ? sw.text : readableOn(p, p.theme.neutralSoft),
-          name,
-          valueText,
-          valueSize,
-          lineH,
-          top: b.y + b.h / 2 - blockH / 2,
-          showName: showLabels && b.h >= name.lines.length * lineH + 4,
-        };
-      }),
-    [tiles, x0, y0, cw, ch, gap, rad, p, mn, mx, scale, fmt, short, showLabels],
-  );
+  const looks = useMemo(() => {
+    const raw = tiles.map((t) => {
+      const b = { x: x0 + t.tile.col * cw + gap / 2, y: y0 + t.tile.row * ch + gap / 2, w: Math.max(0.5, cw - gap), h: Math.max(0.5, ch - gap) };
+      const sw = t.rank ? scaleSwatch(p, mx > mn ? (t.value - mn) / (mx - mn) : 1, MIN_OPACITY, scale) : null;
+      // 이름이 먼저예요: 값은 이름이 다 들어가고 그 아래 자리가 있을 때만 적어요
+      // 타일 위에는 짧은 이름이 있으면 그것을 (미국 격자의 "CA"). 툴팁과 표는 전체 이름이에요
+      const name = fitName(t.tile.abbr ?? t.label, b.w - 6);
+      const lineH = name.size + 2;
+      // 값은 전체 숫자, 짧은 꼴, 없음 순서. 추정 폭의 1.1배가 안쪽 폭(좌우 4px 뺀 폭)에 들어가는 가장 큰 크기로 적어요 (툴팁과 표는 늘 전체 숫자)
+      const sizeFor = (s: string) => [13, 11.5].find((size) => textWidth(s, size, 700) * WIDTH_SAFETY <= b.w - VALUE_PAD * 2 && name.lines.length * lineH + size + 3 + 8 <= b.h);
+      let valueText = sw && showLabels && !name.cut ? fmt(t.value) : "";
+      let valueSize = valueText ? sizeFor(valueText) : undefined;
+      if (valueText && valueSize === undefined && short) valueSize = sizeFor((valueText = short(t.value)));
+      if (valueSize === undefined) valueText = "";
+      return { b, sw, name, valueText, valueSize, lineH, fits: !name.cut && b.h >= name.lines.length * lineH + 4 };
+    });
+    // 글자는 타일마다가 아니라 차트 하나로 정해요: 모든 이름이 (가장 작은 9px까지 줄여서) 들어가면 모두, 하나라도 안 들어가면 하나도 적지 않아요.
+    // 값도 같아요: 값이 있는 모든 타일에 들어갈 때만 적어요. 몇 타일만 이름이 남으면 빈 타일과 구분이 안 돼요 (툴팁, 표, 화면 낭독은 늘 이름과 값을 말해요)
+    const names = showLabels && raw.every((l) => l.fits);
+    const values = names && raw.every((l) => !l.sw || l.valueSize !== undefined);
+    return raw.map(({ b, sw, name, lineH, fits: _, ...v }) => {
+      const valueSize = values ? v.valueSize : undefined;
+      const blockH = name.lines.length * lineH + (valueSize ? valueSize + 3 : 0);
+      return {
+        b,
+        d: roundRectPath(b.x, b.y, b.w, b.h, rad),
+        ring: roundRectPath(b.x - 1.5, b.y - 1.5, b.w + 3, b.h + 3, rad + 1.5),
+        sw,
+        ink: sw ? sw.text : readableOn(p, p.theme.neutralSoft),
+        name,
+        valueText: values ? v.valueText : "",
+        valueSize,
+        lineH,
+        top: b.y + b.h / 2 - blockH / 2,
+        showName: names,
+      };
+    });
+  }, [tiles, x0, y0, cw, ch, gap, rad, p, mn, mx, scale, fmt, short, showLabels]);
 
-  const stg = c.motion.stagger ?? 28;
+  // 타일 사이 지연은 격자 순서대로. 전체 퍼짐은 STAGGER_SPREAD까지라 큰 격자(미국 51곳)도 1초 안팎에 끝나요 (한국 16곳은 그대로)
+  const lastCell = tiles.reduce((m, t) => Math.max(m, t.tile.row * nCols + t.tile.col), 0);
+  const stg = Math.min(c.motion.stagger ?? 28, STAGGER_SPREAD / Math.max(1, lastCell));
   const marks = useMemo<Mark<TileInfo<T>>[]>(() => tiles.map((t) => ({ key: `t${t.tile.id}`, to: [1], from: [0], delay: (t.tile.row * nCols + t.tile.col) * stg, data: t })), [tiles, nCols, stg]);
   const m = useMotion(marks, c.motion);
 
@@ -282,6 +296,8 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
     >
       {props.legend !== false && n ? <ScaleLegend p={p} right={legendRight} steps={steps} scale={scale} labels={ll} min={MIN_OPACITY} /> : null}
       {m.items.map((it) => {
+        // 빠지는 타일은 이제 안 보이는 격자의 칸이라 새 격자에 자리가 없어요 (t.i는 옛 격자 번호예요)
+        if (it.exiting) return null;
         const t = it.data;
         const { b, d, ring, sw, ink, name, valueText, valueSize, lineH, top, showName } = looks[t.i];
         const k = eventOf.get(t.i) ?? -1;

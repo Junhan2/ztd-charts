@@ -55,7 +55,7 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   note: "Note on the same line, such as the as-of date",
   accent: "A word of the title to color with the accent color, used instead of a legend",
   download: "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML",
-  legend: '"auto" builds the legend from the data. "toggle" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like "auto"',
+  legend: '"auto" builds the legend from the data. "toggle" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like "auto"',
   takeaway: "Bold one-line takeaway at the bottom",
   level: '"basic" | "intermediate" | "advanced". The Korean "기본" | "중급" | "심화" also work',
   sample: "Marks the data as sample data",
@@ -90,7 +90,7 @@ function facetSchema(t: SchemaText): JSONSchema {
   };
 }
 
-/** data, card, theme, tooltip 정의. tooltip은 차트 37종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
+/** data, card, theme, tooltip 정의. tooltip은 차트 44종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
 function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" | "theme" | "tooltip", JSONSchema> {
   const tip = common.find((o) => o.type === "tooltip");
   return {

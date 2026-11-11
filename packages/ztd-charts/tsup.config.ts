@@ -22,6 +22,20 @@ export default defineConfig([
     banner: { js: '"use client";' },
   },
   {
+    // 지도 경계는 입구마다 따로예요 (ztd-charts/geo/world 등). 지도를 그리지 않는 쪽은 경계 데이터를 싣지 않아요.
+    // index, spec과 따로 묶어서 그 둘의 조각 나눔이 그대로예요 (작은 이름표 krRegions, usStates만 입구마다 한 벌씩 들어요)
+    entry: { "geo/world": "src/geo/world.ts", "geo/us-states": "src/geo/us-states.ts", "geo/kr-sido": "src/geo/kr-sido.ts" },
+    format: ["esm", "cjs"],
+    dts: true,
+    sourcemap: false,
+    clean: false,
+    splitting: false,
+    treeshake: true,
+    target: "es2020",
+    external,
+    esbuildOptions,
+  },
+  {
     entry: { server: "src/server/index.ts" },
     format: ["esm", "cjs"],
     dts: true,

@@ -76,6 +76,9 @@ describe("카드 범례 색 = 그린 색 (계열 5, 6개, 두 테마)", () => {
   it("와플", () => {
     expectSame((all) => ({ type: "waffle", data: all.map((label, i) => ({ label, value: 40 - i * 3 })), encoding: { label: "label", value: "value" } }), (_s, all, theme, body) => [...new Set(tags(body, "rect").map((e) => attr(e, "fill")).filter((f) => painted(f) && f !== PANEL[theme]))].slice(0, all.length));
   });
+  it("반원 와플 (점, 왼쪽 묶음부터)", () => {
+    expectSame((all) => ({ type: "waffle", data: all.map((label, i) => ({ label, value: 40 - i * 3 })), encoding: { label: "label", value: "value" }, options: { shape: "arc" } }), (_s, all, theme, body) => [...new Set(tags(body, "circle").map((e) => attr(e, "fill")).filter((f) => painted(f) && f !== PANEL[theme]))].slice(0, all.length));
+  });
   it("마리메코", () => {
     expectSame((all) => ({ type: "marimekko", data: all.map((s, i) => ({ x: "A", s, v: 10 + i })), encoding: { x: "x", series: "s", value: "v" } }), (_s, all, _t, body) => pathFills(body).slice(0, all.length));
   });

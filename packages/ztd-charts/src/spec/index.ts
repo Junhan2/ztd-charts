@@ -7,7 +7,7 @@
 export * from "./types";
 export { CHARTS, CHART_TYPES, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 export { GROUPS, LEVELS, findGroup, findLevel, type LabelDef } from "./labels";
-export { specLocale, specTemplate, downloadFields, FACET_TYPES, FACET_MAX } from "./meta";
+export { specLocale, specTemplate, downloadFields, FACET_TYPES, FACET_MAX, MAX_CHART_SIZE, capChartSize } from "./meta";
 export { localizeDef, chartsIn, commonOptionsIn, specSchemaIn, schemaForIn } from "./localize";
 export { VARIANTS, variantSpec, variantsIn, type ChartVariant } from "./variants";
 export { specSchema, schemaFor, chartSchema, optionSchema, SCHEMA_ID, type JSONSchema, type SchemaText } from "./schema";
@@ -16,4 +16,6 @@ export { suggestCharts, profileData, type ColumnProfile, type DataProfile, type 
 /** 예시 데이터: pieSample, lineSample … (네임스페이스 객체는 트리 셰이킹을 막아서 이름으로 내보내요) */
 export * from "./samples";
 export { parseCSV, toCSV, fromRows, fromObjects, melt, normalizeData } from "../data/parse";
+/** 패키지에 든 지도 이름 (ztd-charts/geo/<이름>) */
+export { BUILTIN_MAPS, mapExportName } from "../geo/registry";
 export { percentile, percentiles, type PercentilesOptions } from "../data/percentile";

@@ -99,12 +99,14 @@
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "width": {
           "description": "Fixed width in px. Without it, the chart fits its parent",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "highlight": {
           "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -329,7 +331,7 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
-          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
               "enum": [

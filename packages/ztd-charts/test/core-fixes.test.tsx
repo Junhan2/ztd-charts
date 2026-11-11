@@ -8,6 +8,7 @@ import { StatCard } from "../src/components/StatCard";
 import { AxisPill, GridY, tickLabels, yAxisWidth } from "../src/core/axis";
 import { ChartFrame, type ChartFrameProps } from "../src/core/ChartFrame";
 import { makeFormatter } from "../src/core/format";
+import { CHART_VIEW, isShown } from "../src/core/hooks";
 import { MotionEngine } from "../src/core/motion";
 import { fitDomain, fitLogDomain, logTicks, niceStep, scaleLinear, scaleLog, timeTicks } from "../src/core/scale";
 import { prepSeries } from "../src/core/series";
@@ -256,8 +257,21 @@ describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () 
     return [
       renderToString(<WaffleChart data={[{ label: "A", value: 40 }, { label: "B", value: 60 }]} label="label" value="value" width={400} />),
       renderToString(<CalendarHeatmap data={days} date="date" value="value" width={600} />),
+      renderToString(<WaffleChart data={[{ label: "A", value: 40 }, { label: "B", value: 60 }]} label="label" value="value" shape="arc" total={120} referenceLines={[{ value: 61, label: "Majority" }]} width={400} />),
     ];
   }
+
+  it("반원 와플은 하이드레이트 전 첫 렌더가 서버 렌더와 글자까지 같아요", async () => {
+    const browser = (await renderInBrowser(false))[2];
+    vi.resetModules();
+    vi.doUnmock("../src/core/env");
+    vi.doUnmock("../src/core/hooks");
+    vi.unstubAllGlobals();
+    const { WaffleChart } = await import("../src/charts/waffle");
+    const server = renderToString(<WaffleChart data={[{ label: "A", value: 40 }, { label: "B", value: 60 }]} label="label" value="value" shape="arc" total={120} referenceLines={[{ value: 61, label: "Majority" }]} width={400} />);
+    expect(browser).toBe(server);
+    expect(server).toContain("<circle");
+  });
 
   it("하이드레이트 전 첫 렌더는 서버처럼 등장 스타일이 없어요", async () => {
     for (const html of await renderInBrowser(false)) {
@@ -269,6 +283,39 @@ describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () 
     const [waffle, calendar] = await renderInBrowser(true);
     expect(waffle).toMatch(/style="(opacity:0|animation:ztd-pop)/);
     expect(calendar).toMatch(/style="(opacity:0|animation:ztd-fade)/);
+  });
+});
+
+describe("등장 시작 기준 (useViewport)", () => {
+  // 화면 높이 vh에서 top부터 h만큼인 차트의 관찰 결과. 관찰 영역은 CHART_VIEW.rootMargin의 아래쪽 값만큼 줄어요 ("-8%" 또는 "0px")
+  const entryAt = (top: number, h: number, vh: number, rootMargin: string = CHART_VIEW.rootMargin) => {
+    const bottom = rootMargin.trim().split(/\s+/)[2] ?? rootMargin;
+    const inset = bottom.endsWith("%") ? (-parseFloat(bottom) / 100) * vh : -parseFloat(bottom);
+    const rootH = vh - inset;
+    const seen = Math.max(0, Math.min(rootH, top + h) - Math.max(0, top));
+    return { isIntersecting: seen > 0, intersectionRatio: seen / h, intersectionRect: { height: seen } as DOMRectReadOnly, rootBounds: { height: rootH } as DOMRectReadOnly };
+  };
+  const shown = (top: number, h: number, vh: number) => isShown(entryAt(top, h, vh), CHART_VIEW.threshold, CHART_VIEW.enoughPx);
+
+  it("문서 카드 위쪽만 보이는 키 큰 차트도 시작해요 (1280x900에서 타일 지도, 막대 경주, 타임라인, 트리)", () => {
+    // 운영 사이트에서 7초 동안 비어 있던 자리 그대로: 차트 위 끝, 높이
+    const prod = [[769.19, 515.09], [791.66, 284], [769.19, 236], [763.61, 406.5]];
+    for (const [top, h] of prod) expect(shown(top, h, 900), `${top} ${h}`).toBe(true);
+    // 예전 기준(아래 8% 띠를 빼고 25%)으로는 넷 다 기다렸어요 (타임라인은 25%에 0.2px 모자랐어요)
+    for (const [top, h] of prod) expect(isShown(entryAt(top, h, 900, "0px 0px -8% 0px"), 0.25), `${top} ${h}`).toBe(false);
+  });
+
+  it("화면보다 훨씬 큰 차트는 96px만 보여도 시작하고, 작은 차트는 4분의 1이 보여야 해요", () => {
+    expect(shown(800, 3000, 900)).toBe(true);
+    expect(shown(820, 3000, 900)).toBe(false);
+    expect(shown(880, 120, 900)).toBe(false);
+    expect(shown(870, 120, 900)).toBe(true);
+    expect(shown(950, 300, 900)).toBe(false);
+  });
+
+  it("공개 useInView의 기준은 그대로예요 (비율, 또는 화면 절반)", () => {
+    expect(isShown(entryAt(769, 515, 900, "0px"), 0.5)).toBe(false);
+    expect(isShown(entryAt(400, 3000, 900, "0px"), 0.5)).toBe(true);
   });
 });
 

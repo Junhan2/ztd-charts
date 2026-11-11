@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/ztd-charts/schema/charts/waffle.schema.json",
   "title": "Waffle chart",
-  "description": "Proportion on a 100-cell grid. Use when: A share reads better as a count, like '38 out of 100'. Avoid when: More than 4 items, or differences under 1% matter",
+  "description": "Proportion on a 100-cell grid, or one dot per unit in a half circle (seat chart). Use when: A share reads better as a count, like '38 out of 100', or seats out of a fixed total. Avoid when: More than 4 items, or differences under 1% matter",
   "type": "object",
   "required": [
     "type",
@@ -39,6 +39,14 @@
     "options": {
       "type": "object",
       "properties": {
+        "shape": {
+          "description": "\"arc\" draws one dot per unit in a half circle of rows, each group a wedge from left to right (seats in an assembly, votes on a board, seats sold). cells and columns are not used with it",
+          "default": "grid",
+          "enum": [
+            "grid",
+            "arc"
+          ]
+        },
         "cells": {
           "description": "Number of cells",
           "default": 100,
@@ -52,11 +60,15 @@
           "minimum": 1
         },
         "total": {
-          "description": "Value of the whole. Defaults to the sum",
+          "description": "Value of the whole. Defaults to the sum. With shape \"arc\", units above the sum are drawn as empty seats",
           "type": "number"
         },
+        "referenceLines": {
+          "description": "Shape \"arc\": radial lines at a unit count, such as a majority [{ value, label }]",
+          "type": "array"
+        },
         "summary": {
-          "description": "Show the big number on the right",
+          "description": "Show the big number on the right (shape \"arc\": the total in the middle)",
           "default": true,
           "type": "boolean"
         },
@@ -71,12 +83,14 @@
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "width": {
           "description": "Fixed width in px. Without it, the chart fits its parent",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "highlight": {
           "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -301,7 +315,7 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
-          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
               "enum": [

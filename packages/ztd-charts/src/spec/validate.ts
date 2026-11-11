@@ -2,11 +2,20 @@ import { parseCSV } from "../data/parse";
 import { hasField, numGetter, strGetter, toNumber, uniq } from "../data/accessor";
 import { markPercentile } from "../data/percentile";
 import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
-import { mergedAway, resolveGrid, TILE_MAPS, tileMatcher, tileNames, type TileDef } from "../layout/tileGrid";
+import { ARC_MAX_DOTS } from "../layout/seats";
+import { r2 } from "../core/geometry";
+import { gridName, mergedAway, resolveGrid, TILE_MAPS, tileMatcher, tileNames, type TileDef } from "../layout/tileGrid";
+import { readTimeline, timelineDomain } from "../layout/timeline";
+import { findNodes, preorder, stratify } from "../layout/tree";
+import { nameMatcher } from "../layout/regions";
+import { GEOJSON_LIMITS, geojsonShapes, geojsonSize } from "../geo/codec";
+import { BUILTIN_MAPS, chooseMap, isFeatureCollection, isGeoMap, mapExportName, mapMatcher, regionKeys, registeredMaps, type MapChoice } from "../geo/registry";
+import { MAX_FLOWS, MAX_POINTS, choosePlaceMap, flowPlace, placeDomain, placeEntry, placeIn, symbolPlace, validLonLat, type PlaceDomain } from "../geo/places";
+import type { GeoJSONFeatureCollection, GeoMap } from "../geo/types";
 import { HIGHLIGHT_KEYWORDS } from "../core/highlight";
 import { DMY_RE, ISO_DATE_RE, TEMPLATE_NAMES, TEMPLATE_SLOT, isDateText, isoDay, toDate } from "../core/format";
 import { plural } from "../core/i18n";
-import { FACET_MAX, FACET_TYPES, META, legendToggles, specTemplate } from "./meta";
+import { FACET_MAX, FACET_TYPES, META, hexBinned, legendToggles, specTemplate } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
@@ -72,7 +81,8 @@ function isSafeStyleValue(v: unknown, font = false): boolean {
 function typeOf(v: unknown): string {
   if (Array.isArray(v)) return "array";
   if (v === null) return "null";
-  return typeof v;
+  // NaN, Infinity는 typeof가 "number"라 "숫자여야 해요(지금 number)"처럼 읽혀서 값 그대로 적어요
+  return typeof v === "number" && !Number.isFinite(v) ? String(v) : typeof v;
 }
 
 /** 숫자 o.length개가 모두 o.min~o.max 안인지. 스키마의 minItems, maxItems, minimum, maximum과 같은 규칙이에요 */
@@ -173,7 +183,7 @@ function checkBand(type: string, enc: Record<string, unknown>, opts: Record<stri
  * 같은 x(긴 표는 같은 x와 계열)가 여러 행이면 차트는 더해서 그려요. 비율, 평균처럼 더하면 안 되는 값일 수 있어 알려요.
  * aggregate를 정했으면 묻지 않아요. 큰 표는 앞 10만 행만 봐요
  */
-function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report, facetBy?: string): void {
+function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report, facetBy?: string, path = "encoding.x"): void {
   if (!rows || rows.length < 2 || opts.aggregate !== undefined) return;
   const xf = fieldOf(enc, "x");
   const sf = !Array.isArray(enc.y) && typeof enc.series === "string" ? enc.series : null;
@@ -203,7 +213,7 @@ function checkDuplicates(enc: Record<string, unknown>, opts: Record<string, unkn
   const times = seen.get(firstKey) ?? 2;
   const what = sf ? `${xf}, ${sf}` : xf;
   warn(
-    "encoding.x",
+    path,
     "duplicate_x",
     t(
       `Rows with the same ${sf ? `${xf} and ${sf}` : xf} are added together (${plural(places, "place")}, first "${firstX}" ×${times}). If they should not add up, such as rates or averages, set options.aggregate to "mean", "last" or "count"`,
@@ -273,9 +283,14 @@ function checkSlope(enc: Record<string, unknown>, opts: Record<string, unknown>,
  */
 function checkDates(type: string, enc: Record<string, unknown>, opts: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
   if (!rows || !rows.length) return;
-  const channel = type === "calendar" ? "date" : "x";
-  const field = typeof enc[channel] === "string" ? (enc[channel] as string) : type === "candlestick" ? "date" : channel;
-  const xs = rows.slice(0, 100_000).map((r) => r?.[field]);
+  // 날짜를 읽는 채널: 캘린더는 date, 타임라인은 start와 end(차트처럼 두 열을 함께 봐요), 나머지는 x
+  const channels = type === "calendar" ? ["date"] : type === "timeline" ? ["start", "end"] : ["x"];
+  const channel = channels[0];
+  const head = rows.slice(0, 100_000);
+  const xs = channels.flatMap((ch) => {
+    const field = typeof enc[ch] === "string" ? (enc[ch] as string) : type === "candlestick" ? "date" : ch;
+    return head.map((r) => r?.[field]);
+  });
   // 한 번 훑어서: 모두 날짜 글자인지, ISO가 아닌 첫 값(odd)
   let allText = true;
   let odd: unknown;
@@ -307,8 +322,10 @@ function checkDates(type: string, enc: Record<string, unknown>, opts: Record<str
     }
   }
   if (opts.dayFirst !== undefined || evidence !== undefined || !amb.length) return;
-  const shown = amb.slice(0, 3).map((i) => i + 1);
-  const more = amb.length > shown.length;
+  // 두 열을 이어 봤으면 행 번호는 열 길이로 나눈 나머지예요 (같은 행이 두 번 나오지 않게)
+  const ambRows = uniq(amb.map((i) => String((i % head.length) + 1)));
+  const shown = ambRows.slice(0, 3);
+  const more = ambRows.length > shown.length;
   const v = cellText(xs[amb[0]]);
   warn(
     `encoding.${channel}`,
@@ -393,6 +410,92 @@ function checkDiverging(enc: Record<string, unknown>, o: Record<string, unknown>
   }
 }
 
+/**
+ * 와플 반원(shape "arc") 검사. 격자에서 쓴 referenceLines, 반원에서 쓴 cells, columns는 쓰지 않는다고 알려요.
+ * 반원: 음수는 0으로, total이 0 이하이거나 합보다 작으면 합으로 그리고, ARC_MAX_DOTS를 넘는 단위는 점 하나가 여러 단위, 0과 전체 밖의 기준선은 그리지 않아요
+ */
+function checkWaffle(enc: Record<string, unknown>, o: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, warn: Report): void {
+  if (o.shape !== "arc") {
+    if (o.referenceLines !== undefined) warn("options.referenceLines", "ignored_option", t('options.referenceLines is used only with shape "arc"', 'options.referenceLines 옵션은 shape "arc"에서만 써요'));
+    return;
+  }
+  for (const k of ["cells", "columns"]) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is not used with shape "arc": each dot is one unit`, `shape "arc"에서는 점 하나가 한 단위라 options.${k} 옵션을 쓰지 않아요`));
+  const tot = typeof o.total === "number" && Number.isFinite(o.total) ? o.total : undefined;
+  if (tot !== undefined && tot <= 0) warn("options.total", "bad_total", t("options.total must be above 0, so the sum of the values is used", "options.total 값은 0보다 커야 해요. 값의 합으로 그려요"));
+  if (!rows) return;
+  const vf = fieldOf(enc, "value");
+  let s = 0;
+  let neg = 0;
+  rows.forEach((r) => {
+    const v = toNumber(r?.[vf]);
+    if (v < 0) neg++;
+    if (Number.isFinite(v) && v > 0) s += v;
+  });
+  if (neg) warn("encoding.value", "negative_value", t(`${plural(neg, "negative value")} ${neg === 1 ? "is" : "are"} drawn as 0`, `음수 ${neg}개는 0으로 그려요`));
+  const shown = (v: number) => String(r2(v));
+  if (tot !== undefined && tot > 0 && tot < s) warn("options.total", "total_below_sum", t(`options.total (${shown(tot)}) is less than the sum of the values (${shown(s)}), so the sum is used`, `options.total(${shown(tot)})이 값의 합(${shown(s)})보다 작아서 합으로 그려요`));
+  const whole = tot !== undefined && tot >= s && tot > 0 ? tot : s;
+  const units = Math.round(whole);
+  if (units > ARC_MAX_DOTS) warn(tot === whole ? "options.total" : "data", "too_many_units", t(`${shown(units)} units are more than ${ARC_MAX_DOTS} dots, so each dot stands for about ${shown(units / ARC_MAX_DOTS)} units`, `단위 ${shown(units)}개는 점 ${ARC_MAX_DOTS}개보다 많아서 점 하나가 약 ${shown(units / ARC_MAX_DOTS)}이에요`));
+  if (Array.isArray(o.referenceLines))
+    o.referenceLines.forEach((r, i) => {
+      const v = r && typeof r === "object" ? (r as Record<string, unknown>).value : undefined;
+      if (typeof v === "number" && Number.isFinite(v) && (v < 0 || v > whole)) warn(`options.referenceLines[${i}]`, "reference_out_of_range", t(`A reference line at ${shown(v)} is outside 0 to ${shown(whole)}, so it is not drawn`, `${shown(v)} 기준선은 0~${shown(whole)} 밖이라 그리지 않아요`));
+    });
+}
+
+/**
+ * 산점도 육각 밀도(bin "hex") 검사. 칸은 모든 점의 수라 계열, 크기, 점 이름, 흔들림, 숨김, 점 라벨 수, 강조를 쓰지 않고, 칸은 SVG 경로라 캔버스로 바꾸지 않아요.
+ * bin 없이 쓴 binSize, colorSteps도 알려요. 작은 여러 개는 패널을 고르는 강조를 쓰니 강조는 facet이 없을 때만 알려요
+ */
+function checkHexbin(enc: Record<string, unknown>, o: Record<string, unknown>, faceted: boolean, t: (en: string, ko: string) => string, warn: Report): void {
+  if (!hexBinned(o)) {
+    for (const k of ["binSize", "colorSteps"]) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is used only with bin "hex"`, `options.${k} 옵션은 bin "hex"에서만 써요`));
+    return;
+  }
+  const channels: [string, string, string][] = [
+    ["series", 'Each hexagon counts every dot, so series are not colored. To compare series, split them with facet: { by }', "칸은 모든 점의 수라 계열을 색으로 나누지 않아요. 계열끼리 견주려면 facet: { by }로 나눠 주세요"],
+    ["size", "Hexagons are shaded by count, so size is not used and the chart is not drawn as a bubble chart", "칸은 점 수로 칠해서 크기는 쓰지 않고 버블 차트로 그리지 않아요"],
+    ["label", "Dots are not drawn one by one, so their names are not shown", "점을 하나씩 그리지 않아서 점 이름은 보이지 않아요"],
+  ];
+  for (const [k, en, ko] of channels) if (enc[k] !== undefined) warn(`encoding.${k}`, "ignored_option", t(`encoding.${k} is not used with bin "hex". ${en}`, `bin "hex"에서는 encoding.${k} 채널을 쓰지 않아요. ${ko}`));
+  const ignored = ["jitter", "hidden", "maxLabels", ...(faceted ? [] : ["highlight"])];
+  for (const k of ignored) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is not used with bin "hex", which draws counts per hexagon instead of dots`, `bin "hex"는 점 대신 칸마다 점 수를 그려서 options.${k} 옵션을 쓰지 않아요`));
+  if (o.canvasThreshold !== undefined) warn("options.canvasThreshold", "ignored_option", t('options.canvasThreshold is not used with bin "hex": hexagons are a few SVG paths at any dot count, so the chart never switches to canvas', 'bin "hex"에서는 options.canvasThreshold를 쓰지 않아요. 점이 아무리 많아도 칸은 SVG 경로 몇 개라 캔버스로 바꾸지 않아요'));
+}
+
+/**
+ * 산점도 고정 범위(xDomain, yDomain) 검사. 두 끝이 유한한 숫자 [작은 값, 큰 값]이 아니면 오류이고, 차트는 그 범위 대신 데이터 범위를 써요.
+ * 로그 눈금에서 0 이하에 닿는 yDomain과, 범위 안에 점이 하나도 없는 경우(빈 그림)는 알려요
+ */
+function checkPointRanges(enc: Record<string, unknown>, o: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, err: Report, warn: Report): void {
+  const ok: Record<string, [number, number]> = {};
+  for (const k of ["xDomain", "yDomain"]) {
+    const v = o[k];
+    if (v === undefined || !Array.isArray(v)) continue;
+    if (v.length !== 2 || !v.every((x) => typeof x === "number" && Number.isFinite(x))) err(`options.${k}`, "bad_domain", t(`options.${k} must be two finite numbers [start, end], such as [0, 100]. The data range is used instead`, `options.${k} 값은 [0, 100]처럼 유한한 숫자 두 개 [처음, 끝]이어야 해요. 대신 데이터 범위를 써요`));
+    else if (v[0] >= v[1]) err(`options.${k}`, "bad_domain", t(`options.${k} must have the smaller value first and two different ends (got [${v[0]}, ${v[1]}]). The data range is used instead`, `options.${k} 값은 작은 값이 먼저이고 두 끝이 달라야 해요(지금 [${v[0]}, ${v[1]}]). 대신 데이터 범위를 써요`));
+    else ok[k] = v as [number, number];
+  }
+  if (o.yScale === "log" && ok.yDomain && ok.yDomain[0] <= 0) {
+    warn("options.yDomain", "ignored_option", t("options.yDomain is not used on a log scale because it reaches 0 or below", "로그 눈금은 0 이하를 그릴 수 없어서 0 이하에 닿는 options.yDomain은 쓰지 않아요"));
+    delete ok.yDomain;
+  }
+  if (!rows?.length || (!ok.xDomain && !ok.yDomain)) return;
+  const gx = numGetter<Record<string, unknown>>(fieldOf(enc, "x"), "x");
+  const gy = numGetter<Record<string, unknown>>(fieldOf(enc, "y"), "y");
+  const inside = (v: number, d?: [number, number]) => !d || (v >= d[0] && v <= d[1]);
+  let finite = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const x = gx(rows[i], i);
+    const y = gy(rows[i], i);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (inside(x, ok.xDomain) && inside(y, ok.yDomain)) return;
+    finite++;
+  }
+  if (finite) warn(ok.xDomain ? "options.xDomain" : "options.yDomain", "domain_empty", t(`None of the ${plural(finite, "dot")} fall inside the fixed range, so the chart says "No points in this range."`, `점 ${finite}개 중 고정 범위 안에 드는 점이 없어서 차트에 "이 범위에는 점이 없어요."라고 적어요`));
+}
+
 /** 인코딩의 필드 이름. 문자열이 아니면 기본 이름(x, label, value 등) */
 function fieldOf(enc: Record<string, unknown>, k: string): string {
   return typeof enc[k] === "string" ? (enc[k] as string) : k;
@@ -441,17 +544,97 @@ function checkHistogram(rows: Record<string, unknown>[] | null, enc: Record<stri
   }
 }
 
+/**
+ * 트리 검사: id/parent 행의 겹친 id, 없는 부모, 고리(모두 뿌리 아래에 그려요), 음수 값(0으로 셈),
+ * 강조와 접기의 이름이나 경로가 노드에 없는지. id/parent 행은 차트와 같은 stratify로 트리를 만들어 봐요.
+ * 다른 모양(group, path, children)은 buildTree를 부르지 않고 같은 이름 경로를 직접 만들어요 (부르면 트리맵, 선버스트 번들이 커져요)
+ */
+function checkTree(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, warn: Report, t: (en: string, ko: string) => string) {
+  if (!rows?.length) return;
+  const str = (k: string) => (typeof enc[k] === "string" ? (enc[k] as string) : undefined);
+  const path = Array.isArray(o.path) ? o.path.filter((x): x is string => typeof x === "string") : undefined;
+  const parent = str("parent");
+  const group = str("group");
+  if (parent && (group || path?.length)) warn("encoding.parent", "tree_parent_wins", t("encoding.parent is set, so group and path are ignored: each row is one node under its parent", "encoding.parent가 있어서 group과 path는 쓰지 않아요. 행마다 노드 하나이고 부모 아래에 달려요"));
+  const issues: Record<string, string[]> = { duplicate_id: [], missing_parent: [], cycle: [] };
+  const lf = fieldOf(enc, "label");
+  // 노드의 { id, label }: id/parent 행은 차트와 같은 stratify로, 다른 모양은 buildTree와 같은 이름 경로(id)를 여기서 만들어요
+  // (buildTree를 부르면 트리맵, 선버스트 번들이 커져요). 찾기는 차트와 같은 findNodes예요
+  let nodes: { id: string; label: string }[];
+  if (parent) nodes = preorder(stratify(rows, { label: lf, id: str("id"), parent }, "", (x) => issues[x.code].push(x.id)));
+  else {
+    nodes = [];
+    // 빈칸만 있는 이름은 빈 이름이에요 (차트의 dropBlankNames와 같아요)
+    const text = (v: unknown) => (isBlank(v) || !String(v).trim() ? "" : String(v));
+    const add = (id: string, label: string) => nodes.push({ id, label });
+    const walk = (list: unknown[], at: string) =>
+      list.forEach((r, i) => {
+        const row = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+        const label = text(row[lf]) || `#${i + 1}`;
+        const id = at ? `${at}/${label}` : label;
+        add(id, label);
+        if (Array.isArray(row.children)) walk(row.children, id);
+      });
+    if (rows.some((r) => r && typeof r === "object" && Array.isArray(r.children))) walk(rows, "");
+    else
+      rows.forEach((row, i) => {
+        const steps = path?.length ? path.map((k) => text(row[k])).filter(Boolean) : group && text(row[group]) ? [text(row[group])] : [];
+        steps.forEach((label, k) => add(steps.slice(0, k + 1).join("/"), label));
+        const label = text(row[lf]) || `#${i + 1}`;
+        add([...steps, label].join("/"), label);
+      });
+  }
+  const n = (k: string) => issues[k].length;
+  if (n("duplicate_id")) warn("encoding.id", "tree_duplicate_id", t(`${plural(n("duplicate_id"), "row repeats an id", "rows repeat an id")} (${quoted(issues.duplicate_id, t)}). Each is drawn as its own node, and children go under the first row with that id`, `id가 겹치는 행 ${n("duplicate_id")}개(${quoted(issues.duplicate_id, t)})는 따로 노드로 그리고, 자식은 그 id의 첫 행 아래에 달아요`));
+  if (n("missing_parent")) warn("encoding.parent", "tree_missing_parent", t(`${plural(n("missing_parent"), "row names a parent", "rows name a parent")} that no row has (${quoted(issues.missing_parent, t)}), so ${n("missing_parent") === 1 ? "it hangs" : "they hang"} under the root`, `없는 부모를 가리키는 행 ${n("missing_parent")}개(${quoted(issues.missing_parent, t)})는 뿌리 아래에 달아요`));
+  if (n("cycle")) warn("encoding.parent", "tree_cycle", t(`Parent links loop back (${quoted(issues.cycle, t)}). The loop is cut there and that row hangs under the root`, `부모를 따라가면 제자리로 돌아오는 행(${quoted(issues.cycle, t)})이 있어요. 그 자리에서 끊어 뿌리 아래에 달아요`));
+  const vf = str("value");
+  if (vf && rows.some((r) => r && typeof r === "object" && toNumber(r[vf]) < 0)) warn("encoding.value", "tree_negative_value", t(`Negative values in "${vf}" count as 0 (values add up from the leaves)`, `"${vf}"의 음수 값은 0으로 세요(값은 잎에서 위로 더해요)`));
+  const names = [...new Set(nodes.map((nd) => nd.label))];
+  // 더한 뿌리는 이름표(rootLabel, 없으면 "All" 또는 "전체")로 찾아요. 차트도 같아요
+  const rootNames = typeof o.rootLabel === "string" && o.rootLabel ? [o.rootLabel] : ["All", "전체"];
+  const found = (x: string) => rootNames.includes(x) || findNodes(nodes, x).length > 0;
+  const lookFor = (key: "highlight" | "collapsed", list: unknown[]) => {
+    const missing = list.filter((x): x is string => typeof x === "string" && !(key === "highlight" && HIGHLIGHT_KEYWORDS.includes(x)) && !found(x));
+    if (!missing.length) return;
+    const near = closest(missing[0], names);
+    warn(`options.${key}`, key === "highlight" ? "highlight_not_found" : "collapsed_not_found", t(`No node is named ${quoted(missing, t)}.${near ? ` Did you mean "${near}"?` : ""} Use a node name or a path such as "Parent/Child"`, `${quoted(missing, t)} 노드가 없어요.${near ? ` "${near}"인가요?` : ""} 노드 이름이나 "부모/자식" 같은 경로를 써 주세요`));
+  };
+  if (o.highlight !== undefined) lookFor("highlight", Array.isArray(o.highlight) ? o.highlight : [o.highlight]);
+  if (Array.isArray(o.collapsed)) lookFor("collapsed", o.collapsed);
+}
+
+/** 글자 체계: 한글, 라틴 문자, 숫자, 그 밖 (지역 이름을 권할 때 다른 체계 이름은 권하지 않아요) */
+const scriptOf = (s: string) => (/[가-힣ㄱ-ㆎ]/.test(s) ? "hangul" : /[A-Za-z]/.test(s) ? "latin" : /\d/.test(s) ? "digit" : "other");
+
+/**
+ * 맞지 않는 지역 이름에 권할 이름: 같은 글자 체계이고, 편집 거리가 길이에 비해 작은 이름만 (3글자는 1, 그보다 길면 길이의 1/3, 적어도 2).
+ * "서울"에 "AK"를 권하지 않아요. 없으면 null
+ */
+function regionSuggestion(name: string, names: readonly string[]): string | null {
+  const script = scriptOf(name);
+  // 두 글자 이하 코드("CA", "06")는 한 글자만 달라도 다른 지역이라 권하지 않아요. 두 글자 한글 이름("서을" → "서울")은 권해요.
+  // 64자보다 긴 이름은 지역 이름이 아니에요 (편집 거리가 길이의 곱이라, 남이 쓴 스펙의 아주 긴 이름에 시간을 쓰지 않아요)
+  if ((name.trim().length <= 2 && script !== "hangul") || name.length > 64) return null;
+  const near = closest(name, names.filter((n) => scriptOf(n) === script));
+  if (near === null) return null;
+  const limit = name.length <= 3 ? 1 : Math.max(2, Math.floor(name.length / 3));
+  return levenshtein(name.toLowerCase(), near.toLowerCase()) <= limit ? near : null;
+}
+
 /** 글자 목록을 따옴표로 묶어 앞 5개만 (나머지는 개수로) */
 function quoted(names: string[], t: (en: string, ko: string) => string): string {
   return listText(names.slice(0, 5).map(cellText), names.length, t);
 }
 
 /**
- * 타일 격자 지도 검사: options.map(내장 이름이나 타일 배열), 타일에 맞지 않는 행(가장 가까운 이름을 제안), kr-sido 데이터의 광주, 전남(2026-07-01 통합),
+ * 타일 격자 지도 검사: options.map("auto", 내장 이름이나 타일 배열), 타일에 맞지 않는 행(가장 가까운 이름을 제안), kr-sido 데이터의 광주, 전남(2026-07-01 통합),
  * 같은 타일에 맞는 행이 여럿, 강조할 지역 이름
  */
 function checkTileMap(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
-  const map = o.map ?? "kr-sido";
+  const field = fieldOf(enc, "region");
+  // "auto"(기본)는 차트와 같이 지역 값이 가장 많이 맞는 내장 격자로 봐요
+  const map = gridName(o.map, () => (rows ?? []).map((r) => (r && typeof r === "object" ? r[field] : undefined)));
   const builtins = TILE_MAPS.map((m) => `"${m}"`).join(", ");
   if (typeof map === "string") {
     if (!TILE_MAPS.includes(map)) {
@@ -478,7 +661,6 @@ function checkTileMap(rows: Record<string, unknown>[] | null, enc: Record<string
   const h = o.highlight;
   if (typeof h === "string" && !HIGHLIGHT_KEYWORDS.includes(h) && match(h) < 0) warn("options.highlight", "highlight_not_found", t(`Could not find a tile named "${h}" to highlight`, `강조할 "${h}" 타일을 찾지 못했어요`));
   if (!rows?.length) return;
-  const field = fieldOf(enc, "region");
   // 이 격자에서 합쳐져 사라진 지역(kr-sido의 광주, 전남): 맞지 않는 행 대신 통합을 알려요
   const merger = mergedAway(map);
   const counts = new Array<number>(grid.length).fill(0);
@@ -503,15 +685,325 @@ function checkTileMap(rows: Record<string, unknown>[] | null, enc: Record<string
     );
   if (unmatched.size) {
     const names = grid.flatMap(tileNames);
-    const list = [...unmatched].map((name) => {
-      const near = closest(name, names);
+    // 이름을 권하는 것은 보여 줄 앞 5개만, 정말 가까운 이름만 (regionSuggestion)
+    const list = [...unmatched].slice(0, 5).map((name) => {
+      const near = regionSuggestion(name, names);
       return near ? t(`${cellText(name)} (did you mean "${near}"?)`, `${cellText(name)}("${near}"인가요?)`) : cellText(name);
     });
     const n = unmatched.size;
-    warn("encoding.region", "tile_unmatched", t(`${plural(n, "region matches", "regions match")} no tile and ${n === 1 ? "is" : "are"} left out: ${listText(list.slice(0, 5), n, t)}`, `타일에 맞지 않는 지역 ${n}개는 빼고 그려요: ${listText(list.slice(0, 5), n, t)}`));
+    warn("encoding.region", "tile_unmatched", t(`${plural(n, "region matches", "regions match")} no tile and ${n === 1 ? "is" : "are"} left out: ${listText(list, n, t)}`, `타일에 맞지 않는 지역 ${n}개는 빼고 그려요: ${listText(list, n, t)}`));
   }
   const twice = grid.filter((_, i) => counts[i] > 1).map((tile) => tile.labelKo ?? tile.label ?? tile.id);
   if (twice.length) warn("encoding.region", "tile_duplicate", t(`More than one row matches ${quoted(twice, t)}. The last row is drawn`, `${quoted(twice, t)}에 맞는 행이 여럿이에요. 마지막 행으로 그려요`));
+}
+
+/**
+ * 타임라인 검사: 차트와 같은 규칙(readTimeline)으로 읽고 고친 것, 뺀 것을 알려요. 끝이 시작보다 앞(바꿔 그려요), 끝이 빈 항목(열린 항목),
+ * 시작이 없거나 끝을 못 읽는 항목(빼요), 축과 다른 종류의 칸(빼요), 똑같은 항목, 기준선과 now(x를 못 읽으면 오류, 범위 밖이면 경고)
+ */
+function checkTimeline(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const xType = o.xType === "number" || o.xType === "date" ? o.xType : undefined;
+  // 차트가 받는 프롭과 같게: group, status는 encoding에 있을 때만, dayFirst는 true와 false 모두 그대로
+  const opt = (k: string) => (typeof enc[k] === "string" ? (enc[k] as string) : undefined);
+  const m = readTimeline(rows ?? [], { label: fieldOf(enc, "label"), start: fieldOf(enc, "start"), end: fieldOf(enc, "end"), group: opt("group"), status: opt("status") }, { xType, dayFirst: typeof o.dayFirst === "boolean" ? o.dayFirst : undefined, now: o.now });
+  const s = m.issues;
+  const its = (k: number) => (k === 1 ? "it" : "they");
+  if (s.swapped) warn("encoding.end", "timeline_end_before_start", t(`${plural(s.swapped, "item ends", "items end")} before ${its(s.swapped)} start${s.swapped === 1 ? "s" : ""}, so start and end are swapped`, `끝이 시작보다 앞인 항목 ${s.swapped}개는 시작과 끝을 바꿔 그려요`));
+  if (s.open) warn("encoding.end", "timeline_open_end", t(`${plural(s.open, "item has", "items have")} no end, so ${its(s.open)} run${s.open === 1 ? "s" : ""} to options.now (or the latest time in the data) and ${s.open === 1 ? "is" : "are"} drawn as still open`, `끝이 빈 항목 ${s.open}개는 options.now(없으면 데이터의 가장 늦은 시각)까지 이어지는 진행 중 항목으로 그려요`));
+  if (s.noStart) warn("encoding.start", "timeline_missing_start", t(`${plural(s.noStart, "item has", "items have")} no start that reads as a time and ${s.noStart === 1 ? "is" : "are"} left out`, `시작이 없거나 시각으로 읽히지 않는 항목 ${s.noStart}개는 빼고 그려요`));
+  if (s.badEnd) warn("encoding.end", "timeline_bad_end", t(`${plural(s.badEnd, "item has", "items have")} an end that does not read as a time and ${s.badEnd === 1 ? "is" : "are"} left out. Leave the end empty for an item that is still running`, `끝을 시각으로 읽을 수 없는 항목 ${s.badEnd}개는 빼고 그려요. 아직 이어지는 항목은 끝을 비워 두세요`));
+  if (s.mixed) {
+    const axis = m.kind === "date" ? t("dates", "날짜") : t("numbers", "숫자");
+    warn("encoding.start", "timeline_mixed_kinds", t(`The time axis reads ${axis}, and ${plural(s.mixed, "item uses", "items use")} the other kind (a number on a date axis or a date on a number axis), so ${s.mixed === 1 ? "it is" : "they are"} left out. Set options.xType to choose`, `시간 축은 ${axis}로 읽는데 다른 종류(날짜 축의 숫자, 숫자 축의 날짜)를 쓴 항목 ${s.mixed}개는 빼고 그려요. options.xType으로 정할 수 있어요`));
+  }
+  if (s.duplicate) warn("data", "timeline_duplicate", t(`${plural(s.duplicate, "item repeats", "items repeat")} another item exactly (same label, start, end and group). Both are drawn, in separate lanes`, `이름, 시작, 끝, 묶음이 모두 같은 항목이 ${s.duplicate}개 있어요. 둘 다 칸을 나눠 그려요`));
+  const [lo, hi] = timelineDomain(m);
+  /** 시각으로 읽히면 true (범위 밖이면 경고도). 데이터가 없으면(URL) 축 종류를 몰라서 값이 있는지만 봐요 */
+  const readable = (path: string, v: unknown) => {
+    if (!m.items.length) return !isBlank(v);
+    const x = m.read(v);
+    if (!Number.isFinite(x)) return false;
+    if (x < lo || x > hi) warn(path, "reference_line_outside", t("This line is outside the time range of the data, so it is not drawn", "이 선은 데이터의 시간 범위 밖이라 그리지 않아요"));
+    return true;
+  };
+  if (Array.isArray(o.referenceLines))
+    o.referenceLines.forEach((r, i) => {
+      const x = r && typeof r === "object" ? (r as { x?: unknown }).x : undefined;
+      if (!readable(`options.referenceLines[${i}]`, x))
+        err(`options.referenceLines[${i}]`, "bad_reference_line", t('A timeline reference line needs x on the time axis, such as { x: 30, label: "Target" } or { x: "2026-03-01" }, so this one is not drawn', '타임라인 기준선에는 { x: 30, label: "목표" }나 { x: "2026-03-01" }처럼 시간 축의 x가 있어야 해요. 이 기준선은 그리지 않아요'));
+    });
+  if (o.now !== undefined && !readable("options.now", o.now)) err("options.now", "bad_now", t("options.now must be a time in the same form as the data (a number or a date), so the now line is not drawn", "options.now 값은 데이터와 같은 꼴의 시각(숫자나 날짜)이어야 해요. 지금 선은 그리지 않아요"));
+}
+
+/**
+ * 지도 차트(단계구분도, 기호 지도, 흐름 지도) 공통: options.map을 지도로 고르고(choose), 스펙에 넣은 지도 객체, 너무 큰 GeoJSON, 지도가 아닌 값,
+ * 등록하지 않은 지도와 없는 지도, GeoJSON의 빈 지물과 범위 밖 좌표와 겹치는 id를 알려요. 그릴 지도가 없으면 null
+ */
+function checkMapSource(o: Record<string, unknown>, choose: () => MapChoice | null, err: Report, warn: Report, t: (en: string, ko: string) => string): { src: GeoMap | GeoJSONFeatureCollection; keys: (readonly string[])[]; ids: string[]; geoMap: GeoMap | null } | null {
+  // 압축한 지도 객체는 코드(map 프롭, registerMap)로만 받아요. 스펙은 등록한 지도 이름이나 GeoJSON이에요
+  if (isGeoMap(o.map)) {
+    err("options.map", "map_object_in_spec", t(`A JSON spec cannot carry a packed map object. Name a registered map (for example ${cellText(o.map.name)}) or pass a GeoJSON FeatureCollection; pass map objects from code through the map prop or registerMap`, `JSON 스펙에는 압축한 지도 객체를 넣을 수 없어요. 등록한 지도 이름(예: ${cellText(o.map.name)})이나 GeoJSON FeatureCollection을 넣어 주세요. 지도 객체는 코드에서 map 프롭이나 registerMap으로 넘겨요`));
+    return null;
+  }
+  if (isFeatureCollection(o.map)) {
+    const size = geojsonSize(o.map);
+    const { features: maxF, points: maxP } = GEOJSON_LIMITS;
+    if (size.features > maxF || size.points > maxP) {
+      err("options.map", "map_too_large", t(`The GeoJSON is too large for a spec: ${size.features > maxF ? `${size.features} features (the limit is ${maxF})` : `more than ${maxP} coordinates`}. Simplify it first (for example with mapshaper), or pass it from code through the map prop`, `스펙에 넣기에는 GeoJSON이 너무 커요: ${size.features > maxF ? `지물 ${size.features}개(상한 ${maxF}개)` : `좌표 ${maxP}개 넘음`}. 먼저 단순화(예: mapshaper)하거나 코드에서 map 프롭으로 넘겨 주세요`));
+      return null;
+    }
+  }
+  const choice = choose();
+  const known = [...new Set([...registeredMaps(), ...BUILTIN_MAPS])];
+  const names = known.map((m) => `"${m}"`).join(", ");
+  if (!choice) {
+    err("options.map", "bad_map", t(`options.map must be "auto", a map name (${names}), a map from ztd-charts/geo or a GeoJSON FeatureCollection`, `options.map 값은 "auto", 지도 이름(${names}), ztd-charts/geo의 지도, GeoJSON FeatureCollection 중 하나여야 해요`));
+    return null;
+  }
+  if ("missing" in choice) {
+    const m = choice.missing;
+    const how = (x: string) => `import { ${mapExportName(x)} } from "ztd-charts/geo/${x}"; registerMap(${mapExportName(x)})`;
+    if (m === "auto") err("options.map", "map_not_loaded", t(`No map is registered, so "auto" has nothing to choose from. Register the map you draw first, for example ${how("world")}. ztd-charts/server, the CLI and the MCP server register every built-in map`, `등록한 지도가 없어서 "auto"가 고를 지도가 없어요. 그릴 지도를 먼저 등록해 주세요. 예: ${how("world")}. ztd-charts/server, CLI, MCP 서버는 내장 지도를 모두 등록해 둬요`));
+    else if (BUILTIN_MAPS.includes(m)) err("options.map", "map_not_loaded", t(`The "${m}" map is not registered. Register it before drawing: ${how(m)}`, `"${m}" 지도를 등록하지 않았어요. 그리기 전에 등록해 주세요: ${how(m)}`));
+    else {
+      const near = closest(m, known);
+      err("options.map", "unknown_map", t(`There is no map "${m}".${near ? ` Did you mean "${near}"?` : ""} Maps: ${names}, or pass a GeoJSON FeatureCollection`, `"${m}" 지도는 없어요.${near ? ` "${near}"인가요?` : ""} 지도: ${names}. GeoJSON FeatureCollection도 받아요`));
+    }
+    return null;
+  }
+  const src = choice.map;
+  let keys: (readonly string[])[];
+  let ids: string[];
+  let geoMap: GeoMap | null = null;
+  if (isFeatureCollection(src)) {
+    const g = geojsonShapes(src, typeof o.featureId === "string" ? o.featureId : undefined, typeof o.featureName === "string" ? o.featureName : undefined);
+    if (!g.shapes.length) {
+      err("options.map", "map_empty", t("The GeoJSON has no Polygon or MultiPolygon feature with coordinates to draw", "GeoJSON에 그릴 좌표가 있는 Polygon, MultiPolygon 지물이 없어요"));
+      return null;
+    }
+    const k = g.skipped.length;
+    if (k) warn("options.map", "map_feature_skipped", t(`${plural(k, "feature has", "features have")} no Polygon or MultiPolygon to draw and ${k === 1 ? "is" : "are"} left out (${listText(g.skipped.slice(0, 5).map((i) => `features[${i}]`), k, t)})`, `그릴 Polygon, MultiPolygon이 없는 지물 ${k}개는 빼요(${listText(g.skipped.slice(0, 5).map((i) => `features[${i}]`), k, t)})`));
+    if (g.outOfRange) warn("options.map", "map_out_of_range", t(`${plural(g.outOfRange, "coordinate is", "coordinates are")} outside longitude -180 to 180 or latitude -90 to 90. GeoJSON must be in longitude and latitude degrees (EPSG:4326), not projected meters. Latitudes are clamped and longitudes wrapped`, `좌표 ${g.outOfRange}개가 경도 -180~180, 위도 -90~90 밖이에요. GeoJSON은 투영한 미터가 아니라 경위도(도, EPSG:4326)여야 해요. 위도는 범위 안으로 묶고 경도는 감아서 그려요`));
+    ids = g.shapes.map((s) => s.id);
+    const seen = new Set<string>();
+    const twice = [...new Set(ids.filter((id) => seen.size === seen.add(id).size))];
+    if (twice.length) warn("options.map", "map_duplicate_id", t(`More than one feature has the id ${quoted(twice, t)}. Rows match the first one. Set options.featureId to a property that is unique`, `id가 ${quoted(twice, t)}인 지물이 여럿이에요. 행은 앞 지물에 맞춰요. 겹치지 않는 속성을 options.featureId로 정해 주세요`));
+    keys = g.shapes.map((s) => s.keys);
+  } else {
+    geoMap = src;
+    keys = regionKeys(src);
+    ids = src.regions.map((r) => r[0]);
+  }
+  return { src, keys, ids, geoMap };
+}
+
+/**
+ * 단계구분도 검사: options.map("auto", 지도 이름, 지도 객체, GeoJSON)과 등록하지 않은 지도, GeoJSON의 빈 지물과 범위 밖 좌표, focus,
+ * 지도에 맞지 않는 행(가까운 이름을 제안), 묶음 밖 행과 그리지 않는 지역(남극), kr-sido의 광주와 전남, 같은 지역에 맞는 행이 여럿, 강조할 지역 이름.
+ * 경계를 도법에 올리지 않고 지역 이름표만 봐요 (검사기 번들에 도법 코드가 들지 않아요)
+ */
+function checkChoropleth(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const field = fieldOf(enc, "region");
+  const m = checkMapSource(o, () => chooseMap(o.map, () => (rows ?? []).map((r) => (r && typeof r === "object" ? r[field] : undefined))), err, warn, t);
+  if (!m) return;
+  const { keys, ids, geoMap } = m;
+  const focusName = pointFocus(o, geoMap, warn, t);
+  const focus = focusName !== undefined ? geoMap?.focus?.[focusName] : undefined;
+  const match = geoMap ? mapMatcher(geoMap) : nameMatcher(keys);
+  const h = o.highlight;
+  if (typeof h === "string" && !HIGHLIGHT_KEYWORDS.includes(h) && match(h) < 0) warn("options.highlight", "highlight_not_found", t(`Could not find a region named "${h}" to highlight`, `강조할 "${h}" 지역을 찾지 못했어요`));
+  if (!rows?.length) return;
+  const hidden = new Set(geoMap?.hidden ?? []);
+  const members = focus ? new Set(focus.ids.split(" ")) : null;
+  const merger = mergedAway(geoMap?.name);
+  const counts = new Array<number>(ids.length).fill(0);
+  const unmatched = new Set<string>();
+  const merged = new Set<string>();
+  const outside = new Set<string>();
+  for (const r of rows) {
+    const name = r && typeof r === "object" ? r[field] : undefined;
+    if (isBlank(name)) continue;
+    const k = match(name);
+    if (k < 0) (merger?.is(name) ? merged : unmatched).add(String(name));
+    else if (hidden.has(ids[k]) || (members && !members.has(ids[k]))) outside.add(String(name));
+    else counts[k]++;
+  }
+  if (merged.size) warn("encoding.region", "region_merged", t(`${quoted([...merged], t)} ${merged.size === 1 ? "is" : "are"} left out: Gwangju and Jeollanam-do merged into Jeonnam-Gwangju (전남광주통합특별시) on 2026-07-01, so "kr-sido" has one region for both. Combine the two into one row, or for data from before the merger use the tileMap chart with map "kr-sido-2025"`, `${quoted([...merged], t)} 행은 빼고 그려요. 광주와 전남은 2026-07-01에 전남광주통합특별시로 합쳐져서 "kr-sido"에는 지역이 하나예요. 두 값을 한 행으로 합치거나, 통합 전 데이터면 tileMap 차트의 "kr-sido-2025" 격자를 써 주세요`));
+  if (outside.size) warn("encoding.region", "region_outside_map", t(`${quoted([...outside], t)} ${outside.size === 1 ? "is" : "are"} not drawn on this map${focus ? ` (outside options.focus "${o.focus}")` : " (Antarctica is left out of the world map)"}, so ${outside.size === 1 ? "it is" : "they are"} left out`, `${quoted([...outside], t)} 행은 이 지도에 그리지 않는 지역이라 빼요${focus ? `(options.focus "${o.focus}" 밖)` : "(세계 지도에서 남극은 빼요)"}`));
+  if (unmatched.size) {
+    const all = keys.flat();
+    // 이름을 권하는 것은 보여 줄 앞 5개만 (거리 계산이 이름표 전체와 견줘서 비싸요)
+    const list = [...unmatched].slice(0, 5).map((name) => {
+      const near = regionSuggestion(name, all);
+      return near ? t(`${cellText(name)} (did you mean "${near}"?)`, `${cellText(name)}("${near}"인가요?)`) : cellText(name);
+    });
+    const n = unmatched.size;
+    warn("encoding.region", "region_unmatched", t(`${plural(n, "region matches", "regions match")} nothing on the map and ${n === 1 ? "is" : "are"} left out: ${listText(list, n, t)}`, `지도에 맞지 않는 지역 ${n}개는 빼고 그려요: ${listText(list, n, t)}`));
+  }
+  const twice = ids.flatMap((id, i) => (counts[i] > 1 ? [keys[i][1] ?? id] : []));
+  if (twice.length) warn("encoding.region", "region_duplicate", t(`More than one row matches ${quoted(twice, t)}. The last row is drawn`, `${quoted(twice, t)}에 맞는 행이 여럿이에요. 마지막 행으로 그려요`));
+}
+
+/** 지도 차트의 focus 검사: 세계 지도의 묶음이 아니면 알려요. 쓸 수 있는 focus면 그 이름 */
+function pointFocus(o: Record<string, unknown>, geoMap: GeoMap | null, warn: Report, t: (en: string, ko: string) => string): string | undefined {
+  const ok = typeof o.focus === "string" && geoMap?.focus && Object.hasOwn(geoMap.focus, o.focus);
+  if (o.focus !== undefined && !ok) warn("options.focus", "focus_unsupported", t(`options.focus works on the world map only, so it is not used here`, `options.focus는 세계 지도에서만 써서 여기서는 쓰지 않아요`));
+  return ok ? (o.focus as string) : undefined;
+}
+
+/** 지도에 맞지 않는 이름 경고 (단계구분도와 같은 꼴에 다음 할 일을 붙여요). 이름을 권하는 것은 보여 줄 앞 5개만 */
+function unmatchedNames(names: Set<string>, d: PlaceDomain, path: string, tail: [string, string], warn: Report, t: (en: string, ko: string) => string) {
+  if (!names.size) return;
+  const all = d.shapes.flatMap((sh) => sh.keys);
+  const list = [...names].slice(0, 5).map((name) => {
+    const near = regionSuggestion(name, all);
+    return near ? t(`${cellText(name)} (did you mean "${near}"?)`, `${cellText(name)}("${near}"인가요?)`) : cellText(name);
+  });
+  const n = names.size;
+  warn(path, "region_unmatched", t(`${plural(n, "name matches", "names match")} nothing on the map and ${n === 1 ? "is" : "are"} left out: ${listText(list, n, t)}. ${tail[0]}`, `지도에 맞지 않는 이름 ${n}개는 빼고 그려요: ${listText(list, n, t)}. ${tail[1]}`));
+}
+
+const domainOf = (src: GeoMap | GeoJSONFeatureCollection, o: Record<string, unknown>, focus: string | undefined) =>
+  placeDomain(src, { focus, featureId: typeof o.featureId === "string" ? o.featureId : undefined, featureName: typeof o.featureName === "string" ? o.featureName : undefined });
+
+/**
+ * 기호 지도 검사: 자리(경위도나 지역 이름)가 없는 데이터, options.map과 focus(단계구분도와 같은 검사), 범위 밖이거나 숫자가 아닌 경위도(경도와 위도가 바뀐 듯하면 알려요),
+ * 지도 밖 지점, 지도에 맞지 않는 지역 이름(도시 목록은 없어요), 0 이하인 값, 따로 그리는 원 상한, 강조할 이름
+ */
+function checkSymbolMap(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const list = (rows ?? []).filter((r): r is Record<string, unknown> => !!r && typeof r === "object");
+  const has = (f: string) => list.slice(0, 200).some((r) => hasField(r, f));
+  const lonF = fieldOf(enc, "lon");
+  const latF = fieldOf(enc, "lat");
+  const regF = fieldOf(enc, "region");
+  if (list.length && !(has(lonF) && has(latF)) && !has(regF)) {
+    err("encoding.lon", "no_location", t(`A symbol map needs a place for each row: longitude and latitude fields (encoding.lon and encoding.lat, "lon" and "lat" by default), or a region field (encoding.region) with names of the map such as countries or US states`, `기호 지도는 행마다 자리가 필요해요: 경도와 위도 필드(encoding.lon, encoding.lat, 기본 "lon", "lat")나 나라, 미국 주 같은 지도의 지역 이름 필드(encoding.region)`));
+    return;
+  }
+  const places = list.map((r) => symbolPlace(toNumber(r[lonF]), toNumber(r[latF]), isBlank(r[regF]) ? "" : String(r[regF])));
+  const m = checkMapSource(o, () => choosePlaceMap(o.map, () => places), err, warn, t);
+  if (!m) return;
+  const focus = pointFocus(o, m.geoMap, warn, t);
+  const d = domainOf(m.src, o, focus);
+  const sized = typeof enc.size === "string" || has("size");
+  const sizeF = fieldOf(enc, "size");
+  const labelF = typeof enc.label === "string" ? enc.label : has("label") ? "label" : "name";
+  const nameOf = (r: Record<string, unknown>, i: number) => (isBlank(r[labelF]) ? t(`row ${i + 1}`, `${i + 1}행`) : cellText(r[labelF]));
+  const invalid: string[] = [];
+  let invalidN = 0;
+  let swapped = 0;
+  const outside: string[] = [];
+  let outsideN = 0;
+  const unmatched = new Set<string>();
+  const outsideRegions = new Set<string>();
+  let notPositive = 0;
+  let drawn = 0;
+  list.forEach((r, i) => {
+    const pl = places[i];
+    const at = placeIn(d, pl);
+    if ("miss" in at) {
+      if ("name" in pl) (at.miss === "unmatched" ? unmatched : outsideRegions).add(String(pl.name));
+      else if (at.miss === "invalid") {
+        if (invalidN++ < 5) invalid.push(nameOf(r, i));
+        // 위도가 범위 밖인데 둘을 바꾸면 맞는 값이면 바뀐 듯해요
+        if (validLonLat(pl.lat, pl.lon)) swapped++;
+      } else if (outsideN++ < 5) outside.push(nameOf(r, i));
+      return;
+    }
+    const v = sized ? toNumber(r[sizeF]) : 1;
+    if (Number.isFinite(v) && v <= 0) notPositive++;
+    else if (Number.isFinite(v)) drawn++;
+  });
+  if (invalidN) {
+    const n = invalidN;
+    const hint = swapped === n ? t(" Longitude and latitude look swapped: longitude (east-west, -180 to 180) goes in lon and latitude (-90 to 90) in lat", " 경도와 위도가 바뀐 것 같아요: 경도(동서, -180~180)는 lon, 위도(-90~90)는 lat에 넣어 주세요") : "";
+    warn("encoding.lat", "point_invalid", t(`${plural(n, "row has", "rows have")} no valid longitude and latitude (longitude -180 to 180, latitude -90 to 90, as numbers) and ${n === 1 ? "is" : "are"} left out: ${listText(invalid, n, t)}.${hint}`, `올바른 경도와 위도(경도 -180~180, 위도 -90~90 숫자)가 없는 행 ${n}개는 빼요: ${listText(invalid, n, t)}.${hint}`));
+  }
+  if (outsideN) {
+    const n = outsideN;
+    warn("encoding.lon", "point_outside_map", t(`${plural(n, "point falls", "points fall")} outside the map${focus ? ` (outside options.focus "${focus}")` : ""} and ${n === 1 ? "is" : "are"} left out: ${listText(outside, n, t)}`, `지도 밖 지점 ${n}개는 빼요${focus ? `(options.focus "${focus}" 밖)` : ""}: ${listText(outside, n, t)}`));
+  }
+  unmatchedNames(unmatched, d, "encoding.region", ["No list of cities ships: give cities longitude and latitude (encoding.lon, encoding.lat)", "도시 목록은 없어요: 도시는 경도와 위도(encoding.lon, encoding.lat)를 넣어 주세요"], warn, t);
+  if (outsideRegions.size) warn("encoding.region", "region_outside_map", t(`${quoted([...outsideRegions], t)} ${outsideRegions.size === 1 ? "is" : "are"} not drawn on this map${focus ? ` (outside options.focus "${focus}")` : ""}, so ${outsideRegions.size === 1 ? "it is" : "they are"} left out`, `${quoted([...outsideRegions], t)} 행은 이 지도에 그리지 않는 지역이라 빼요${focus ? `(options.focus "${focus}" 밖)` : ""}`));
+  if (notPositive) warn("encoding.size", "size_not_positive", t(`${plural(notPositive, "row has", "rows have")} a size of 0 or less and ${notPositive === 1 ? "is" : "are"} not drawn (circle area follows the value)`, `값이 0 이하인 행 ${notPositive}개는 그리지 않아요(원의 넓이가 값을 따라요)`));
+  if (drawn > MAX_POINTS) warn("data", "too_many_points", t(`${drawn} places can be drawn, but only the ${MAX_POINTS} largest are, to keep the SVG small. The total, shares and ranks still count every place. Aggregate nearby places first`, `놓을 수 있는 지점이 ${drawn}곳인데 SVG를 작게 두려고 큰 ${MAX_POINTS}곳만 그려요. 합계, 비율, 순위는 모두로 세요. 가까운 지점은 먼저 묶어 주세요`));
+  const sr = o.sizeRange;
+  if (sr !== undefined && !(Array.isArray(sr) && sr.length === 2 && sr.every((x) => typeof x === "number" && Number.isFinite(x) && x >= 0.5 && x <= 200) && sr[0] <= sr[1]))
+    warn("options.sizeRange", "bad_size_range", t("options.sizeRange must be two radii in px, smallest first, each from 0.5 to 200, for example [3, 24]. The radii are clamped, and the largest is at most an eighth of the chart's shorter side", "options.sizeRange는 작은 값부터 반지름 두 개(px, 각각 0.5~200)여야 해요. 예: [3, 24]. 범위 안으로 묶고, 가장 큰 반지름은 차트 짧은 변의 1/8까지예요"));
+  const h = o.highlight;
+  if (typeof h === "string" && !HIGHLIGHT_KEYWORDS.includes(h) && list.length && !list.some((r) => !isBlank(r[labelF]) && String(r[labelF]) === h)) warn("options.highlight", "highlight_not_found", t(`Could not find a place named "${h}" to highlight`, `강조할 "${h}" 지점을 찾지 못했어요`));
+}
+
+/**
+ * 흐름 지도 검사: options.places 꼴, options.map과 focus, 빈 이름, 같은 곳으로 가는 흐름, 0 이하인 값, 자리가 없는 이름(places에도 지도에도 없음),
+ * 지도 밖 자리, 따로 그리는 흐름 상한, 강조할 자리. 같은 방향의 같은 쌍은 더해서 그려요 (네트워크, 코드와 같아요)
+ */
+function checkFlowMap(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const pl = o.places;
+  if (pl !== undefined && (!pl || typeof pl !== "object" || Array.isArray(pl))) err("options.places", "bad_places", t(`options.places must be an object of { name: [longitude, latitude] }`, `options.places는 { 이름: [경도, 위도] } 객체여야 해요`));
+  const placesObj = pl && typeof pl === "object" && !Array.isArray(pl) ? (pl as Record<string, unknown>) : undefined;
+  const list = (rows ?? []).filter((r): r is Record<string, unknown> => !!r && typeof r === "object");
+  const has = (k: string) => list.slice(0, 200).some((r) => hasField(r, k));
+  const sf = typeof enc.source === "string" ? enc.source : has("source") ? "source" : "from";
+  const tf = typeof enc.target === "string" ? enc.target : has("target") ? "target" : "to";
+  const vf = typeof enc.value === "string" ? enc.value : has("value") ? "value" : null;
+  let blank = 0;
+  let self = 0;
+  let notPositive = 0;
+  const pairs: [string, string][] = [];
+  const seenPair = new Set<string>();
+  const names = new Set<string>();
+  for (const r of list) {
+    const s = isBlank(r[sf]) ? "" : String(r[sf]).trim();
+    const d = isBlank(r[tf]) ? "" : String(r[tf]).trim();
+    if (!s || !d) {
+      blank++;
+      continue;
+    }
+    if (s === d) {
+      self++;
+      continue;
+    }
+    const v = vf ? toNumber(r[vf]) : 1;
+    if (Number.isFinite(v) && v <= 0) notPositive++;
+    if (!(v > 0) || !Number.isFinite(v)) continue;
+    names.add(s).add(d);
+    const key = JSON.stringify([s, d]);
+    if (!seenPair.has(key)) {
+      seenPair.add(key);
+      pairs.push([s, d]);
+    }
+  }
+  // 데이터에 나오는 이름만 봐요 (쓰지 않는 자리는 그리지 않아요)
+  if (placesObj) {
+    const bad = [...names].filter((k) => {
+      const e = placeEntry(placesObj, k);
+      return e !== null && !validLonLat(e.lon, e.lat);
+    });
+    if (bad.length) warn("options.places", "bad_place", t(`${quoted(bad, t)} ${bad.length === 1 ? "is" : "are"} not [longitude, latitude] in degrees (longitude -180 to 180, latitude -90 to 90), so ${bad.length === 1 ? "its flows are" : "their flows are"} left out`, `${quoted(bad, t)} 값이 [경도, 위도](경도 -180~180, 위도 -90~90)가 아니라서 그 흐름은 빼요`));
+  }
+  if (self) warn("encoding.target", "flow_self_link", t(`${plural(self, "row goes", "rows go")} from a place to itself and ${self === 1 ? "is" : "are"} not drawn`, `같은 곳으로 가는 행 ${self}개는 그리지 않아요`));
+  if (blank) warn("encoding.source", "flow_blank_place", t(`${plural(blank, "row has", "rows have")} an empty source or target and ${blank === 1 ? "is" : "are"} left out`, `출발지나 도착지가 빈 행 ${blank}개는 빼고 그려요`));
+  if (notPositive) warn("encoding.value", "flow_value_not_positive", t(`${plural(notPositive, "row has", "rows have")} a value of 0 or less and ${notPositive === 1 ? "is" : "are"} not drawn`, `값이 0 이하인 행 ${notPositive}개는 그리지 않아요`));
+  const m = checkMapSource(o, () => choosePlaceMap(o.map, () => [...names].map((n) => flowPlace(placesObj, n))), err, warn, t);
+  if (!m) return;
+  const focus = pointFocus(o, m.geoMap, warn, t);
+  const d = domainOf(m.src, o, focus);
+  const unknown = new Set<string>();
+  const outside = new Set<string>();
+  const ok = new Set<string>();
+  for (const n of names) {
+    const at = placeIn(d, flowPlace(placesObj, n));
+    if (!("miss" in at)) ok.add(n);
+    else if (at.miss === "unmatched") unknown.add(n);
+    else if (at.miss === "outside") outside.add(n);
+  }
+  unmatchedNames(unknown, d, "options.places", ["Add each to options.places as [longitude, latitude], or use region names of the map", "options.places에 [경도, 위도]로 넣거나 지도의 지역 이름을 써 주세요"], warn, t);
+  if (outside.size) warn("options.places", "place_outside_map", t(`${quoted([...outside], t)} ${outside.size === 1 ? "is" : "are"} outside the map${focus ? ` (outside options.focus "${focus}")` : ""}, so ${outside.size === 1 ? "its flows are" : "their flows are"} left out`, `${quoted([...outside], t)} 자리는 지도 밖이라${focus ? `(options.focus "${focus}" 밖)` : ""} 그 흐름은 빼요`));
+  const drawn = pairs.filter(([s, e]) => ok.has(s) && ok.has(e)).length;
+  if (drawn > MAX_FLOWS) warn("data", "too_many_flows", t(`${drawn} flows can be drawn, but only the ${MAX_FLOWS} largest are, to keep the SVG small. The total and shares still count every flow. Combine small flows first`, `그릴 수 있는 흐름이 ${drawn}개인데 SVG를 작게 두려고 큰 ${MAX_FLOWS}개만 그려요. 합계와 비율은 모두로 세요. 작은 흐름은 먼저 묶어 주세요`));
+  const h = o.highlight;
+  if (typeof h === "string" && !HIGHLIGHT_KEYWORDS.includes(h) && names.size && !names.has(h) && !pairs.some(([s, e]) => `${s} → ${e}` === h)) warn("options.highlight", "highlight_not_found", t(`Could not find a place or flow named "${h}" to highlight`, `강조할 "${h}" 자리나 흐름을 찾지 못했어요`));
 }
 
 /**
@@ -557,6 +1049,68 @@ function checkFacet(facet: unknown, type: string, opts: Record<string, unknown>,
   return by;
 }
 
+/** 막대 레이스 검사: 시점이 하나뿐이면 움직이지 않아요, startFrame이 시점에 없으면 마지막 시점을 그려요 */
+function checkBarRace(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, warn: Report, t: (en: string, ko: string) => string) {
+  if (!rows?.length) return;
+  const field = fieldOf(enc, "frame");
+  const frames = new Set<string>();
+  const nums = new Set<number>();
+  for (const r of rows.slice(0, 100_000)) {
+    const v = r && typeof r === "object" ? r[field] : undefined;
+    if (isBlank(v)) continue;
+    // 시점은 글자로도, 숫자나 날짜(차트가 그 순서로 읽어요)로도 맞춰 봐요
+    frames.add(String(v));
+    nums.add(toNumber(v));
+    nums.add(toDate(v)?.getTime() ?? NaN);
+  }
+  if (frames.size === 1) warn("encoding.frame", "single_frame", t(`There is only one step (${cellText([...frames][0])}), so the bars do not move. A bar chart may fit better`, `시점이 하나뿐이라(${cellText([...frames][0])}) 막대가 움직이지 않아요. 막대 차트가 더 맞을 수 있어요`));
+  const s = o.startFrame;
+  if (s !== undefined && frames.size && !frames.has(String(s)) && !nums.has(toDate(s)?.getTime() ?? NaN) && !nums.has(toNumber(s)))
+    warn("options.startFrame", "frame_not_found", t(`options.startFrame ${cellText(s)} is not a step in the data, so the last step is shown first`, `options.startFrame ${cellText(s)} 값이 데이터의 시점에 없어서 마지막 시점을 먼저 보여 줘요`));
+}
+
+/**
+ * 네트워크 검사: 차트가 링크로 그리지 않는 행(자기 자신으로 가는 행, 이름이 빈 행, 값이 0보다 작은 행)과
+ * options.groups(묶음 이름이 글자인지, 노드에 없는 이름). 숫자가 아닌 값은 encoding 공통 검사가 알려요
+ */
+function checkNetwork(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, warn: Report, t: (en: string, ko: string) => string) {
+  const g = o.groups;
+  const groups = g && typeof g === "object" && !Array.isArray(g) ? (g as Record<string, unknown>) : null;
+  if (groups) {
+    const bad = Object.keys(groups).filter((k) => typeof groups[k] !== "string");
+    if (bad.length) warn("options.groups", "network_bad_group", t(`Group names must be strings, so ${quoted(bad, t)} ${bad.length === 1 ? "has" : "have"} no group`, `묶음 이름은 글자여야 해요. ${quoted(bad, t)}에는 묶음이 없어요`));
+  }
+  if (!rows?.length) return;
+  const has = (k: string) => rows.slice(0, 200).some((r) => r && typeof r === "object" && hasField(r, k));
+  const sf = typeof enc.source === "string" ? enc.source : has("source") ? "source" : "from";
+  const tf = typeof enc.target === "string" ? enc.target : has("target") ? "target" : "to";
+  const vf = typeof enc.value === "string" ? enc.value : has("value") ? "value" : null;
+  let self = 0;
+  let blank = 0;
+  let negative = 0;
+  const names = new Set<string>();
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    // 차트와 같이 앞뒤 빈칸을 떼고 봐요
+    const s = isBlank(r[sf]) ? "" : String(r[sf]).trim();
+    const d = isBlank(r[tf]) ? "" : String(r[tf]).trim();
+    if (!s || !d) {
+      blank++;
+      continue;
+    }
+    names.add(s).add(d);
+    if (s === d) self++;
+    else if (vf && toNumber(r[vf]) < 0) negative++;
+  }
+  if (self) warn("encoding.target", "network_self_link", t(`${plural(self, "row links", "rows link")} a node to itself and ${self === 1 ? "is" : "are"} not drawn`, `노드가 자기 자신으로 가는 행 ${self}개는 그리지 않아요`));
+  if (blank) warn("encoding.source", "network_blank_node", t(`${plural(blank, "row has", "rows have")} an empty source or target and ${blank === 1 ? "is" : "are"} left out`, `출발이나 도착이 빈 행 ${blank}개는 빼고 그려요`));
+  if (negative) warn("encoding.value", "network_negative_value", t(`${plural(negative, "link has", "links have")} a value below 0 and ${negative === 1 ? "is" : "are"} not drawn. The nodes stay`, `값이 0보다 작은 링크 ${negative}개는 그리지 않아요. 노드는 남아요`));
+  if (groups) {
+    const unknown = Object.keys(groups).filter((k) => !names.has(k));
+    if (unknown.length) warn("options.groups", "network_group_not_found", t(`${quoted(unknown, t)} ${unknown.length === 1 ? "is" : "are"} not a node in the data`, `${quoted(unknown, t)} 노드가 데이터에 없어요`));
+  }
+}
+
 /**
  * 스펙 검사. 오류(렌더 불가)와 경고(동작은 하지만 의심)를 나눠 돌려줘요.
  * 메시지는 영어, { lang: "ko" }면 한글. code와 path는 언어와 상관없이 같아요.
@@ -590,8 +1144,9 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
     def = getChartDef(TYPE_ALIASES[spec.type]);
     warn("type", "alias", t(`"${spec.type}" is drawn as "${def?.type}"`, `"${spec.type}" 타입은 "${def?.type}" 차트로 그려요`));
   }
-  // 0.4까지 scatter는 bubble의 별칭이라, size 채널이 있으면 그때처럼 bubble로 그려요 (resolveDef와 같은 규칙)
-  if (def?.type === "scatter" && spec.encoding && typeof spec.encoding === "object" && (spec.encoding as Record<string, unknown>).size !== undefined) {
+  // 0.4까지 scatter는 bubble의 별칭이라, size 채널이 있으면 그때처럼 bubble로 그려요 (resolveDef와 같은 규칙). 육각 밀도는 크기를 쓰지 않아 산점도 그대로예요(checkHexbin이 알려요)
+  const hexBin = hexBinned(spec.options);
+  if (def?.type === "scatter" && !hexBin && spec.encoding && typeof spec.encoding === "object" && (spec.encoding as Record<string, unknown>).size !== undefined) {
     def = getChartDef("bubble");
     warn("type", "alias", t('"scatter" with a size channel is drawn as "bubble"', 'size 채널이 있는 "scatter"는 "bubble" 차트로 그려요'));
   }
@@ -637,7 +1192,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   const fields = rows && rows.length ? Array.from(new Set(rows.slice(0, 200).flatMap((r) => (r && typeof r === "object" ? Object.keys(r) : [])))) : [];
   const names = def.encoding.map((c) => c.name);
   for (const k of Object.keys(enc)) {
-    if (!names.includes(k)) {
+    if (!names.includes(k) && !(hexBin && def.type === "scatter" && k === "size")) {
       const near = closest(k, names);
       warn(`encoding.${k}`, "unknown_channel", t(`${chartName} has no channel "${k}".${near ? ` Did you mean "${near}"?` : ""} Available channels: ${names.join(", ")}`, `${chartName}에는 "${k}" 채널이 없어요.${near ? ` "${near}"인가요?` : ""} 가능한 채널: ${names.join(", ")}`));
     }
@@ -760,12 +1315,15 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         }
       } else if (o.type === "highlight" && !(vt === "number" || vt === "string" || (vt === "array" && (v as unknown[]).every((x) => typeof x === "number" || typeof x === "string")))) bad("an index, a name or an array of them", "인덱스나 이름, 또는 그 배열이어야");
     }
-    // 기준선은 숫자 y가 있어야 그려요 ({ value: 30 }처럼 키를 틀리면 그리지 않아요)
-    if (Array.isArray(options.referenceLines) && def.options.some((o) => o.name === "referenceLines"))
+    // 기준선은 숫자 y(와플 반원은 단위 수 value)가 있어야 그려요 ({ value: 30 }처럼 키를 틀리면 그리지 않아요)
+    // 타임라인의 기준선은 시간 축의 x예요 (checkTimeline)
+    if (Array.isArray(options.referenceLines) && def.type !== "timeline" && def.options.some((o) => o.name === "referenceLines")) {
+      const key = def.type === "waffle" ? "value" : "y";
       options.referenceLines.forEach((r, i) => {
-        const y = r && typeof r === "object" ? (r as { y?: unknown }).y : undefined;
-        if (!(typeof y === "number" && Number.isFinite(y))) err(`options.referenceLines[${i}]`, "bad_reference_line", t('A reference line needs a number y, such as { y: 30, label: "Target" }, so this one is not drawn', '기준선에는 { y: 30, label: "목표" }처럼 숫자 y가 있어야 해요. 이 기준선은 그리지 않아요'));
+        const y = r && typeof r === "object" ? (r as Record<string, unknown>)[key] : undefined;
+        if (!(typeof y === "number" && Number.isFinite(y))) err(`options.referenceLines[${i}]`, "bad_reference_line", t(`A reference line needs a number ${key}, such as { ${key}: 30, label: "Target" }, so this one is not drawn`, `기준선에는 { ${key}: 30, label: "목표" }처럼 숫자 ${key}가 있어야 해요. 이 기준선은 그리지 않아요`));
       });
+    }
     if (def.type === "bar" && options.orientation === "horizontal" && Array.isArray(options.annotations) && options.annotations.length)
       warn("options.annotations", "annotations_ignored", t("Annotations are drawn on vertical bars only", "주석은 세로 막대에서만 그려요"));
     // 툴팁 틀의 {이름}이 데이터 열에 없으면 그 줄은 늘 빠져요
@@ -786,8 +1344,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         err("options.locale", "bad_locale", t(`options.locale "${options.locale}" is not a locale. Use a tag such as "en-US" or "ko-KR"`, `options.locale "${options.locale}" 값은 로캘이 아니에요. "en-US", "ko-KR" 같은 값을 써 주세요`));
       }
     }
-    // 타일 격자 지도는 지역 이름표로 강조할 타일을 찾아요 (checkTileMap)
-    if (rows && rows.length && def.type !== "tileMap" && typeof options.highlight === "string" && !HIGHLIGHT_KEYWORDS.includes(options.highlight)) {
+    // 지도 차트는 지역 이름표로 강조할 지역을 찾아요 (checkTileMap, checkChoropleth). 트리는 노드 이름과 경로로 찾아요 (checkTree)
+    if (rows && rows.length && def.group !== "map" && def.type !== "tree" && typeof options.highlight === "string" && !HIGHLIGHT_KEYWORDS.includes(options.highlight)) {
       const h = options.highlight;
       // 넓은 표(y가 열 배열)에서는 열 이름이 계열 이름이에요. 데이터 값에 없어도 강조돼요
       const seriesColumn = Object.values(enc).some((v) => Array.isArray(v) && v.includes(h));
@@ -803,14 +1361,28 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   const facetBy = spec.facet === undefined ? undefined : checkFacet(spec.facet, def.type, optsObj, rows, fields, t, err, warn);
   if (def.type === "line" || def.type === "area") checkBand(def.type, enc, optsObj, rows, t, err, warn);
   // 같은 x를 합쳐 그리는 차트는 aggregate 옵션이 있는 차트예요
-  if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn, facetBy);
+  // 막대 레이스는 시점(frame)과 항목(label)이 같은 행을 더해요
+  if (def.type === "barRace") checkDuplicates({ x: fieldOf(enc, "frame"), series: fieldOf(enc, "label") }, optsObj, rows, t, warn, undefined, "encoding.frame");
+  else if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn, facetBy);
   if (def.type === "pie" || def.type === "donut") checkSlices(enc, optsObj, rows, t, warn);
   if (def.type === "slope") checkSlope(enc, optsObj, rows, t, warn);
   // 날짜를 읽는 차트는 dayFirst 옵션이 있는 차트예요
   if (def.options.some((o) => o.name === "dayFirst")) checkDates(def.type, enc, optsObj, rows, t, warn);
   if (def.type === "histogram") checkHistogram(rows, enc, optsObj, binned, err, warn, t);
   if (def.type === "tileMap") checkTileMap(rows, enc, optsObj, err, warn, t);
+  if (def.type === "barRace") checkBarRace(rows, enc, optsObj, warn, t);
+  if (def.type === "network") checkNetwork(rows, enc, optsObj, warn, t);
+  if (def.type === "timeline") checkTimeline(rows, enc, optsObj, err, warn, t);
+  if (def.type === "tree") checkTree(rows, enc, optsObj, warn, t);
+  if (def.type === "choropleth") checkChoropleth(rows, enc, optsObj, err, warn, t);
+  if (def.type === "symbolMap") checkSymbolMap(rows, enc, optsObj, err, warn, t);
+  if (def.type === "flowMap") checkFlowMap(rows, enc, optsObj, err, warn, t);
   if (def.type === "bar") checkDiverging(enc, optsObj, rows, t, err, warn);
+  if (def.type === "waffle") checkWaffle(enc, optsObj, rows, t, warn);
+  if (def.type === "scatter") {
+    checkHexbin(enc, optsObj, facetBy !== undefined, t, warn);
+    checkPointRanges(enc, optsObj, rows, t, err, warn);
+  }
   if (def.options.some((o) => o.name === "yScale")) checkLogScale(enc, optsObj, rows, t, warn);
 
   // card
@@ -826,7 +1398,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
         else if (k === "legend" && v !== "auto" && v !== "toggle" && !Array.isArray(v)) err("card.legend", "bad_legend", t('card.legend must be "auto", "toggle" or an array of [{ label, color }]', 'card.legend는 "auto", "toggle" 또는 [{ label, color }] 배열이어야 해요'));
         // 켜고 끄는 범례는 계열을 숨길 수 있는(hidden) 차트에서만. 막대 위 선이 있으면 선은 숨길 수 없어서 보통 범례로 그려요
         else if (k === "legend" && v === "toggle" && !legendToggles(def.type, enc, optsObj))
-          warn("card.legend", "legend_toggle_ignored", t('card.legend "toggle" works on line, area, bar and scatter, so this chart draws a plain legend', 'card.legend "toggle"은 line, area, bar, scatter에서만 켜고 꺼요. 이 차트는 보통 범례로 그려요'));
+          warn("card.legend", "legend_toggle_ignored", t('card.legend "toggle" works on line, area, bar, scatter and timeline, so this chart draws a plain legend', 'card.legend "toggle"은 line, area, bar, scatter, timeline에서만 켜고 꺼요. 이 차트는 보통 범례로 그려요'));
         else if (k === "legend" && Array.isArray(v))
           v.forEach((it, i) => {
             const c = it && typeof it === "object" ? (it as { color?: unknown }).color : undefined;

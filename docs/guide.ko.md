@@ -76,7 +76,7 @@ import { ThemeProvider } from "ztd-charts";
 
 ## 애니메이션과 인터랙션
 
-- 화면에 25% 넘게 들어오면 등장해요(`animateOnView`). 모든 차트가 requestAnimationFrame 루프 하나를 같이 써요.
+- 차트의 4분의 1이나 96px 중 작은 쪽이 화면에 들어오면 등장해요(`animateOnView`). 키 큰 차트도 위쪽 띠만 보이면 시작해요. 모든 차트가 requestAnimationFrame 루프 하나를 같이 써요.
 - `easing`: `"spring"`(기본, 임계 감쇠라 넘치지 않아요), `"easeOut"`, `"easeInOut"`, `"linear"`.
 - `replayKey`가 바뀌거나 카드의 다시 재생 버튼을 누르면 처음부터. 데이터가 바뀌면 새 항목은 들어오고, 빠진 항목은 접히며 사라지고, 남은 항목은 이어서 움직여요.
 - OS의 동작 줄이기를 따라요. `reducedMotion={true}`면 항상 끄고, `false`면 항상 켜요.

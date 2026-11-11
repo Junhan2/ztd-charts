@@ -76,7 +76,7 @@ On the card background `dim` is 2.95:1 in dark and 1.97:1 in light, below WCAG A
 
 ## Animation and interaction
 
-- Charts enter once more than 25% is on screen (`animateOnView`). All charts share one requestAnimationFrame loop.
+- Charts enter once a quarter of the chart or 96px of it, whichever is less, is on screen (`animateOnView`), so a tall chart starts as soon as its top band shows. All charts share one requestAnimationFrame loop.
 - `easing`: `"spring"` (default, critically damped so it never overshoots), `"easeOut"`, `"easeInOut"`, `"linear"`.
 - A new `replayKey` or the card's replay button starts over. When data changes, new items enter, removed items fold away, and the rest move on from where they are.
 - Follows the OS reduced motion setting. `reducedMotion={true}` always turns motion off, `false` always keeps it on.

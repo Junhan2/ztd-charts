@@ -2,12 +2,12 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
-export const VERSION = "0.7.0";
+export const VERSION = "0.8.0";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
 const en = {
-  help: `ztd-charts ${VERSION}  CLI for 37 React chart types
+  help: `ztd-charts ${VERSION}  CLI for 44 React chart types
 
 Usage
   ztd-charts list [--group proportion] [--level basic] [--json]
@@ -60,6 +60,7 @@ Examples
   noVariants: (type: string) => `${type} has no named variants`,
   saved: (p: string) => `Saved: ${p}`,
   emojiRemoved: (n: number) => `Removed ${n} emoji from the PNG text because PNG has no emoji font. SVG and HTML keep them`,
+  pngNoSize: "Couldn't read a width and height in pixels on the outer <svg>, so the PNG was not drawn",
   valid: (file: string, type: string, warnings: number) => `✓ ${file}: valid ${type} spec${warnings ? ` (${plural(warnings, "warning")})` : ""}`,
   skipped: (p: string) => `Skipped (already exists): ${p}`,
   created: (p: string) => `Created: ${p}`,
@@ -92,7 +93,7 @@ Examples
 export type CliText = typeof en;
 
 const ko: CliText = {
-  help: `ztd-charts ${VERSION}  React 차트 37종을 위한 CLI
+  help: `ztd-charts ${VERSION}  React 차트 44종을 위한 CLI
 
 사용법
   ztd-charts list [--group 비율] [--level 기본] [--json]
@@ -143,6 +144,7 @@ const ko: CliText = {
   noVariants: (type) => `${type}에는 이름 붙은 변형이 없어요`,
   saved: (p) => `저장: ${p}`,
   emojiRemoved: (n) => `PNG에는 이모지 글꼴이 없어서 글자에서 이모지 ${n}개를 뺐어요. SVG와 HTML에는 그대로 있어요`,
+  pngNoSize: "바깥 <svg>에서 픽셀 폭과 높이를 읽지 못해서 PNG를 그리지 않았어요",
   valid: (file, type, warnings) => `✓ ${file}: 올바른 ${type} 스펙${warnings ? `(경고 ${warnings}개)` : ""}`,
   skipped: (p) => `건너뜀(이미 있음): ${p}`,
   created: (p) => `만듦: ${p}`,

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { fetchUrl, loadRows, MAX_FETCH_BYTES, reactSnippet, render } from "../src/api";
+import { fetchUrl, loadRows, MAX_FETCH_BYTES, PNG_MAX_PIXELS, pngZoom, reactSnippet, render, svgToPng } from "../src/api";
 import { isPrivateAddress } from "../src/guard";
 
 const exec = promisify(execFile);
@@ -154,5 +154,57 @@ describe("보안: evil.json (리뷰어 재현)", () => {
       expect(r.out).toContain("theme.accent");
       expect(existsSync(join(dir, out))).toBe(false);
     }
+  });
+});
+
+describe("svgToPng: 픽셀 한도", () => {
+  /** resvg를 가짜로 바꿔 넘겨받은 SVG 크기와 배율만 적어요. 실제로 큰 비트맵을 만들지 않아요 */
+  const capture = async (fn: () => Promise<unknown>) => {
+    const seen: { w: number; h: number; zoom: number }[] = [];
+    vi.doMock("@resvg/resvg-js", () => ({
+      Resvg: class {
+        constructor(svg: string, o: { fitTo: { value: number } }) {
+          const tag = /<svg\b[^>]*>/.exec(svg)![0];
+          seen.push({ w: Number(/ width="([\d.]+)"/.exec(tag)![1]), h: Number(/ height="([\d.]+)"/.exec(tag)![1]), zoom: o.fitTo.value });
+        }
+        render() {
+          return { asPng: () => new Uint8Array([1]) };
+        }
+      },
+    }));
+    try {
+      await fn();
+    } finally {
+      vi.doUnmock("@resvg/resvg-js");
+    }
+    return seen;
+  };
+  const pixels = (q: { w: number; h: number; zoom: number }) => q.w * q.h * q.zoom * q.zoom;
+
+  it("배율은 바깥 <svg>의 줄이지 않은 실제 크기로 정해서 크기 × 배율²이 PNG_MAX_PIXELS를 넘지 않아요", async () => {
+    expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="450">', 2)).toBe(2);
+    expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1000">', 4)).toBe(4);
+    // 차트 한 변 한도(10,000)보다 큰 문서도 그 크기 그대로 재요
+    const seen = await capture(() => svgToPng('<svg xmlns="http://www.w3.org/2000/svg" width="10000" height="240000"></svg>', { scale: 4 }));
+    expect(seen).toHaveLength(1);
+    expect(pixels(seen[0])).toBeLessThanOrEqual(PNG_MAX_PIXELS * 1.0001);
+    // 안쪽 <svg>의 크기를 바깥 크기로 읽지 않아요
+    expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9000 9000"><svg width="10" height="10"/></svg>', 2)).toBeNull();
+  });
+  it("바깥 <svg> 크기를 읽지 못하면(없음, %, 0, 음수) 그리지 않고 오류예요", async () => {
+    for (const svg of ['<svg xmlns="http://www.w3.org/2000/svg"></svg>', '<svg width="100%" height="100%"></svg>', '<svg width="0" height="10"></svg>', '<svg width="-5" height="10"></svg>', "<g/>"]) {
+      expect(pngZoom(svg, 2), svg).toBeNull();
+      const seen = await capture(() => expect(svgToPng(svg, { scale: 2 })).rejects.toThrow("Couldn't read a width and height"));
+      expect(seen, svg).toHaveLength(0);
+    }
+  });
+  it("가장 큰 작은 여러 개(24칸 한 줄씩, 패널 높이 10,000px)도 PNG는 픽셀 한도 안이에요", async () => {
+    const data = Array.from({ length: 24 }, (_, g) => [1, 2, 3].map((x) => ({ g: `g${g}`, x, y: x * (g + 1) }))).flat();
+    const spec = { type: "line", data, encoding: { x: "x", y: "y" }, options: { height: 10000 }, facet: { by: "g", columns: 1 }, card: { title: "Largest facet grid", note: "n ".repeat(400) } };
+    const seen = await capture(() => render(spec as never, { format: "png", width: 10000, scale: 4 }));
+    expect(seen).toHaveLength(1);
+    expect(seen[0].h).toBeGreaterThan(240000);
+    expect(seen[0].h).toBeLessThanOrEqual(250000);
+    expect(pixels(seen[0])).toBeLessThanOrEqual(PNG_MAX_PIXELS * 1.0001);
   });
 });

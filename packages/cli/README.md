@@ -1,6 +1,6 @@
 # ztd-charts-cli
 
-`ztd-charts`: the list of all 37 charts, JSON Schema, spec validation, SVG/PNG/HTML rendering, starter files, and chart suggestions from your data.
+`ztd-charts`: the list of all 44 charts, JSON Schema, spec validation, SVG/PNG/HTML rendering, starter files, and chart suggestions from your data.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [GitHub](https://github.com/Junhan2/ztd-charts)
 

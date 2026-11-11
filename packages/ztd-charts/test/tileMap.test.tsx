@@ -8,7 +8,7 @@ import { textWidth } from "../src/core/text";
 import { resolveGrid, tileMatcher, tileNeighbor } from "../src/layout/tileGrid";
 import { renderSpecToSVG } from "../src/server";
 import { CHARTS, validateSpec } from "../src/spec";
-import { tileMapSample, tileMapSampleKo } from "../src/spec/samples";
+import { tileMapSample, tileMapSampleKo, tileMapUsSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
 /** histogram.test.tsx와 같은 틀: active를 주면 고른 타일을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   spy: false,
   calls: [] as [number | null, string | undefined][],
   frame: null as unknown,
+  delays: [] as number[],
 }));
 
 vi.mock("../src/core/useChart", async (orig) => {
@@ -42,12 +43,24 @@ vi.mock("../src/core/ChartFrame", async (orig) => {
   };
 });
 
+vi.mock("../src/core/useMotion", async (orig) => {
+  const actual = await orig<typeof import("../src/core/useMotion")>();
+  return {
+    ...actual,
+    useMotion: (marks: { delay?: number }[], o: never) => {
+      state.delays = marks.map((m) => m.delay ?? 0);
+      return actual.useMotion(marks as never, o);
+    },
+  };
+});
+
 afterEach(() => {
   state.active = null;
   state.via = "pointer";
   state.spy = false;
   state.calls = [];
   state.frame = null;
+  state.delays = [];
 });
 
 const r = (el: ReactElement) => renderToStaticMarkup(el);
@@ -210,9 +223,42 @@ describe("TileMap", () => {
       expect(names(card).every((t) => !t.text.includes("…") && t.text !== ""), locale).toBe(true);
       expect(values(card), locale).toHaveLength(16);
     }
+    // 좁으면 차트 하나로 정해요: 이름이 모두 들어가지 않으면 이름도 값도 적지 않아요 (몇 타일만 남지 않게)
     const narrow = r(<TileMap data={tileMapSampleKo} region="sido" value="rate" width={150} animate={false} locale="ko" />);
     expect(values(narrow)).toHaveLength(0);
-    expect(names(narrow).map((t) => t.text)).toContain("세종");
+    expect([0, 16]).toContain(names(narrow).length);
+    for (const width of [280, 330, 390, 480, 720]) {
+      const us = r(<TileMap data={tileMapUsSample} region="state" value="rate" width={width} animate={false} />);
+      expect([0, 51], String(width)).toContain(names(us).length);
+      expect([0, 51], String(width)).toContain(values(us).length);
+    }
+  });
+
+  it('"auto" picks the grid from the data: US states by postal code, FIPS or name, Korean regions as before', () => {
+    const us = [{ s: "CA", v: 3 }, { s: 36, v: 2 }, { s: "texas", v: 1 }];
+    const h = r(<TileMap data={us} region="s" value="v" width={720} animate={false} />);
+    expect(frame().events).toHaveLength(51);
+    expect(frame().events.slice(0, 3).map((e) => e.label)).toEqual(["California", "New York", "Texas"]);
+    // 타일 위에는 우편 약자, 툴팁과 표는 이름
+    expect(texts(h).map((t) => t.text)).toContain("CA");
+    expect(h).toContain('<th scope="row">California</th>');
+    // 한국 시도 데이터는 예전 기본값 kr-sido 그대로, 잘못 쓴 한글 이름만 있어도 한국 격자예요
+    r(<TileMap data={tileMapSampleKo} region="sido" value="rate" width={480} animate={false} />);
+    expect(frame().events).toHaveLength(16);
+    r(<TileMap data={[sido("부산광역", 1)]} region="sido" value="rate" width={480} animate={false} />);
+    expect(frame().events).toEqual([]);
+    expect(resolveGrid("us-states")).toHaveLength(51);
+  });
+
+  it("the entrance spread is bounded for the 51-tile US grid and unchanged for the 16-tile Korean grid", () => {
+    r(<TileMap data={tileMapUsSample} region="state" value="rate" width={480} />);
+    expect(state.delays).toHaveLength(51);
+    expect(Math.max(...state.delays)).toBeLessThanOrEqual(480);
+    expect(Math.max(...state.delays)).toBeGreaterThan(400);
+    draw(tileMapSample);
+    // 4열 격자에서 칸 순서 × 28ms 그대로 (제주가 마지막: 4행 0열 → 16 × 28)
+    expect(Math.max(...state.delays)).toBe(448);
+    expect(state.delays.every((d) => Number.isInteger(d / 28))).toBe(true);
   });
 
   it("the server SVG and the browser chart draw the same geometry", () => {

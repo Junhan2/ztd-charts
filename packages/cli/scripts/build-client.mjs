@@ -1,17 +1,17 @@
 // render --interactive 로 내보낸 HTML이 서버 그림을 이어받을 때 쓰는 브라우저 코드를 dist/client/ 에 만들어요.
 // react.js 는 React, React DOM client, JSX 런타임을 globalThis.__ztdReact 에 올리고, <type>.js 는 그 차트 하나와 스펙 렌더러, 이어받기 시작점을 담아요.
 // api.ts 의 clientScript 가 react.js 와 그 차트의 파일 하나를 HTML에 글자 그대로 넣어요 (CDN, base64, import map 없음)
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CHARTS } from "ztd-charts/spec";
+import { BUILTIN_MAPS, CHARTS, mapExportName } from "ztd-charts/spec";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 // 새 의존성 없이 tsup 이 쓰는 esbuild 를 빌려요
 const esbuild = createRequire(require.resolve("tsup"))("esbuild");
-// 작업 공간의 라이브러리 소스를 묶어요. package.json 의 "sideEffects": false 덕에 쓰지 않는 차트 36종은 빠져요
+// 작업 공간의 라이브러리 소스를 묶어요. package.json 의 "sideEffects": false 덕에 쓰지 않는 차트 43종은 빠져요
 const lib = dirname(require.resolve("ztd-charts/package.json"));
 const out = join(root, "dist/client");
 rmSync(out, { recursive: true, force: true });
@@ -53,4 +53,14 @@ const index = JSON.stringify(join(lib, "src/index.ts"));
 await Promise.all(
   CHARTS.map((d) => build(d.type, `import { hydrateChart } from ${hydrate}; import { ${d.component} } from ${index}; hydrateChart(${JSON.stringify(d.type)}, ${d.component});`, [reactGlobal])),
 );
-console.log(`client: react + ${CHARTS.length} charts -> dist/client/`);
+// 지도마다 geo-<이름>.js 가 그 지도를 등록해요. 등록표는 globalThis 한 곳이라 차트 파일의 지도 차트가 이 지도를 찾아요
+const registry = JSON.stringify(join(lib, "src/geo/registry.ts"));
+await Promise.all(
+  BUILTIN_MAPS.map((name) => {
+    const exported = mapExportName(name);
+    return build(`geo-${name}`, `import { registerMap } from ${registry}; import { ${exported} } from ${JSON.stringify(join(lib, `src/geo/${name}.ts`))}; registerMap(${exported});`);
+  }),
+);
+// 지도 경계 데이터의 출처와 라이선스(ISC 고지 포함)를 그 데이터를 담은 geo-*.js 옆에 같이 실어요
+copyFileSync(join(lib, "NOTICE.md"), join(out, "NOTICE.md"));
+console.log(`client: react + ${CHARTS.length} charts + ${BUILTIN_MAPS.length} maps -> dist/client/`);

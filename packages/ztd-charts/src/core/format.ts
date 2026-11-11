@@ -247,6 +247,40 @@ export function toDate(v: unknown, dayFirst?: boolean): Date | null {
   return null;
 }
 
+/** formatDuration의 단위: Intl 단위 이름과 길이(ms). 큰 것부터 */
+const DURATION_UNITS: [string, number][] = [
+  ["day", 86400000],
+  ["hour", 3600000],
+  ["minute", 60000],
+  ["second", 1000],
+];
+
+/**
+ * 걸린 시간(ms)을 로캘에 맞는 짧은 글로: "7 min", "2d 4h", "45 sec", "120 ms", 1년 넘으면 "1.5 yrs".
+ * 큰 단위가 10 미만이면 다음 단위를 하나 더 붙여요(한국어 "2일 4시간"). 단위 글은 Intl.NumberFormat의 unit 꼴이에요
+ */
+export function formatDuration(ms: number, locale = DEFAULT_LOCALE): string {
+  if (!Number.isFinite(ms)) return "-";
+  const a = Math.abs(ms);
+  const sign = ms < 0 ? "-" : "";
+  const unit = (u: string, v: number, display: "short" | "narrow" = "short", digits = 0) => formatNumber(v, { locale, style: "unit", unit: u, unitDisplay: display, maximumFractionDigits: digits });
+  if (a >= 86400000 * 365) return sign + unit("year", a / (86400000 * 365.25), "short", 1);
+  for (let k = 0; k < DURATION_UNITS.length; k++) {
+    const [u, len] = DURATION_UNITS[k];
+    if (a < len) continue;
+    let q = Math.floor(a / len);
+    const next = DURATION_UNITS[k + 1];
+    if (q >= 10 || !next) return sign + unit(u, u === "second" && q < 10 ? a / len : Math.round(a / len), "short", u === "second" ? 1 : 0);
+    let r = Math.round((a - q * len) / next[1]);
+    if (r * next[1] >= len) {
+      q++;
+      r = 0;
+    }
+    return sign + (r ? `${unit(u, q, "narrow")} ${unit(next[0], r, "narrow")}` : unit(u, q));
+  }
+  return sign + unit("millisecond", a);
+}
+
 const dfCache = new Map<string, Intl.DateTimeFormat>();
 export function formatDate(v: unknown, opts: Intl.DateTimeFormatOptions & { locale?: string } = { month: "short", day: "numeric" }): string {
   const d = toDate(v);

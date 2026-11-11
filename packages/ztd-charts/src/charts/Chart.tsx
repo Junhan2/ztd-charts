@@ -11,12 +11,13 @@ import { strGetter, uniq, numGetter } from "../data/accessor";
 import { useChartData } from "../data/useChartData";
 import { DownloadButtons } from "../components/download";
 import { templateTooltip } from "./tooltipTemplate";
-import { barLineFields, downloadFields, FACET_TYPES, legendToggles, nameIn, resolveMeta, specLocale, specTemplate, TOGGLES, type ChartMeta } from "../spec/meta";
+import { barLineFields, downloadFields, FACET_TYPES, hexBinned, legendToggles, nameIn, resolveMeta, specLocale, specTemplate, TOGGLES, type ChartMeta } from "../spec/meta";
 import type { ChartSpec, SpecFacet } from "../spec/types";
 import { inlineRows } from "../spec/validate";
 import { ThemeProvider, useChartLocale, type Painter, type ThemeInput } from "../theme/context";
 import { AreaChart, LineChart, lineSwatches } from "./line";
 import { BarChart, lineToken } from "./bar";
+import { BarRace } from "./barRace";
 import { divergingLead } from "../layout/stack";
 import { BeeswarmChart } from "./beeswarm";
 import { BoxPlot } from "./box";
@@ -27,6 +28,8 @@ import { BumpChart } from "./bump";
 import { CalendarHeatmap } from "./calendar";
 import { CANDLE_TEXT, CandlestickChart, MA_TOKENS, maPeriods } from "./candlestick";
 import { ChordChart } from "./chord";
+import { Choropleth } from "./choropleth";
+import { FlowMap } from "./flowMap";
 import { DumbbellChart } from "./dumbbell";
 import { FunnelChart } from "./funnel";
 import { Heatmap } from "./heatmap";
@@ -46,7 +49,13 @@ import { SlopeChart } from "./slope";
 import { Sparkline } from "./sparkline";
 import { StreamGraph, streamHighlight, streamOrder, streamSwatches } from "./stream";
 import { SunburstChart } from "./sunburst";
+import { SymbolMap } from "./symbolMap";
 import { TileMap } from "./tileMap";
+import { NetworkChart } from "./network";
+import { groupNames, networkSwatches } from "../layout/network";
+import { Timeline, timelineGroupHighlight } from "./timeline";
+import { timelineGroups } from "../layout/timeline";
+import { Tree } from "./tree";
 import { Treemap } from "./treemap";
 import { WaffleChart } from "./waffle";
 import { WaterfallChart } from "./waterfall";
@@ -90,15 +99,22 @@ export const CHART_COMPONENTS: Record<string, ComponentType<any>> = {
   histogram: HistogramChart,
   scatter: ScatterChart,
   tileMap: TileMap,
+  barRace: BarRace,
+  network: NetworkChart,
+  timeline: Timeline,
+  tree: Tree,
+  choropleth: Choropleth,
+  symbolMap: SymbolMap,
+  flowMap: FlowMap,
 };
 
 /**
  * 타입이나 별칭으로 채널, 이름 찾기 (레지스트리 전체를 끌어오지 않아요).
- * 0.4까지 scatter는 bubble의 별칭이었어요. size 채널이 있는 scatter 스펙은 그때처럼 bubble로 그려요
+ * 0.4까지 scatter는 bubble의 별칭이었어요. size 채널이 있는 scatter 스펙은 그때처럼 bubble로 그려요. 육각 밀도(bin "hex")는 크기를 쓰지 않아 산점도 그대로예요
  */
-export function resolveDef(type: string, encoding?: ChartSpec["encoding"]): ChartMeta | undefined {
+export function resolveDef(type: string, encoding?: ChartSpec["encoding"], options?: ChartSpec["options"]): ChartMeta | undefined {
   const def = resolveMeta(type);
-  return def?.type === "scatter" && encoding?.size !== undefined ? resolveMeta("bubble") : def;
+  return def?.type === "scatter" && encoding?.size !== undefined && !hexBinned(options) ? resolveMeta("bubble") : def;
 }
 
 /** encoding(채널 -> 필드)을 컴포넌트 프롭으로 */
@@ -116,7 +132,7 @@ export function encodingToProps(def: Pick<ChartMeta, "encoding">, encoding: Char
  * options.hidden 계열은 빼요. withHidden이면 숨긴 계열까지 모두 적어요 (켜고 끄는 범례)
  */
 export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], locale: string, withHidden = false): LegendItem[] {
-  const def = resolveDef(spec.type, spec.encoding);
+  const def = resolveDef(spec.type, spec.encoding, spec.options);
   if (!def || !rows.length) return [];
   const enc = spec.encoding ?? {};
   const opt = spec.options ?? {};
@@ -138,7 +154,9 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const all = other ? [...kept, other] : kept;
     // 차트가 칠하는 색 함수 그대로 (와플은 categorical, 파이와 도넛은 colorMode에 따라)
     const tokens = legendColors((p) => (isWaffle ? categorical(p, all.length, hi) : sliceSwatches(p, all.length, hi, opt.colorMode as "categorical" | "emphasis" | undefined)));
-    return all.map((x, i) => ({ label: x.label, color: tokens[i] }));
+    // 반원 와플(의석 차트)은 점이라 범례도 원이에요
+    const dot = isWaffle && opt.shape === "arc";
+    return all.map((x, i) => ({ label: x.label, color: tokens[i], ...(dot && { shape: "circle" as const }) }));
   }
   if (def.type === "candlestick") {
     // 차트가 그리는 이동평균만 (행 수보다 긴 기간은 빼요)
@@ -146,8 +164,25 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const t = CANDLE_TEXT[langOf(locale)];
     return [{ label: t.up, color: (opt.upColor as string | undefined) ?? "accent" }, { label: t.down, color: (opt.downColor as string | undefined) ?? "neutralStrong" }, ...ma.map((d, i) => ({ label: t.maLegend(d), color: MA_TOKENS[i], shape: "line" as const }))];
   }
+  if (def.type === "network") {
+    // 차트가 칠하는 묶음 색 함수 그대로 (networkSwatches). 강조 노드는 강조색이라 범례에 넣지 않아요
+    const groups = groupNames(opt.groups);
+    if (groups.length < 2) return [];
+    const tokens = legendColors((p) => networkSwatches(p, groups.length));
+    return groups.map((g, i) => ({ label: g, color: tokens[i], shape: "circle" as const }));
+  }
+  if (def.type === "symbolMap") {
+    // 기호 지도의 묶음 색: 차트와 같이 데이터에 나온 순서, 강조 없는 categoricalDots
+    if (typeof enc.group !== "string") return [];
+    const g = strGetter(enc.group, "group");
+    const groups = uniq(rows.map((r, i) => g(r, i)).filter(Boolean));
+    if (groups.length < 2) return [];
+    const tokens = legendColors((p) => categoricalDots(p, groups.length, new Set()));
+    return groups.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const }));
+  }
   if (def.type === "scatter") {
-    if (typeof enc.series !== "string") return [];
+    // 육각 밀도는 계열을 쓰지 않아요. 색 범례는 차트 안에 있어요
+    if (typeof enc.series !== "string" || hexBinned(opt)) return [];
     const g = strGetter(enc.series, "series");
     const series = uniq(rows.map((r, i) => g(r, i)));
     if (series.length < 2) return [];
@@ -155,6 +190,16 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     const dotHi = seriesHighlight(h, rows, series, g);
     const tokens = legendColors((p) => categoricalDots(p, series.length, dotHi));
     return shown(series.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const })));
+  }
+  if (def.type === "timeline") {
+    // 묶음(group)마다 한 칸. 차트와 같은 색 함수(categorical)와 강조(묶음 이름)예요
+    // 색을 나누는 값은 group, 없으면 status(상태 띠). 차트와 같은 규칙이에요
+    const byStatus = typeof enc.group !== "string";
+    const field = byStatus ? enc.status : enc.group;
+    if (typeof field !== "string") return [];
+    const groups = timelineGroups(rows, field, byStatus);
+    const tokens = legendColors((p) => categorical(p, groups.length, timelineGroupHighlight(h as Highlight<never>, groups)));
+    return shown(groups.map((s, i) => ({ label: s, color: tokens[i], shape: "square" as const })));
   }
   if (["marimekko", "area", "bar", "line", "stream", "radar"].includes(def.type)) {
     let series: string[] = [];
@@ -247,7 +292,7 @@ export function Chart(props: ChartProps) {
  */
 export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONENTS) {
   const { spec } = props;
-  const def = resolveDef(spec.type, spec.encoding);
+  const def = resolveDef(spec.type, spec.encoding, spec.options);
   // { csv }는 렌더마다 다시 읽지 않아요
   const inline = useMemo(() => inlineRows(spec.data), [spec.data]);
   const remote = !inline && spec.data && typeof spec.data === "object" && "url" in spec.data ? (spec.data as { url: string; format?: "json" | "csv" | "auto"; select?: string }) : null;

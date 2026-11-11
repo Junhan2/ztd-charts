@@ -1,4 +1,4 @@
-# Reference for all 37 charts
+# Reference for all 44 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -43,11 +43,11 @@
 
 ## waffle · Waffle chart (`<WaffleChart>`, Intermediate, Proportion)
 
-- What: Proportion on a 100-cell grid
-- Use when: A share reads better as a count, like '38 out of 100'
+- What: Proportion on a 100-cell grid, or one dot per unit in a half circle (seat chart)
+- Use when: A share reads better as a count, like '38 out of 100', or seats out of a fixed total
 - Avoid when: More than 4 items, or differences under 1% matter
 - encoding: label, value
-- Chart options: cells, columns, total, summary, summaryLabel, summaryNote
+- Chart options: shape: grid|arc, cells, columns, total, referenceLines, summary, summaryLabel, summaryNote
 - Default highlight: the first series or item
 
 ```json
@@ -464,9 +464,9 @@
 
 - What: How two numbers relate, one dot per item, colored by series
 - Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series
-- Avoid when: x is time (a line works better), or there are more than 50,000 dots
+- Avoid when: x is time (a line works better), or there are more than 50,000 dots without bin "hex"
 - encoding: x, y, series?, label?
-- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter
+- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter, xDomain, yDomain, bin: hex, binSize, colorSteps
 - Default highlight: none, or the first series when a series channel is set
 - Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
@@ -477,14 +477,105 @@
 ## tileMap · Tile grid map (`<TileMap>`, Intermediate, Map)
 
 - What: One equal tile per region, placed roughly where it is and shaded by its value
-- Use when: Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones
+- Use when: Comparing one value across the regions of a country, such as a rate per state, where small regions matter as much as large ones
 - Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them
 - encoding: region, value
 - Chart options: map, legend, legendLabels, colorReverse, colorSteps, labels: auto|ko|en
 - Default highlight: the largest value
 
 ```json
-{"type":"tileMap","data":[{"sido":"Seoul","rate":96},{"sido":"Busan","rate":91},{"sido":"Daegu","rate":89}],"encoding":{"region":"sido","value":"rate"},"options":{"map":"kr-sido","unit":"%"},"card":{"number":"37","title":"Tile grid map","subtitle":"Addresses with next-day delivery, by region (%)","takeaway":"Sejong leads at 98%","level":"intermediate"}}
+{"type":"tileMap","data":[{"state":"AL","rate":71},{"state":"AK","rate":38},{"state":"AZ","rate":82}],"encoding":{"region":"state","value":"rate"},"options":{"unit":"%"},"card":{"number":"37","title":"Tile grid map","subtitle":"Addresses with next-day delivery, by state (%)","takeaway":"DC leads at 97%","level":"intermediate"}}
+```
+
+## choropleth · Choropleth map (`<Choropleth>`, Intermediate, Map)
+
+- What: Regions on a real map, shaded by their value in steps
+- Use when: Where is it high and where is it low: a rate or average per country, state or province, where the geographic pattern is the message
+- Avoid when: The values are totals that grow with area or population (large regions look heavier), or every region must be equally visible (use tileMap)
+- encoding: region, value
+- Chart options: map, focus: europe|asia|africa|americas|oceania, featureId, featureName, legend, legendLabels, colorReverse, colorCenter, colorSteps, ranking, labels: auto|ko|en
+- Default highlight: the largest value
+
+```json
+{"type":"choropleth","data":[{"country":"United States","rate":3.8},{"country":"Canada","rate":4.8},{"country":"Mexico","rate":2.1}],"encoding":{"region":"country","value":"rate"},"options":{"map":"world","unit":"%"},"card":{"number":"38","title":"Choropleth map","subtitle":"Checkout conversion (%)","takeaway":"Canada converts best","level":"intermediate"}}
+```
+
+## barRace · Bar race (`<BarRace>`, Intermediate, Comparison)
+
+- What: Horizontal bars ranked at each time step that move to their new length and place as the steps play
+- Use when: Telling how a ranking changed over time in a talk or a video, such as sales by brand per year
+- Avoid when: Readers need to compare exact values or ranks across time (a bump chart or a line chart does that better), or there is only one time step
+- encoding: label, value, frame
+- Chart options: top, stepMs, autoplay, startFrame, aggregate: sum|mean|last|count
+- Default highlight: the largest value
+
+```json
+{"type":"barRace","data":[{"brand":"Northwind","year":2015,"sales":420},{"brand":"Aurora","year":2015,"sales":380},{"brand":"Kestrel","year":2015,"sales":350}],"encoding":{"label":"brand","value":"sales","frame":"year"},"options":{"top":8},"card":{"number":"39","title":"Bar race","subtitle":"Yearly sales by brand (thousand units)","takeaway":"Lumen climbs to 1st","level":"intermediate"}}
+```
+
+## network · Network (`<NetworkChart>`, Advanced, Relationship)
+
+- What: Who is connected to whom, and who sits at the center
+- Use when: The structure of links matters more than their amount, such as calls between services, collaboration between teams or links between documents
+- Avoid when: The amount moving between stages is the point (sankey, chord), the links form a tree (sunburst), or there are more than about 300 nodes
+- encoding: source, target, value?
+- Chart options: layout: arc, sort: auto|data|group|degree, groups, nodeSize: value|degree
+- Default highlight: the largest value
+
+```json
+{"type":"network","data":[{"from":"Web","to":"Gateway","calls":42},{"from":"Mobile app","to":"Gateway","calls":36},{"from":"Gateway","to":"Auth","calls":30}],"encoding":{"source":"from","target":"to","value":"calls"},"options":{"highlight":"Payments","unit":"K"},"card":{"number":"40","title":"Network","subtitle":"Calls per minute between services","takeaway":"Payments talks to 7 services","level":"advanced","legend":"auto"}}
+```
+
+## timeline · Timeline (`<Timeline>`, Intermediate, Trend)
+
+- What: When things started and ended, and what overlapped: one bar per item on a time axis
+- Use when: Items with a start and an end, such as a project schedule, deployment and job runs, an agent run log or an incident timeline
+- Avoid when: Each item has one value and no start or end (use bar), or the dependencies between tasks are the story
+- encoding: label, start, end, group?, status?
+- Chart options: xType: number|date, dayFirst, sort: none|start|duration, referenceLines, now, brush, hidden
+- Default highlight: the largest value
+
+```json
+{"type":"timeline","data":[{"step":"Plan","start":0,"end":3,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:00","endAt":"2026-11-10T09:03"},{"step":"Search code","start":3,"end":8,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:03","endAt":"2026-11-10T09:08"},{"step":"Edit files","start":8,"end":15,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:08","endAt":"2026-11-10T09:15"}],"encoding":{"label":"step","start":"start","end":"end"},"options":{"unit":" min"},"card":{"number":"41","title":"Timeline","subtitle":"One agent run from plan to merge, in minutes","takeaway":"18 of 43 minutes went to waiting for CI","level":"intermediate"}}
+```
+
+## tree · Tree (`<Tree>`, Intermediate, Hierarchy)
+
+- What: The parent and child links of a hierarchy, drawn as dots joined by curves
+- Use when: The structure itself is the point: an org chart, a folder or dependency tree, what an outage reaches, a decision tree
+- Avoid when: Each part's share of the total matters more than the links (treemap or sunburst), or the leaves are thousands of items to compare by size
+- encoding: label, value?, group?, id?, parent?
+- Chart options: layout: horizontal|radial, path, sort, rootLabel, collapsed
+- Default highlight: none (options.highlight names nodes or paths)
+
+```json
+{"type":"tree","data":[{"service":"Orders","screen":"Checkout","users":42},{"service":"Orders","screen":"Cart checkout","users":31},{"service":"Orders","screen":"One-tap pay","users":18}],"encoding":{"group":"service","label":"screen"},"options":{"rootLabel":"Payments API","highlight":["Checkout","Cart checkout","One-tap pay","Order history","Start subscription","Renewal","Cancel and refund","Payment methods","Receipts"]},"card":{"number":"42","title":"Tree","subtitle":"Screens that call the payments API, by service","takeaway":"A payments outage stops 9 of 23 screens","level":"intermediate"}}
+```
+
+## symbolMap · Symbol map (`<SymbolMap>`, Intermediate, Map)
+
+- What: One circle per place on a pale map, its area proportional to the value
+- Use when: Amounts that sit at a point, such as users per city, revenue per store or traffic per data centre, where absolute sizes should compare directly
+- Avoid when: The value is a rate across a whole region (use choropleth), or the places are so many and so close that circles cover each other (aggregate first)
+- encoding: lon?, lat?, size?, label?, region?, group?
+- Chart options: map, focus: europe|asia|africa|americas|oceania, featureId, featureName, sizeRange, center: auto|atlantic|pacific, legend
+- Default highlight: the largest value
+
+```json
+{"type":"symbolMap","data":[{"city":"Tokyo","continent":"Asia","lon":139.69,"lat":35.69,"users":1180000},{"city":"São Paulo","continent":"Americas","lon":-46.63,"lat":-23.55,"users":820000},{"city":"Jakarta","continent":"Asia","lon":106.85,"lat":-6.21,"users":710000}],"encoding":{"size":"users","label":"city"},"options":{"format":"compact"},"card":{"number":"43","title":"Symbol map","subtitle":"Monthly active users by city","takeaway":"Tokyo leads with 15% of users","level":"intermediate"}}
+```
+
+## flowMap · Flow map (`<FlowMap>`, Advanced, Map)
+
+- What: Curved links between places on a map, their width proportional to the amount
+- Use when: From where to where and how much: shipments, migration, transfers or traffic between regions, where direction and distance matter
+- Avoid when: Only the amounts matter and places have no meaningful position (use sankey or chord), or there are hundreds of crossing flows
+- encoding: source, target, value?
+- Chart options: places, map, focus: europe|asia|africa|americas|oceania, featureId, featureName, ranking, center: auto|atlantic|pacific
+- Default highlight: the largest value
+
+```json
+{"type":"flowMap","data":[{"from":"Shanghai","to":"Los Angeles","teu":412000},{"from":"Shanghai","to":"Rotterdam","teu":268000},{"from":"Singapore","to":"Rotterdam","teu":231000}],"encoding":{"source":"from","target":"to","value":"teu"},"options":{"places":{"Shanghai":[121.47,31.23],"Singapore":[103.82,1.35],"Rotterdam":[4.48,51.92],"Los Angeles":[-118.24,34.05],"Busan":[129.08,35.18],"Dubai":[55.27,25.2],"New York":[-74.01,40.71],"Santos":[-46.33,-23.96],"Hamburg":[9.99,53.55]},"format":"compact"},"card":{"number":"44","title":"Flow map","subtitle":"Container shipments between ports (TEU)","takeaway":"Shanghai to LA is the top lane","level":"advanced"}}
 ```
 
 ## Common options

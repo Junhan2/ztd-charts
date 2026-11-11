@@ -45,9 +45,13 @@ const MONTH_KO = /^(1[0-2]|[1-9])월$/;
 const YMD = /^\d{8}$/;
 const RANK_RE = /(rank|순위|등수)/i;
 const STAGE_RE = /(stage|step|funnel|단계|스텝)/i;
+const PARENT_RE = /^(parent|manager|reports_?to|부모|상위)/i;
 const BEFORE_RE = /(before|prev|start|이전|전|작년|기존|old)/i;
 const AFTER_RE = /(after|next|end|이후|후|올해|신규|new)/i;
 const TARGET_KPI = /(target|goal|목표)/i;
+/** 타임라인의 시작, 끝 날짜 열 이름 */
+const SPAN_START = /(start|begin|from|opened|시작|착수)/i;
+const SPAN_END = /(end|finish|until|due|closed|stop|끝|종료|마감)/i;
 /** 엑셀 등이 빈 칸에 쓰는 표시 ("-", "n/a", "#N/A", "null") */
 const MISSING = /^(-|—|–|n\/?a|#n\/a|na|null|nan|none)$/i;
 /** 순번이 아니라 식별자라 x로 쓰지 않는 이름 */
@@ -171,6 +175,41 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     if (reciprocal) out.push(mk("chord", 0.92, t(`${src.name}→${dst.name} goes both ways, so a chord diagram fits`, `${src.name}→${dst.name} 관계가 양방향이라 코드 다이어그램이 맞아요`), rows, { source: src.name, target: dst.name, value: v0.name }));
     out.push(mk("sankey", reciprocal ? 0.8 : 0.95, chained ? t("The flow runs through several stages, which a Sankey diagram shows well", "흐름이 여러 단계로 이어져서 생키 다이어그램이 잘 맞아요") : t("A Sankey diagram shows the amount between source and target as band width", "생키 다이어그램으로 출발과 도착 사이 양을 띠 굵기로 보여 줘요"), rows, { source: src.name, target: dst.name, value: v0.name }));
   }
+  // 네트워크는 값이 없어도 그려요(행마다 1). 노드가 10개를 넘으면 생키, 코드보다 읽기 쉬워요
+  if (src && dst) {
+    const nodes = new Set(rows.flatMap((r) => [String(r[src.name]), String(r[dst.name])])).size;
+    const strong = nodes > 10 || !v0;
+    out.push(
+      mk(
+        "network",
+        strong ? 0.9 : 0.7,
+        strong ? t(`${nodes} nodes linked by ${src.name}→${dst.name}: a network shows who is connected to whom and who is central`, `${src.name}→${dst.name}로 이어진 노드 ${nodes}개: 네트워크로 누가 누구와 이어져 있고 누가 가운데인지 보여 줘요`) : t("A network shows the structure of the links rather than their amount", "네트워크로 흐름의 양보다 이어진 모양을 보여 줘요"),
+        rows,
+        { source: src.name, target: dst.name, ...(v0 && { value: v0.name }) },
+      ),
+    );
+  }
+
+  // 시작과 끝: 이름이 시작, 끝인 날짜 열 두 개와 이름 열이면 타임라인 (일정, 실행 기록)
+  const startC = dates.find((c) => SPAN_START.test(c.name));
+  const endC = dates.find((c) => c !== startC && SPAN_END.test(c.name));
+  const itemC = cats.find((c) => c.distinct >= 2) ?? cols.find((c) => c.kind === "text");
+  if (startC && endC && itemC) {
+    const statusC = cats.find((c) => c !== itemC && c.distinct >= 2 && c.distinct <= 8);
+    out.push(mk("timeline", 0.94, t(`${startC.name} and ${endC.name} mark when each ${itemC.name} ran, so a timeline shows what ran when and what overlapped`, `${startC.name}부터 ${endC.name}까지 ${itemC.name}마다 언제 이어졌는지라서 타임라인으로 무엇이 언제, 겹쳐서 이어졌는지 보여 줘요`), rows, { label: itemC.name, start: startC.name, end: endC.name, ...(statusC ? { group: statusC.name } : {}) }));
+  }
+
+  // 계층: id와 부모 id (조직도, 폴더 표). 부모 칸 대부분이 id 열의 값이면 트리예요
+  const parentCol = cols.find((c) => PARENT_RE.test(c.name));
+  const idCol = parentCol && cols.find((c) => c !== parentCol && c.unique);
+  if (parentCol && idCol) {
+    const ids = new Set(rows.map((r) => String(r[idCol.name])));
+    const refs = rows.map((r) => r[parentCol.name]).filter((v) => v !== null && v !== undefined && v !== "");
+    if (refs.length && refs.filter((v) => ids.has(String(v))).length >= refs.length * 0.8) {
+      const name = cats.find((c) => c !== idCol && c !== parentCol && c.unique) ?? idCol;
+      out.push(mk("tree", 0.95, t(`Each row points to its ${parentCol.name}, so a tree draws the structure`, `행마다 ${parentCol.name} 값으로 부모를 가리켜서 트리로 구조를 그려요`), rows, { label: name.name, id: idCol.name, parent: parentCol.name }));
+    }
+  }
 
   // 시간
   const t0 = dates[0];
@@ -189,6 +228,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
       out.push(mk("line", 0.93, t(`Compares the ${t0.name} trend by ${seriesCat.name} (one highlighted line, the rest gray)`, `${t0.name} 흐름을 ${seriesCat.name}별로 비교해요(강조 한 줄, 나머지는 회색)`), rows, { x: t0.name, y: v0.name, series: seriesCat.name }, xt));
       out.push(mk("area", 0.8, t("If the series add up to something meaningful, stacked areas show how the mix changes", "계열 합이 의미 있으면 쌓은 영역으로 구성 변화를 봐요"), rows, { x: t0.name, y: v0.name, series: seriesCat.name }, xt));
       if (seriesCat.distinct >= 5) out.push(mk("stream", 0.72, t("With many series, a streamgraph can show the rhythm of the flow", "계열이 많아서 스트림그래프로 흐름의 리듬을 보여 줄 수 있어요"), rows, { x: t0.name, y: v0.name, series: seriesCat.name }, xt));
+      if (seriesCat.distinct >= 5) out.push(mk("barRace", 0.62, t(`To tell how the ${seriesCat.name} ranking changed in a talk or a video, a bar race plays it step by step`, `${seriesCat.name} 순위가 바뀐 이야기를 발표나 영상으로 전하려면 막대 레이스로 시점마다 재생해요`), rows, { label: seriesCat.name, value: v0.name, frame: t0.name }));
     } else {
       out.push(mk("line", 0.9, t(`A line chart shows ${v0.name} over ${t0.name}`, `라인 차트로 ${t0.name}에 따른 ${v0.name} 추이를 봐요`), rows, { x: t0.name, y: nums.length > 1 && nums.length <= 6 ? nums.map((c) => c.name) : v0.name }, nums.length <= 1 ? { ...xt, area: true } : xt));
       if (attrCat) {
@@ -236,6 +276,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
       if (hierarchical) {
         out.push(mk("treemap", 0.92, t(`${child.name} sits under ${parent.name}, so a treemap fits the hierarchy`, `${child.name} 필드가 ${parent.name} 필드 아래에 있는 계층이라 트리맵이 맞아요`), rows, { group: parent.name, label: child.name, value: v0.name }));
         out.push(mk("sunburst", 0.82, t("A sunburst shows the same hierarchy in rings", "선버스트로 같은 계층을 고리 모양으로 보여 줘요"), rows, { group: parent.name, label: child.name, value: v0.name }));
+        out.push(mk("tree", 0.7, t(`A tree shows which ${child.name} sits under which ${parent.name}, when the links matter more than the shares`, `몫보다 어느 ${child.name}이 어느 ${parent.name} 아래에 있는지가 중요하면 트리로 이어짐을 보여 줘요`), rows, { group: parent.name, label: child.name }));
       } else if (full) {
         const rowsCat = cat.distinct <= second.distinct ? cat : second;
         const colsCat = rowsCat === cat ? second : cat;

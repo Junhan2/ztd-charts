@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { FACET_MAX } from "../spec/meta";
 import { numGetter, strGetter } from "../data/accessor";
 import { dataSignature } from "../data/parse";
@@ -244,7 +245,15 @@ export interface FacetPlan {
   isPanelPick: boolean;
   /** 묶음 전체를 읽어 주는 한 문장 */
   description: string;
+  /**
+   * 모든 패널이 같이 쓰는 범례 (육각 밀도 산점도의 같은 색 척도). 격자 위 오른쪽에 FACET_LEGEND_H 높이로 한 번만 그리고, 패널에는 그리지 않아요.
+   * class="ztd-facet-legend"인 svg라 서버 SVG도 같은 자리에 옮겨 놓아요
+   */
+  legend?: ReactNode;
 }
+
+/** 묶음 범례 줄 높이(px) */
+export const FACET_LEGEND_H = 18;
 
 export interface FacetInput {
   type: FacetType;

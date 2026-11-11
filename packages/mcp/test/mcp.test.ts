@@ -34,7 +34,7 @@ describe("MCP 도구", () => {
     expect(tools.find((t) => t.name === "list_charts")!.annotations?.readOnlyHint).toBe(true);
   });
   it("list_charts: 전체와 필터", async () => {
-    expect(firstJson((await call("list_charts", {})).content).count).toBe(37);
+    expect(firstJson((await call("list_charts", {})).content).count).toBe(44);
     const r = firstJson((await call("list_charts", { group: "distribution" })).content);
     expect(r.charts.map((c: { type: string }) => c.type)).toEqual(["beeswarm", "ridgeline", "box", "histogram"]);
   });
@@ -47,7 +47,7 @@ describe("MCP 도구", () => {
     expect(j.variants.map((v: { id: string }) => v.id)).toContain("forecast");
     expect(firstJson((await call("get_chart_schema", { type: "doughnut" })).content).type).toBe("donut");
     expect((await call("get_chart_schema", { type: "pyramid" })).isError).toBe(true);
-    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(37);
+    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(44);
   });
   it("validate_spec: 오류 경로와 제안", async () => {
     const j = firstJson((await call("validate_spec", { spec: { type: "bar", data: [{ q: "1분기", revenue: 1 }], encoding: { x: "q", y: "revenu" } } })).content);
@@ -71,6 +71,24 @@ describe("MCP 도구", () => {
     expect(png.readUInt32BE(16)).toBe(480);
     expect(r.content.some((c) => c.text?.startsWith("<svg"))).toBe(true);
     expect(r.content.some((c) => c.text?.includes("<PieChart"))).toBe(true);
+  });
+  it('render_chart: a choropleth with "map": "auto" finds the world map from country names', async () => {
+    const spec = { type: "choropleth", data: [{ country: "Brazil", rate: 2 }, { country: "KOR", rate: 5 }, { country: 840, rate: 4 }], encoding: { region: "country", value: "rate" } };
+    const r = await call("render_chart", { spec, format: "svg", width: 640 });
+    expect(r.isError).toBe(false);
+    const svg = r.content.find((c) => c.text?.startsWith("<svg"))!.text!;
+    expect(svg).toContain("Choropleth map. 3 regions with data. Highest South Korea 5");
+    expect((svg.match(/fill-rule="evenodd"/g) ?? []).length).toBeGreaterThan(160);
+  });
+  it("render_chart: a symbol map from coordinates and a flow map from country names", async () => {
+    const spec = { type: "symbolMap", data: [{ city: "Tokyo", lon: 139.69, lat: 35.69, users: 9 }, { city: "Paris", lon: 2.35, lat: 48.86, users: 4 }], encoding: { size: "users", label: "city" } };
+    const r = await call("render_chart", { spec, format: "svg", width: 640 });
+    expect(r.isError).toBe(false);
+    const svg = r.content.find((c) => c.text?.startsWith("<svg"))!.text!;
+    expect(svg).toContain("Symbol map. 2 places, 13 in total. Largest: Tokyo 9");
+    const flow = { type: "flowMap", data: [{ source: "Brazil", target: "Portugal", value: 4 }], encoding: {} };
+    const f = await call("render_chart", { spec: flow, format: "svg", width: 640 });
+    expect(f.content.find((c) => c.text?.startsWith("<svg"))!.text!).toContain("Flow map. 1 flow between 2 places");
   });
   it("render_chart: locale로 차트 글자 언어를 정해요 (기본 영어)", async () => {
     const spec = { type: "pie", data: [{ label: "a", value: 3 }, { label: "b", value: 1 }] };
@@ -105,7 +123,7 @@ describe("MCP 도구", () => {
     const { resources } = await client.listResources();
     expect(resources[0].uri).toBe("ztd-charts://schema/chart-spec.json");
     const r = await client.readResource({ uri: resources[0].uri });
-    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(37);
+    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(44);
   });
 });
 

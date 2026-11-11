@@ -5,7 +5,7 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 import { CHARTS, commonOptionsIn, downloadFields, FACET_TYPES, findGroup, findLevel, getChartDef, localizeDef, schemaForIn, specLocale, specSchemaIn, specTemplate, suggestCharts, validateSpec, variantsIn, type ChartDef, type ChartSpec, type JSONSchema, type Suggestion, type ValidationResult, TYPE_ALIASES } from "ztd-charts/spec";
 import { inlineRows, normalizeData, parseCSV } from "ztd-charts/spec";
-import { langOf, renderSpecToHTML, renderSpecToSVG, resolveDef, resolveSpecData } from "ztd-charts/server";
+import { langOf, mapExportName, renderSpecToHTML, renderSpecToSVG, resolveDef, resolveSpecData, specMapName } from "ztd-charts/server";
 import { CLI_TEXT, type CliText } from "./messages";
 
 const require = createRequire(import.meta.url);
@@ -145,11 +145,14 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
   // 스펙 툴팁 틀은 컴포넌트에 templateTooltip(…) 함수로 넘겨요 (객체 그대로면 컴포넌트가 무시해요)
   const template = specTemplate(spec);
   const tipLocale = specLocale(spec);
+  // 지도 차트의 내장 지도는 이름 대신 그 입구에서 불러온 지도를 넘겨요 (registerMap 없이 그려요)
+  const geo = specMapName(spec);
   for (const [k, v] of Object.entries(spec.options ?? {})) {
-    if (!JSX_NAME.test(k)) continue;
+    if (!JSX_NAME.test(k) || (geo && k === "map")) continue;
     if (k === "tooltip" && template) props.push(`tooltip={templateTooltip(${JSON.stringify(template)}${tipLocale ? `, ${JSON.stringify(tipLocale)}` : ""})}`);
     else props.push(`${k}=${jsxValue(v)}`);
   }
+  if (geo) props.push(`map={${mapExportName(geo)}}`);
   // 작은 여러 개(spec.facet)는 <ChartFacets>가 by 값마다 차트를 한 칸씩 그려요. highlight는 패널을 고르고, 다른 프롭은 chartProps로 패널마다 넘겨요
   // 양쪽 막대(layout "diverging")는 작은 여러 개로 그리지 않아요 (검사기가 오류로 알려요)
   const facet = spec.facet && typeof spec.facet.by === "string" && FACET_TYPES.includes(def.type) && !(def.type === "bar" && spec.options?.layout === "diverging") ? spec.facet : undefined;
@@ -172,12 +175,17 @@ export function reactSnippet(spec: ChartSpec, opts: { dataVar?: string; inlineDa
     cp.push("replay");
     body = `<ChartCard ${cp.join(" ")}>\n      ${chartEl}\n    </ChartCard>`;
   }
-  return `import { ${imports} } from "ztd-charts";\n\n${dataLine}export function ${def.component}Example() {\n  return (\n    ${body}\n  );\n}\n`;
+  const geoLine = geo ? `import { ${mapExportName(geo)} } from "ztd-charts/geo/${geo}";\n` : "";
+  return `import { ${imports} } from "ztd-charts";\n${geoLine}\n${dataLine}export function ${def.component}Example() {\n  return (\n    ${body}\n  );\n}\n`;
 }
 
 /** 스펙 그대로 쓰는 React 코드. ChartSpec 타입을 달아야 card.legend: "auto" 같은 값이 string으로 넓어지지 않아 TS에서 바로 컴파일돼요 */
 export function specSnippet(spec: ChartSpec): string {
-  return `import { Chart, type ChartSpec } from "ztd-charts";\n\nconst spec: ChartSpec = ${JSON.stringify({ ...spec, data: Array.isArray(spec.data) ? spec.data.slice(0, 8) : spec.data }, null, 2)};\n\nexport function SpecChart() {\n  return <Chart spec={spec} />;\n}\n`;
+  // 지도 차트는 그리는 지도를 한 번 등록해요 (options.map의 "world"와 "auto"가 등록한 지도를 찾아요)
+  const geo = specMapName(spec);
+  const name = geo && mapExportName(geo);
+  const head = geo ? `import { Chart, registerMap, type ChartSpec } from "ztd-charts";\nimport { ${name} } from "ztd-charts/geo/${geo}";\n\nregisterMap(${name});\n` : `import { Chart, type ChartSpec } from "ztd-charts";\n`;
+  return `${head}\nconst spec: ChartSpec = ${JSON.stringify({ ...spec, data: Array.isArray(spec.data) ? spec.data.slice(0, 8) : spec.data }, null, 2)};\n\nexport function SpecChart() {\n  return <Chart spec={spec} />;\n}\n`;
 }
 
 /** 한글이 들어간 PNG를 위해 쓸 글꼴 파일 */
@@ -253,14 +261,16 @@ export function stripEmoji(svg: string): { svg: string; removed: number } {
   return { svg: out, removed };
 }
 
-/** --interactive HTML의 브라우저 코드: React와 그 차트 하나 (scripts/build-client.mjs 가 dist/client 에 만들어요). 없으면 null → 정적 HTML */
-function clientScript(type: string): string | null {
+/**
+ * --interactive HTML의 브라우저 코드: React와 그 차트 하나 (scripts/build-client.mjs 가 dist/client 에 만들어요). 없으면 null → 정적 HTML.
+ * 지도 차트는 그 스펙이 그리는 내장 지도 하나(geo-<이름>.js)를 차트 앞에 넣어요. 서버 그림과 같은 지도로 이어받아요
+ */
+function clientScript(type: string, map: string | null): string | null {
   const here = dirname(fileURLToPath(import.meta.url));
   // 빌드한 dist/ 에서는 옆의 client/, vitest 로 src/ 에서 돌 때는 ../dist/client/
   for (const dir of [join(here, "client"), join(here, "../dist/client")]) {
-    const react = join(dir, "react.js");
-    const chart = join(dir, `${type}.js`);
-    if (existsSync(react) && existsSync(chart)) return `${readFileSync(react, "utf8")}\n${readFileSync(chart, "utf8")}`;
+    const files = [join(dir, "react.js"), ...(map ? [join(dir, `geo-${map}.js`)] : []), join(dir, `${type}.js`)];
+    if (files.every((f) => existsSync(f))) return files.map((f) => readFileSync(f, "utf8")).join("\n");
   }
   return null;
 }
@@ -348,8 +358,8 @@ export async function render(input: ChartSpec, opts: RenderOptions = {}): Promis
   const format = opts.format ?? "svg";
   if (format === "html") {
     // 별칭과 채널로 실제 그릴 차트를 골라(scatter 에 size 가 있으면 bubble) 그 차트의 코드만 넣어요
-    const type = opts.interactive ? resolveDef(spec.type, spec.encoding)?.type : undefined;
-    const script = type ? clientScript(type) : null;
+    const type = opts.interactive ? resolveDef(spec.type, spec.encoding, spec.options)?.type : undefined;
+    const script = type ? clientScript(type, specMapName(spec)) : null;
     const html = renderSpecToHTML(spec, { width: opts.width, height: opts.height, theme: opts.theme, frame: opts.frame, interactive: script ? { script } : false, locale });
     return { format, html };
   }
@@ -369,8 +379,28 @@ export async function svgToPng(svg: string, opts: { scale?: number; fonts?: stri
   const { Resvg } = await import("@resvg/resvg-js");
   const fontFiles = findFonts(opts.fonts);
   const plain = stripEmoji(svg);
-  const r = new Resvg(plain.svg, { fitTo: { mode: "zoom", value: opts.scale ?? 2 }, font: { fontFiles, loadSystemFonts: true, defaultFontFamily: fontFiles.length ? "Pretendard" : "sans-serif" } });
+  const zoom = pngZoom(svg, opts.scale ?? 2);
+  if (zoom === null) throw new Error(CLI_TEXT[langOf(opts.locale)].pngNoSize);
+  const r = new Resvg(plain.svg, { fitTo: { mode: "zoom", value: zoom }, font: { fontFiles, loadSystemFonts: true, defaultFontFamily: fontFiles.length ? "Pretendard" : "sans-serif" } });
   return { png: Buffer.from(r.render().asPng()), ...(plain.removed ? { notes: [CLI_TEXT[langOf(opts.locale)].emojiRemoved(plain.removed)] } : {}) };
+}
+
+/**
+ * PNG 한 장의 최대 픽셀 수. 10,000 × 5,000px 또는 2400 × 1000px 차트의 배율 4(약 3,800만)까지 그대로이고, 비트맵은 4바이트씩이라 약 200MB가 상한이에요
+ */
+export const PNG_MAX_PIXELS = 50_000_000;
+
+/**
+ * PNG 배율. 실제로 그릴 SVG의 바깥 <svg> 크기 × 배율²이 PNG_MAX_PIXELS를 넘으면 넘지 않게 배율을 낮춰요(비트맵을 잡기 전에 정해요).
+ * 크기는 줄이지 않은 그대로 재요(작은 여러 개, 긴 범례처럼 차트 한 변 한도보다 큰 문서도 있어요).
+ * 바깥 <svg>에 픽셀 폭과 높이가 없거나 0 이하, 유한하지 않으면 null이라 그리지 않아요(한도를 증명할 수 없어서)
+ */
+export function pngZoom(svg: string, scale: number): number | null {
+  const tag = /<svg\b[^>]*>/.exec(svg)?.[0] ?? "";
+  const w = Number(/\swidth="([\d.]+)"/.exec(tag)?.[1]);
+  const h = Number(/\sheight="([\d.]+)"/.exec(tag)?.[1]);
+  if (!(w > 0 && h > 0 && Number.isFinite(w) && Number.isFinite(h))) return null;
+  return Math.min(scale, Math.sqrt(PNG_MAX_PIXELS / (w * h)));
 }
 
 /** http(s) 주소인지. loadRows, CLI suggest, MCP suggest_chart가 같은 규칙(대소문자 무시)을 써요 */

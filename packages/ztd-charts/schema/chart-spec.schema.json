@@ -47,7 +47,14 @@
         "skyline",
         "histogram",
         "scatter",
-        "tileMap"
+        "tileMap",
+        "choropleth",
+        "barRace",
+        "network",
+        "timeline",
+        "tree",
+        "symbolMap",
+        "flowMap"
       ]
     }
   },
@@ -127,12 +134,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -326,12 +335,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -508,12 +519,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -632,7 +645,7 @@
     },
     {
       "title": "Waffle chart",
-      "description": "Proportion on a 100-cell grid. Use when: A share reads better as a count, like '38 out of 100'. Avoid when: More than 4 items, or differences under 1% matter",
+      "description": "Proportion on a 100-cell grid, or one dot per unit in a half circle (seat chart). Use when: A share reads better as a count, like '38 out of 100', or seats out of a fixed total. Avoid when: More than 4 items, or differences under 1% matter",
       "type": "object",
       "required": [
         "type",
@@ -669,6 +682,14 @@
         "options": {
           "type": "object",
           "properties": {
+            "shape": {
+              "description": "\"arc\" draws one dot per unit in a half circle of rows, each group a wedge from left to right (seats in an assembly, votes on a board, seats sold). cells and columns are not used with it",
+              "default": "grid",
+              "enum": [
+                "grid",
+                "arc"
+              ]
+            },
             "cells": {
               "description": "Number of cells",
               "default": 100,
@@ -682,11 +703,15 @@
               "minimum": 1
             },
             "total": {
-              "description": "Value of the whole. Defaults to the sum",
+              "description": "Value of the whole. Defaults to the sum. With shape \"arc\", units above the sum are drawn as empty seats",
               "type": "number"
             },
+            "referenceLines": {
+              "description": "Shape \"arc\": radial lines at a unit count, such as a majority [{ value, label }]",
+              "type": "array"
+            },
             "summary": {
-              "description": "Show the big number on the right",
+              "description": "Show the big number on the right (shape \"arc\": the total in the middle)",
               "default": true,
               "type": "boolean"
             },
@@ -701,12 +726,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -891,12 +918,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -1078,12 +1107,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -1259,12 +1290,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -1440,12 +1473,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -1609,12 +1644,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -1814,12 +1851,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -2008,12 +2047,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -2238,12 +2279,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -2624,12 +2667,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -3012,12 +3057,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -3262,12 +3309,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -3560,12 +3609,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -3763,12 +3814,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -3963,12 +4016,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -4143,12 +4198,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -4339,12 +4396,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -4521,12 +4580,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -4707,12 +4768,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -4884,12 +4947,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5065,12 +5130,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5248,12 +5315,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5427,12 +5496,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5601,12 +5672,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5801,12 +5874,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -5973,12 +6048,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -6167,12 +6244,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -6346,12 +6425,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -6614,12 +6695,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -6796,12 +6879,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -7017,12 +7102,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -7240,12 +7327,14 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -7364,7 +7453,7 @@
     },
     {
       "title": "Scatter plot",
-      "description": "How two numbers relate, one dot per item, colored by series. Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series. Avoid when: x is time (a line works better), or there are more than 50,000 dots",
+      "description": "How two numbers relate, one dot per item, colored by series. Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series. Avoid when: x is time (a line works better), or there are more than 50,000 dots without bin \"hex\"",
       "type": "object",
       "required": [
         "type",
@@ -7488,15 +7577,51 @@
               "description": "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render",
               "type": "object"
             },
+            "xDomain": {
+              "description": "Fixed x range [start, end], smallest first. Use it to zoom in: dots outside are not drawn, and with bin \"hex\" only the dots inside are counted",
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "yDomain": {
+              "description": "Fixed y range [bottom, top], smallest first. With yScale \"log\" both ends must be above 0",
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "bin": {
+              "description": "\"hex\" counts the dots in hexagons and shades each hexagon by its count, so dense areas of tens of thousands of dots stay readable. Empty hexagons are not drawn. Series, size, dot labels, jitter and the canvas switch are not used",
+              "enum": [
+                "hex"
+              ]
+            },
+            "binSize": {
+              "description": "Bin \"hex\": hexagon width in px",
+              "default": 16,
+              "type": "number",
+              "minimum": 4,
+              "maximum": 200
+            },
+            "colorSteps": {
+              "description": "Bin \"hex\": number of color steps. The legend shows each step",
+              "default": 5,
+              "type": "number",
+              "minimum": 2,
+              "maximum": 12
+            },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -7642,7 +7767,7 @@
     },
     {
       "title": "Tile grid map",
-      "description": "One equal tile per region, placed roughly where it is and shaded by its value. Use when: Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones. Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
+      "description": "One equal tile per region, placed roughly where it is and shaded by its value. Use when: Comparing one value across the regions of a country, such as a rate per state, where small regions matter as much as large ones. Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
       "type": "object",
       "required": [
         "type",
@@ -7680,8 +7805,8 @@
           "type": "object",
           "properties": {
             "map": {
-              "description": "Tile grid. \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; \"kr-sido-2025\" is the 17 regions before that. Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11",
-              "default": "kr-sido"
+              "description": "Tile grid. \"auto\" picks the built-in grid that matches the most region values. \"us-states\" is the 50 US states and DC (postal codes, FIPS codes, names); \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; \"kr-sido-2025\" is the 17 regions before that (only when named). Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11",
+              "default": "auto"
             },
             "legend": {
               "description": "Show the color legend",
@@ -7719,12 +7844,1501 @@
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
             },
             "width": {
               "description": "Fixed width in px. Without it, the chart fits its parent",
               "type": "number",
-              "minimum": 40
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Choropleth map",
+      "description": "Regions on a real map, shaded by their value in steps. Use when: Where is it high and where is it low: a rate or average per country, state or province, where the geographic pattern is the message. Avoid when: The values are totals that grow with area or population (large regions look heavier), or every region must be equally visible (use tileMap)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "choropleth"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "Region name or code, matched to a region of options.map (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Value field (number)"
+            }
+          },
+          "required": [
+            "region",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "map": {
+              "description": "Map. \"auto\" picks the registered map that matches the most region values. \"world\" is 177 countries (Natural Earth 1:110m, de facto borders; ISO 3166-1 alpha-2, alpha-3 and numeric codes, English and common names), \"us-states\" is the 50 US states and DC with Alaska and Hawaii moved below (postal codes, FIPS codes, names), \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01. Or a GeoJSON FeatureCollection of Polygon and MultiPolygon features in longitude and latitude degrees. ztd-charts/server, the CLI and the MCP server load every built-in map; in the browser import the map from ztd-charts/geo/<name> and pass it to registerMap",
+              "default": "auto"
+            },
+            "focus": {
+              "description": "Show only part of the world map, cropped and enlarged. Countries of other regions inside the frame are drawn pale and take no data. Regions follow UN M49",
+              "enum": [
+                "europe",
+                "asia",
+                "africa",
+                "americas",
+                "oceania"
+              ]
+            },
+            "featureId": {
+              "description": "GeoJSON property that holds the region id. Without it: feature.id, then the id or code property",
+              "type": "string"
+            },
+            "featureName": {
+              "description": "GeoJSON property that holds the region name. Without it: the name or NAME property",
+              "type": "string"
+            },
+            "legend": {
+              "description": "Show the color legend. It also shows a No data swatch when some regions have no value",
+              "default": true,
+              "type": "boolean"
+            },
+            "legendLabels": {
+              "description": "Names at both ends of the legend",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "colorReverse": {
+              "description": "Darkest color for the smallest value, for rankings where 1st should stand out. The default highlight moves to the smallest value too",
+              "default": false,
+              "type": "boolean"
+            },
+            "colorCenter": {
+              "description": "Value that gets the lightest color. Values above take the accent color and values below take gray, so gains and losses split there (for example 0)",
+              "type": "number"
+            },
+            "colorSteps": {
+              "description": "Number of color steps. The legend shows each step, and hovering a step leaves only its regions",
+              "default": 5,
+              "type": "number",
+              "minimum": 2,
+              "maximum": 12
+            },
+            "ranking": {
+              "description": "Ranked list of the highest and lowest regions beside the map. \"auto\" shows it when the chart is at least 600px wide",
+              "default": "auto"
+            },
+            "labels": {
+              "description": "Language of region names on the Korean map. \"auto\" uses Korean names when a matched region value contains Hangul, otherwise the locale's language",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "ko",
+                "en"
+              ]
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Bar race",
+      "description": "Horizontal bars ranked at each time step that move to their new length and place as the steps play. Use when: Telling how a ranking changed over time in a talk or a video, such as sales by brand per year. Avoid when: Readers need to compare exact values or ranks across time (a bump chart or a line chart does that better), or there is only one time step",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "barRace"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Item name field (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Value field (number)"
+            },
+            "frame": {
+              "type": "string",
+              "description": "Time step field: a year, a date or any ordered key. Numbers and dates play in order, other text in the order it first appears. An item with no value in a step leaves the bars for that step (any)"
+            }
+          },
+          "required": [
+            "label",
+            "value",
+            "frame"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "top": {
+              "description": "Bars in each step: the items with the largest values",
+              "default": 10,
+              "type": "number",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "stepMs": {
+              "description": "Time per step while playing (ms)",
+              "default": 1000,
+              "type": "number",
+              "minimum": 100,
+              "maximum": 60000
+            },
+            "autoplay": {
+              "description": "Play from the first step when the chart scrolls into view. Off by default so a page does not move by itself; it never plays with reduced motion, where the controls step one at a time",
+              "default": false,
+              "type": "boolean"
+            },
+            "startFrame": {
+              "description": "The step shown first, and the one images and the first server paint show, as a step value such as 2021. Default: the last step"
+            },
+            "aggregate": {
+              "description": "How rows with the same step and label combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
+              "default": "sum",
+              "enum": [
+                "sum",
+                "mean",
+                "last",
+                "count"
+              ]
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Network",
+      "description": "Who is connected to whom, and who sits at the center. Use when: The structure of links matters more than their amount, such as calls between services, collaboration between teams or links between documents. Avoid when: The amount moving between stages is the point (sankey, chord), the links form a tree (sunburst), or there are more than about 300 nodes",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "network"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "Source node (string)"
+            },
+            "target": {
+              "type": "string",
+              "description": "Target node (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Link weight. Without it every row counts 1 (number)"
+            }
+          },
+          "required": [
+            "source",
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "layout": {
+              "description": "Layout. \"arc\" puts the nodes on one line and draws each link as an arc above it",
+              "default": "arc",
+              "enum": [
+                "arc"
+              ]
+            },
+            "sort": {
+              "description": "Node order. \"auto\" keeps groups (or connected parts) together and orders nodes so arcs stay short; \"data\" keeps the order nodes first appear in; \"group\" orders by group; \"degree\" puts the most connected node first",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "data",
+                "group",
+                "degree"
+              ]
+            },
+            "groups": {
+              "description": "Node name to group name, such as { \"Payments\": \"Money\" }. Each group gets its own gray step and sort \"auto\" and \"group\" keep a group together. The card legend (\"auto\") lists the groups",
+              "type": "object"
+            },
+            "nodeSize": {
+              "description": "Dot size: \"value\" is the sum of the node's link values, \"degree\" the number of connected nodes",
+              "default": "value",
+              "enum": [
+                "value",
+                "degree"
+              ]
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Timeline",
+      "description": "When things started and ended, and what overlapped: one bar per item on a time axis. Use when: Items with a start and an end, such as a project schedule, deployment and job runs, an agent run log or an incident timeline. Avoid when: Each item has one value and no start or end (use bar), or the dependencies between tasks are the story",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "timeline"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Row name. Items with the same name share a row (string)"
+            },
+            "start": {
+              "type": "string",
+              "description": "Start: a number (minutes, seconds, any unit) or a date or date-time (any)"
+            },
+            "end": {
+              "type": "string",
+              "description": "End, same kind as start. Equal to start draws a point event; empty means still open (any)"
+            },
+            "group": {
+              "type": "string",
+              "description": "Group field (one color per group, and the legend) (string)"
+            },
+            "status": {
+              "type": "string",
+              "description": "State of the item, written inside the bar and in the tooltip. Without group it also colors the bars and makes the legend, so a row of consecutive states reads as a status strip (string)"
+            }
+          },
+          "required": [
+            "label",
+            "start",
+            "end"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "xType": {
+              "description": "Time axis type. Automatic when omitted: dates and date-times (ISO, \"2025.03.01\", Korean dates, quarters, English month names) make a date axis, otherwise numbers in options.unit. With \"date\", numbers are timestamps (10 digits are Unix seconds) or years",
+              "enum": [
+                "number",
+                "date"
+              ]
+            },
+            "dayFirst": {
+              "description": "Reads dates such as \"05/03/2024\", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads \"05.03.24\" as day.month.year",
+              "type": "boolean"
+            },
+            "sort": {
+              "description": "Row order: \"none\" keeps the data order, \"start\" puts the earliest start first, \"duration\" the longest total first",
+              "default": "none",
+              "enum": [
+                "none",
+                "start",
+                "duration"
+              ]
+            },
+            "referenceLines": {
+              "description": "Vertical lines on the time axis [{ x, label }]. x is a number or a date, like the data. Lines outside the axis range are not drawn",
+              "type": "array"
+            },
+            "now": {
+              "description": "Time of a \"Now\" line, in the same form as the data. Items without an end run up to it. The chart never reads the clock, so server and browser draw the same"
+            },
+            "brush": {
+              "description": "Drag across the time axis to zoom in: \"zoom\" or true (keyboard: Shift+arrows, Enter). Escape or \"Show all\" zooms out",
+              "default": false
+            },
+            "hidden": {
+              "description": "Series to hide. Colors stay as if every series were shown. With card.legend \"toggle\", viewers can show them again",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Tree",
+      "description": "The parent and child links of a hierarchy, drawn as dots joined by curves. Use when: The structure itself is the point: an org chart, a folder or dependency tree, what an outage reaches, a decision tree. Avoid when: Each part's share of the total matters more than the links (treemap or sunburst), or the leaves are thousands of items to compare by size",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "tree"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Node name field (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Value field. Sizes the dots; values add up from the leaves (number)"
+            },
+            "group": {
+              "type": "string",
+              "description": "Parent group field (flat rows, as in the treemap) (string)"
+            },
+            "id": {
+              "type": "string",
+              "description": "Row id for id/parent rows. Defaults to the label (string)"
+            },
+            "parent": {
+              "type": "string",
+              "description": "Parent id field. Each row is one node, and rows with an empty parent hang under the root (string)"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "layout": {
+              "description": "\"horizontal\" puts the root on the left and the leaves on the right, with level labels that read at any width. \"radial\" puts the root in the center and fits more leaves into a square",
+              "default": "horizontal",
+              "enum": [
+                "horizontal",
+                "radial"
+              ]
+            },
+            "path": {
+              "description": "Field list for multi-level paths",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sort": {
+              "description": "Sort siblings largest first by value. Off keeps the data order",
+              "default": false,
+              "type": "boolean"
+            },
+            "rootLabel": {
+              "description": "Name of the root that is added when the data has several top-level nodes",
+              "default": "All",
+              "type": "string"
+            },
+            "collapsed": {
+              "description": "Branches that start folded, by name or by path such as \"Orders/Checkout\". Server rendering folds them too",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Symbol map",
+      "description": "One circle per place on a pale map, its area proportional to the value. Use when: Amounts that sit at a point, such as users per city, revenue per store or traffic per data centre, where absolute sizes should compare directly. Avoid when: The value is a rate across a whole region (use choropleth), or the places are so many and so close that circles cover each other (aggregate first)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "symbolMap"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "lon": {
+              "type": "string",
+              "description": "Longitude (degrees) (number)"
+            },
+            "lat": {
+              "type": "string",
+              "description": "Latitude (degrees) (number)"
+            },
+            "size": {
+              "type": "string",
+              "description": "Value (circle area). Without it all circles match (number)"
+            },
+            "label": {
+              "type": "string",
+              "description": "Place name (string)"
+            },
+            "region": {
+              "type": "string",
+              "description": "Region of options.map, for rows without lon and lat (string)"
+            },
+            "group": {
+              "type": "string",
+              "description": "Group field (one color per group) (string)"
+            }
+          },
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "map": {
+              "description": "Base map. \"auto\" picks the registered map that takes the most places (coordinates inside it or region names on it), and the narrower map on a tie, so US cities land on \"us-states\". \"world\", \"us-states\", \"kr-sido\" or a GeoJSON FeatureCollection, as for choropleth. Points outside the drawn frame are left out and reported",
+              "default": "auto"
+            },
+            "focus": {
+              "description": "Show only part of the world map, cropped and enlarged. Places outside it are left out",
+              "enum": [
+                "europe",
+                "asia",
+                "africa",
+                "americas",
+                "oceania"
+              ]
+            },
+            "featureId": {
+              "description": "GeoJSON property that holds the region id",
+              "type": "string"
+            },
+            "featureName": {
+              "description": "GeoJSON property that holds the region name",
+              "type": "string"
+            },
+            "sizeRange": {
+              "description": "Circle radius range [smallest, largest] in px. By default it follows the width. The largest radius is capped at an eighth of the chart's shorter side",
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "center": {
+              "description": "Centre of the world map. \"auto\" picks the view that pushes the fewest places to the edge; \"atlantic\" centres longitude 0, \"pacific\" centres longitude 150 and cuts the map in the Atlantic. Not used with focus or other maps",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "atlantic",
+                "pacific"
+              ]
+            },
+            "legend": {
+              "description": "Show the size legend (two or three reference circles)",
+              "default": true,
+              "type": "boolean"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Flow map",
+      "description": "Curved links between places on a map, their width proportional to the amount. Use when: From where to where and how much: shipments, migration, transfers or traffic between regions, where direction and distance matter. Avoid when: Only the amounts matter and places have no meaningful position (use sankey or chord), or there are hundreds of crossing flows",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "flowMap"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "Start: a name in options.places or a region (string)"
+            },
+            "target": {
+              "type": "string",
+              "description": "End (string)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Amount. Without it each row counts 1 (number)"
+            }
+          },
+          "required": [
+            "source",
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "places": {
+              "description": "Where each place is: { name: [longitude, latitude] } in degrees. Names that are not here are matched to a region of the map (a country, a state) and placed at its centre",
+              "type": "object"
+            },
+            "map": {
+              "description": "Base map. \"auto\" picks the registered map that takes the most places, and the narrower map on a tie. \"world\", \"us-states\", \"kr-sido\" or a GeoJSON FeatureCollection, as for choropleth",
+              "default": "auto"
+            },
+            "focus": {
+              "description": "Show only part of the world map, cropped and enlarged. Flows to places outside it are left out",
+              "enum": [
+                "europe",
+                "asia",
+                "africa",
+                "americas",
+                "oceania"
+              ]
+            },
+            "featureId": {
+              "description": "GeoJSON property that holds the region id",
+              "type": "string"
+            },
+            "featureName": {
+              "description": "GeoJSON property that holds the region name",
+              "type": "string"
+            },
+            "ranking": {
+              "description": "Ranked list of the largest flows beside the map. \"auto\" shows it when the chart is at least 600px wide",
+              "default": "auto"
+            },
+            "center": {
+              "description": "Centre of the world map. \"auto\" picks the view that cuts the least flow volume at the map edge, so trans-Pacific lanes get a Pacific-centred map; \"atlantic\" centres longitude 0, \"pacific\" centres longitude 150 and cuts the map in the Atlantic. A flow that still crosses the edge gets matching arrowheads where it leaves and re-enters. Not used with focus or other maps",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "atlantic",
+                "pacific"
+              ]
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
             },
             "highlight": {
               "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -7951,7 +9565,7 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
-          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
               "enum": [

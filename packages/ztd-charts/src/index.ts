@@ -3,7 +3,7 @@ export { ThemeProvider, useChartTheme, useChartLocale, useThemeContext, makePain
 export { contrastRatio, parseColor, mixHex, luminance, pickText } from "./theme/color";
 
 export * from "./core/types";
-export { formatNumber, formatPercent, formatCompact, formatCurrency, formatDate, makeFormatter, toDate, DEFAULT_LOCALE, type FormatSpec, type FormatName, type ValueFormatter } from "./core/format";
+export { formatNumber, formatPercent, formatCompact, formatCurrency, formatDate, formatDuration, makeFormatter, toDate, DEFAULT_LOCALE, type FormatSpec, type FormatName, type ValueFormatter } from "./core/format";
 export { langOf, type ChartLang } from "./core/i18n";
 export { useReplay, useInView, useReducedMotion } from "./core/hooks";
 export { type EasingName, type Mark } from "./core/motion";
@@ -57,6 +57,13 @@ export { SegmentedBar, type SegmentedBarProps } from "./charts/segmented";
 export { SkylineChart, type SkylineChartProps } from "./charts/skyline";
 export { HistogramChart, type HistogramChartProps, type HistogramThreshold } from "./charts/histogram";
 export { TileMap, type TileMapProps } from "./charts/tileMap";
+export { BarRace, type BarRaceProps } from "./charts/barRace";
+export { NetworkChart, type NetworkChartProps } from "./charts/network";
+export { Timeline, type TimelineProps, type TimelineReferenceLine } from "./charts/timeline";
+export { Tree, type TreeProps } from "./charts/tree";
+export { Choropleth, type ChoroplethProps } from "./charts/choropleth";
+export { SymbolMap, type SymbolMapProps } from "./charts/symbolMap";
+export { FlowMap, type FlowMapProps } from "./charts/flowMap";
 export { type XRange } from "./core/brush";
 
 export { templateTooltip } from "./charts/tooltipTemplate";
@@ -71,4 +78,10 @@ export { stack, insideOut, type StackOffset } from "./layout/stack";
 export { sankeyLayout, type SankeyNode, type SankeyLink } from "./layout/sankey";
 export { chordLayout } from "./layout/chord";
 export { kde, boxStats, beeswarm, ranks, binEdges, binCounts, binIndex, dotUnit, type BoxStats, type BinOptions } from "./layout/stats";
+export { stratify, type TreeIssue } from "./layout/tree";
 export { resolveGrid, tileMatcher, tileNeighbor, TILE_MAPS, type TileDef } from "./layout/tileGrid";
+export { networkGraph, networkOrder, arcCost, type NetworkGraph, type NetworkNode, type NetworkLink, type NetworkLinkIn, type NetworkSort } from "./layout/network";
+export { readTimeline, timelineRows, type TimelineItem, type TimelineModel, type TimelineRow, type TimelineSort, type TimeKind } from "./layout/timeline";
+export { registerMap, getMap, registeredMaps, mapExportName, BUILTIN_MAPS } from "./geo/registry";
+export { specMapName } from "./geo/spec";
+export type { GeoMap, GeoJSONFeatureCollection } from "./geo/types";

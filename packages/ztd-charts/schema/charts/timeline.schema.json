@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/ztd-charts/schema/charts/timeline.schema.json",
+  "title": "Timeline",
+  "description": "When things started and ended, and what overlapped: one bar per item on a time axis. Use when: Items with a start and an end, such as a project schedule, deployment and job runs, an agent run log or an incident timeline. Avoid when: Each item has one value and no start or end (use bar), or the dependencies between tasks are the story",
+  "type": "object",
+  "required": [
+    "type",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "type": {
+      "const": "timeline"
+    },
+    "data": {
+      "$ref": "#/$defs/data"
+    },
+    "encoding": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Row name. Items with the same name share a row (string)"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start: a number (minutes, seconds, any unit) or a date or date-time (any)"
+        },
+        "end": {
+          "type": "string",
+          "description": "End, same kind as start. Equal to start draws a point event; empty means still open (any)"
+        },
+        "group": {
+          "type": "string",
+          "description": "Group field (one color per group, and the legend) (string)"
+        },
+        "status": {
+          "type": "string",
+          "description": "State of the item, written inside the bar and in the tooltip. Without group it also colors the bars and makes the legend, so a row of consecutive states reads as a status strip (string)"
+        }
+      },
+      "required": [
+        "label",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "xType": {
+          "description": "Time axis type. Automatic when omitted: dates and date-times (ISO, \"2025.03.01\", Korean dates, quarters, English month names) make a date axis, otherwise numbers in options.unit. With \"date\", numbers are timestamps (10 digits are Unix seconds) or years",
+          "enum": [
+            "number",
+            "date"
+          ]
+        },
+        "dayFirst": {
+          "description": "Reads dates such as \"05/03/2024\", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads \"05.03.24\" as day.month.year",
+          "type": "boolean"
+        },
+        "sort": {
+          "description": "Row order: \"none\" keeps the data order, \"start\" puts the earliest start first, \"duration\" the longest total first",
+          "default": "none",
+          "enum": [
+            "none",
+            "start",
+            "duration"
+          ]
+        },
+        "referenceLines": {
+          "description": "Vertical lines on the time axis [{ x, label }]. x is a number or a date, like the data. Lines outside the axis range are not drawn",
+          "type": "array"
+        },
+        "now": {
+          "description": "Time of a \"Now\" line, in the same form as the data. Items without an end run up to it. The chart never reads the clock, so server and browser draw the same"
+        },
+        "brush": {
+          "description": "Drag across the time axis to zoom in: \"zoom\" or true (keyboard: Shift+arrows, Enter). Escape or \"Show all\" zooms out",
+          "default": false
+        },
+        "hidden": {
+          "description": "Series to hide. Colors stay as if every series were shown. With card.legend \"toggle\", viewers can show them again",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "height": {
+          "description": "Height in px. Without it, each chart picks a default that fits its width",
+          "type": "number",
+          "minimum": 40,
+          "maximum": 10000
+        },
+        "width": {
+          "description": "Fixed width in px. Without it, the chart fits its parent",
+          "type": "number",
+          "minimum": 40,
+          "maximum": 10000
+        },
+        "highlight": {
+          "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          ]
+        },
+        "format": {
+          "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+          "anyOf": [
+            {
+              "enum": [
+                "number",
+                "integer",
+                "percent",
+                "ratio",
+                "compact",
+                "currency",
+                "decimal"
+              ]
+            },
+            {
+              "type": "object",
+              "description": "Intl.NumberFormat options plus suffix and prefix"
+            }
+          ]
+        },
+        "unit": {
+          "description": "Unit appended to values. For example \"%\" or \"ms\"",
+          "type": "string"
+        },
+        "locale": {
+          "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+          "default": "en-US",
+          "type": "string"
+        },
+        "animate": {
+          "description": "Entry and update animation",
+          "default": true,
+          "type": "boolean"
+        },
+        "duration": {
+          "description": "Animation length (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "easing": {
+          "description": "Motion curve",
+          "default": "spring",
+          "enum": [
+            "spring",
+            "easeOut",
+            "easeInOut",
+            "linear"
+          ]
+        },
+        "stagger": {
+          "description": "Delay between items as they enter (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "reducedMotion": {
+          "description": "\"auto\" follows the OS setting. true always turns motion off",
+          "default": "auto"
+        },
+        "animateOnView": {
+          "description": "Play when the chart scrolls into view",
+          "default": true,
+          "type": "boolean"
+        },
+        "showLabels": {
+          "description": "Labels drawn on the chart (values and names)",
+          "default": true,
+          "type": "boolean"
+        },
+        "tooltip": {
+          "$ref": "#/$defs/tooltip"
+        },
+        "syncId": {
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "type": "string"
+        },
+        "ariaLabel": {
+          "description": "Name for screen readers",
+          "type": "string"
+        },
+        "description": {
+          "description": "Description for screen readers. Built from the data when omitted",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "card": {
+      "$ref": "#/$defs/card"
+    },
+    "theme": {
+      "$ref": "#/$defs/theme"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tooltip": {
+      "description": "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out",
+      "default": true,
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "template": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "data": {
+      "description": "An array of objects, or one of { values }, { csv }, { url }",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "values"
+          ],
+          "properties": {
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "csv"
+          ],
+          "properties": {
+            "csv": {
+              "type": "string",
+              "description": "CSV text (the first line is the header)"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "JSON or CSV address (REST API, Google Sheets CSV export and so on)"
+            },
+            "format": {
+              "enum": [
+                "json",
+                "csv",
+                "auto"
+              ],
+              "default": "auto"
+            },
+            "select": {
+              "type": "string",
+              "description": "Path to the array inside the response JSON. For example \"data.items\""
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "card": {
+      "type": "object",
+      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway, level badge, source line and download buttons",
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "For example \"01\""
+        },
+        "title": {
+          "type": "string"
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "takeaway": {
+          "type": "string",
+          "description": "Bold one-line takeaway at the bottom"
+        },
+        "level": {
+          "type": "string",
+          "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
+        },
+        "legend": {
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "toggle"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "enum": [
+                      "square",
+                      "line",
+                      "dash",
+                      "circle"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Marks the data as sample data"
+        },
+        "replay": {
+          "type": "boolean",
+          "default": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Source line under the chart, after \"Source: \""
+        },
+        "note": {
+          "type": "string",
+          "description": "Note on the same line, such as the as-of date"
+        },
+        "accent": {
+          "type": "string",
+          "description": "A word of the title to color with the accent color, used instead of a legend"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "csv",
+                  "svg",
+                  "png"
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML"
+        }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "anyOf": [
+        {
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Token overrides. For example { accent: \"#00C2FF\" }",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

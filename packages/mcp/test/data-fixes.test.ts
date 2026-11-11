@@ -88,3 +88,11 @@ describe("MCP: 데이터 주소가 내부망이면 막아요", () => {
     }
   });
 });
+
+describe("MCP: 차트 크기 한도", () => {
+  it("render_chart는 스펙의 아주 큰 height를 그리지 않고 검사 결과(out_of_range)를 돌려줘요", async () => {
+    const r = await call("render_chart", { spec: { type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { height: 1e9 } }, format: "svg" });
+    expect(r.isError).toBe(true);
+    expect(r.content.map((c) => c.text ?? "").join("\n")).toContain("out_of_range");
+  });
+});

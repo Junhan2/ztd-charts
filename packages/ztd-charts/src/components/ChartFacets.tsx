@@ -4,7 +4,7 @@ import { CardTitleContext } from "../core/cardTitle";
 import { SR_ONLY } from "../core/ChartFrame";
 import { cssEntrance, useCssEntrance } from "../core/css";
 import { isBrowser } from "../core/env";
-import { FACET_GAP, FACET_ROW_GAP, FACET_TITLE_H, FACET_TITLE_SIZE, planFacets, type FacetScale, type FacetType } from "../core/facet";
+import { FACET_GAP, FACET_LEGEND_H, FACET_ROW_GAP, FACET_TITLE_H, FACET_TITLE_SIZE, planFacets, type FacetPlan, type FacetScale, type FacetType } from "../core/facet";
 import { useHydrated, useMeasuredNode, useReducedMotion } from "../core/hooks";
 import { langOf } from "../core/i18n";
 import type { Highlight, Row } from "../core/types";
@@ -64,11 +64,16 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
   const lang = langOf(locale);
   const cardTitle = useContext(CardTitleContext);
   const title = props.title ?? cardTitle;
+  // 차트가 패널 프롭을 더 정할 수 있어요 (육각 밀도 산점도의 같은 색 척도: ScatterChart.facetPlan)
+  const more = (props.chart as { facetPlan?: (plan: FacetPlan, cp: Record<string, unknown>, locale: string) => FacetPlan }).facetPlan;
   const plan = useMemo(
-    () => planFacets({ type: props.type, data: props.data as readonly Row[], by: props.by, columns: props.columns, scale: props.scale, chartProps: cp, highlight: props.highlight as Highlight<Row> | undefined, syncId: props.syncId, width, height: props.height, title, locale, lang }),
+    () => {
+      const base = planFacets({ type: props.type, data: props.data as readonly Row[], by: props.by, columns: props.columns, scale: props.scale, chartProps: cp, highlight: props.highlight as Highlight<Row> | undefined, syncId: props.syncId, width, height: props.height, title, locale, lang });
+      return more ? more(base, cp, locale) : base;
+    },
     // chartProps는 렌더마다 새 객체일 수 있어요. 차트가 받는 값이라 바뀌면 다시 짜요
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.type, props.data, props.by, props.columns, props.scale, JSON.stringify(cp, (_, v) => (typeof v === "function" ? String(v) : v)), props.highlight, props.syncId, width, props.height, title, locale, lang],
+    [props.type, props.data, props.by, props.columns, props.scale, JSON.stringify(cp, (_, v) => (typeof v === "function" ? String(v) : v)), props.highlight, props.syncId, width, props.height, title, locale, lang, more],
   );
   const descId = `${useId().replace(/:/g, "")}fd`;
   // 패널은 공용 등장(cssEntrance)으로 차례로 나타나요. 동작 줄이기와 서버 그림을 이어받은 첫 그림에서는 끝 모습 그대로예요
@@ -81,7 +86,7 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
       <p id={descId} style={SR_ONLY}>
         {props.description ?? plan.description}
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${plan.cols}, minmax(0, 1fr))`, columnGap: FACET_GAP, rowGap: FACET_ROW_GAP }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${plan.cols}, minmax(0, 1fr))`, columnGap: FACET_GAP, rowGap: FACET_ROW_GAP, ...(plan.legend ? { marginTop: FACET_LEGEND_H } : null) }}>
         {plan.panels.map((pn, i) => {
           const ink = p.paint(pn.isPicked ? "accentText" : plan.isPanelPick ? "muted" : "ink");
           return (
@@ -96,6 +101,12 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
           );
         })}
       </div>
+      {/* 모든 패널이 같이 쓰는 범례: 격자 위 오른쪽. 격자 뒤에 둬서 패널 차트의 useId 값(서버 그림과 맞춰요)이 바뀌지 않아요 */}
+      {plan.legend ? (
+        <div aria-hidden="true" style={{ position: "absolute", top: 0, right: 0, height: FACET_LEGEND_H }}>
+          {plan.legend}
+        </div>
+      ) : null}
     </div>
   );
 }

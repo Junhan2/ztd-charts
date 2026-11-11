@@ -14,7 +14,7 @@ export default defineConfig({
   },
   test: {
     projects: [
-      { extends: true, test: { name: "ztd-charts", include: ["packages/ztd-charts/test/**/*.test.{ts,tsx}"], environment: "node" } },
+      { extends: true, test: { name: "ztd-charts", include: ["packages/ztd-charts/test/**/*.test.{ts,tsx}"], environment: "node", setupFiles: ["packages/ztd-charts/test/setup-maps.ts"] } },
       { extends: true, test: { name: "cli", include: ["packages/cli/test/**/*.test.ts"], environment: "node", testTimeout: 60_000 } },
       { extends: true, test: { name: "mcp", include: ["packages/mcp/test/**/*.test.ts"], environment: "node", testTimeout: 60_000 } },
     ],

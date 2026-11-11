@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/ztd-charts/schema/charts/tileMap.schema.json",
   "title": "Tile grid map",
-  "description": "One equal tile per region, placed roughly where it is and shaded by its value. Use when: Comparing one value across the regions of a country, such as a rate per province, where small regions matter as much as large ones. Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
+  "description": "One equal tile per region, placed roughly where it is and shaded by its value. Use when: Comparing one value across the regions of a country, such as a rate per state, where small regions matter as much as large ones. Avoid when: Exact borders, distances or areas matter, or the regions are not in a built-in grid and you have no layout for them",
   "type": "object",
   "required": [
     "type",
@@ -40,8 +40,8 @@
       "type": "object",
       "properties": {
         "map": {
-          "description": "Tile grid. \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; \"kr-sido-2025\" is the 17 regions before that. Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11",
-          "default": "kr-sido"
+          "description": "Tile grid. \"auto\" picks the built-in grid that matches the most region values. \"us-states\" is the 50 US states and DC (postal codes, FIPS codes, names); \"kr-sido\" is South Korea's 16 first-level regions from 2026-07-01, when Gwangju and Jeollanam-do merged; \"kr-sido-2025\" is the 17 regions before that (only when named). Or your own tiles: [{ id, label, row, col, aliases }]. The Korean grids match short and full Korean names, older names, English names and ISO 3166-2 codes such as KR-11",
+          "default": "auto"
         },
         "legend": {
           "description": "Show the color legend",
@@ -79,12 +79,14 @@
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "width": {
           "description": "Fixed width in px. Without it, the chart fits its parent",
           "type": "number",
-          "minimum": 40
+          "minimum": 40,
+          "maximum": 10000
         },
         "highlight": {
           "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
@@ -309,7 +311,7 @@
           "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
         },
         "legend": {
-          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter). Images and static HTML draw it like \"auto\"",
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
           "anyOf": [
             {
               "enum": [

@@ -15,6 +15,8 @@ import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter } from "../data/accessor";
 import { plural, type ChartLang } from "../core/i18n";
 import { SCATTER_KIT, type CanvasGroup, type PlacedTag, type PlotBox, type ScatterKit, type SeriesLabel } from "./scatter-kit";
+import { DOT_PAD, HEX_TOP, PLOT_BOTTOM } from "../layout/hexbin";
+import { hexFacetPlan } from "./scatter-hex";
 
 const en = {
   bubble: "Bubble chart",
@@ -89,6 +91,16 @@ export interface ScatterChartProps<T = Row> extends PointChartProps<T> {
   jitter?: { amount?: number; seed?: number };
   /** series가 있으면 계열 이름, 인덱스, 배열, "first"(기본)로 계열을 골라요. 판별 함수는 그 계열의 행 하나라도 맞으면 그 계열을 강조해요. series가 없으면 점을 골라요(기본 없음) */
   highlight?: Highlight<T>;
+  /** "hex"면 점을 육각 칸에 세어 점 수로 칠해요(빈 칸은 그리지 않아요). 계열, 흔들림, 점 이름, 강조, 캔버스는 쓰지 않아요 */
+  bin?: "hex";
+  /** 육각 칸 폭(px, 마주 보는 두 변 사이). 기본 16, 4~200 */
+  binSize?: number;
+  /** bin "hex"의 색 단계 수 (2~12). 기본 5 */
+  colorSteps?: number;
+  /** bin "hex"의 색 척도 양 끝 점 수 [적은 쪽, 많은 쪽]. 작은 여러 개(ChartFacets)가 패널의 색을 맞출 때 써요 */
+  binDomain?: [number, number];
+  /** bin "hex"의 위쪽 색 범례. 기본 true. 작은 여러 개는 범례를 묶음 위에 한 번 그려서 패널에서는 false예요 */
+  binLegend?: boolean;
 }
 
 /** PointChart가 받는 프롭. kit은 ScatterChart만 넘기는 산점도 기능 묶음이고, 없으면 버블 차트예요 */
@@ -96,6 +108,9 @@ type PointProps<T> = BubbleChartProps<T> & ScatterChartProps<T> & { kit: Scatter
 
 /** 산점도만 받는 옵션. 버블 차트에서는 비어 있어서 스펙 options에 섞여 와도 그리지 않아요 */
 type ScatterOptions<T> = Pick<ScatterChartProps<T>, "series" | "hidden" | "fit" | "refLines" | "quadrants" | "jitter">;
+
+/** 육각 밀도에서 쓰지 않는 점 목록 */
+const NO_DOTS: never[] = [];
 
 interface Dot<T> {
   i: number;
@@ -132,18 +147,28 @@ export function BubbleChart<T = Row>(props: BubbleChartProps<T>) {
   return <PointChart<T> {...props} kit={undefined} />;
 }
 
-/** 산점도: 버블 차트와 같은 그리기에 크기 없이 작은 점. 계열 색, 추세선, 기준선과 사분면, 흔들림, 방향 키 이동을 더해요 */
-export function ScatterChart<T = Row>(props: ScatterChartProps<T>) {
-  return <PointChart<T> {...props} kit={SCATTER_KIT} />;
-}
+/**
+ * 산점도: 버블 차트와 같은 그리기에 크기 없이 작은 점. 계열 색, 추세선, 기준선과 사분면, 흔들림, 방향 키 이동, 육각 밀도를 더해요.
+ * facetPlan은 작은 여러 개(ChartFacets)가 부르는 패널 프롭 다듬기예요(육각 밀도의 같은 색 척도). 컴포넌트에 붙여서 산점도를 쓸 때만 번들에 들어가요
+ */
+export const ScatterChart = /* @__PURE__ */ Object.assign(
+  function ScatterChart<T = Row>(props: ScatterChartProps<T>) {
+    return <PointChart<T> {...props} kit={SCATTER_KIT} />;
+  },
+  { facetPlan: hexFacetPlan },
+);
 
 const finiteOrUndefined = (v: number | undefined): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+/** 고정 범위로 쓸 수 있는 [작은 값, 큰 값]. 두 끝이 유한하고 작은 값이 먼저일 때만이고, 아니면 데이터 범위를 써요 (validateSpec이 알려요) */
+const fixedRange = (d: unknown): [number, number] | undefined => (Array.isArray(d) && d.length === 2 && Number.isFinite(d[0]) && Number.isFinite(d[1]) && d[0] < d[1] ? (d as [number, number]) : undefined);
 
 function PointChart<T>(props: PointProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(320, w * 0.6)), duration: 800, stagger: 0 });
   const { p, width: W, height: H } = c;
   const kit = props.kit;
-  const so: ScatterOptions<T> = kit ? props : {};
+  // 육각 밀도(산점도 bin "hex"): 칸의 점 수만 그려서 계열, 숨김, 흔들림은 쓰지 않아요 (validateSpec이 알려요)
+  const hex = kit && props.bin === "hex" ? kit.hex : null;
+  const so: ScatterOptions<T> = !kit ? {} : hex ? { fit: props.fit, refLines: props.refLines, quadrants: props.quadrants } : props;
   const hasSize = !kit && props.size !== undefined;
   const isLog = props.yScale === "log";
   // 행마다 계열 이름 (계열 필드를 한 번만 읽어요)
@@ -206,7 +231,7 @@ function PointChart<T>(props: PointProps<T>) {
   }, [isLog, props.data, props.x, props.y]);
 
   const n = raw.length;
-  const useCanvas = c.hydrated && n > (props.canvasThreshold ?? 1500);
+  const useCanvas = !hex && c.hydrated && n > (props.canvasThreshold ?? 1500);
   const ext = useMemo(() => ({ x: extent(raw.map((r) => r.x)), y: extent(raw.map((r) => r.y)), s: extent(raw.map((r) => r.s)) }), [raw]);
   // 축 범위는 흔들린 자리와 기준선까지 넣어요. 둘 다 없으면 데이터 범위 그대로예요
   const plotExt = useMemo(() => {
@@ -216,17 +241,20 @@ function PointChart<T>(props: PointProps<T>) {
   const [xmn, xmx] = ext.x;
   const [ymn, ymx] = ext.y;
   const yCount = Math.max(2, Math.round(H / 70));
-  const fixedY = props.yDomain && (!isLog || (props.yDomain[0] > 0 && props.yDomain[1] > 0)) ? props.yDomain : undefined;
+  const fixedX = fixedRange(props.xDomain);
+  const fixedYIn = fixedRange(props.yDomain);
+  const fixedY = fixedYIn && (!isLog || fixedYIn[0] > 0) ? fixedYIn : undefined;
   const yDom = fixedY ?? (isLog ? fitLogDomain(plotExt.y[0], plotExt.y[1], yCount) : fitDomain(plotExt.y[0], plotExt.y[1], yCount, { zero: props.zero ?? false, pad: 0.08 }));
-  const xDom = props.xDomain ?? fitDomain(plotExt.x[0], plotExt.x[1], Math.max(2, Math.round(W / 110)), { zero: props.zero ?? false, pad: 0.06 });
+  const xDom = fixedX ?? fitDomain(plotExt.x[0], plotExt.x[1], Math.max(2, Math.round(W / 110)), { zero: props.zero ?? false, pad: 0.06 });
   const yMaxAbs = Math.max(Math.abs(yDom[0]), Math.abs(yDom[1]));
   const xMaxAbs = Math.max(Math.abs(xDom[0]), Math.abs(xDom[1]));
   const yFmt = useMemo(() => makeTickFormatter(props.format, c.locale, yMaxAbs), [props.format, c.locale, yMaxAbs]);
   const xFmt = useMemo(() => makeTickFormatter(props.xFormat, c.locale, xMaxAbs), [props.xFormat, c.locale, xMaxAbs]);
-  const top = props.yLabel ? 20 : 10;
-  const bottom = 24;
+  // 육각 밀도는 위쪽 줄에 색 범례를 둬요 (y축 이름과 같은 줄)
+  const top = hex && props.binLegend !== false ? HEX_TOP : props.yLabel ? 20 : 10;
+  const bottom = PLOT_BOTTOM;
   const [rMin, rMax] = props.sizeRange ?? (hasSize ? [4, Math.max(10, Math.min(28, W / 22))] : [n > 2000 ? 1.6 : n > 300 ? 2.6 : 4, 0]);
-  const pad = hasSize ? rMax * 0.6 : 4;
+  const pad = hasSize ? rMax * 0.6 : DOT_PAD;
   // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
   const y = (isLog ? scaleLog : scaleLinear)(yDom, [H - bottom - pad, top + pad]);
   const yTicks = y.ticks(yCount);
@@ -243,6 +271,7 @@ function PointChart<T>(props: PointProps<T>) {
   );
   const colors = useMemo(() => (kit && hiSeries ? kit.colors(p, seriesNames.length, hiSeries) : null), [kit, p, seriesNames.length, hiSeries]);
   const hi = useMemo(() => {
+    if (hex) return new Set<number>();
     if (hiSeries) {
       const out = new Set<number>();
       raw.forEach((r, k) => {
@@ -251,11 +280,18 @@ function PointChart<T>(props: PointProps<T>) {
       return out;
     }
     return resolveHighlight(props.highlight, raw.map((r) => r.d), raw.map((r) => r.label), raw.map((r) => (hasSize ? r.s : r.y)), hasSize ? "max" : "none");
-  }, [raw, props.highlight, hasSize, hiSeries]);
+  }, [raw, props.highlight, hasSize, hiSeries, hex]);
 
-  const dots = useMemo<Dot<T>[]>(() => raw.map((r, k) => ({ i: k, x: x(r.px), y: y(r.y), r: rs(r.s), vx: r.x, vy: r.y, vs: r.s, label: r.label, hi: hi.has(k), datum: r.d, si: r.si })),
+  const dots = useMemo<Dot<T>[]>(() => (hex ? NO_DOTS : raw.map((r, k) => ({ i: k, x: x(r.px), y: y(r.y), r: rs(r.s), vx: r.x, vy: r.y, vs: r.s, label: r.label, hi: hi.has(k), datum: r.d, si: r.si }))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raw, hi, W, H, xDom[0], xDom[1], yDom[0], yDom[1], rMin, rMax]);
+    [raw, hi, W, H, xDom[0], xDom[1], yDom[0], yDom[1], rMin, rMax, hex]);
+  // 육각 밀도: 축 범위 안의 점(확대나 고정 범위 밖은 빼요)을 화면 좌표로 한 번에 세요. 칸, 항목, 툴팁, 낭독은 kit.hex가 만들어요
+  const hv = useMemo(
+    () => hex && hex.view<T>(props, { raw, x, y, box, left, c, xFmt }),
+    // 눈금 함수는 렌더마다 새로 만들어서 범위 숫자로 비교하고, 프롭은 육각 밀도가 읽는 것만 봐요(부모가 다시 그려도 점을 다시 세지 않게)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hex, raw, box, left, xDom[0], xDom[1], yDom[0], yDom[1], c.lang, c.locale, xFmt, c.fmt, props.binSize, props.colorSteps, props.binDomain?.[0], props.binDomain?.[1], props.binLegend, props.xFormat, props.format, props.unit, props.xLabel, props.yLabel],
+  );
 
   const order = useMemo(() => [...dots].sort(drawOrder), [dots]);
   const D = c.motion.duration ?? 800;
@@ -373,17 +409,19 @@ function PointChart<T>(props: PointProps<T>) {
   const fv = c.fv;
   const events: ChartEvent<T>[] = useMemo(
     () =>
-      lazyArray(dots.length, (k) => {
+      hv
+        ? hv.events
+        : lazyArray(dots.length, (k) => {
         const d = dots[k];
         const e: ChartEvent<T> = { datum: d.datum, index: d.i, key: `${d.i}`, label: d.label || msg.nth(d.i + 1), value: hasSize ? d.vs : d.vy, formatted: `x ${xFmt(d.vx)}, y ${fv(d.vy)}${hasSize ? `, ${msg.sizeWord} ${fmt(d.vs)}` : ""}` };
         if (d.si >= 0) e.series = seriesNames[d.si];
         return e;
       }),
     // 표는 툴팁과 같은 포맷: y는 단위까지 (축 눈금처럼 줄이지 않아요)
-    [dots, hasSize, xFmt, fv, fmt, msg, seriesNames],
+    [dots, hasSize, xFmt, fv, fmt, msg, seriesNames, hv],
   );
 
-  let tip: TooltipData | null = null;
+  let tip: TooltipData | null = hv ? hv.tip(c.active) : null;
   if (c.active !== null && dots[c.active]) {
     const d = dots[c.active];
     const rows: TooltipRow[] = [{ label: props.xLabel ?? "x", value: xFmt(d.vx) }, { label: props.yLabel ?? "y", value: c.fv(d.vy) }, ...(hasSize ? [{ label: msg.size, value: c.fmt(d.vs), color: d.hi ? accent.fill : p.paint("neutral") }] : [])];
@@ -429,7 +467,14 @@ function PointChart<T>(props: PointProps<T>) {
   );
 
   // 방향 키(산점도): 화살표 방향의 가장 가까운 점으로. 첫 키는 강조 점으로 가요. 나머지 키(Home, End, Escape, Enter)는 ChartFrame이 맡아요
-  const onKey = kit
+  const onKey = hv
+    ? (e: KeyboardEvent<HTMLDivElement>) => {
+        // 육각 칸: 화살표는 그 방향 이웃 칸으로. Home, End는 ChartFrame이 맡아요(가장 촘촘한 칸, 가장 성긴 칸)
+        const next = hv.step(kit ? kit.arrowStep(e.key) : null, c.active);
+        if (next !== null && next >= 0) c.setActive(next, "keyboard");
+        return next !== null;
+      }
+    : kit
     ? (e: KeyboardEvent<HTMLDivElement>) => {
         const step = kit.arrowStep(e.key);
         if (!step || !dots.length) return false;
@@ -449,14 +494,23 @@ function PointChart<T>(props: PointProps<T>) {
     const refs = [...(refX === undefined ? [] : [`x ${xFmt(refX)}`]), ...(refY === undefined ? [] : [`y ${fv(refY)}`])];
     return kit.describe(st, { points: raw, seriesNames, fit, xName: props.xLabel ?? "x", yName: props.yLabel ?? "y", refs, refX, refY, quadrants: quadrantNames });
   }, [kit, st, hasScatterOptions, refX, refY, xFmt, fv, raw, seriesNames, fit, props.xLabel, props.yLabel, quadrantNames]);
-  const desc = props.description ?? baseDesc + scatterDesc + (logDropped ? msg.logDropped(logDropped) : "");
+  // 산점도: 고정 범위(확대) 안에 점이 하나도 없으면 빈 축 대신 그 까닭을 그림과 설명에 적어요
+  const outOfRange = useMemo(
+    () => (kit && st && (fixedX || fixedY) && kit.noneInside(raw, xDom, yDom) ? st.outOfRange : ""),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [kit, st, raw, xDom[0], xDom[1], yDom[0], yDom[1], fixedX, fixedY],
+  );
+  const desc = props.description ?? (outOfRange || baseDesc + (hv ? hv.desc : "") + scatterDesc + (logDropped ? msg.logDropped(logDropped) : ""));
+  const yTitle = hv ? hv.yTitle : props.yLabel;
 
+  const refLines = kit && (refPx !== null || refPy !== null) ? <kit.RefLines p={p} x={refPx} y={refPy} box={box} /> : null;
   return (
     <ChartFrame
       c={c}
       kind={hasSize ? msg.bubble : msg.scatter}
       ariaLabel={props.ariaLabel}
       description={desc}
+      emptyText={outOfRange || undefined}
       events={events}
       tip={tip}
       renderTip={props.tooltip}
@@ -464,15 +518,16 @@ function PointChart<T>(props: PointProps<T>) {
       style={props.style}
       theme={props.theme}
       onPointerMove={(px, py, e) => {
-        const k = nearest(px, py);
+        const k = hv ? hv.at(px, py) : nearest(px, py);
         if (k !== c.active) c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer");
       }}
       onKey={onKey}
+      announce={hv && c.via === "keyboard" ? hv.say(c.active) : undefined}
       underlay={useCanvas ? <CanvasLayer width={W} height={H} draw={drawCanvas} progress={prog} version={c.sig} /> : undefined}
     >
-      {props.yLabel && showY ? (
+      {yTitle && showY ? (
         <Txt x={left} y={6} size={10.5} fill={p.paint("muted")}>
-          {props.yLabel}
+          {yTitle}
         </Txt>
       ) : null}
       <GridY p={p} ticks={yTicks} y={y} x0={left} x1={W} fmt={yFmt} locale={c.locale} zero={false} labels={showY} />
@@ -488,14 +543,19 @@ function PointChart<T>(props: PointProps<T>) {
           </Txt>
         ) : null}
       </g>
-      {kit && (refPx !== null || refPy !== null) ? <kit.RefLines p={p} x={refPx} y={refPy} box={box} /> : null}
+      {hv ? null : refLines}
+      {hex && hv ? <hex.Layer p={p} v={hv} box={box} active={c.active} c={c} m={m} onPick={c.click} /> : null}
+      {/* 육각 칸은 면이라 기준선을 칸 위에 그려요 */}
+      {hv ? refLines : null}
       {!useCanvas
         ? m.items.map((it) => {
             const d = it.data;
             if (!d) return null;
             const [cx, cy, r] = it.v;
             const isA = c.active === d.i;
-            const fill = colors && d.si >= 0 ? colors[d.si].fill : d.hi ? accent.fill : p.paint(hasSize ? "neutral" : "neutralStrong");
+            // 빠지는 점은 옛 데이터의 계열 번호라 새 계열 색에 없을 수 있어요
+            const sw = colors && d.si >= 0 ? colors[d.si] : undefined;
+            const fill = sw ? sw.fill : d.hi ? accent.fill : p.paint(hasSize ? "neutral" : "neutralStrong");
             return (
               <circle
                 key={it.key}
@@ -535,6 +595,11 @@ function PointChart<T>(props: PointProps<T>) {
           {l.d.label}
         </Txt>
       ))}
+      {outOfRange ? (
+        <Txt x={(box.x0 + box.x1) / 2} y={(box.y0 + box.y1) / 2} anchor="middle" size={12} fill={p.paint("muted")}>
+          {outOfRange}
+        </Txt>
+      ) : null}
     </ChartFrame>
   );
 }

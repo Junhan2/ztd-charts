@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { COMMON_OPTIONS, findGroup, findLevel, formatIssues, GROUPS, LEVELS, localizeDef, variantSpec, variantsIn } from "ztd-charts/spec";
+import { capChartSize, COMMON_OPTIONS, findGroup, findLevel, formatIssues, GROUPS, LEVELS, localizeDef, variantSpec, variantsIn } from "ztd-charts/spec";
 import { langOf } from "ztd-charts/server";
 import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, resolveType, suggest, validate, type ChartSpec } from "./api";
 import { CLI_TEXT, SCHEMA_URL, VERSION } from "./messages";
@@ -182,8 +182,9 @@ async function main(argv0: string[]) {
       const scale = numberFlag(f, "scale");
       const res = await render(spec, {
         format,
-        width: numberFlag(f, "width"),
-        height: numberFlag(f, "height"),
+        // 한 변은 MAX_CHART_SIZE(10,000px)까지. 넘으면 줄여서 그려요
+        width: capChartSize(numberFlag(f, "width")),
+        height: capChartSize(numberFlag(f, "height")),
         theme,
         scale,
         frame: f["no-frame"] ? false : f.frame ? true : undefined,

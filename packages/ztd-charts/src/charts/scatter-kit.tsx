@@ -8,6 +8,7 @@ import { overlaps, textWidth, truncate, type Box } from "../core/text";
 import type { Highlight } from "../core/types";
 import { uniq } from "../data/accessor";
 import type { Painter } from "../theme/context";
+import { HEX_KIT } from "./scatter-hex";
 
 /*
  * 산점도만 쓰는 계산, 글, 그리기. bubble.tsx의 ScatterChart만 이 묶음(SCATTER_KIT)을 넘겨서
@@ -24,6 +25,8 @@ const en = {
   quadrants: (list: [string, number][]) => ` Quadrants: ${list.map(([q, k]) => `${q} ${k}`).join("; ")}.`,
   slope: "Trend slope",
   trendTag: "Trend",
+  /** 고정 범위(xDomain, yDomain) 안에 점이 하나도 없을 때 */
+  outOfRange: "No points in this range.",
 };
 const TEXT: Record<ChartLang, typeof en> = {
   en,
@@ -36,6 +39,7 @@ const TEXT: Record<ChartLang, typeof en> = {
     quadrants: (list) => ` 사분면: ${list.map(([q, k]) => `${q} ${k}개`).join(", ")}.`,
     slope: "추세 기울기",
     trendTag: "추세",
+    outOfRange: "이 범위에는 점이 없어요.",
   },
 };
 
@@ -361,6 +365,11 @@ function Overlay(props: {
   );
 }
 
+/** 점이 있는데 고정 범위 [x0, x1] × [y0, y1] 안에는 하나도 없는지 (안에 든 첫 점에서 멈춰요) */
+function noneInside(pts: readonly { x: number; y: number }[], [x0, x1]: readonly number[], [y0, y1]: readonly number[]): boolean {
+  return pts.length > 0 && !pts.some((q) => q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1);
+}
+
 /** ScatterChart가 PointChart에 넘기는 산점도 기능 묶음 */
 export const SCATTER_KIT = {
   text: TEXT,
@@ -382,6 +391,9 @@ export const SCATTER_KIT = {
   describe: describeScatter,
   RefLines,
   Overlay,
+  /** 육각 밀도 (options.bin "hex") */
+  hex: HEX_KIT,
+  noneInside,
 };
 
 export type ScatterKit = typeof SCATTER_KIT;

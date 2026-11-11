@@ -42,7 +42,7 @@ export interface SpecCard {
   takeaway?: string;
   /** 수준 배지. "basic" | "intermediate" | "advanced". 예전 한글 값("기본" …)도 받아요 */
   level?: ChartLevel | "기본" | "중급" | "심화" | string;
-  /** "auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter). 이미지와 정적 HTML에서는 "auto"와 같아요 */
+  /** "auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter, timeline의 묶음). 이미지와 정적 HTML에서는 "auto"와 같아요 */
   legend?: "auto" | "toggle" | { label: string; color?: string; shape?: "square" | "line" | "dash" | "circle" }[];
   /** 예시 데이터 표시 */
   sample?: boolean | string;

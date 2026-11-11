@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/ztd-charts/schema/charts/symbolMap.schema.json",
+  "title": "Symbol map",
+  "description": "One circle per place on a pale map, its area proportional to the value. Use when: Amounts that sit at a point, such as users per city, revenue per store or traffic per data centre, where absolute sizes should compare directly. Avoid when: The value is a rate across a whole region (use choropleth), or the places are so many and so close that circles cover each other (aggregate first)",
+  "type": "object",
+  "required": [
+    "type",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "type": {
+      "const": "symbolMap"
+    },
+    "data": {
+      "$ref": "#/$defs/data"
+    },
+    "encoding": {
+      "type": "object",
+      "properties": {
+        "lon": {
+          "type": "string",
+          "description": "Longitude (degrees) (number)"
+        },
+        "lat": {
+          "type": "string",
+          "description": "Latitude (degrees) (number)"
+        },
+        "size": {
+          "type": "string",
+          "description": "Value (circle area). Without it all circles match (number)"
+        },
+        "label": {
+          "type": "string",
+          "description": "Place name (string)"
+        },
+        "region": {
+          "type": "string",
+          "description": "Region of options.map, for rows without lon and lat (string)"
+        },
+        "group": {
+          "type": "string",
+          "description": "Group field (one color per group) (string)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "map": {
+          "description": "Base map. \"auto\" picks the registered map that takes the most places (coordinates inside it or region names on it), and the narrower map on a tie, so US cities land on \"us-states\". \"world\", \"us-states\", \"kr-sido\" or a GeoJSON FeatureCollection, as for choropleth. Points outside the drawn frame are left out and reported",
+          "default": "auto"
+        },
+        "focus": {
+          "description": "Show only part of the world map, cropped and enlarged. Places outside it are left out",
+          "enum": [
+            "europe",
+            "asia",
+            "africa",
+            "americas",
+            "oceania"
+          ]
+        },
+        "featureId": {
+          "description": "GeoJSON property that holds the region id",
+          "type": "string"
+        },
+        "featureName": {
+          "description": "GeoJSON property that holds the region name",
+          "type": "string"
+        },
+        "sizeRange": {
+          "description": "Circle radius range [smallest, largest] in px. By default it follows the width. The largest radius is capped at an eighth of the chart's shorter side",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "center": {
+          "description": "Centre of the world map. \"auto\" picks the view that pushes the fewest places to the edge; \"atlantic\" centres longitude 0, \"pacific\" centres longitude 150 and cuts the map in the Atlantic. Not used with focus or other maps",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "atlantic",
+            "pacific"
+          ]
+        },
+        "legend": {
+          "description": "Show the size legend (two or three reference circles)",
+          "default": true,
+          "type": "boolean"
+        },
+        "height": {
+          "description": "Height in px. Without it, each chart picks a default that fits its width",
+          "type": "number",
+          "minimum": 40,
+          "maximum": 10000
+        },
+        "width": {
+          "description": "Fixed width in px. Without it, the chart fits its parent",
+          "type": "number",
+          "minimum": 40,
+          "maximum": 10000
+        },
+        "highlight": {
+          "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          ]
+        },
+        "format": {
+          "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+          "anyOf": [
+            {
+              "enum": [
+                "number",
+                "integer",
+                "percent",
+                "ratio",
+                "compact",
+                "currency",
+                "decimal"
+              ]
+            },
+            {
+              "type": "object",
+              "description": "Intl.NumberFormat options plus suffix and prefix"
+            }
+          ]
+        },
+        "unit": {
+          "description": "Unit appended to values. For example \"%\" or \"ms\"",
+          "type": "string"
+        },
+        "locale": {
+          "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+          "default": "en-US",
+          "type": "string"
+        },
+        "animate": {
+          "description": "Entry and update animation",
+          "default": true,
+          "type": "boolean"
+        },
+        "duration": {
+          "description": "Animation length (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "easing": {
+          "description": "Motion curve",
+          "default": "spring",
+          "enum": [
+            "spring",
+            "easeOut",
+            "easeInOut",
+            "linear"
+          ]
+        },
+        "stagger": {
+          "description": "Delay between items as they enter (ms)",
+          "type": "number",
+          "minimum": 0
+        },
+        "reducedMotion": {
+          "description": "\"auto\" follows the OS setting. true always turns motion off",
+          "default": "auto"
+        },
+        "animateOnView": {
+          "description": "Play when the chart scrolls into view",
+          "default": true,
+          "type": "boolean"
+        },
+        "showLabels": {
+          "description": "Labels drawn on the chart (values and names)",
+          "default": true,
+          "type": "boolean"
+        },
+        "tooltip": {
+          "$ref": "#/$defs/tooltip"
+        },
+        "syncId": {
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "type": "string"
+        },
+        "ariaLabel": {
+          "description": "Name for screen readers",
+          "type": "string"
+        },
+        "description": {
+          "description": "Description for screen readers. Built from the data when omitted",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "card": {
+      "$ref": "#/$defs/card"
+    },
+    "theme": {
+      "$ref": "#/$defs/theme"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tooltip": {
+      "description": "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out",
+      "default": true,
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "template": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "data": {
+      "description": "An array of objects, or one of { values }, { csv }, { url }",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "values"
+          ],
+          "properties": {
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "csv"
+          ],
+          "properties": {
+            "csv": {
+              "type": "string",
+              "description": "CSV text (the first line is the header)"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "JSON or CSV address (REST API, Google Sheets CSV export and so on)"
+            },
+            "format": {
+              "enum": [
+                "json",
+                "csv",
+                "auto"
+              ],
+              "default": "auto"
+            },
+            "select": {
+              "type": "string",
+              "description": "Path to the array inside the response JSON. For example \"data.items\""
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "card": {
+      "type": "object",
+      "description": "Wraps the chart in a card with a number, title, legend, one-line takeaway, level badge, source line and download buttons",
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "For example \"01\""
+        },
+        "title": {
+          "type": "string"
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "takeaway": {
+          "type": "string",
+          "description": "Bold one-line takeaway at the bottom"
+        },
+        "level": {
+          "type": "string",
+          "description": "\"basic\" | \"intermediate\" | \"advanced\". The Korean \"기본\" | \"중급\" | \"심화\" also work"
+        },
+        "legend": {
+          "description": "\"auto\" builds the legend from the data. \"toggle\" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like \"auto\"",
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "toggle"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "enum": [
+                      "square",
+                      "line",
+                      "dash",
+                      "circle"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Marks the data as sample data"
+        },
+        "replay": {
+          "type": "boolean",
+          "default": true
+        },
+        "source": {
+          "type": "string",
+          "description": "Source line under the chart, after \"Source: \""
+        },
+        "note": {
+          "type": "string",
+          "description": "Note on the same line, such as the as-of date"
+        },
+        "accent": {
+          "type": "string",
+          "description": "A word of the title to color with the accent color, used instead of a legend"
+        },
+        "download": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "csv",
+                  "svg",
+                  "png"
+                ]
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML"
+        }
+      },
+      "additionalProperties": false
+    },
+    "theme": {
+      "anyOf": [
+        {
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Token overrides. For example { accent: \"#00C2FF\" }",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

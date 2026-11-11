@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { Chart, autoLegend, encodingToProps, facetPropsOf, resolveDef, specFacet } from "../charts/Chart";
-import { FACET_GAP, FACET_ROW_GAP, FACET_TITLE_H, FACET_TITLE_SIZE, planFacets, type FacetInput } from "../core/facet";
+import { FACET_GAP, FACET_LEGEND_H, FACET_ROW_GAP, FACET_TITLE_H, FACET_TITLE_SIZE, planFacets, type FacetInput } from "../core/facet";
 import { CARD_INSET, CARD_TEXT } from "../components/ChartCard";
 import { ThemeProvider, makePainter, resolveThemeInput } from "../theme/context";
 import { baseCss } from "../core/css";
@@ -12,9 +12,16 @@ import { textWidth, truncate } from "../core/text";
 import { fetchChartData, readResponse } from "../data/useChartData";
 import { themeToCss, type ChartTheme } from "../theme/tokens";
 import { levelBadge } from "../spec/labels";
-import { nameIn, specLocale, type ChartMeta } from "../spec/meta";
+import { capChartSize, nameIn, specLocale, type ChartMeta } from "../spec/meta";
 import { inlineRows, validateSpec } from "../spec/validate";
 import type { ChartSpec, SpecFacet } from "../spec/types";
+import { registerMap } from "../geo/registry";
+import { krSido } from "../geo/kr-sido";
+import { usStates } from "../geo/us-states";
+import { world } from "../geo/world";
+
+// 서버에서는 내장 지도를 모두 미리 등록해요: renderSpecToSVG, CLI, MCP가 "map": "world"를 설정 없이 그려요 (브라우저 번들에는 들지 않아요)
+registerMap(world, usStates, krSido);
 
 export interface RenderOptions {
   /** 전체 폭(px). 기본 720 */
@@ -110,17 +117,22 @@ function extractPanels(markup: string): { inner: string; vw: number; vh: number 
  */
 function facetBody(spec: ChartSpec, facet: SpecFacet, def: ChartMeta, rows: Record<string, unknown>[], width: number, height: number | undefined, theme: ChartTheme, locale: string | undefined, T: Record<keyof ChartTheme, string>): { height: number; at: (x: number, y: number) => string } {
   const type = def.type;
-  const panels = extractPanels(chartMarkup({ ...spec, data: rows }, width, height, theme, false, false, locale));
+  const markup = chartMarkup({ ...spec, data: rows }, width, height, theme, false, false, locale);
+  const panels = extractPanels(markup);
+  // 모든 패널이 같이 쓰는 범례(FacetPlan.legend)는 브라우저처럼 격자 위 오른쪽에 한 번
+  const legend = /<svg class="ztd-facet-legend" width="([\d.]+)" height="([\d.]+)"[^>]*>([\s\S]*?)<\/svg>/.exec(markup);
+  const top = legend ? FACET_LEGEND_H : 0;
   const loc = locale ?? DEFAULT_LOCALE;
   // <Chart>가 만드는 차트 프롭과 같은 순서: 채널, options, 행, 폭(높이) 프롭, 로캘
   const chartProps = { ...encodingToProps(def, spec.encoding), ...(spec.options ?? {}), data: rows, width, ...(height !== undefined ? { height } : {}), locale };
   const plan = planFacets({ ...facetPropsOf(type, facet, chartProps), width, locale: loc, lang: langOf(loc) } as FacetInput);
   const rowsN = Math.ceil(plan.panels.length / plan.cols);
   const at = (ox: number, oy: number) =>
+    (legend ? `<svg x="${ox + width - Number(legend[1])}" y="${oy}" width="${legend[1]}" height="${legend[2]}" overflow="visible">${legend[3]}</svg>` : "") +
     plan.panels
       .map((pn, i) => {
         const x = ox + (i % plan.cols) * (plan.pw + FACET_GAP);
-        const y = oy + Math.floor(i / plan.cols) * (FACET_TITLE_H + plan.ph + FACET_ROW_GAP);
+        const y = oy + top + Math.floor(i / plan.cols) * (FACET_TITLE_H + plan.ph + FACET_ROW_GAP);
         const fill = pn.isPicked ? T.accentText : plan.isPanelPick ? T.muted : T.ink;
         const lastW = pn.last !== undefined ? textWidth(pn.last, FACET_TITLE_SIZE, 700) + 8 : 0;
         const svg = panels[i];
@@ -134,14 +146,34 @@ function facetBody(spec: ChartSpec, facet: SpecFacet, def: ChartMeta, rows: Reco
         );
       })
       .join("");
-  return { height: rowsN * (FACET_TITLE_H + plan.ph) + Math.max(0, rowsN - 1) * FACET_ROW_GAP, at };
+  return { height: top + rowsN * (FACET_TITLE_H + plan.ph) + Math.max(0, rowsN - 1) * FACET_ROW_GAP, at };
 }
 
-function extractSvg(markup: string): { attrs: string; inner: string; vw: number; vh: number } | null {
-  const m = /<svg([^>]*class="ztd-svg"[^>]*)>([\s\S]*?)<\/svg><\/div>/.exec(markup) ?? /<svg([^>]*)>([\s\S]*)<\/svg>/.exec(markup);
+/** 차트 svg 하나. 닫는 태그는 짝을 세어 찾아서 차트 밖 HTML 단추 속 아이콘 svg(막대 레이스의 재생 단추)까지 넘어가지 않아요 */
+function extractSvg(markup: string): { inner: string; vw: number; vh: number } | null {
+  const panel = extractPanels(markup)[0];
+  if (panel) return panel;
+  const m = /<svg([^>]*)>([\s\S]*)<\/svg>/.exec(markup);
   if (!m) return null;
   const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(m[1]);
-  return { attrs: m[1], inner: m[2], vw: vb ? Number(vb[1]) : 0, vh: vb ? Number(vb[2]) : 0 };
+  return { inner: m[2], vw: vb ? Number(vb[1]) : 0, vh: vb ? Number(vb[2]) : 0 };
+}
+
+/** 렌더 옵션 padding의 상한(px) */
+const MAX_PADDING = 200;
+
+/**
+ * 독립 SVG 문서 한 변의 상한(px). 차트 한 변은 MAX_CHART_SIZE(10,000)지만 문서는 그보다 클 수 있어요: 작은 여러 개 24칸 한 줄씩(최대 약 240,800px),
+ * 데이터만큼 길어지는 차트(가로 막대 줄마다), 긴 범례와 메모 줄. 가장 큰 작은 여러 개가 줄지 않는 250,000px를 넘으면
+ * viewBox는 그대로 두고 width, height만 비율대로 줄여서 그림 전체가 작게 들어가요. 그보다 작으면 예전과 같은 글자예요
+ */
+export const MAX_DOCUMENT_SIZE = 250_000;
+
+/** 바깥 <svg> 여는 태그의 앞부분 (크기와 viewBox). 닫는 ">"와 나머지 속성은 부르는 쪽이 붙여요 */
+function svgOpen(W: number, H: number): string {
+  const k = Math.min(1, MAX_DOCUMENT_SIZE / Math.max(W, H));
+  const fit = (v: number) => (k < 1 ? Math.max(1, Math.floor(v * k)) : v);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${fit(W)}" height="${fit(H)}" viewBox="0 0 ${W} ${H}"`;
 }
 
 /** 스펙을 독립 SVG 문자열로. PNG 변환(resvg)에서도 그대로 써요 */
@@ -156,27 +188,29 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const theme = resolveThemeInput((opts.theme ?? (spec.theme as never)) || "dark");
   // 아래 문자열에 넣는 테마 값은 모두 이스케이프한 것만 써요 (검사를 거치지 않은 opts.theme도 속성을 벗어나지 못해요)
   const T = Object.fromEntries(Object.entries(theme).map(([k, v]) => [k, esc(v)])) as Record<keyof ChartTheme, string>;
-  const W = Math.max(160, Math.round(opts.width ?? 720));
-  // 속성에 들어가는 크기는 숫자로만 (문자열이 오면 그대로 붙지 않게)
-  const pad = Number(opts.padding ?? 24) || 0;
+  // 렌더 옵션 크기는 검사하지 않고 받아서 한 변 MAX_CHART_SIZE 안으로 줄여요 (스펙 options.width, height는 validateSpec이 막아요)
+  const W = capChartSize(Math.max(160, Math.round(opts.width ?? 720)));
+  const optH = capChartSize(opts.height);
+  // 속성에 들어가는 크기는 숫자로만 (문자열이 오면 그대로 붙지 않게). 여백도 검사 없이 받아서 MAX_PADDING까지예요
+  const pad = Math.min(MAX_PADDING, Number(opts.padding ?? 24) || 0);
   const frame = opts.frame ?? !!spec.card;
   const card = spec.card ?? {};
-  const def = resolveDef(spec.type, spec.encoding);
+  const def = resolveDef(spec.type, spec.encoding, spec.options);
   const inner = frame ? W - pad * 2 - 40 : W - pad * 2;
   // 작은 여러 개(spec.facet)는 패널을 격자로 놓은 조각이에요. facet이 없으면 예전과 같은 글자 그대로예요
   const facet = def ? specFacet(spec, def.type) : undefined;
-  const grid = facet && def ? facetBody(spec, facet, def, rows, inner, opts.height, theme, locale, T) : null;
+  const grid = facet && def ? facetBody(spec, facet, def, rows, inner, optH, theme, locale, T) : null;
   // { csv }를 한 번만 읽도록 행으로 바꿔 넘겨요
-  const svg = grid ? { inner: "", vw: inner, vh: grid.height } : extractSvg(chartMarkup({ ...spec, data: rows }, inner, opts.height, theme, false, false, locale));
+  const svg = grid ? { inner: "", vw: inner, vh: grid.height } : extractSvg(chartMarkup({ ...spec, data: rows }, inner, optH, theme, false, false, locale));
   if (!svg) throw new Error(lang === "ko" ? "차트 SVG를 만들지 못했어요" : "Couldn't build the chart SVG");
-  const chartH = svg.vh || Number(opts.height) || 240;
+  const chartH = svg.vh || Number(optH) || 240;
   const font = theme.fontFamily.replace(/"/g, "'");
   const mono = theme.monoFamily.replace(/"/g, "'");
   const body = (x: number, y: number) => (grid ? grid.at(x, y) : `<svg x="${x}" y="${y}" width="${inner}" height="${chartH}" viewBox="0 0 ${svg.vw || inner} ${chartH}" overflow="visible">${svg.inner}</svg>`);
 
   if (!frame) {
     const H = Math.round(chartH + pad * 2);
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${body(pad, pad)}</svg>`;
+    return `${svgOpen(W, H)} font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${body(pad, pad)}</svg>`;
   }
 
   // 카드 틀
@@ -269,7 +303,7 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const ch = y - cy0;
   const H = Math.round(ch + pad * 2);
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${esc(font)}" color="${T.ink}">` +
+    `${svgOpen(W, H)} font-family="${esc(font)}" color="${T.ink}">` +
     (opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.bg}"/>`) +
     `<rect x="${cx0 + 0.5}" y="${cy0 + 0.5}" width="${cw - 1}" height="${ch - 1}" rx="${T.radius}" fill="${T.panel}" stroke="${T.line}"/>` +
     parts.join("") +
@@ -297,7 +331,8 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   const lang = langOf(locale);
   assertValid(spec, lang);
   const theme = resolveThemeInput((opts.theme ?? (spec.theme as never)) || "dark");
-  const W = Math.max(240, Math.round(opts.width ?? 720));
+  const W = capChartSize(Math.max(240, Math.round(opts.width ?? 720)));
+  const optH = capChartSize(opts.height);
   const withCard = opts.frame ?? true;
   // 정적 HTML 에는 스크립트가 없어 다시 재생, 내려받기 버튼이 눌러도 아무 일도 안 해요. 그래서 interactive 일 때만 버튼을 그려요
   // 켜고 끄는 범례도 스크립트가 있어야 해서 정적 HTML에서는 "auto"로 그려요
@@ -306,16 +341,16 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   if (hydrate !== null && /<\/script|<!--/i.test(hydrate)) throw new Error(lang === "ko" ? "interactive.script에는 </script나 <!--가 들어갈 수 없어요" : "interactive.script must not contain </script or <!--");
   // 이어받는 차트는 .wrap 의 내용 폭(W)으로 그려요. 브라우저의 첫 그림도 같은 폭이라 그림이 움직이지 않아요 (renderToStaticMarkup 결과는 이어받을 수 없어요).
   // 작은 여러 개는 정적 HTML에서도 그 폭으로 칸 수를 정해요 (스크립트가 없으면 다시 재지 못해요)
-  const def = resolveDef(spec.type, spec.encoding);
+  const def = resolveDef(spec.type, spec.encoding, spec.options);
   const isFacet = !!def && !!specFacet(spec, def.type);
   const width = (hydrate !== null || isFacet) && spec.options?.width === undefined ? W - (shown.card ? CARD_INSET : 0) : undefined;
-  const tree = createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, width, height: opts.height, animate: false, locale }));
+  const tree = createElement(ThemeProvider, { theme, cssVars: true }, createElement(Chart, { spec: shown, width, height: optH, animate: false, locale }));
   const markup = hydrate !== null ? renderToString(tree) : renderToStaticMarkup(tree);
   const title = opts.title ?? spec.card?.title ?? (def ? nameIn(def, lang) : "Chart");
   const legacy = opts.interactive && "libraryUrl" in opts.interactive ? opts.interactive : null;
   const rv = legacy?.reactVersion ?? "19";
   const script = hydrate !== null
-    ? `<script type="application/json" id="ztd-chart-config">${json({ spec: shown, theme, width, height: opts.height, locale })}</script>
+    ? `<script type="application/json" id="ztd-chart-config">${json({ spec: shown, theme, width, height: optH, locale })}</script>
 <script type="module">${hydrate}</script>`
     : legacy
     ? `<script type="importmap">${JSON.stringify({ imports: { react: `https://esm.sh/react@${rv}`, "react/jsx-runtime": `https://esm.sh/react@${rv}/jsx-runtime`, "react-dom/client": `https://esm.sh/react-dom@${rv}/client?deps=react@${rv}`, "ztd-charts": legacy.libraryUrl } })}</script>
@@ -326,7 +361,7 @@ import { Chart, ThemeProvider } from "ztd-charts";
 const spec = ${json(withCard ? spec : { ...spec, card: undefined })};
 const el = document.getElementById("chart");
 el.innerHTML = "";
-createRoot(el).render(h(ThemeProvider, { theme: ${json(theme)} }, h(Chart, { spec${opts.height ? `, height: ${opts.height}` : ""}${locale ? `, locale: ${json(locale)}` : ""} })));
+createRoot(el).render(h(ThemeProvider, { theme: ${json(theme)} }, h(Chart, { spec${optH ? `, height: ${optH}` : ""}${locale ? `, locale: ${json(locale)}` : ""} })));
 </script>`
     : "";
   return `<!doctype html>
@@ -351,11 +386,14 @@ ${script}
 `;
 }
 
+export { registerMap, registeredMaps, mapExportName } from "../geo/registry";
+export { specMapName } from "../geo/spec";
 export { validateSpec } from "../spec/validate";
 export { resolveDef } from "../charts/Chart";
 export { langOf, plural, type ChartLang } from "../core/i18n";
 export { DEFAULT_LOCALE } from "../core/format";
 export { specSchema, schemaFor } from "../spec/schema";
+export { MAX_CHART_SIZE } from "../spec/meta";
 export { CHARTS, getChartDef } from "../spec/registry";
 export { suggestCharts } from "../spec/suggest";
 export type { ChartSpec } from "../spec/types";

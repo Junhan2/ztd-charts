@@ -45,7 +45,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "12.54 KB"
+    "limit": "15.15 KB"
   },
   {
     "name": "Treemap",
@@ -141,7 +141,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.32 KB"
+    "limit": "16.7 KB"
   },
   {
     "name": "LineChart",
@@ -177,7 +177,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "16.46 KB"
+    "limit": "16.5 KB"
   },
   {
     "name": "BarChart",
@@ -369,7 +369,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.62 KB"
+    "limit": "13.68 KB"
   },
   {
     "name": "CandlestickChart",
@@ -429,7 +429,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "19.11 KB"
+    "limit": "22.55 KB"
   },
   {
     "name": "TileMap",
@@ -441,7 +441,109 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "14.9 KB"
+    "limit": "15.92 KB"
+  },
+  {
+    "name": "Choropleth",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ Choropleth }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "19.1 KB"
+  },
+  {
+    "name": "SymbolMap",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ SymbolMap }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "20.35 KB"
+  },
+  {
+    "name": "FlowMap",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ FlowMap }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "21.05 KB"
+  },
+  {
+    "name": "Map: world (ztd-charts/geo/world)",
+    "path": "packages/ztd-charts/dist/geo/world.js",
+    "import": "{ world }",
+    "limit": "24.8 KB"
+  },
+  {
+    "name": "Map: us-states (ztd-charts/geo/us-states)",
+    "path": "packages/ztd-charts/dist/geo/us-states.js",
+    "import": "{ usStates }",
+    "limit": "10.8 KB"
+  },
+  {
+    "name": "Map: kr-sido (ztd-charts/geo/kr-sido)",
+    "path": "packages/ztd-charts/dist/geo/kr-sido.js",
+    "import": "{ krSido }",
+    "limit": "5.2 KB"
+  },
+  {
+    "name": "Tree",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ Tree }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "17 KB"
+  },
+  {
+    "name": "Timeline",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ Timeline }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "20 KB"
+  },
+  {
+    "name": "BarRace",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ BarRace }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "17.7 KB"
+  },
+  {
+    "name": "NetworkChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ NetworkChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "15.9 KB"
   },
   {
     "name": "StatCard",
@@ -501,7 +603,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "98.2 KB"
+    "limit": "137.8 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -513,7 +615,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "127.43 KB"
+    "limit": "181.3 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -525,7 +627,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "33.9 KB"
+    "limit": "53.7 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",
@@ -533,6 +635,6 @@
       "packages/cli/dist/client/react.js",
       "packages/cli/dist/client/area.js"
     ],
-    "limit": "99.12 KB"
+    "limit": "100.4 KB"
   }
 ]

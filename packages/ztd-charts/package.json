@@ -1,7 +1,7 @@
 {
   "name": "ztd-charts",
-  "version": "0.7.0",
-  "description": "37 animated, interactive React charts in pure SVG with zero runtime dependencies, a JSON spec, and CLI and MCP tools for AI agents",
+  "version": "0.8.0",
+  "description": "44 animated, interactive React charts in pure SVG with zero runtime dependencies, a JSON spec, and CLI and MCP tools for AI agents",
   "license": "MIT",
   "author": "Junhan2",
   "repository": {
@@ -29,11 +29,23 @@
       "import": { "types": "./dist/server.d.ts", "default": "./dist/server.js" },
       "require": { "types": "./dist/server.d.cts", "default": "./dist/server.cjs" }
     },
+    "./geo/world": {
+      "import": { "types": "./dist/geo/world.d.ts", "default": "./dist/geo/world.js" },
+      "require": { "types": "./dist/geo/world.d.cts", "default": "./dist/geo/world.cjs" }
+    },
+    "./geo/us-states": {
+      "import": { "types": "./dist/geo/us-states.d.ts", "default": "./dist/geo/us-states.js" },
+      "require": { "types": "./dist/geo/us-states.d.cts", "default": "./dist/geo/us-states.cjs" }
+    },
+    "./geo/kr-sido": {
+      "import": { "types": "./dist/geo/kr-sido.d.ts", "default": "./dist/geo/kr-sido.js" },
+      "require": { "types": "./dist/geo/kr-sido.d.cts", "default": "./dist/geo/kr-sido.cjs" }
+    },
     "./schema.json": "./schema/chart-spec.schema.json",
     "./schema/*": "./schema/*",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "schema", "README.md"],
+  "files": ["dist", "schema", "README.md", "NOTICE.md"],
   "scripts": {
     "build": "rm -rf dist && tsup && node scripts/write-schema.mjs",
     "dev": "tsup --watch",

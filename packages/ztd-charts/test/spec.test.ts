@@ -14,10 +14,10 @@ const KO = chartsIn("ko");
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
 describe("레지스트리", () => {
-  it("37종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
-    expect(CHARTS).toHaveLength(37);
-    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(37);
-    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(37);
+  it("44종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
+    expect(CHARTS).toHaveLength(44);
+    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(44);
+    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(44);
   });
   it("차트별 스키마 파일을 패키지 이름으로 불러와요 (README에 적은 경로)", () => {
     const req = createRequire(import.meta.url);
@@ -101,7 +101,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
   it("예시 데이터: 한글판은 영어판과 숫자, 필드, 행 수가 같아요", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
-    expect(koNames.length).toBe(32);
+    expect(koNames.length).toBe(41);
     // 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름까지 한글이에요. 그 표는 값만 같은 순서로 견줘요
     const WIDE = new Set(["skylineSampleKo"]);
     const shape = (rows: Record<string, unknown>[], wide: boolean) => JSON.stringify(wide ? rows.map((r) => Object.values(r)) : rows, (_k, v) => (typeof v === "string" ? "" : v));
@@ -333,7 +333,7 @@ describe("text in number columns and duplicate x (options.aggregate)", () => {
     expect(codesOf(validateSpec({ type: "line", data: data.map((d, i) => ({ ...d, s: i === 1 ? "b" : "a" })), encoding: { x: "m", y: "r", series: "s" } }))).toEqual([]);
     expect(codesOf(validateSpec({ ...spec, options: { aggregate: "median" } }))).toEqual(["bad_enum"]);
     const owners = CHARTS.filter((c) => c.options.some((o) => o.name === "aggregate")).map((c) => c.type);
-    expect(owners).toEqual(["line", "area", "stream", "bar"]);
+    expect(owners).toEqual(["line", "area", "stream", "bar", "barRace"]);
     for (const t of owners) expect(KO.find((k) => k.type === t)!.options.find((o) => o.name === "aggregate")!.description, t).toMatch(HANGUL);
   });
 });
@@ -495,13 +495,21 @@ describe("variants", () => {
           expect([...r.errors, ...r.warnings].map((i) => `${type}/${x.id}: ${i.message}`)).toEqual([]);
           // 예시가 이미 그 값이면 변형이 예시와 같아져요 (예시를 바꾸면 변형도 다시 봐요)
           const ex = (d.example.options ?? {}) as Record<string, unknown>;
-          const changed = Object.entries(x.options).some(([k, val]) => JSON.stringify(val) !== JSON.stringify(ex[k] ?? defaults[k] ?? (Array.isArray(val) ? [] : undefined)));
+          // encoding만 바꾸는 변형(타임라인의 상태 띠, 시각)은 그 자체로 예시와 달라요
+          const changed = x.encoding !== undefined || Object.entries(x.options).some(([k, val]) => JSON.stringify(val) !== JSON.stringify(ex[k] ?? defaults[k] ?? (Array.isArray(val) ? [] : undefined)));
           expect(changed, `${type}/${x.id} (${lang})`).toBe(true);
         }
         expect(ko.find((k) => k.id === x.id)?.name, `${type}/${x.id}`).not.toBe(x.name);
       }
     }
     expect(variantSpec(CHARTS[0], "nope")).toBeNull();
+  });
+
+  it("null in a variant removes that channel or option from the example (scatter hexagon density)", () => {
+    const hex = variantSpec(CHARTS.find((d) => d.type === "scatter")!, "hex")!;
+    expect(Object.keys(hex.encoding ?? {}).sort()).toEqual(["x", "y"]);
+    expect(hex.options).not.toHaveProperty("highlight");
+    expect(hex.options).toMatchObject({ bin: "hex", xLabel: "Cost (¢)" });
   });
 });
 
@@ -536,7 +544,7 @@ describe("범례 켜고 끄기 검사 (차례 4 ⑫)", () => {
     expect(validateAll(line)).toBe(true);
     const pie = validateSpec({ type: "pie", data: [{ label: "a", value: 1 }, { label: "b", value: 2 }], encoding: { label: "label", value: "value" }, card: { legend: "toggle" } }).warnings;
     expect(pie.map((w) => w.code)).toEqual(["legend_toggle_ignored"]);
-    expect(pie[0].message).toBe('card.legend "toggle" works on line, area, bar and scatter, so this chart draws a plain legend');
+    expect(pie[0].message).toBe('card.legend "toggle" works on line, area, bar, scatter and timeline, so this chart draws a plain legend');
     expect(validateSpec({ ...line, card: { legend: "toggles" } }).errors.find((e) => e.code === "bad_legend")!.message).toContain('"toggle"');
   });
 });

@@ -18,6 +18,12 @@ function relabel<T extends object>(rows: readonly T[], ko: Record<string, string
   });
 }
 
+/** 객체 열쇠를 한글로 (흐름 지도 자리 이름표). 값은 그대로예요 */
+/* @__NO_SIDE_EFFECTS__ */
+function relabelKeys<V>(obj: Record<string, V>, ko: Record<string, string>): Record<string, V> {
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [ko[k] ?? k, v]));
+}
+
 /**
  * 행마다 필드 이름을 ko(영어 -> 한글)로 바꾼 사본. 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름을 바꿔요.
  * 값, 키 순서, 행 수는 그대로예요
@@ -54,6 +60,15 @@ export const waffleSample = [
   { segment: "Returning", customers: 62 },
 ];
 export const waffleSampleKo = /* @__PURE__ */ relabel(waffleSample, { New: "신규", Returning: "재구매" });
+
+/** 반원 와플(shape "arc", total 400) 예시: 400석 공연장에서 표 종류별로 팔린 좌석. 남은 100석은 빈자리예요 */
+export const seatSample = [
+  { ticket: "Early bird", seats: 118 },
+  { ticket: "Standard", seats: 96 },
+  { ticket: "Group", seats: 64 },
+  { ticket: "VIP", seats: 22 },
+];
+export const seatSampleKo = /* @__PURE__ */ relabel(seatSample, { "Early bird": "얼리버드", Standard: "일반", Group: "단체" });
 
 export const treemapSample = [
   { category: "Running shoes", product: "Cushion Run", share: 22 },
@@ -547,6 +562,23 @@ function scatterRows(names: readonly string[], request: string) {
 export const scatterSample = /* @__PURE__ */ scatterRows(["Large", "Medium", "Small"], "Request");
 export const scatterSampleKo = /* @__PURE__ */ scatterRows(["대형", "중형", "소형"], "요청");
 
+/**
+ * names: [작은 요청, 큰 업로드] 경로 이름. 요청 4,000건의 크기(KB, 소수 한 자리)와 응답 시간(ms): 작은 요청 묶음과 큰 업로드 묶음 두 덩어리예요.
+ * 육각 밀도(bin "hex") 예시. 고정 씨앗이라 언제나 같은 값이에요
+ */
+function scatterHexRows(names: readonly [string, string]) {
+  const rnd = seeded(41);
+  return Array.from({ length: 4000 }, (_, i) => {
+    const upload = i % 5 >= 3;
+    const kb = upload ? 270 + gauss(rnd) * 30 : Math.exp(3.8 + gauss(rnd) * 0.4);
+    const ms = upload ? 520 + (kb - 270) * 0.5 + gauss(rnd) * 32 : 110 + kb * 1.5 + gauss(rnd) * 30;
+    return { route: names[upload ? 1 : 0], kb: Math.round(Math.max(1, kb) * 10) / 10, ms: Math.max(20, Math.round(ms)) };
+  });
+}
+/** 경로별 요청 크기(KB)와 응답 시간(ms), 4,000건 */
+export const scatterHexSample = /* @__PURE__ */ scatterHexRows(["Search", "Upload"]);
+export const scatterHexSampleKo = /* @__PURE__ */ scatterHexRows(["검색", "업로드"]);
+
 /** 광역 지자체 16곳(2026-07-01 통합 뒤)의 다음 날 배송이 되는 주소 비율(%) */
 export const tileMapSample = [
   { sido: "Seoul", rate: 96 },
@@ -584,3 +616,322 @@ export const tileMapSampleKo = /* @__PURE__ */ relabel(tileMapSample, {
   Gyeongnam: "경남",
   Jeju: "제주",
 });
+
+/** 가상의 브랜드 12곳, 2015~2026년 연간 판매량(천 대). 빠르게 크는 브랜드가 아래에서 올라와 순위가 바뀌어요 */
+function raceRows(brands: readonly string[]) {
+  const rnd = seeded(31);
+  const base = [420, 380, 350, 300, 120, 260, 240, 200, 180, 90, 150, 60];
+  const growth = [0.02, 0.05, 0.03, 0.06, 0.2, 0.04, 0.07, 0.08, 0.05, 0.17, 0.09, 0.19];
+  const level = base.slice();
+  const out: { brand: string; year: number; sales: number }[] = [];
+  for (let year = 2015; year <= 2026; year++) {
+    brands.forEach((brand, i) => {
+      out.push({ brand, year, sales: Math.round(level[i]) });
+      level[i] *= 1 + growth[i] + (rnd() - 0.5) * 0.06;
+    });
+  }
+  return out;
+}
+export const barRaceSample = /* @__PURE__ */ raceRows(["Northwind", "Aurora", "Kestrel", "Halcyon", "Lumen", "Orbit", "Pinnacle", "Quill", "Summit", "Vertex", "Willow", "Zephyr"]);
+export const barRaceSampleKo = /* @__PURE__ */ raceRows(["노스윈드", "오로라", "케스트럴", "할시온", "루멘", "오르빗", "피너클", "퀼", "서밋", "버텍스", "윌로", "제퍼"]);
+
+/** 서비스 사이 호출 수(분당, 천 건). 같은 쌍의 반대 방향 행(Payments → Orders)은 링크 하나로 합쳐 그려요 */
+export const networkSample = [
+  { from: "Web", to: "Gateway", calls: 42 },
+  { from: "Mobile app", to: "Gateway", calls: 36 },
+  { from: "Gateway", to: "Auth", calls: 30 },
+  { from: "Gateway", to: "Search", calls: 18 },
+  { from: "Gateway", to: "Catalog", calls: 22 },
+  { from: "Gateway", to: "Cart", calls: 14 },
+  { from: "Gateway", to: "Orders", calls: 12 },
+  { from: "Gateway", to: "Logs", calls: 6 },
+  { from: "Auth", to: "Users", calls: 20 },
+  { from: "Search", to: "Catalog", calls: 16 },
+  { from: "Catalog", to: "Cart", calls: 9 },
+  { from: "Cart", to: "Orders", calls: 11 },
+  { from: "Cart", to: "Payments", calls: 4 },
+  { from: "Orders", to: "Payments", calls: 9 },
+  { from: "Payments", to: "Orders", calls: 3 },
+  { from: "Orders", to: "Shipping", calls: 8 },
+  { from: "Orders", to: "Logs", calls: 3 },
+  { from: "Payments", to: "Auth", calls: 6 },
+  { from: "Payments", to: "Users", calls: 3 },
+  { from: "Payments", to: "Billing", calls: 7 },
+  { from: "Payments", to: "Notifications", calls: 5 },
+  { from: "Payments", to: "Logs", calls: 4 },
+  { from: "Shipping", to: "Notifications", calls: 3 },
+  { from: "Users", to: "Notifications", calls: 2 },
+  { from: "Billing", to: "Logs", calls: 2 },
+];
+export const networkSampleKo = /* @__PURE__ */ relabel(networkSample, {
+  Web: "웹",
+  "Mobile app": "앱",
+  Gateway: "게이트웨이",
+  Auth: "인증",
+  Users: "회원",
+  Search: "검색",
+  Catalog: "상품",
+  Cart: "장바구니",
+  Orders: "주문",
+  Payments: "결제",
+  Billing: "정산",
+  Shipping: "배송",
+  Notifications: "알림",
+  Logs: "로그",
+});
+
+/** 에이전트 실행 한 번의 단계(분). startAt, endAt은 같은 단계의 시각이고, run, state는 한 줄짜리 상태 띠 꼴에 써요 */
+function timelineRows(names: Record<string, string>, states: Record<string, string>, run: string) {
+  const steps: [string, number, number, string][] = [
+    ["Plan", 0, 3, "Working"],
+    ["Search code", 3, 8, "Working"],
+    ["Edit files", 8, 15, "Working"],
+    ["Run tests", 15, 18, "Working"],
+    ["Fix failing test", 18, 22, "Fixing"],
+    ["Run tests", 22, 24, "Working"],
+    ["Open PR", 24, 25, "Working"],
+    ["Wait for CI", 25, 43, "Waiting"],
+    ["Merged", 43, 43, "Merged"],
+  ];
+  const at = (m: number) => `2026-11-10T${String(9 + Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return steps.map(([step, start, end, state]) => ({ step: names[step] ?? step, start, end, run, state: states[state] ?? state, startAt: at(start), endAt: at(end) }));
+}
+export const timelineSample = /* @__PURE__ */ timelineRows({}, {}, "Agent run");
+export const timelineSampleKo = /* @__PURE__ */ timelineRows(
+  { Plan: "계획 세우기", "Search code": "코드 검색", "Edit files": "파일 수정", "Run tests": "시험 실행", "Fix failing test": "실패 고치기", "Open PR": "PR 올리기", "Wait for CI": "CI 기다림", Merged: "합침" },
+  { Working: "작업", Fixing: "고침", Waiting: "기다림", Merged: "합침" },
+  "에이전트 실행",
+);
+
+/** 날짜로 적은 프로젝트 일정 (팀별 색, 출시는 하루짜리 사건) */
+export const timelineScheduleSample = [
+  { task: "Research", start: "2026-01-05", end: "2026-01-23", team: "Product" },
+  { task: "Design", start: "2026-01-19", end: "2026-02-13", team: "Design" },
+  { task: "Build", start: "2026-02-09", end: "2026-03-27", team: "Engineering" },
+  { task: "Beta", start: "2026-03-23", end: "2026-04-10", team: "Engineering" },
+  { task: "Launch", start: "2026-04-14", end: "2026-04-14", team: "Product" },
+];
+
+/** 결제 API가 멈추면 영향받는 화면 (서비스 6개, 화면 23개). users는 하루 사용자(천 명)라 트리맵, 선버스트로 바꿔 그려도 돼요 */
+export const treeSample = [
+  { service: "Orders", screen: "Checkout", users: 42 },
+  { service: "Orders", screen: "Cart checkout", users: 31 },
+  { service: "Orders", screen: "One-tap pay", users: 18 },
+  { service: "Orders", screen: "Order history", users: 25 },
+  { service: "Subscriptions", screen: "Start subscription", users: 9 },
+  { service: "Subscriptions", screen: "Renewal", users: 12 },
+  { service: "Subscriptions", screen: "Cancel and refund", users: 4 },
+  { service: "Account", screen: "Payment methods", users: 11 },
+  { service: "Account", screen: "Receipts", users: 7 },
+  { service: "Account", screen: "Profile", users: 15 },
+  { service: "Account", screen: "Notification settings", users: 5 },
+  { service: "Support", screen: "Notices", users: 6 },
+  { service: "Support", screen: "Chat", users: 8 },
+  { service: "Support", screen: "FAQ", users: 10 },
+  { service: "Support", screen: "Contact us", users: 3 },
+  { service: "Search", screen: "Suggestions", users: 30 },
+  { service: "Search", screen: "Filters", users: 22 },
+  { service: "Search", screen: "Search bar", users: 48 },
+  { service: "Products", screen: "Compare", users: 9 },
+  { service: "Products", screen: "Wishlist", users: 14 },
+  { service: "Products", screen: "Reviews", users: 20 },
+  { service: "Products", screen: "Catalog", users: 52 },
+  { service: "Products", screen: "Details", users: 60 },
+];
+export const treeSampleKo = /* @__PURE__ */ relabel(treeSample, {
+  Orders: "주문",
+  Subscriptions: "정기구독",
+  Account: "마이페이지",
+  Support: "고객센터",
+  Search: "검색",
+  Products: "상품",
+  Checkout: "주문서",
+  "Cart checkout": "장바구니 결제",
+  "One-tap pay": "간편결제",
+  "Order history": "주문 내역",
+  "Start subscription": "구독 시작",
+  Renewal: "갱신",
+  "Cancel and refund": "해지 환불",
+  "Payment methods": "결제 수단",
+  Receipts: "영수증",
+  Profile: "프로필",
+  "Notification settings": "알림 설정",
+  Notices: "공지",
+  Chat: "채팅",
+  "Contact us": "문의",
+  Suggestions: "추천어",
+  Filters: "필터",
+  "Search bar": "검색창",
+  Compare: "비교",
+  Wishlist: "찜",
+  Reviews: "리뷰",
+  Catalog: "목록",
+  Details: "상세",
+});
+
+/** 미국 주 50곳과 DC의 다음 날 배송이 되는 주소 비율(%) (타일 격자 지도의 기본 예시) */
+export const tileMapUsSample = [
+  { state: "AL", rate: 71 }, { state: "AK", rate: 38 }, { state: "AZ", rate: 82 }, { state: "AR", rate: 66 }, { state: "CA", rate: 91 }, { state: "CO", rate: 84 },
+  { state: "CT", rate: 90 }, { state: "DE", rate: 88 }, { state: "DC", rate: 97 }, { state: "FL", rate: 86 }, { state: "GA", rate: 83 }, { state: "HI", rate: 44 },
+  { state: "ID", rate: 63 }, { state: "IL", rate: 87 }, { state: "IN", rate: 79 }, { state: "IA", rate: 70 }, { state: "KS", rate: 68 }, { state: "KY", rate: 74 },
+  { state: "LA", rate: 72 }, { state: "ME", rate: 61 }, { state: "MD", rate: 89 }, { state: "MA", rate: 92 }, { state: "MI", rate: 81 }, { state: "MN", rate: 80 },
+  { state: "MS", rate: 62 }, { state: "MO", rate: 76 }, { state: "MT", rate: 52 }, { state: "NE", rate: 67 }, { state: "NV", rate: 81 }, { state: "NH", rate: 78 },
+  { state: "NJ", rate: 94 }, { state: "NM", rate: 60 }, { state: "NY", rate: 93 }, { state: "NC", rate: 80 }, { state: "ND", rate: 50 }, { state: "OH", rate: 82 },
+  { state: "OK", rate: 69 }, { state: "OR", rate: 77 }, { state: "PA", rate: 86 }, { state: "RI", rate: 90 }, { state: "SC", rate: 75 }, { state: "SD", rate: 54 },
+  { state: "TN", rate: 78 }, { state: "TX", rate: 85 }, { state: "UT", rate: 79 }, { state: "VT", rate: 58 }, { state: "VA", rate: 87 }, { state: "WA", rate: 85 },
+  { state: "WV", rate: 59 }, { state: "WI", rate: 75 }, { state: "WY", rate: 47 },
+];
+
+/** 나라별 결제 완료율(%) (단계구분도 기본 예시) */
+export const choroplethSample = [
+  { country: "United States", rate: 3.8 }, { country: "Canada", rate: 4.8 }, { country: "Mexico", rate: 2.1 }, { country: "Brazil", rate: 1.9 }, { country: "Argentina", rate: 1.6 },
+  { country: "Chile", rate: 2.3 }, { country: "Colombia", rate: 1.8 }, { country: "Peru", rate: 1.5 }, { country: "United Kingdom", rate: 4.1 }, { country: "Ireland", rate: 3.9 },
+  { country: "France", rate: 3.2 }, { country: "Germany", rate: 3.6 }, { country: "Netherlands", rate: 4.4 }, { country: "Spain", rate: 2.8 }, { country: "Italy", rate: 2.6 },
+  { country: "Poland", rate: 2.9 }, { country: "Sweden", rate: 4.2 }, { country: "Norway", rate: 4 }, { country: "Finland", rate: 3.7 }, { country: "Türkiye", rate: 2.2 },
+  { country: "Egypt", rate: 1.2 }, { country: "Nigeria", rate: 0.9 }, { country: "Kenya", rate: 1.4 }, { country: "South Africa", rate: 2 }, { country: "Morocco", rate: 1.3 },
+  { country: "Saudi Arabia", rate: 2.7 }, { country: "United Arab Emirates", rate: 3.5 }, { country: "India", rate: 1.7 }, { country: "Indonesia", rate: 1.6 }, { country: "Vietnam", rate: 1.9 },
+  { country: "Thailand", rate: 2.2 }, { country: "Philippines", rate: 1.8 }, { country: "China", rate: 2.5 }, { country: "Japan", rate: 3.3 }, { country: "South Korea", rate: 3.9 },
+  { country: "Australia", rate: 3.9 }, { country: "New Zealand", rate: 3.6 },
+];
+
+/** 유럽 나라별 결제 완료율(%) (focus: "europe" 예시) */
+export const choroplethEuropeSample = [
+  { country: "United Kingdom", rate: 4.1 }, { country: "Ireland", rate: 3.9 }, { country: "France", rate: 3.2 }, { country: "Germany", rate: 3.6 }, { country: "Netherlands", rate: 4.4 },
+  { country: "Belgium", rate: 3.5 }, { country: "Spain", rate: 2.8 }, { country: "Portugal", rate: 2.7 }, { country: "Italy", rate: 2.6 }, { country: "Switzerland", rate: 3.8 },
+  { country: "Austria", rate: 3.4 }, { country: "Poland", rate: 2.9 }, { country: "Czechia", rate: 3 }, { country: "Hungary", rate: 2.4 }, { country: "Romania", rate: 2.1 },
+  { country: "Greece", rate: 2.3 }, { country: "Sweden", rate: 4.2 }, { country: "Norway", rate: 4 }, { country: "Denmark", rate: 4.3 }, { country: "Finland", rate: 3.7 },
+];
+
+/** 결제 완료율(%) 꼴로 바꾼 미국 주, 한국 시도 예시 (다음 날 배송 비율 예시의 값을 20으로 나눠 소수 한 자리) */
+const toConversion = <T extends { rate: number }>(rows: readonly T[]): T[] => rows.map((r) => ({ ...r, rate: Math.round(r.rate / 2) / 10 }));
+export const choroplethUsSample = /* @__PURE__ */ toConversion(tileMapUsSample);
+export const choroplethKrSample = /* @__PURE__ */ toConversion(tileMapSample);
+export const choroplethKrSampleKo = /* @__PURE__ */ toConversion(tileMapSampleKo);
+
+/** 가상의 배송 구역 네 곳 (사용자 GeoJSON 예시: 구멍이 있는 구역, 조각이 둘인 구역). 경위도 도 */
+export const choroplethZones = {
+  type: "FeatureCollection" as const,
+  features: [
+    { type: "Feature", properties: { zone: "North", label: "North zone" }, geometry: { type: "Polygon", coordinates: [[[10, 50.6], [10.6, 50.6], [10.6, 51], [10, 51], [10, 50.6]]] } },
+    { type: "Feature", properties: { zone: "East", label: "East zone" }, geometry: { type: "Polygon", coordinates: [[[10.6, 50.2], [11.2, 50.2], [11.2, 51], [10.6, 51], [10.6, 50.2]], [[10.8, 50.5], [11, 50.5], [11, 50.7], [10.8, 50.7], [10.8, 50.5]]] } },
+    { type: "Feature", properties: { zone: "South", label: "South zone" }, geometry: { type: "Polygon", coordinates: [[[10, 50.2], [10.6, 50.2], [10.6, 50.6], [10, 50.6], [10, 50.2]]] } },
+    { type: "Feature", properties: { zone: "Lakes", label: "Lakes zone" }, geometry: { type: "MultiPolygon", coordinates: [[[[10.8, 50.5], [11, 50.5], [11, 50.7], [10.8, 50.7], [10.8, 50.5]]], [[[10.1, 50.05], [10.4, 50.05], [10.4, 50.15], [10.1, 50.15], [10.1, 50.05]]]] } },
+  ],
+};
+export const choroplethZonesSample = [
+  { zone: "North", rate: 3.1 },
+  { zone: "East", rate: 4.2 },
+  { zone: "South", rate: 2.4 },
+  { zone: "Lakes", rate: 1.8 },
+];
+
+/** 도시별 월간 활성 사용자 (기호 지도 기본 예시). 경위도는 도 */
+export const symbolMapSample = [
+  { city: "Tokyo", continent: "Asia", lon: 139.69, lat: 35.69, users: 1_180_000 },
+  { city: "São Paulo", continent: "Americas", lon: -46.63, lat: -23.55, users: 820_000 },
+  { city: "Jakarta", continent: "Asia", lon: 106.85, lat: -6.21, users: 710_000 },
+  { city: "New York", continent: "Americas", lon: -74.01, lat: 40.71, users: 640_000 },
+  { city: "Mumbai", continent: "Asia", lon: 72.88, lat: 19.08, users: 600_000 },
+  { city: "London", continent: "Europe", lon: -0.13, lat: 51.51, users: 560_000 },
+  { city: "Seoul", continent: "Asia", lon: 126.98, lat: 37.57, users: 520_000 },
+  { city: "Mexico City", continent: "Americas", lon: -99.13, lat: 19.43, users: 450_000 },
+  { city: "Los Angeles", continent: "Americas", lon: -118.24, lat: 34.05, users: 430_000 },
+  { city: "Lagos", continent: "Africa", lon: 3.38, lat: 6.52, users: 410_000 },
+  { city: "Cairo", continent: "Africa", lon: 31.24, lat: 30.04, users: 380_000 },
+  { city: "Paris", continent: "Europe", lon: 2.35, lat: 48.86, users: 310_000 },
+  { city: "Istanbul", continent: "Europe", lon: 28.98, lat: 41.01, users: 250_000 },
+  { city: "Sydney", continent: "Oceania", lon: 151.21, lat: -33.87, users: 210_000 },
+  { city: "Singapore", continent: "Asia", lon: 103.82, lat: 1.35, users: 180_000 },
+];
+
+/** 나라별 월간 활성 사용자 (기호 지도에 경위도 없이 나라 이름으로) */
+export const symbolMapCountrySample = [
+  { country: "United States", users: 2_400_000 }, { country: "Brazil", users: 1_300_000 }, { country: "India", users: 1_900_000 }, { country: "Indonesia", users: 1_100_000 },
+  { country: "Japan", users: 1_500_000 }, { country: "Germany", users: 700_000 }, { country: "United Kingdom", users: 820_000 }, { country: "France", users: 560_000 },
+  { country: "Nigeria", users: 640_000 }, { country: "Egypt", users: 430_000 }, { country: "Mexico", users: 900_000 }, { country: "Australia", users: 380_000 },
+  { country: "South Africa", users: 290_000 }, { country: "Argentina", users: 340_000 }, { country: "Türkiye", users: 520_000 }, { country: "Canada", users: 610_000 },
+];
+
+/** 미국 매장별 월 매출 (us-states 예시: 알래스카, 하와이 매장은 옮겨 붙인 자리에 놓여요) */
+export const symbolMapUsSample = [
+  { store: "New York", lon: -74.01, lat: 40.71, revenue: 4_200_000 }, { store: "Los Angeles", lon: -118.24, lat: 34.05, revenue: 3_600_000 }, { store: "Chicago", lon: -87.63, lat: 41.88, revenue: 2_500_000 },
+  { store: "Houston", lon: -95.37, lat: 29.76, revenue: 2_100_000 }, { store: "Phoenix", lon: -112.07, lat: 33.45, revenue: 1_300_000 }, { store: "Seattle", lon: -122.33, lat: 47.61, revenue: 1_700_000 },
+  { store: "Miami", lon: -80.19, lat: 25.76, revenue: 1_900_000 }, { store: "Denver", lon: -104.99, lat: 39.74, revenue: 1_100_000 }, { store: "Atlanta", lon: -84.39, lat: 33.75, revenue: 1_400_000 },
+  { store: "Boston", lon: -71.06, lat: 42.36, revenue: 1_600_000 }, { store: "Minneapolis", lon: -93.27, lat: 44.98, revenue: 800_000 }, { store: "Anchorage", lon: -149.9, lat: 61.22, revenue: 300_000 },
+  { store: "Honolulu", lon: -157.86, lat: 21.31, revenue: 650_000 },
+];
+
+/** 유럽 도시별 월간 활성 사용자 (focus: "europe" 예시) */
+export const symbolMapEuropeSample = [
+  { city: "London", lon: -0.13, lat: 51.51, users: 560_000 }, { city: "Paris", lon: 2.35, lat: 48.86, users: 310_000 }, { city: "Berlin", lon: 13.4, lat: 52.52, users: 290_000 },
+  { city: "Madrid", lon: -3.7, lat: 40.42, users: 240_000 }, { city: "Rome", lon: 12.5, lat: 41.9, users: 170_000 }, { city: "Amsterdam", lon: 4.9, lat: 52.37, users: 210_000 },
+  { city: "Warsaw", lon: 21.01, lat: 52.23, users: 130_000 }, { city: "Stockholm", lon: 18.07, lat: 59.33, users: 150_000 }, { city: "Lisbon", lon: -9.14, lat: 38.72, users: 90_000 },
+  { city: "Athens", lon: 23.73, lat: 37.98, users: 80_000 }, { city: "Dublin", lon: -6.26, lat: 53.35, users: 120_000 }, { city: "Vienna", lon: 16.37, lat: 48.21, users: 100_000 },
+];
+
+/** 한국 도시별 월간 활성 사용자 (기호 지도 한국 변형과 한국어 예시) */
+export const symbolMapKrSample = [
+  { city: "Seoul", lon: 126.98, lat: 37.57, users: 1_820_000 }, { city: "Busan", lon: 129.08, lat: 35.18, users: 600_000 }, { city: "Incheon", lon: 126.7, lat: 37.46, users: 520_000 },
+  { city: "Daegu", lon: 128.6, lat: 35.87, users: 410_000 }, { city: "Daejeon", lon: 127.38, lat: 36.35, users: 300_000 }, { city: "Gwangju", lon: 126.85, lat: 35.16, users: 280_000 },
+  { city: "Suwon", lon: 127.03, lat: 37.26, users: 330_000 }, { city: "Ulsan", lon: 129.31, lat: 35.54, users: 190_000 }, { city: "Cheongju", lon: 127.49, lat: 36.64, users: 140_000 },
+  { city: "Jeonju", lon: 127.15, lat: 35.82, users: 120_000 }, { city: "Gangneung", lon: 128.88, lat: 37.75, users: 60_000 }, { city: "Jeju", lon: 126.53, lat: 33.5, users: 150_000 },
+];
+const KR_CITIES: Record<string, string> = {
+  Seoul: "서울", Busan: "부산", Incheon: "인천", Daegu: "대구", Daejeon: "대전", Gwangju: "광주", Suwon: "수원", Ulsan: "울산", Cheongju: "청주", Jeonju: "전주",
+  Gangneung: "강릉", Jeju: "제주", Changwon: "창원", Wonju: "원주", "Icheon hub": "이천 센터",
+};
+export const symbolMapKrSampleKo = /* @__PURE__ */ relabel(symbolMapKrSample, KR_CITIES);
+
+/** 항구 사이 컨테이너 물동량(TEU) (흐름 지도 기본 예시). 자리는 flowMapPlaces */
+export const flowMapSample = [
+  { from: "Shanghai", to: "Los Angeles", teu: 412_000 },
+  { from: "Shanghai", to: "Rotterdam", teu: 268_000 },
+  { from: "Singapore", to: "Rotterdam", teu: 231_000 },
+  { from: "Busan", to: "Los Angeles", teu: 205_000 },
+  { from: "Shanghai", to: "Singapore", teu: 174_000 },
+  { from: "Singapore", to: "Dubai", teu: 140_000 },
+  { from: "Rotterdam", to: "New York", teu: 121_000 },
+  { from: "Los Angeles", to: "Shanghai", teu: 96_000 },
+  { from: "Dubai", to: "Hamburg", teu: 88_000 },
+  { from: "Shanghai", to: "Santos", teu: 70_000 },
+  { from: "Santos", to: "Rotterdam", teu: 54_000 },
+];
+/** 항구 자리 [경도, 위도] */
+export const flowMapPlaces: Record<string, [number, number]> = {
+  Shanghai: [121.47, 31.23], Singapore: [103.82, 1.35], Rotterdam: [4.48, 51.92], "Los Angeles": [-118.24, 34.05], Busan: [129.08, 35.18],
+  Dubai: [55.27, 25.2], "New York": [-74.01, 40.71], Santos: [-46.33, -23.96], Hamburg: [9.99, 53.55],
+};
+
+/** 미국 주 사이 화물(톤) (흐름 지도 us-states 예시: 자리는 주 이름이라 경위도가 없어요. 알래스카, 하와이로 가는 흐름도 있어요) */
+export const flowMapUsSample = [
+  { from: "California", to: "Texas", tons: 52_000 }, { from: "Texas", to: "Illinois", tons: 38_000 }, { from: "California", to: "Washington", tons: 24_000 },
+  { from: "Illinois", to: "New York", tons: 31_000 }, { from: "Georgia", to: "Florida", tons: 27_000 }, { from: "Texas", to: "California", tons: 22_000 },
+  { from: "New York", to: "Massachusetts", tons: 15_000 }, { from: "Washington", to: "Alaska", tons: 9_000 }, { from: "California", to: "Hawaii", tons: 11_000 },
+  { from: "Illinois", to: "Colorado", tons: 12_000 }, { from: "Texas", to: "Georgia", tons: 17_000 },
+];
+
+/** 유럽 공항 사이 항공 화물(톤) (흐름 지도 focus: "europe" 예시) */
+export const flowMapEuropeSample = [
+  { from: "Frankfurt", to: "London", tons: 4_200 }, { from: "London", to: "Frankfurt", tons: 2_600 }, { from: "Frankfurt", to: "Madrid", tons: 2_100 },
+  { from: "Paris", to: "Rome", tons: 1_800 }, { from: "Frankfurt", to: "Warsaw", tons: 1_500 }, { from: "Paris", to: "Lisbon", tons: 1_200 },
+  { from: "Frankfurt", to: "Stockholm", tons: 1_100 }, { from: "Istanbul", to: "Frankfurt", tons: 1_700 }, { from: "Paris", to: "Athens", tons: 900 },
+  { from: "London", to: "Dublin", tons: 800 }, { from: "Frankfurt", to: "Helsinki", tons: 600 },
+];
+export const flowMapEuropePlaces: Record<string, [number, number]> = {
+  Frankfurt: [8.68, 50.11], London: [-0.13, 51.51], Madrid: [-3.7, 40.42], Paris: [2.35, 48.86], Rome: [12.5, 41.9], Warsaw: [21.01, 52.23],
+  Lisbon: [-9.14, 38.72], Stockholm: [18.07, 59.33], Istanbul: [28.98, 41.01], Athens: [23.73, 37.98], Dublin: [-6.26, 53.35], Helsinki: [24.94, 60.17],
+};
+
+/** 이천 물류 센터에서 나간 물량(천 상자) (흐름 지도 한국 변형과 한국어 예시) */
+export const flowMapKrSample = [
+  { from: "Icheon hub", to: "Busan", boxes: 412 }, { from: "Icheon hub", to: "Daegu", boxes: 268 }, { from: "Icheon hub", to: "Gwangju", boxes: 231 },
+  { from: "Icheon hub", to: "Daejeon", boxes: 205 }, { from: "Icheon hub", to: "Changwon", boxes: 174 }, { from: "Icheon hub", to: "Jeonju", boxes: 121 },
+  { from: "Icheon hub", to: "Wonju", boxes: 96 }, { from: "Icheon hub", to: "Jeju", boxes: 88 }, { from: "Icheon hub", to: "Gangneung", boxes: 54 },
+];
+export const flowMapKrSampleKo = /* @__PURE__ */ relabel(flowMapKrSample, KR_CITIES);
+export const flowMapKrPlaces: Record<string, [number, number]> = {
+  "Icheon hub": [127.44, 37.27], Busan: [129.08, 35.18], Daegu: [128.6, 35.87], Gwangju: [126.85, 35.16], Daejeon: [127.38, 36.35],
+  Changwon: [128.68, 35.23], Jeonju: [127.15, 35.82], Wonju: [127.95, 37.34], Jeju: [126.53, 33.5], Gangneung: [128.88, 37.75],
+};
+/** 한국어 이름을 열쇠로 한 같은 자리 */
+export const flowMapKrPlacesKo = /* @__PURE__ */ relabelKeys(flowMapKrPlaces, KR_CITIES);
