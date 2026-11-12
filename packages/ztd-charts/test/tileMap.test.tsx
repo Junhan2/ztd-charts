@@ -11,7 +11,7 @@ import { CHARTS, validateSpec } from "../src/spec";
 import { tileMapSample, tileMapSampleKo, tileMapUsSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
-/** histogram.test.tsx와 같은 틀: active를 주면 고른 타일을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as histogram.test.tsx: active sets the picked tile, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -65,7 +65,7 @@ afterEach(() => {
 
 const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
-/** 타일 글자 (굵기 500 이상). 범례 양끝 이름은 굵기 400이라 빠져요 */
+/** Tile text (weight 500 or more). The names at both legend ends have weight 400, so they are left out */
 const texts = (h: string) => [...h.matchAll(/<text [^>]*font-weight="(\d+)"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ weight: +m[1], text: m[2] })).filter((t) => t.weight >= 500);
 const sido = (name: string, rate: number) => ({ sido: name, rate });
 const draw = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<TileMap data={data} region="sido" value="rate" unit="%" width={480} animate={false} {...extra} />);
@@ -95,7 +95,7 @@ describe("tile grids", () => {
     expect(["강원", "강원특별자치도", "강원도", "Gangwon", "KR-51", "KR-42"].map(id)).toEqual(Array(6).fill("Gangwon"));
     expect(["전북", "전북특별자치도", "전라북도", "Jeollabuk-do", "KR-52", "KR-45"].map(id)).toEqual(Array(6).fill("Jeonbuk"));
     expect(["전남광주", "전남광주통합특별시", "jeonnam-gwangju"].map(id)).toEqual(Array(3).fill("Jeonnam-Gwangju"));
-    // 합친 뒤 격자에는 광주, 전남 타일이 따로 없어요. 경기도 광주시와 겹치는 "광주시"는 받지 않아요
+    // After the merge the grid has no separate Gwangju or Jeonnam tile. "광주시", which clashes with Gwangju-si in Gyeonggi-do, is not accepted
     expect(["광주", "전남", "Atlantis"].map(match)).toEqual([-1, -1, -1]);
     expect(tileMatcher(resolveGrid("kr-sido-2025")!)("광주시")).toBe(-1);
   });
@@ -106,12 +106,12 @@ describe("tile grids", () => {
       { id: "B", row: 0, col: 2 },
       { id: "C", row: 1, col: 1 },
     ])!;
-    // A에서 오른쪽: 빈 칸 (0, 1)을 건너 B
+    // Right from A: skips the empty cell (0, 1) to B
     expect(custom[tileNeighbor(custom, 0, "ArrowRight")].id).toBe("B");
     expect(tileNeighbor(custom, 1, "ArrowRight")).toBe(-1);
     const grid = resolveGrid("kr-sido")!;
     const go = (from: string, key: string) => grid[tileNeighbor(grid, grid.findIndex((t) => t.id === from), key)]?.id;
-    // 부산 오른쪽은 빈 칸이라 한 줄 위 울산, 제주 오른쪽은 경남, 부산 아래(빈 칸만)는 없어요
+    // Right of Busan is an empty cell, so Ulsan one row up; right of Jeju is Gyeongnam; below Busan (only empty cells) there is nothing
     expect([go("Busan", "ArrowRight"), go("Jeju", "ArrowRight"), go("Jeju", "ArrowUp"), go("Busan", "ArrowDown")]).toEqual(["Ulsan", "Gyeongnam", "Jeonnam-Gwangju", undefined]);
   });
 });
@@ -121,7 +121,7 @@ describe("TileMap", () => {
     const h = draw(tileMapSample);
     const outlines = h.match(/fill="none" stroke="var\(--ztd-ink[^"]*\)" stroke-width="2"/g) ?? [];
     expect(outlines).toHaveLength(1);
-    // 이름은 보통 600, 강조 타일만 700이에요 (값은 700, 강조 타일 값은 800)
+    // Names are normally 600, only the highlighted tile's name is 700 (values are 700, the highlighted tile's value 800)
     const boldNames = (html: string) => texts(html).filter((t) => t.weight === 700 && !/\d/.test(t.text)).map((t) => t.text);
     expect(boldNames(h)).toEqual(["Sejong"]);
     expect(texts(h).filter((t) => t.weight === 800).map((t) => t.text)).toEqual(["98"]);
@@ -147,14 +147,14 @@ describe("TileMap", () => {
   it("region names follow the language of the data, unless labels sets one", () => {
     const ko = [sido("서울", 5), sido("부산광역시", 3), sido("전남광주", 1)];
     const names = (extra: Record<string, unknown> = {}, data: Record<string, unknown>[] = ko) => (draw(data, extra), frame().events.slice(0, 3).map((e) => e.label));
-    // 로캘이 없어도(en-US) 한글 데이터면 한국어 이름. 숫자와 나머지 글자는 로캘(영어)을 따라요
+    // Even without a locale (en-US), Korean data gets Korean names. Numbers and the rest of the text follow the locale (English)
     expect(names()).toEqual(["서울", "부산", "전남광주"]);
     expect(frame().description).toMatch(/^Tile map\. 3 regions with data\. Highest 서울 5%/);
     expect(frame().events[0].formatted).toBe("5%, 1 of 3");
     expect(names({ labels: "en" })).toEqual(["Seoul", "Busan", "Jeonnam-Gwangju"]);
     const en = [sido("Seoul", 5), sido("Busan", 3), sido("Jeju", 1)];
     expect([names({}, en), names({ locale: "ko" }, en), names({ labels: "ko" }, en)]).toEqual([["Seoul", "Busan", "Jeju"], ["서울", "부산", "제주"], ["서울", "부산", "제주"]]);
-    // 사용자 격자는 자기 label
+    // A custom grid uses its own label
     expect(names({ labels: "ko", map: [{ id: "CA", label: "California", row: 0, col: 0 }] }, [sido("CA", 1)])[0]).toBe("California");
   });
 
@@ -163,7 +163,7 @@ describe("TileMap", () => {
     expect(draw(flat)).not.toMatch(/stroke-width="2"/);
     expect(frame().description).toBe("Tile map. 3 regions with data, all at the same value, 0%. 13 regions without data.");
     expect(draw(flat, { highlight: "min" })).not.toMatch(/stroke-width="2"/);
-    // 이름으로 정한 강조는 그대로예요
+    // A highlight set by name still applies
     expect(texts(draw(flat, { highlight: "Busan" })).filter((t) => t.weight === 700 && !/\d/.test(t.text)).map((t) => t.text)).toEqual(["Busan"]);
   });
 
@@ -171,11 +171,12 @@ describe("TileMap", () => {
     const big = tileMapSample.map((d, i) => sido(d.sido, i % 2 ? 3_400_000_000 : 1_200_000_000));
     const values = (h: string) => [...h.matchAll(/<text [^>]*font-size="([\d.]+)"[^>]*font-weight="(?:700|800)"[^>]*>([^<]*\d[^<]*)<\/text>/g)].map((m) => ({ size: +m[1], text: m[2] }));
     const at = (width: number, extra: Record<string, unknown> = {}) => values(r(<TileMap data={big} region="sido" value="rate" width={width} animate={false} {...extra} />));
-    // 720px: 타일 폭 98.4(가로 102.4 - 틈 4). 크롬에서 숫자가 추정보다 넓게 그려져서 추정의 1.1배가 좌우 4px 안에 들어가야 해요
+    // 720px: tile width 98.4 (102.4 across minus a 4 gap). Chrome draws numbers wider than the estimate, so 1.1 times the estimate must fit with 4px on each side
     const wide = at(720);
     expect(wide).toHaveLength(16);
     for (const v of wide) expect(textWidth(v.text, v.size, 700) * 1.1, v.text).toBeLessThanOrEqual(98.4 - 8);
-    // 400px: 전체 숫자가 안 들어가서 짧은 꼴 (영어 1.2B, 한국어 12억). format을 정했으면 줄이지 않고 빼요. 표는 늘 전체 숫자
+    // 400px: the full number does not fit, so the short form (English "1.2B", Korean "12억").
+    // With format set, values are dropped instead of shortened. The table always has the full number
     expect(new Set(at(400).map((v) => v.text))).toEqual(new Set(["1.2B", "3.4B"]));
     expect(new Set(at(400, { locale: "ko" }).map((v) => v.text))).toEqual(new Set(["12억", "34억"]));
     expect(at(400, { format: "number" })).toEqual([]);
@@ -189,7 +190,7 @@ describe("TileMap", () => {
     expect(ev.slice(0, 2).map((e) => e.formatted)).toEqual(["10%, 1 of 2", "5%, 2 of 2"]);
     expect(ev[2]).toMatchObject({ label: "Incheon", value: null, formatted: "No data" });
     expect(frame().description).toContain("14 regions without data");
-    // 빈 타일은 이름만: 글자는 이름 16개와 값 2개
+    // Empty tiles show only the name: the text is 16 names and 2 values
     expect(texts(h)).toHaveLength(16 + 2);
   });
 
@@ -209,7 +210,7 @@ describe("TileMap", () => {
     const press = (key: string) => root!.props.onKeyDown({ key, target: self, currentTarget: self, preventDefault() {} } as never);
     press("End");
     press("Home");
-    // 서울(0행 1열)에서 오른쪽은 경기. 경기는 데이터가 없어서 값 있는 타일 3개 뒤 읽는 순서 자리예요
+    // Right of Seoul (row 0, column 1) is Gyeonggi. Gyeonggi has no data, so its place in the reading order comes after the 3 tiles with values
     press("ArrowRight");
     const ev = frame().events;
     expect(state.calls.map(([i, via]) => `${i === null ? "-" : ev[i].label}/${via}`)).toEqual(["Ulsan/keyboard", "Seoul/keyboard", "Gyeonggi/keyboard"]);
@@ -223,7 +224,7 @@ describe("TileMap", () => {
       expect(names(card).every((t) => !t.text.includes("…") && t.text !== ""), locale).toBe(true);
       expect(values(card), locale).toHaveLength(16);
     }
-    // 좁으면 차트 하나로 정해요: 이름이 모두 들어가지 않으면 이름도 값도 적지 않아요 (몇 타일만 남지 않게)
+    // When narrow, one decision for the whole chart: if not all names fit, neither names nor values are written (so it never ends with just a few tiles labeled)
     const narrow = r(<TileMap data={tileMapSampleKo} region="sido" value="rate" width={150} animate={false} locale="ko" />);
     expect(values(narrow)).toHaveLength(0);
     expect([0, 16]).toContain(names(narrow).length);
@@ -239,10 +240,10 @@ describe("TileMap", () => {
     const h = r(<TileMap data={us} region="s" value="v" width={720} animate={false} />);
     expect(frame().events).toHaveLength(51);
     expect(frame().events.slice(0, 3).map((e) => e.label)).toEqual(["California", "New York", "Texas"]);
-    // 타일 위에는 우편 약자, 툴팁과 표는 이름
+    // Tiles show the postal abbreviation; the tooltip and the table use the name
     expect(texts(h).map((t) => t.text)).toContain("CA");
     expect(h).toContain('<th scope="row">California</th>');
-    // 한국 시도 데이터는 예전 기본값 kr-sido 그대로, 잘못 쓴 한글 이름만 있어도 한국 격자예요
+    // Korean province data still gets the old default, kr-sido, and data with only a misspelled Korean name still gets the Korean grid
     r(<TileMap data={tileMapSampleKo} region="sido" value="rate" width={480} animate={false} />);
     expect(frame().events).toHaveLength(16);
     r(<TileMap data={[sido("부산광역", 1)]} region="sido" value="rate" width={480} animate={false} />);
@@ -256,7 +257,7 @@ describe("TileMap", () => {
     expect(Math.max(...state.delays)).toBeLessThanOrEqual(480);
     expect(Math.max(...state.delays)).toBeGreaterThan(400);
     draw(tileMapSample);
-    // 4열 격자에서 칸 순서 × 28ms 그대로 (제주가 마지막: 4행 0열 → 16 × 28)
+    // On the 4-column grid it is still cell order × 28ms (Jeju is last: row 4, column 0 → 16 × 28)
     expect(Math.max(...state.delays)).toBe(448);
     expect(state.delays.every((d) => Number.isInteger(d / 28))).toBe(true);
   });

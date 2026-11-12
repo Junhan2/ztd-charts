@@ -32,7 +32,7 @@ export interface SparklineProps<T = Row> extends BaseChartProps<T>, DayFirstProp
   showValue?: boolean;
   /** Mark the highest and lowest points. Default false */
   showExtremes?: boolean;
-  /** Highlighted point: "last" | "max" | "min". Default "last" */
+  /** Highlighted point: "last" | "max" | "min" | "none" (no point). Default "last" */
   mark?: "last" | "max" | "min" | "none";
 }
 

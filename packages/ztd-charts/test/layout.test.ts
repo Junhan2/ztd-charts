@@ -104,12 +104,12 @@ describe("stack", () => {
 });
 
 describe("divergingStack (양쪽 막대)", () => {
-  /** 줄 k의 [왼쪽 길이, 오른쪽 길이] */
+  /** [left length, right length] of row k */
   const sides = (s: ReturnType<typeof divergingStack>, k: number) => {
     const ends = s.y0.flatMap((row, i) => [row[k], s.y1[i][k]]);
     return [-Math.min(0, ...ends), Math.max(0, ...ends)];
   };
-  // 계열: 매우 반대, 반대, 보통, 찬성, 매우 찬성 (줄마다)
+  // Series, one per line: Strongly disagree, Disagree, Neutral, Agree, Strongly agree
   const likert = [
     [4, 22, -3],
     [8, 28, 6],
@@ -145,7 +145,7 @@ describe("divergingStack (양쪽 막대)", () => {
       expect(-s.y0[2][k]).toBeCloseTo(s.y1[2][k], 9);
       expect(s.y1[2][k] - s.y0[2][k]).toBeCloseTo(Math.abs(likert[2][k]), 9);
     }
-    // 반대 두 칸은 보통의 왼쪽 끝부터 바깥으로 (반대가 0선 쪽), 찬성 두 칸은 오른쪽 끝부터 데이터 순서로
+    // The two disagree segments go outward from Neutral's left end (Disagree on the zero line side), the two agree segments from its right end in data order
     expect([s.y0[1][1], s.y1[1][1], s.y1[0][1]]).toEqual([-10, -38, -60]);
     expect([s.y0[3][1], s.y1[3][1], s.y1[4][1]]).toEqual([10, 32, 40]);
   });
@@ -155,12 +155,12 @@ describe("divergingStack (양쪽 막대)", () => {
     expect(s.y1[0][0]).toBeLessThan(s.y1[1][0]);
     expect(Math.max(s.y0[0][0], s.y1[0][0], s.y0[1][0], s.y1[1][0])).toBeLessThanOrEqual(-10);
     expect([s.neg[0], s.pos[0]]).toEqual([20, 60]);
-    // 찬성을 숨기면 오른쪽만 다시 쌓이고 왼쪽과 percent 분모는 그대로예요
+    // Hiding Agree restacks only the right side; the left side and the percent denominator stay the same
     const full = divergingStack(row, { negative: [1, 0], neutral: 2, percent: true });
     const hid = divergingStack(row, { negative: [1, 0], neutral: 2, percent: true, skip: new Set([3]) });
     for (const i of [0, 1, 2]) expect([hid.y0[i][0], hid.y1[i][0]]).toEqual([full.y0[i][0], full.y1[i][0]]);
     expect(hid.y0[4][0]).toBe(10);
-    // 이미 음수인 값은 부호대로 왼쪽, 데이터 순서가 왼쪽부터 읽혀요
+    // Values that are already negative go left by their sign, and the data order reads from the left
     const signed = divergingStack([[-3], [-7], [5]]);
     expect([signed.y1[0][0], signed.y1[1][0], signed.y1[2][0]]).toEqual([-10, -7, 5]);
   });

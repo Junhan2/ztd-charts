@@ -1,4 +1,4 @@
-// 빌드한 spec 모듈로 공개 JSON Schema 파일을 써요
+// Writes the public JSON Schema files from the built spec module
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

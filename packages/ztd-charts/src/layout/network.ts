@@ -243,7 +243,7 @@ function refine(g: NetworkGraph, start: number[], block: (n: number) => number):
 function swapPass(g: NetworkGraph, order: number[], block: (n: number) => number): number[] {
   const { nodes, links } = g;
   const pos = positions(order);
-  // Change in the length of u's links (except the one to v) when u moves one slot to the right
+  // Change in the length of u's links (except the one to v) when u moves one slot in direction dir (1 right, -1 left)
   const shift = (u: number, v: number, dir: 1 | -1) => {
     let d = 0;
     for (const k of nodes[u].links) {

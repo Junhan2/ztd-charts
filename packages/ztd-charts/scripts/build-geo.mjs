@@ -1,6 +1,6 @@
-// 내장 지도 경계(src/geo/maps/*.ts)를 원본에서 다시 만들어요: node scripts/build-geo.mjs [받은 원본을 둘 폴더]
-// 원본은 판을 고정한 주소에서 받고 sha256으로 확인해요. 저장소에는 원본을 두지 않고, 만든 파일만 둬요 (출처와 이용 조건은 NOTICE.md)
-// 만드는 일: 쓰지 않는 지역 빼기(미국 자치령), 광주와 전남 합치기(2026-07-01 통합), 선 단순화(미국 주, 한국 시도), 좌표 다시 눈금 맞추기, 압축
+// Rebuilds the built-in map boundaries (src/geo/maps/*.ts) from their sources: node scripts/build-geo.mjs [folder for the downloaded sources]
+// Sources are downloaded from version-pinned URLs and checked with sha256. The repo keeps only the generated files, not the sources (origins and terms of use in NOTICE.md)
+// Steps: drop unused regions (US territories), merge Gwangju and Jeonnam (merged on 2026-07-01), simplify lines (US states, Korean provinces), re-snap coordinates to a grid, compress
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,10 +15,10 @@ const SOURCES = {
   world: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json",
   us: "https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/states-10m.json",
   kr: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/KOR/ADM1/geoBoundaries-KOR-ADM1.topojson",
-  // 독도: geoBoundaries KOR ADM1에 없어서 Natural Earth 1:10m 작은 섬(퍼블릭 도메인)에서 가져와요
+  // Dokdo: missing from geoBoundaries KOR ADM1, so it comes from the Natural Earth 1:10m minor islands (public domain)
   islands: "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_minor_islands.geojson",
 };
-// 받은 원본의 sha256. 처음 받을 때 적고, 그 뒤로는 다르면 멈춰요
+// The sha256 of each downloaded source. Recorded on the first download; after that, a mismatch stops the script
 const hashFile = join(root, "scripts/geo-sources.json");
 const HASHES = existsSync(hashFile) ? JSON.parse(readFileSync(hashFile, "utf8")) : {};
 
@@ -37,7 +37,7 @@ async function source(key) {
   return JSON.parse(buf.toString("utf8"));
 }
 
-/** TopoJSON 선을 경위도 점 배열로 */
+/** TopoJSON arcs to arrays of lon/lat points */
 function arcsOf(topo) {
   const [sx, sy] = topo.transform?.scale ?? [1, 1];
   const [tx, ty] = topo.transform?.translate ?? [0, 0];
@@ -47,7 +47,7 @@ function arcsOf(topo) {
     return a.map(([dx, dy]) => (topo.transform ? [(x += dx) * sx + tx, (y += dy) * sy + ty] : [dx, dy]));
   });
 }
-/** 도형의 다각형 목록 (다각형마다 고리마다 선 번호) */
+/** A geometry's polygon list (arc indexes for each ring of each polygon) */
 const polysOf = (g) => (g.type === "Polygon" ? [g.arcs] : g.type === "MultiPolygon" ? g.arcs : []);
 const ringPoints = (arcs, ring) => ring.flatMap((a, k) => (a >= 0 ? arcs[a] : [...arcs[~a]].reverse()).slice(k ? 1 : 0));
 function ringArea(pts) {
@@ -65,7 +65,7 @@ function inside(pt, ring) {
   return c;
 }
 
-/** 더글러스-포이커 단순화. 경도는 위도의 cos로 줄여서 재요. 양끝 점은 늘 남아서 이웃 지역과 경계가 어긋나지 않아요 */
+/** Douglas-Peucker simplification. Longitude is scaled by the cosine of the latitude when measuring. Both end points always stay, so borders with neighboring regions do not drift apart */
 function simplify(pts, tol) {
   if (pts.length < 3 || !tol) return pts;
   const k = Math.cos((pts.reduce((s, p) => s + p[1], 0) / pts.length) * (Math.PI / 180));
@@ -95,14 +95,14 @@ function simplify(pts, tol) {
       stack.push([a, best], [best, b]);
     }
   }
-  // 닫힌 선(첫 점 = 끝 점)은 가운데 점 하나를 더 남겨요 (고리가 납작해지지 않게)
+  // A closed line (first point = last point) also keeps the points at one third and two thirds (so the ring does not go flat)
   if (pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) keep[Math.floor(pts.length / 3)] = keep[Math.floor((2 * pts.length) / 3)] = 1;
   return pts.filter((_, i) => keep[i]);
 }
 
 /**
- * 지역 목록([{ row, polys }], polys는 다각형마다 고리마다 선 번호)과 선을 압축한 꼴로.
- * 선은 단순화하고 step 눈금으로 맞춘 뒤, 이어진 같은 점을 빼요. 점이 3개가 안 되는 고리와 넓이가 0인 고리는 빼고, 바깥 고리가 빠진 다각형도 빼요
+ * Region list ([{ row, polys }], polys holds arc indexes for each ring of each polygon) and arcs to the compressed form.
+ * Arcs are simplified and snapped to the step grid, then consecutive duplicate points are removed. Rings with fewer than 3 points and rings with zero area are dropped, and so are polygons whose outer ring was dropped
  */
 function encode(regions, arcs, { step, tol = 0, keep = new Set() }) {
   const used = [...new Set(regions.flatMap((r) => r.polys.flat(2).map((a) => (a < 0 ? ~a : a))))].sort((a, b) => a - b);
@@ -133,7 +133,7 @@ function encode(regions, arcs, { step, tol = 0, keep = new Set() }) {
       )
       .filter((rings, k) => rings.length && rings[0] === polys[k][0]);
   const finalRegions = regions.map((r) => ({ ...r, polys: keptPolys(r.polys) }));
-  // 남은 선만 다시 번호를 매겨요
+  // Renumber only the arcs that are left
   const left = [...new Set(finalRegions.flatMap((r) => r.polys.flat(2).map((a) => (a < 0 ? ~a : a))))].sort((a, b) => a - b);
   const index = new Map(left.map((a, k) => [a, k]));
   const ints = [];
@@ -164,7 +164,7 @@ function encode(regions, arcs, { step, tol = 0, keep = new Set() }) {
 }
 const round = (n) => Number(n.toFixed(6));
 
-/** 정수 목록을 글자로: 지그재그(0, -1, 1, -2 …)로 음수를 없애고, 한 글자에 5비트씩 (6번째 비트는 이어짐). 글자표는 base64url */
+/** Integer list to text: zigzag (0, -1, 1, -2 …) removes negatives, then 5 bits per character (the 6th bit means more follow). The alphabet is base64url */
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 function pack(ints) {
   let s = "";
@@ -179,7 +179,7 @@ function pack(ints) {
   return s;
 }
 
-/** 두 지역(다각형 목록)을 하나로: 둘이 같이 쓰는 선을 지우고 남은 선을 고리로 다시 이어요. 다른 고리 안에 든 고리는 구멍이에요 */
+/** Merges two regions (polygon lists) into one: removes the arcs they share and joins the remaining arcs back into rings. A ring inside another ring is a hole */
 function merge(polysA, polysB, arcs) {
   const refs = [...polysA, ...polysB].flat(2);
   const count = new Map();
@@ -217,14 +217,14 @@ function merge(polysA, polysB, arcs) {
     .map(({ r, i }) => [r, ...rings.filter((_, j) => holes[j] && inside(geo[j][0], geo[i]))]);
 }
 
-// ── 세계 ──────────────────────────────────────────────────────────────
-// 줄마다 ISO 3166-1 숫자, 알파-2, 알파-3, UN M49 대륙 (AF 아프리카, AM 아메리카, AS 아시아, EU 유럽, OC 오세아니아, AN 남극)
+// ── World ─────────────────────────────────────────────────────────────
+// Each row: ISO 3166-1 numeric, alpha-2, alpha-3, UN M49 continent (AF Africa, AM Americas, AS Asia, EU Europe, OC Oceania, AN Antarctica)
 const ISO = `242 FJ FJI OC|834 TZ TZA AF|732 EH ESH AF|124 CA CAN AM|840 US USA AM|398 KZ KAZ AS|860 UZ UZB AS|598 PG PNG OC|360 ID IDN AS|032 AR ARG AM|152 CL CHL AM|180 CD COD AF|706 SO SOM AF|404 KE KEN AF|729 SD SDN AF|148 TD TCD AF|332 HT HTI AM|214 DO DOM AM|643 RU RUS EU|044 BS BHS AM|238 FK FLK AM|578 NO NOR EU|304 GL GRL AM|260 TF ATF AF|626 TL TLS AS|710 ZA ZAF AF|426 LS LSO AF|484 MX MEX AM|858 UY URY AM|076 BR BRA AM|068 BO BOL AM|604 PE PER AM|170 CO COL AM|591 PA PAN AM|188 CR CRI AM|558 NI NIC AM|340 HN HND AM|222 SV SLV AM|320 GT GTM AM|084 BZ BLZ AM|862 VE VEN AM|328 GY GUY AM|740 SR SUR AM|250 FR FRA EU|218 EC ECU AM|630 PR PRI AM|388 JM JAM AM|192 CU CUB AM|716 ZW ZWE AF|072 BW BWA AF|516 NA NAM AF|686 SN SEN AF|466 ML MLI AF|478 MR MRT AF|204 BJ BEN AF|562 NE NER AF|566 NG NGA AF|120 CM CMR AF|768 TG TGO AF|288 GH GHA AF|384 CI CIV AF|324 GN GIN AF|624 GW GNB AF|430 LR LBR AF|694 SL SLE AF|854 BF BFA AF|140 CF CAF AF|178 CG COG AF|266 GA GAB AF|226 GQ GNQ AF|894 ZM ZMB AF|454 MW MWI AF|508 MZ MOZ AF|748 SZ SWZ AF|024 AO AGO AF|108 BI BDI AF|376 IL ISR AS|422 LB LBN AS|450 MG MDG AF|275 PS PSE AS|270 GM GMB AF|788 TN TUN AF|012 DZ DZA AF|400 JO JOR AS|784 AE ARE AS|634 QA QAT AS|414 KW KWT AS|368 IQ IRQ AS|512 OM OMN AS|548 VU VUT OC|116 KH KHM AS|764 TH THA AS|418 LA LAO AS|104 MM MMR AS|704 VN VNM AS|408 KP PRK AS|410 KR KOR AS|496 MN MNG AS|356 IN IND AS|050 BD BGD AS|064 BT BTN AS|524 NP NPL AS|586 PK PAK AS|004 AF AFG AS|762 TJ TJK AS|417 KG KGZ AS|795 TM TKM AS|364 IR IRN AS|760 SY SYR AS|051 AM ARM AS|752 SE SWE EU|112 BY BLR EU|804 UA UKR EU|616 PL POL EU|040 AT AUT EU|348 HU HUN EU|498 MD MDA EU|642 RO ROU EU|440 LT LTU EU|428 LV LVA EU|233 EE EST EU|276 DE DEU EU|100 BG BGR EU|300 GR GRC EU|792 TR TUR AS|008 AL ALB EU|191 HR HRV EU|756 CH CHE EU|442 LU LUX EU|056 BE BEL EU|528 NL NLD EU|620 PT PRT EU|724 ES ESP EU|372 IE IRL EU|540 NC NCL OC|090 SB SLB OC|554 NZ NZL OC|036 AU AUS OC|144 LK LKA AS|156 CN CHN AS|158 TW TWN AS|380 IT ITA EU|208 DK DNK EU|826 GB GBR EU|352 IS ISL EU|031 AZ AZE AS|268 GE GEO AS|608 PH PHL AS|458 MY MYS AS|096 BN BRN AS|705 SI SVN EU|246 FI FIN EU|703 SK SVK EU|203 CZ CZE EU|232 ER ERI AF|392 JP JPN AS|600 PY PRY AM|887 YE YEM AS|682 SA SAU AS|010 AQ ATA AN|196 CY CYP AS|504 MA MAR AF|818 EG EGY AF|434 LY LBY AF|231 ET ETH AF|262 DJ DJI AF|800 UG UGA AF|646 RW RWA AF|070 BA BIH EU|807 MK MKD EU|688 RS SRB EU|499 ME MNE EU|780 TT TTO AM|728 SS SSD AF`;
-// 숫자 코드가 없는 세 곳: 이름으로 맞춰요. 코소보는 널리 쓰는 사용자 지정 코드 XK, XKX
+// Three places with no numeric code, matched by name. Kosovo uses the widely used user-assigned codes XK and XKX
 const NO_ISO = { Kosovo: ["XKX", "Kosovo", "EU", "XK", "Republic of Kosovo"], "N. Cyprus": ["Northern Cyprus", "Northern Cyprus", "AS", "N. Cyprus", "Turkish Republic of Northern Cyprus"], Somaliland: ["Somaliland", "Somaliland", "AF"] };
-// 보여 줄 이름: CLDR 영어 이름(Intl.DisplayNames)을 기본으로, 차트에 어색한 것만 바꿔요
+// Display names: CLDR English names (Intl.DisplayNames) by default, changing only the ones that look awkward on a chart
 const NAME = { COD: "DR Congo", COG: "Congo", MMR: "Myanmar", BIH: "Bosnia and Herzegovina", PSE: "Palestine", CIV: "Côte d'Ivoire", TLS: "Timor-Leste" };
-// 데이터에서 자주 보는 다른 이름 (ISO 3166 영어 이름, 흔한 줄임말과 옛 이름)
+// Other names often seen in data (ISO 3166 English names, common abbreviations and former names)
 const ALIAS = {
   USA: ["United States of America", "USA", "U.S.", "U.S.A.", "America"],
   GBR: ["UK", "U.K.", "Great Britain", "Britain", "United Kingdom of Great Britain and Northern Ireland"],
@@ -263,7 +263,7 @@ const ALIAS = {
   KGZ: ["Kyrgyz Republic"],
 };
 const FOCUS = {
-  // [서, 남, 동, 북] 경위도 상자와 중앙 경선. 상자 밖 지역은 그리지 않고, 상자 안의 다른 대륙 지역은 옅은 바탕으로만 그려요
+  // [west, south, east, north] lon/lat box and central meridian. Regions outside the box are not drawn, and regions of other continents inside the box are drawn only as a faint background
   europe: { box: [-25, 34, 45, 71.5], lon0: 10, group: "EU" },
   asia: { box: [25, -11, 150, 56], lon0: 90, group: "AS" },
   africa: { box: [-19, -36, 53, 38], lon0: 17, group: "AF" },
@@ -294,7 +294,7 @@ async function buildWorld() {
     }
     return { row, group, polys: polysOf(g) };
   });
-  // 이름이 한 나라에만 있는지 봐요 (CLDR 이름과 다른 이름이 겹치면 맞추기가 앞 나라로 가요)
+  // Checks that each name belongs to one country only (if a CLDR name and another name collide, matching goes to the earlier country)
   const seen = new Map();
   for (const r of regions) for (const n of r.row) {
     const k = n.toLowerCase();
@@ -306,7 +306,7 @@ async function buildWorld() {
   return { enc, focus };
 }
 
-// ── 미국 주 ───────────────────────────────────────────────────────────
+// ── US states ─────────────────────────────────────────────────────────
 async function buildUs() {
   const topo = await source("us");
   const arcs = arcsOf(topo);
@@ -322,19 +322,19 @@ async function buildUs() {
   return { enc: encode(regions, arcs, { step: 0.01, tol: 0.03 }) };
 }
 
-// ── 한국 시도 ─────────────────────────────────────────────────────────
+// ── Korean provinces ──────────────────────────────────────────────────
 async function buildKr() {
   const topo = await source("kr");
   const arcs = arcsOf(topo);
   const geoms = Object.values(topo.objects)[0].geometries;
   const byIso = new Map(geoms.map((g) => [g.properties.shapeISO, g]));
-  // geoBoundaries의 ISO 코드 → krRegions.ts의 id. 강원(KR-42), 전북(KR-45)은 옛 코드로 와요
+  // geoBoundaries ISO code → id in krRegions.ts. Gangwon (KR-42) and Jeonbuk (KR-45) come with their old codes
   const ID = { "KR-11": "Seoul", "KR-26": "Busan", "KR-27": "Daegu", "KR-28": "Incheon", "KR-30": "Daejeon", "KR-31": "Ulsan", "KR-50": "Sejong", "KR-41": "Gyeonggi", "KR-42": "Gangwon", "KR-43": "Chungbuk", "KR-44": "Chungnam", "KR-45": "Jeonbuk", "KR-47": "Gyeongbuk", "KR-48": "Gyeongnam", "KR-49": "Jeju" };
   const regions = Object.entries(ID).map(([code, id]) => ({ row: [id], polys: polysOf(byIso.get(code)) }));
-  // 광주(KR-29)와 전남(KR-46)을 전남광주로 (2026-07-01). 순서는 krRegions.ts 와 같게 맨 끝
+  // Gwangju (KR-29) and Jeonnam (KR-46) become Jeonnam-Gwangju (2026-07-01). Placed last, as in krRegions.ts
   const merged = merge(polysOf(byIso.get("KR-46")), polysOf(byIso.get("KR-29")), arcs);
   regions.push({ row: ["Jeonnam-Gwangju"], polys: merged });
-  // 독도(경북 울릉군)를 경북의 다각형 하나로 더해요. Natural Earth 작은 섬 가운데 무게중심이 131.86°E, 37.24°N 근처인 것 하나예요
+  // Adds Dokdo (Ulleung County, Gyeongbuk) as one more polygon of Gyeongbuk. It is the one Natural Earth minor island whose centroid is near 131.86°E, 37.24°N
   const islands = await source("islands");
   const near = islands.features.filter((f) => {
     if (f.geometry?.type !== "Polygon") return false;
@@ -347,7 +347,7 @@ async function buildKr() {
   arcs.push(near[0].geometry.coordinates[0]);
   const dokdo = arcs.length - 1;
   regions.find((r) => r.row[0] === "Gyeongbuk").polys.push([[dokdo]]);
-  // 독도는 아주 작아서 단순화하지 않아요 (단순화하면 점이 모자라 빠져요)
+  // Dokdo is very small, so it is not simplified (simplifying would leave too few points and drop it)
   return { enc: encode(regions, arcs, { step: 0.001, tol: 0.004, keep: new Set([dokdo]) }) };
 }
 

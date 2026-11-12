@@ -133,7 +133,7 @@ describe("색 척도 옵션: 뒤집기, 가운데 값, 단계 (차례 2 ⑬)", (
     expect(heat(vals, { colorReverse: true })).toBe(heat(vals, { colorReverse: true, highlight: "min" }));
     expect(heat(vals, { colorReverse: true })).not.toBe(heat(vals, { colorReverse: true, highlight: "max" }));
     expect(heat(vals)).toBe(heat(vals, { highlight: "max" }));
-    // 캘린더: 데이터가 없는 날(0)이 아니라 가장 작은 실제 값이 강조돼요
+    // Calendar: the smallest real value is highlighted, not a day without data (0)
     const cal = (props: Record<string, unknown>) => renderToStaticMarkup(<CalendarHeatmap data={[{ date: "2024-03-01", value: 7 }, { date: "2024-03-05", value: 2 }, { date: "2024-03-09", value: 9 }]} width={480} animate={false} {...props} />);
     const outlined = (html: string) => [...html.matchAll(/<rect [^>]*stroke="var\(--ztd-ink[^"]*"[^>]*>/g)].length;
     expect(outlined(cal({ colorReverse: true }))).toBe(1);

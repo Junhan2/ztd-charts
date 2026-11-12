@@ -181,7 +181,6 @@ export function specLocale(spec: Pick<ChartSpec, "options">, override?: string):
   return typeof l === "string" && l ? l.replace(/_/g, "-") : undefined;
 }
 
-/** Charts that can be split into small multiples (spec.facet). Shared by the validator, <Chart> and the server render */
 /**
  * Maximum size of one side of a chart (px). A value real charts never reach (over 4 times the MCP render_chart width limit of 2400).
  * validateSpec checks the spec's options.width and height against it, and places that take sizes unvalidated (server render options, CLI flags) reduce them to it.
@@ -194,6 +193,7 @@ export function capChartSize<T extends number | undefined>(v: T): T {
   return (typeof v === "number" && v > MAX_CHART_SIZE ? MAX_CHART_SIZE : v) as T;
 }
 
+/** Charts that can be split into small multiples (spec.facet). Shared by the validator, the JSON schema, <Chart> and the server render */
 export const FACET_TYPES = ["line", "area", "bar", "scatter"];
 
 /** Maximum number of facet panels. Beyond it, only this many are drawn from the start, and the validator reports how many were left out */
@@ -202,7 +202,7 @@ export const FACET_MAX = 24;
 /** Charts that can hide series (hidden). These are also the charts whose series card.legend "toggle" turns on and off */
 export const TOGGLES = ["line", "area", "bar", "scatter", "timeline"];
 
-/** Fields of the lines drawn over bars (round 3 ⑪). Drawn only on vertical bars, and not on 100% or diverging bars */
+/** Fields of the lines drawn over bars. Drawn only on vertical bars, and not on 100% or diverging bars */
 export function barLineFields(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): string[] {
   return type === "bar" && opt.orientation !== "horizontal" && opt.layout !== "percent" && opt.layout !== "diverging" ? ([] as unknown[]).concat(enc.line ?? []).map(String) : [];
 }

@@ -71,7 +71,7 @@ export interface CandlestickChartProps<T = Row> extends BaseChartProps<T>, Brush
   volume?: Accessor<T, number>;
   /** Periods of the closing-price moving average lines. Example: [5, 20] */
   ma?: number[];
-  /** Color of rising candles. A theme token name or CSS color. Default "accent" (Korean convention: rises in red tones) */
+  /** Color of rising candles. A theme token name or CSS color. Default "accent" (the theme's accent color) */
   upColor?: string;
   /** Color of falling candles. Default "neutralStrong" */
   downColor?: string;

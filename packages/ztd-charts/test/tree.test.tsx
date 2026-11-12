@@ -11,7 +11,7 @@ import { renderSpecToSVG } from "../src/server";
 import { CHARTS, parseCSV, suggestCharts, validateSpec } from "../src/spec";
 import { treeSample } from "../src/spec/samples";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 노드를, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked node, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -69,7 +69,7 @@ interface Box {
   hh: number;
   text: string;
 }
-/** 그린 이름 상자 (돌린 것 포함). 글자 폭은 차트와 같은 textWidth로 재요 */
+/** Drawn label boxes (rotated ones included). Text width is measured with textWidth, the same as the chart */
 function boxes(svg: string): Box[] {
   return [...svg.matchAll(/<text x="([-\d.]+)" y="([-\d.]+)" dy="0.35em"(?: transform="rotate\(([-\d.]+)[^"]*\)")? text-anchor="(\w+)" font-size="([\d.]+)" font-weight="(\d+)"[^>]*>([^<]*)<\/text>/g)]
     .filter((m) => !svg.slice(0, m.index).endsWith("<g pointer-events=\"none\">"))
@@ -95,19 +95,19 @@ function overlap(a: Box, b: Box): boolean {
   }
   return true;
 }
-/** 겹치는 이름 쌍 (강조 경로 이름끼리는 늘 남기니까 서로는 빼고 봐요) */
+/** Pairs of overlapping labels (labels on the highlighted path are always kept, so they are not checked against each other) */
 const clashes = (svg: string) => {
   const list = boxes(svg);
   const out: string[] = [];
   for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (overlap(list[i], list[j])) out.push(`${list[i].text} × ${list[j].text}`);
   return out;
 };
-/** 이름 상자와 겹치는 점 (점은 반지름만큼의 정사각형으로) */
+/** Dots that overlap a label box (each dot taken as a square reaching out by its radius) */
 const onDots = (svg: string) => {
   const dots = [...svg.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)" fill=/g)].map((m) => ({ cx: +m[1], cy: +m[2], ux: 1, uy: 0, hw: +m[3], hh: +m[3], text: "dot" }));
   return boxes(svg).filter((b) => dots.some((d) => overlap(b, d))).map((b) => b.text);
 };
-/** 그린 이름 글자만 */
+/** Only the drawn label text */
 const names = (svg: string) => boxes(svg).map((b) => b.text);
 
 describe("tree data", () => {
@@ -138,9 +138,9 @@ describe("tree data", () => {
     expect(issues.map((x) => `${x.code}:${x.id}`)).toEqual(["duplicate_id:b", "cycle:c", "missing_parent:d", "cycle:e"]);
     const all = preorder(root);
     expect(all).toHaveLength(rows.length + 1);
-    // 고리는 e에서 끊겨 e가 뿌리 아래, f는 e 아래, g는 f 아래예요. 겹친 id의 자식(h)은 첫 b 아래예요
+    // The cycle is broken at e, so e goes under the root, f under e, g under f. The child of the duplicated id (h) goes under the first b
     expect(all.map((n) => n.id)).toEqual(["", "a", "a/b", "a/b/h", "a/b again", "c", "d", "e", "e/f", "e/f/g"]);
-    // 깊이 5000 사슬도 재귀 없이
+    // A chain 5000 deep too, without recursion
     expect(preorder(stratify(chain(5000), {})).at(-1)!.depth).toBe(5000);
   });
 
@@ -148,7 +148,7 @@ describe("tree data", () => {
     const root = buildTree(treeSample, { group: "service", label: "screen" });
     const { nodes, slots, span, levels } = layoutSlots(root, () => false);
     expect(levels).toBe(2);
-    // 잎 23개, 서비스가 바뀔 때마다 반 칸 (5번)
+    // 23 leaves, plus half a slot each time the service changes (5 times)
     expect(span).toBe(25.5);
     for (const n of nodes) {
       if (!n.children.length) continue;
@@ -166,11 +166,11 @@ describe("Tree", () => {
   it("draws the path from each highlighted node to the root in the accent color, the rest quiet", () => {
     const h = sample({ highlight: ["Payment methods", "Renewal"] });
     const accentLinks = h.match(/<path d="[^"]+" stroke="var\(--ztd-accent[^"]*\)"/g) ?? [];
-    // Payment methods: 뿌리 → Account → Payment methods (선 2개), Renewal: 뿌리 → Subscriptions → Renewal (선 2개)
+    // Payment methods: root → Account → Payment methods (2 links), Renewal: root → Subscriptions → Renewal (2 links)
     expect(accentLinks).toHaveLength(4);
     expect(h.match(/<circle [^>]*fill="var\(--ztd-accent[^"]*\)"/g)).toHaveLength(5);
     expect(sample()).not.toContain("--ztd-accent");
-    // 경로("부모/자식")로, 이름이 겹치면 모두, 없는 이름은 없음
+    // By path ("parent/child"), every match when names repeat, nothing for a missing name
     expect(sample({ highlight: "Account/Receipts" }).match(/<path d="[^"]+" stroke="var\(--ztd-accent/g)).toHaveLength(2);
     const twins = draw([{ g: "A", l: "Same" }, { g: "B", l: "Same" }, { g: "B", l: "Other" }], { group: "g", label: "l", highlight: "Same" });
     expect(twins.match(/<path d="[^"]+" stroke="var\(--ztd-accent/g)).toHaveLength(4);
@@ -187,18 +187,18 @@ describe("Tree", () => {
         const shown = names(h);
         for (const name of ["Account", ...hi]) expect(shown.some((s) => name.startsWith(s.replace(/…$/, ""))), `${layout} ${width} ${name}`).toBe(true);
       }
-    // 한 부모 아래 잎 500개: 자리가 모자라면 이름을 빼되 강조한 잎은 남아요
+    // 500 leaves under one parent: when room runs out labels are dropped, but the highlighted leaf keeps its label
     for (const layout of ["horizontal", "radial"]) {
       const h = draw(fan(500), { id: "id", parent: "parent", layout, highlight: "Child 250" });
       expect(clashes(h), layout).toEqual([]);
       expect(names(h)).toContain("Child 250");
       expect(names(h).length).toBeLessThan(200);
     }
-    // 빈칸만 있는 그룹은 그룹 없음, 빈칸만 있는 이름은 빈 이름처럼 "#행 번호" (차트와 검사가 같아요)
+    // A group of only spaces counts as no group; a label of only spaces is treated like an empty one, "#" plus the row number (the chart and the validator agree)
     const blank = draw([{ g: "Orders", l: "Checkout" }, { g: "  ", l: "Loose" }, { g: "Orders", l: "   " }], { group: "g", label: "l" });
     expect(names(blank)).toEqual(["All", "Orders", "Checkout", "#3", "Loose"]);
     expect(validateSpec({ type: "tree", data: [{ g: "  ", l: "Loose" }, { g: "A", l: "   " }], encoding: { group: "g", label: "l" }, options: { highlight: ["Loose", "A/#2"] } }).warnings).toEqual([]);
-    // 아주 긴 이름은 줄이고, 빈 이름은 id로
+    // A very long label is shortened, and an empty label falls back to the id
     const long = draw([{ id: "r", label: "Root" }, { id: "x", parent: "r", label: "A very long label ".repeat(10) }, { id: "y", parent: "r", label: "" }], { id: "id", parent: "parent", width: 280 });
     expect(names(long).find((s) => s.startsWith("A very"))).toMatch(/…$/);
     expect(names(long)).toContain("y");
@@ -209,9 +209,9 @@ describe("Tree", () => {
     const small = sample({ layout: "radial" });
     const big = draw(fan(200), { id: "id", parent: "parent", layout: "radial" });
     expect(height(small)).toBeLessThan(height(big));
-    // 서비스 이름(첫 고리)은 돌리지 않은 가로 글자예요
+    // Service names (the first ring) are horizontal, unrotated text
     for (const name of ["Orders", "Account", "Search"]) expect(small, name).toMatch(new RegExp(`<text x="[-\\d.]+" y="[-\\d.]+" dy="0.35em" text-anchor="\\w+"[^>]*>${name}</text>`));
-    // 선 위의 점은 뿌리에서 멀어지기만 해요 (3차 곡선 조각을 0.1 간격으로)
+    // Points along a link only move away from the root (each cubic segment sampled at 0.1 steps)
     const root = small.match(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)"/)!;
     const [rx, ry] = [+root[1], +root[2]];
     const paths = [...small.matchAll(/<path d="(M[^"]+)" stroke=/g)].map((m) => m[1]);
@@ -244,9 +244,9 @@ describe("Tree", () => {
 
   it("radial: outer names use the card's room before they are shortened, and the root name stays whole", () => {
     const names = (width: number) => [...sample({ layout: "radial", width }).matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]).filter(Boolean);
-    // 문서 변형 카드(1280 화면 403px, 1440 화면 483px)에서 예전에는 "Start subscri…", "Notification sett…"처럼 줄었어요
+    // On the docs variant cards (403px on a 1280 screen, 483px on a 1440 screen) names used to be cut like "Start subscri…", "Notification sett…"
     for (const width of [403, 483]) expect(names(width).filter((t) => t.endsWith("…")), `${width}`).toEqual([]);
-    // 원이 하한인 좁은 카드는 줄이되 가운데 뿌리 이름은 온전해요
+    // On a narrow card where the circle is at its minimum size, names are shortened, but the root name in the middle stays whole
     const narrow = names(357);
     expect(narrow.some((t) => t.endsWith("…"))).toBe(true);
     expect(narrow).toContain("Payments API");
@@ -264,9 +264,9 @@ describe("Tree", () => {
     for (const h of outs) expect(h).not.toMatch(/NaN|Infinity|undefined/);
     expect(names(outs[0])).toEqual(["Only"]);
     expect(outs[3]).toContain("No data.");
-    // 사슬 끝까지 강조 경로 (선 49개)
+    // The highlighted path runs to the end of the chain (49 links)
     expect(outs[1].match(/<path d="[^"]+" stroke="var\(--ztd-accent/g)).toHaveLength(49);
-    // 값이 있으면 점 크기가 값을 따라요(2.5~9px로 묶어요). 음수, 0, 글자는 가장 작게
+    // With values, dot size follows the value (clamped to 2.5~9px). Negatives, 0 and text get the smallest size
     const radii = [...outs[4].matchAll(/<circle [^>]*r="([\d.]+)"/g)].map((m) => +m[1]);
     expect(Math.min(...radii)).toBeGreaterThanOrEqual(1.2);
     expect(Math.max(...radii)).toBeLessThanOrEqual(9);
@@ -276,12 +276,12 @@ describe("Tree", () => {
     const h = sample({ collapsed: ["Products", "Search/Filters"] });
     expect(names(h)).toContain("Products");
     expect(names(h)).not.toContain("Catalog");
-    // 접힌 가지에는 점 둘레 고리가 있어요 (잎 Filters는 접을 게 없어서 그대로)
+    // A collapsed branch has a ring around its dot (the leaf Filters has nothing to collapse, so it stays as is)
     expect(h.match(/r="[\d.]+" fill="none" stroke=/g)).toHaveLength(1);
-    // 접힌 가지가 맨 오른쪽 잎 자리에 와도 이름이 들어가요 (점과 고리 몫까지 오른쪽 여백)
+    // Even when a collapsed branch lands in the rightmost leaf slot, its name fits (the right margin leaves room for the dot and the ring)
     expect(names(draw([{ label: "CEO", children: [{ label: "CTO", children: [{ label: "Platform" }] }, { label: "CFO" }] }], { collapsed: ["CTO"] }))).toEqual(["CEO", "CTO", "CFO"]);
     expect(renderSpecToSVG({ ...def.example, options: { ...def.example.options, collapsed: ["Products"] } })).toBe(renderSpecToSVG({ ...def.example, options: { ...def.example.options, collapsed: ["Products"] } }));
-    // 키보드: 접힌 노드에서 Enter (useState라 서버 그림에서는 상태만 보고, 접기는 onClick 이벤트로 확인)
+    // Keyboard: Enter on a collapsed node (it is useState, so the server render only shows the state; the folding is checked through the onClick event)
     const clicks: string[] = [];
     state.active = frame().events.findIndex((e) => e.label === "Products");
     state.via = "keyboard";
@@ -307,7 +307,7 @@ describe("Tree", () => {
     };
     expect([go("horizontal", "Checkout", "ArrowLeft"), go("horizontal", "Orders", "ArrowRight"), go("horizontal", "Orders", "ArrowDown"), go("horizontal", "Order history", "ArrowDown"), go("horizontal", "Payments API", "ArrowLeft")]).toEqual(["Orders", "Checkout", "Subscriptions", "Start subscription", undefined]);
     expect([go("radial", "Checkout", "ArrowUp"), go("radial", "Orders", "ArrowDown"), go("radial", "Orders", "ArrowRight"), go("radial", "Subscriptions", "ArrowLeft")]).toEqual(["Orders", "Checkout", "Subscriptions", "Orders"]);
-    // 고른 게 없으면 화살표는 뿌리로
+    // With nothing picked, an arrow key goes to the root
     state.active = null;
     sample();
     state.calls = [];
@@ -349,7 +349,7 @@ describe("Tree", () => {
     expect(draw(rows, { id: "id", parent: "parent" })).toBe(a);
     expect(a.match(/<circle /g)!.length).toBe(5000);
     expect(clashes(a)).toEqual([]);
-    // 넉넉한 상한 (이 맥은 부하로 2~5배 흔들려요). 같은 데이터의 선버스트와 견준 값은 PR에 적어요
+    // A generous limit (this Mac's speed swings 2 to 5 times under load). The comparison with a sunburst of the same data goes in the PR
     expect(ms).toBeLessThan(3000);
   });
 });
@@ -368,12 +368,12 @@ describe("validateSpec for tree", () => {
     expect(v.valid).toBe(true);
     expect(codes(v)).toEqual(["tree_duplicate_id", "tree_missing_parent", "tree_cycle", "tree_negative_value", "highlight_not_found", "collapsed_not_found"]);
     expect(v.warnings.find((w) => w.code === "highlight_not_found")!.message).toContain('"Nope"');
-    // 경로와 이름, 강조 낱말, 뿌리 이름은 맞는 것으로 봐요
+    // Paths, names, highlight keywords and the root name all count as matches
     expect(codes(spec(treeSample, { group: "service", label: "screen" }, { rootLabel: "API", highlight: ["Account/Receipts", "Orders", "max", "API"] }))).toEqual([]);
     expect(codes(spec(treeSample, { group: "service", label: "screen", parent: "service" }))).toContain("tree_parent_wins");
-    // 이름에 "/"가 든 경로 열("src/layout")도 경로로 찾아요
+    // A path column whose names contain "/" ("src/layout") is matched as a path too
     expect(codes(spec([{ path: "src/layout", name: "tree.ts" }], { label: "name" }, { path: ["path"], highlight: "src/layout/tree.ts" }))).toEqual([]);
-    // 경로는 실제 부모 아래에 있어야 맞아요 (Checkout은 Orders 아래라 Search/Checkout은 없어요)
+    // A path matches only under its real parent (Checkout is under Orders, so there is no Search/Checkout)
     expect(codes(spec(treeSample, { group: "service", label: "screen" }, { highlight: "Search/Checkout" }))).toEqual(["highlight_not_found"]);
     expect(validateSpec(def.example).warnings).toEqual([]);
   });

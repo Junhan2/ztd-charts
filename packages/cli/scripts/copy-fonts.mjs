@@ -1,5 +1,5 @@
-// 글꼴이 없는 컴퓨터(리눅스 컨테이너 등)에서도 PNG의 글자가 빠지지 않도록 Pretendard 정적 글꼴과 OFL 라이선스를 fonts/에 복사해요.
-// 굵기는 차트 SVG가 쓰는 400~800 다섯 가지예요. findFonts가 dist 옆의 fonts/를 읽고, package.json files에 fonts가 있어 npm 패키지에 같이 실려요
+// Copies the static Pretendard fonts and the OFL license into fonts/ so PNG text does not go missing on machines without fonts (Linux containers and the like).
+// The weights are the five the chart SVGs use, 400 to 800. findFonts reads fonts/ next to dist, and fonts is in package.json files, so it ships in the npm package
 import { copyFileSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";

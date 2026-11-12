@@ -1,6 +1,6 @@
-// render --interactive 로 내보낸 HTML이 서버 그림을 이어받을 때 쓰는 브라우저 코드를 dist/client/ 에 만들어요.
-// react.js 는 React, React DOM client, JSX 런타임을 globalThis.__ztdReact 에 올리고, <type>.js 는 그 차트 하나와 스펙 렌더러, 이어받기 시작점을 담아요.
-// api.ts 의 clientScript 가 react.js 와 그 차트의 파일 하나를 HTML에 글자 그대로 넣어요 (CDN, base64, import map 없음)
+// Builds into dist/client/ the browser code that HTML exported with render --interactive uses to hydrate the server-drawn chart.
+// react.js puts React, the React DOM client and the JSX runtime on globalThis.__ztdReact; <type>.js holds that one chart, the spec renderer and the hydration entry point.
+// clientScript in api.ts inlines react.js, the map file geo-<name>.js for a map chart, and that chart's file into the HTML as plain text (no CDN, base64 or import map)
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -9,15 +9,15 @@ import { BUILTIN_MAPS, CHARTS, mapExportName } from "ztd-charts/spec";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-// 새 의존성 없이 tsup 이 쓰는 esbuild 를 빌려요
+// Borrows the esbuild that tsup uses, so no new dependency
 const esbuild = createRequire(require.resolve("tsup"))("esbuild");
-// 작업 공간의 라이브러리 소스를 묶어요. package.json 의 "sideEffects": false 덕에 쓰지 않는 차트 43종은 빠져요
+// Bundles the library source from the workspace. Thanks to "sideEffects": false in package.json, the 43 unused charts are left out
 const lib = dirname(require.resolve("ztd-charts/package.json"));
 const out = join(root, "dist/client");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-// 차트 파일의 React import 는 react.js 가 올린 전역을 읽어요. 그래서 React 는 페이지에 한 벌만 있어요
+// React imports in a chart file read the global that react.js set up, so the page has only one copy of React
 const REACT = /^(react|react\/jsx-runtime|react-dom\/client)$/;
 const reactGlobal = {
   name: "react-global",
@@ -42,7 +42,7 @@ const common = {
 async function build(name, contents, plugins = []) {
   const r = await esbuild.build({ ...common, stdin: { contents, resolveDir: root, loader: "tsx" }, plugins });
   const code = r.outputFiles[0].text;
-  // <script> 안에 그대로 넣으므로 태그를 닫거나 주석을 여는 글자가 있으면 멈춰요 (esbuild 는 브라우저용 출력에서 </script> 를 이미 바꿔 줘요)
+  // The code goes into a <script> as is, so text that closes the tag or opens a comment stops the build (esbuild already rewrites </script> in browser output)
   if (/<\/script|<!--/i.test(code)) throw new Error(`${name}: </script or <!-- left in the bundle`);
   writeFileSync(join(out, `${name}.js`), code);
 }
@@ -53,7 +53,7 @@ const index = JSON.stringify(join(lib, "src/index.ts"));
 await Promise.all(
   CHARTS.map((d) => build(d.type, `import { hydrateChart } from ${hydrate}; import { ${d.component} } from ${index}; hydrateChart(${JSON.stringify(d.type)}, ${d.component});`, [reactGlobal])),
 );
-// 지도마다 geo-<이름>.js 가 그 지도를 등록해요. 등록표는 globalThis 한 곳이라 차트 파일의 지도 차트가 이 지도를 찾아요
+// Each map's geo-<name>.js registers that map. The registry sits in one place on globalThis, so the map chart in a chart file finds this map
 const registry = JSON.stringify(join(lib, "src/geo/registry.ts"));
 await Promise.all(
   BUILTIN_MAPS.map((name) => {
@@ -61,6 +61,6 @@ await Promise.all(
     return build(`geo-${name}`, `import { registerMap } from ${registry}; import { ${exported} } from ${JSON.stringify(join(lib, `src/geo/${name}.ts`))}; registerMap(${exported});`);
   }),
 );
-// 지도 경계 데이터의 출처와 라이선스(ISC 고지 포함)를 그 데이터를 담은 geo-*.js 옆에 같이 실어요
+// Ships the sources and licenses of the map boundary data (ISC notice included) next to the geo-*.js files that carry that data
 copyFileSync(join(lib, "NOTICE.md"), join(out, "NOTICE.md"));
 console.log(`client: react + ${CHARTS.length} charts + ${BUILTIN_MAPS.length} maps -> dist/client/`);

@@ -19,7 +19,7 @@ import { CHARTS, validateSpec } from "../src/spec";
 import { choroplethKrSample, choroplethSample, choroplethUsSample, choroplethZones, tileMapSample, tileMapSampleKo, tileMapUsSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 지역을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked region, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -60,12 +60,12 @@ const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
 const row = (country: unknown, rate: unknown) => ({ country, rate });
 const draw = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<Choropleth data={data} region="country" value="rate" unit="%" width={720} animate={false} {...extra} />);
-/** 지역 길 (채운 길만, 테두리 길은 fill="none") */
+/** Region paths (filled paths only; outline paths have fill="none") */
 const regionPaths = (h: string) => [...h.matchAll(/<path d="([^"]+)" fill="(?!none)[^"]*"[^>]*fill-rule="evenodd"[^>]*class="ztd-mark"/g)].map((m) => m[1]);
 const outlines = (h: string) => [...h.matchAll(/<path d="[^"]+" fill="none" stroke="[^"]+" stroke-width="([\d.]+)"/g)].map((m) => +m[1]);
-/** 길의 한 부분 경로에서 가로로 크게 건너뛰는 선(지도를 가로지르는 선)이 있는지: 상대 좌표 l 뒤 dx 중 가장 큰 절댓값 */
+/** Whether a subpath has a big horizontal jump (a line across the map): the largest absolute dx after the relative l command */
 const maxJump = (d: string) => Math.max(0, ...[...d.matchAll(/l([^MZ]+)/g)].flatMap((m) => m[1].trim().split(/\s+/).filter((_, i) => i % 2 === 0).map((v) => Math.abs(+v))));
-/** 등록표를 잠깐 비우고 fn을 돌려요 (등록하지 않은 경우) */
+/** Runs fn with the map registry briefly emptied (the case where nothing is registered) */
 function withoutMaps<T>(fn: () => T): T {
   const key = Symbol.for("ztd-charts.geo.maps");
   const g = globalThis as unknown as Record<symbol, Map<string, unknown>>;
@@ -106,7 +106,7 @@ describe("geo foundation", () => {
     expect(kr.map((s) => s.id)).toContain("Jeonnam-Gwangju");
     expect(kr).toHaveLength(16);
     for (const s of [...mapShapes(world), ...mapShapes(usStates), ...kr]) expect(s.polygons.length, s.id).toBeGreaterThan(0);
-    // 광주는 전남광주에 들어가서 따로 없어요
+    // Gwangju is part of Jeonnam-Gwangju, so it has no entry of its own
     expect(mapMatcher(krSido)("광주")).toBe(-1);
   });
 
@@ -123,18 +123,18 @@ describe("geo foundation", () => {
     const [akX, akY] = projectPoint(us, -150, 64);
     const [hiX, hiY] = projectPoint(us, -157.8, 21.3);
     expect(caX).toBeLessThan(maineX);
-    // 알래스카와 하와이는 본토 왼쪽 아래 (도법 조각을 지점 자리로 골라요)
+    // Alaska and Hawaii sit below and left of the lower 48 (the projection piece is chosen by the point's location)
     expect(akY).toBeGreaterThan(maineY);
     expect(hiY).toBeGreaterThan(maineY);
     expect(akX).toBeLessThan(hiX);
   });
 
   it("cuts rings that cross the antimeridian instead of drawing a line across the map", () => {
-    // 피지처럼 179°E에서 179°W로 건너는 고리: 두 조각, 경도 차이는 어느 조각에서도 180 미만
+    // A ring that crosses from 179°E to 179°W, like Fiji: two pieces, each spanning less than 180 degrees of longitude
     const pieces = cutRing([[178, -17], [179.5, -17], [-179.5, -17], [-179, -16], [179, -16]]);
     expect(pieces).toHaveLength(2);
     for (const p of pieces) expect(Math.max(...p.map((q) => q[0])) - Math.min(...p.map((q) => q[0]))).toBeLessThan(180);
-    // 세계 지도의 피지, 러시아: 지도 폭의 절반을 넘게 건너뛰는 선이 없어요
+    // Fiji and Russia on the world map: no line jumps more than half the map width
     const g = geoLayout(world);
     const f = geoFrame(g, 720, 320);
     for (const id of ["FJI", "RUS", "USA"]) {
@@ -142,7 +142,7 @@ describe("geo foundation", () => {
       expect(f.paths[i].length, id).toBeGreaterThan(20);
       expect(maxJump(f.paths[i]), id).toBeLessThan(360);
     }
-    // 남극은 기본으로 빼요
+    // Antarctica is left out by default
     expect(g.regions.map((i) => g.shapes[i].id)).not.toContain("ATA");
   });
 
@@ -153,7 +153,7 @@ describe("geo foundation", () => {
         const f = geoFrame(g, w, h);
         for (const i of [...g.regions, ...g.context])
           for (const ring of f.paths[i].split("Z").filter(Boolean)) {
-            // 1px보다 작은 고리는 1.6px 네모(h1.6v1.6h-1.6)예요
+            // A ring smaller than 1px becomes a 1.6px square (h1.6v1.6h-1.6)
             const [, x, y, rest] = /^M([-\d.]+) ([-\d.]+)(?:l(.*)|h1\.6v1\.6h-1\.6)?$/.exec(ring)!;
             const xs = [+x];
             const ys = [+y];
@@ -178,9 +178,9 @@ describe("geo foundation", () => {
     expect(g.shapes.map((s) => s.id)).toEqual(["North", "East", "South", "Lakes", "Far"]);
     expect(g.shapes.map((s) => s.name).slice(0, 2)).toEqual(["North zone", "East zone"]);
     expect(g.skipped).toEqual([4, 5]);
-    // 위도 95인 점 셋(닫는 점 포함)은 90으로 묶어요
+    // The three points at latitude 95 (closing point included) are clamped to 90
     expect(g.outOfRange).toBe(3);
-    // 구멍 하나, 조각 둘
+    // One hole, two pieces
     expect(g.shapes[1].polygons[0]).toHaveLength(2);
     expect(g.shapes[3].polygons).toHaveLength(2);
   });
@@ -211,7 +211,7 @@ describe("geo foundation", () => {
     expect(pick(tileMapUsSample.map((d) => d.state))).toBe("us-states");
     expect(pick(tileMapSampleKo.map((d) => d.sido))).toBe("kr-sido");
     expect(pick(["Seoul", "Busan"])).toBe("kr-sido");
-    // "Georgia" 하나는 나라와 주가 같이 맞아서 먼저 등록한 세계 지도. 아무것도 안 맞으면 처음 지도
+    // "Georgia" alone matches both a country and a state, so it picks the world map, registered first. When nothing matches, the first map
     expect(pick(["Georgia"])).toBe("world");
     expect(pick(["Georgia", "Ohio"])).toBe("us-states");
     expect(pick([])).toBe("world");
@@ -221,7 +221,7 @@ describe("geo foundation", () => {
 
 describe("Choropleth", () => {
   it("legend step hover: the rest turns no-data grey, the step's regions get a thin outline, and the list shows that step", async () => {
-    // 범례 단계 상태(useState(null))만 0(가장 옅은 단계)으로: choropleth.tsx가 바로 부른 useState만 바꿔요
+    // Only the legend step state (useState(null)) is set to 0 (the lightest step): only the useState called directly by choropleth.tsx is replaced
     vi.resetModules();
     vi.doMock("react", async (orig) => {
       const R = await orig<typeof import("react")>();
@@ -237,17 +237,17 @@ describe("Choropleth", () => {
       const mod = await import("../src/charts/choropleth");
       const h = r(<mod.Choropleth data={choroplethSample} region="country" value="rate" unit="%" width={720} animate={false} />);
       const lowest = ["Peru", "Kenya", "Morocco", "Egypt", "Nigeria"];
-      // 목록 머리 줄과 그 단계 지역 (가장 높은 곳 목록이 아니에요)
+      // The list header line and the regions in that step (not the list of highest regions)
       expect(h).toMatch(/>\d+ regions in this step</);
       for (const name of lowest) expect(h).toContain(`. ${name}<`);
       expect(h).not.toContain(">1. Canada<");
-      // 단계 밖 지역은 데이터 없음 색(불투명), 단계 지역은 얇은 테두리
+      // Regions outside the step get the no-data color (opaque), regions in the step a thin outline
       const fills = [...h.matchAll(/fill="([^"]+)" opacity="([\d.]+)"[^>]*fill-rule="evenodd"/g)];
       expect(fills.filter((m) => m[1].includes("neutral-soft")).length).toBeGreaterThan(150);
       expect(fills.filter((m) => !m[1].includes("neutral-soft"))).toHaveLength(7);
       expect(fills.every((m) => +m[2] !== 0.25)).toBe(true);
       expect(h).toMatch(/<g pointer-events="none" fill="none" stroke="[^"]+" stroke-width="0.75"/);
-      // 단계 밖 강조(캐나다)의 굵은 테두리는 숨겨요
+      // The thick outline of the highlighted region outside the step (Canada) is hidden
       expect(outlines(h)).not.toContain(1.4);
     } finally {
       vi.doUnmock("react");
@@ -256,7 +256,7 @@ describe("Choropleth", () => {
   });
 
   it("legend step hover draws the highlight outline or ring only while the highlighted region is in that step (world, US states, Korea)", async () => {
-    // 범례 단계 상태를 at으로: choropleth.tsx가 바로 부른 useState(null)만 바꿔요
+    // The legend step state comes from at: only the useState(null) called directly by choropleth.tsx is replaced
     let at = 0;
     vi.resetModules();
     vi.doMock("react", async (orig) => {
@@ -271,7 +271,7 @@ describe("Choropleth", () => {
     });
     try {
       const mod = await import("../src/charts/choropleth");
-      // 큰 지역은 굵은 테두리(path), 작은 지역은 고리(circle)로 둘러요 (확대한 한국 지도는 세종까지 모두 테두리예요)
+      // Large regions get a thick outline (path), small regions a ring (circle) (on the zoomed Korea map every region gets an outline, Sejong included)
       const cases: [string, Record<string, unknown>, string, "outline" | "ring"][] = [
         ["Canada", { data: choroplethSample, region: "country" }, "Canada", "outline"],
         ["South Korea", { data: choroplethSample, region: "country" }, "South Korea", "ring"],
@@ -308,16 +308,16 @@ describe("Choropleth", () => {
     const paths = regionPaths(h);
     expect(paths.length).toBeGreaterThan(160);
     expect(h).not.toMatch(/NaN|undefined|Infinity/);
-    // 가장 높은 곳(캐나다)에만 테두리
+    // Outline only on the highest region (Canada)
     expect(outlines(h)).toEqual([1.4]);
     const ev = frame().events;
     expect(ev.slice(0, 3).map((e) => `${e.label}: ${e.formatted}`)).toEqual(["Canada: 4.8%, 1st of 37", "Netherlands: 4.4%, 2nd of 37", "Sweden: 4.2%, 3rd of 37"]);
-    // 같은 값은 같은 순위 (태국과 튀르키예 2.2%는 둘 다 22위)
+    // Equal values share a rank (Thailand and Türkiye at 2.2% are both 22nd)
     expect([ev[21].formatted, ev[22].formatted]).toEqual(["2.2%, 22nd of 37", "2.2%, 22nd of 37"]);
     expect(ev[36].formatted).toBe("0.9%, 37th of 37");
     expect(ev[37]).toMatchObject({ value: null, formatted: "No data" });
     expect(frame().description).toBe("Choropleth map. 37 regions with data. Highest Canada 4.8%, lowest Nigeria 0.9%, mean 2.7%. 139 regions without data.");
-    // 범례: 다섯 단계와 데이터 없음 칸
+    // Legend: five steps and a no-data swatch
     expect(h).toContain(">No data</text>");
   });
 
@@ -330,7 +330,7 @@ describe("Choropleth", () => {
     expect(narrow).not.toContain(">Highest</text>");
     expect(draw(choroplethSample, { ranking: false })).not.toContain(">Highest</text>");
     expect(draw(choroplethSample, { width: 390, ranking: true })).toContain(">Highest</text>");
-    // 지역이 적으면 머리 줄 없이 모두
+    // With few regions, all are listed, without the header line
     const few = draw([row("France", 3), row("Spain", 2), row("Italy", 1)]);
     expect(few).not.toContain(">Highest</text>");
     expect(few).toContain(">3. Italy</text>");
@@ -368,13 +368,13 @@ describe("Choropleth", () => {
       const h = draw(data);
       expect(h, JSON.stringify(data)).not.toMatch(/NaN|undefined|Infinity|<script>/);
     }
-    // 모두 같으면 강조 없음, 같은 값이라고 말해요
+    // All equal: no highlight, and the description says they share one value
     draw(["France", "Spain", "Italy"].map((c) => row(c, 2)));
     expect(frame().description).toMatch(/^Choropleth map\. 3 regions with data, all at the same value, 2%/);
-    // 하나만
+    // Only one
     draw([row("France", 3)]);
     expect(frame().events[0].formatted).toBe("3%, 1st of 1");
-    // 이상한 옵션 값
+    // Odd option values
     for (const extra of [{ colorSteps: 0 }, { colorSteps: 99 }, { colorSteps: "x" }, { width: 0 }, { height: -10 }, { focus: "mars" }, { colorCenter: 0 }, { legendLabels: [] }]) {
       expect(draw(choroplethSample, extra), JSON.stringify(extra)).not.toMatch(/NaN|undefined|Infinity/);
     }
@@ -419,7 +419,7 @@ describe("Choropleth", () => {
     r(<Probe />);
     const self = {};
     const press = (key: string) => root!.props.onKeyDown({ key, target: self, currentTarget: self, preventDefault() {} } as never);
-    // 독일에서: End는 가장 낮은 스페인, 오른쪽은 이웃 폴란드, 왼쪽은 이웃 나라(벨기에, 네덜란드, 룩셈부르크 쪽)
+    // From Germany: End goes to the lowest, Spain; right to the neighbor Poland; left to a neighboring country (toward Belgium, the Netherlands, Luxembourg)
     press("End");
     press("ArrowRight");
     press("ArrowDown");
@@ -451,7 +451,7 @@ describe("Choropleth", () => {
     );
     expect(geometry(browser).length).toBeGreaterThan(20_000);
     expect(geometry(server)).toBe(geometry(browser));
-    // 이어받는 HTML(renderToString)도 같은 길
+    // The HTML that gets hydrated (renderToString) has the same paths too
     const html = renderSpecToHTML(def.example, { width: 640, frame: false, interactive: { script: "" } });
     expect(geometry(html)).toContain(geometry(browser).slice(0, 2000));
     const ssr = renderToString(<Choropleth data={choroplethSample} region="country" value="rate" map={world} width={640} animate={false} />);
@@ -467,7 +467,7 @@ describe("Choropleth", () => {
     let t0 = performance.now();
     draw(many);
     expect(performance.now() - t0).toBeLessThan(2000);
-    // 0.002° 간격 원 1,000개 = 약 5MB
+    // 1,000 circles at 0.002° spacing = about 5MB
     const features = Array.from({ length: 1000 }, (_, k) => {
       const cx = (k % 40) * 0.5;
       const cy = Math.floor(k / 40) * 0.5;
@@ -491,12 +491,12 @@ describe("lead review fixes", () => {
       expect(outlines(big), String(width)).toEqual([1.4]);
       expect(circles(big)).toEqual([]);
       const small = draw(choroplethSample, { width, highlight: "South Korea" });
-      // 얇은 선(0.75)과 고리 하나. 굵은 선이 칠을 덮지 않아요
+      // A thin line (0.75) and one ring. No thick line covers the fill
       expect(outlines(small), String(width)).toEqual([0.75]);
       expect(circles(small)).toHaveLength(1);
       expect(circles(small)[0]).toBeGreaterThanOrEqual(6);
     }
-    // 미국을 강조한 아메리카: 본토와 알래스카만 굵게, 하와이 섬들은 굵은 선에서 빠져요
+    // Americas with the United States highlighted: only the lower 48 and Alaska get the thick line; the Hawaiian islands are left out of it
     const us = draw(choroplethSample, { focus: "americas", highlight: "United States" });
     const d = /<path d="([^"]+)" fill="none" stroke="[^"]+" stroke-width="1.4"/.exec(us)![1];
     const usAll = regionPaths(us).find((p) => p.length > d.length && p.startsWith(d.slice(0, 12)));
@@ -508,7 +508,7 @@ describe("lead review fixes", () => {
     const part = gb.polygons.find((p) => p[0].every(([lon, lat]) => Math.abs(lon - 131.865) < 0.02 && Math.abs(lat - 37.242) < 0.02));
     expect(part, "polygon near 131.86E 37.24N").toBeTruthy();
     expect(mapShapes(krSido).filter((s) => s.id !== "Gyeongbuk").some((s) => s.polygons.some((p) => p[0].some(([lon]) => lon > 131.5)))).toBe(false);
-    // 720px 지도에서 독도는 1.6px 네모로 남아요 (울릉도 오른쪽)
+    // On a 720px map Dokdo stays as a 1.6px square (right of Ulleungdo)
     const g = geoLayout(krSido);
     const f = geoFrame(g, 720, 780);
     const i = g.shapes.findIndex((s) => s.id === "Gyeongbuk");
@@ -531,7 +531,7 @@ describe("lead review fixes", () => {
 });
 
 describe("forged input", () => {
-  /** build-geo.mjs의 pack과 같은 꼴: 지그재그, 한 글자에 5비트, 6번째 비트는 이어짐 */
+  /** Same format as pack in build-geo.mjs: zigzag, 5 bits per character, the 6th bit means more follows */
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const pack = (ints: number[]) =>
     ints
@@ -552,20 +552,20 @@ describe("forged input", () => {
     expect(performance.now() - t0).toBeLessThan(500);
     return out;
   };
-  // 세모 하나 (선 하나, 점 4개: 처음, 오른쪽, 위, 처음)
+  // One triangle (one arc, 4 points: start, right, up, start)
   const tri = [4, 0, 0, 1, 0, -1, 1, 0, -1];
 
   it("counts larger than the input left stop the decoder instead of looping", () => {
-    // 다각형 10억 개라고 적고 그 뒤가 비었어요
+    // Claims 1 billion polygons, and nothing follows
     expect(quick(() => mapShapes(forged({ arcs: pack(tri), shapes: pack([1e9]) })))[0].polygons).toEqual([]);
-    // 선 하나가 점 10억 개라고 적었어요
+    // One arc claims 1 billion points
     expect(quick(() => mapShapes(forged({ arcs: pack([1e9, 0, 0, 1, 1]), shapes: pack([1, 1, 1, 0]) })))[0].polygons).toEqual([]);
-    // 고리 하나가 선 10억 개라고 적었어요
+    // One ring claims 1 billion arcs
     expect(quick(() => mapShapes(forged({ arcs: pack(tri), shapes: pack([1, 1, 1e9, 0]) })))[0].polygons).toEqual([]);
-    // 없는 선 번호, 음수 개수, 정수가 아닌 눈금
+    // A missing arc index, a negative count, a non-integer step
     expect(quick(() => mapShapes(forged({ arcs: pack(tri), shapes: pack([1, 1, 2, 99, -50]) })))[0].polygons).toEqual([]);
     expect(mapShapes(forged({ t: [NaN, 0, 0], arcs: pack(tri), shapes: pack([1, 1, 1, 0]) }))[0].polygons).toEqual([]);
-    // 제대로 된 세모는 그대로 풀려요
+    // A well-formed triangle decodes as is
     expect(mapShapes(forged({ arcs: pack(tri), shapes: pack([1, 1, 1, 0]) }))[0].polygons[0][0]).toEqual([[0, 0], [1, 0], [0, 1]]);
   });
 
@@ -603,7 +603,7 @@ describe("forged input", () => {
     const big = [{ type: "Feature", properties: { id: "f1" }, geometry: { type: "Polygon", coordinates: [ring] } }];
     expect(quick(() => validateSpec(spec(big))).errors.map((e) => e.code)).toEqual(["map_too_large"]);
     expect(() => renderSpecToSVG(spec(big) as never)).toThrow(/too large/);
-    // 상한 안의 GeoJSON은 그대로 그려요
+    // GeoJSON within the limit is still drawn
     expect(validateSpec(spec(many.slice(0, 200))).valid).toBe(true);
   });
 });

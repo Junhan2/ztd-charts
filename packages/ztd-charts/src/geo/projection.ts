@@ -312,7 +312,7 @@ function ringMoments(xy: Float64Array): [number, number, number] {
 }
 
 /**
- * A point inside a region (screen coordinates): the midpoint of the longest stretch inside the polygon along a horizontal line at the area centroid's height of the largest polygon (area minus holes).
+ * A point inside a region (plane coordinates): the midpoint of the longest stretch inside the polygon along a horizontal line at the area centroid's height of the largest polygon (area minus holes).
  * The centroid itself can land in a hole (Seoul inside Gyeonggi-do) or outside (a curved country), hence this approach. It is in plane coordinates, so it is not remeasured when the size changes
  */
 export function shapeCenter(s: ProjectedShape): [number, number] {

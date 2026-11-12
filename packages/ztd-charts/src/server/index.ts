@@ -43,12 +43,12 @@ export interface RenderOptions {
   locale?: string;
 }
 
-/** Spec validation. Throws with the collected reasons when invalid */
 /** Only { csv } data becomes pre-parsed rows (validation and rendering share the rows, so the CSV is parsed once). Validation reads other shapes directly */
 function csvRows(data: unknown): Record<string, unknown>[] | undefined {
   return typeof (data as { csv?: unknown } | null)?.csv === "string" ? (inlineRows(data) ?? undefined) : undefined;
 }
 
+/** Spec validation. Throws with the collected reasons when invalid */
 function assertValid(spec: ChartSpec, lang: ChartLang, rows?: Record<string, unknown>[]) {
   const v = validateSpec(spec, { lang, rows });
   if (!v.valid) throw new Error(`${lang === "ko" ? "스펙 오류" : "Invalid spec"}: ${v.errors.map((e) => `${e.path} ${e.message}`).join("; ")}`);

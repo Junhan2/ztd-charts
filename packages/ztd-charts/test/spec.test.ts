@@ -10,7 +10,7 @@ const ajv = new Ajv2020({ strict: false, allErrors: true });
 const validateAll = ajv.compile(specSchema());
 const HANGUL = /[가-힣]/;
 const KO = chartsIn("ko");
-/** options.locale을 뺀 스펙. 한글 예시와 추천을 locale이 없던 예전 값과 비교할 때 써요 */
+/** A spec without options.locale. Used to compare the Korean examples and suggestions with the old values from before locale existed */
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
 describe("레지스트리", () => {
@@ -37,7 +37,7 @@ describe("레지스트리", () => {
       expect(c.name, c.type).toBe(c.nameEn);
       const { options, ...rest } = c;
       expect(JSON.stringify(rest), c.type).not.toMatch(HANGUL);
-      // 펀넬 rateLabel 설명만 한국어 로캘의 기본값("전 단계 대비")을 그대로 적어요
+      // Only the funnel rateLabel description quotes the Korean locale's default ("전 단계 대비") as is
       for (const o of options) if (!(c.type === "funnel" && o.name === "rateLabel")) expect(o.description, `${c.type}.${o.name}`).not.toMatch(HANGUL);
       expect(LEVELS.map((l) => l.id), c.type).toContain(c.example.card?.level);
     }
@@ -79,7 +79,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
       for (const o of k.options) expect(o.description, `${k.type}.options.${o.name}`).toMatch(HANGUL);
       expect(k.example.card?.title, k.type).toBe(k.name);
       expect(JSON.stringify(k.example.card), k.type).toMatch(HANGUL);
-      // 언어와 상관없는 값은 그대로예요
+      // Values that do not depend on the language are unchanged
       expect({ ...k, name: en.name, summary: en.summary, useWhen: en.useWhen, avoidWhen: en.avoidWhen, why: en.why, encoding: en.encoding, options: en.options, example: en.example }).toEqual(en);
       expect(k.encoding.map((c) => ({ ...c, description: "" }))).toEqual(en.encoding.map((c) => ({ ...c, description: "" })));
       expect(k.options.map((o) => ({ ...o, description: "" }))).toEqual(en.options.map((o) => ({ ...o, description: "" })));
@@ -102,7 +102,8 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
     expect(koNames.length).toBe(41);
-    // 넓은 표(스카이라인)는 필드 이름이 곧 계열 이름이라 한글판은 필드 이름까지 한글이에요. 그 표는 값만 같은 순서로 견줘요
+    // In a wide table (skyline) the field names are the series names, so the Korean version has Korean field names too.
+    // For that table only the values are compared, in the same order
     const WIDE = new Set(["skylineSampleKo"]);
     const shape = (rows: Record<string, unknown>[], wide: boolean) => JSON.stringify(wide ? rows.map((r) => Object.values(r)) : rows, (_k, v) => (typeof v === "string" ? "" : v));
     for (const k of koNames) {
@@ -149,7 +150,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     expect(specSchemaIn("en")).toEqual(specSchema());
     expect(schemaForIn("pie", "en")).toEqual(en);
     expect(schemaForIn("nope", "ko")).toBeNull();
-    // 한글 스키마도 한글 예시를 받아요
+    // The Korean schema accepts the Korean examples too
     const one = new Ajv2020({ strict: false }).compile(specSchemaIn("ko"));
     for (const c of KO) expect(one(c.example), c.type).toBe(true);
   });
@@ -250,7 +251,7 @@ describe("suggestCharts", () => {
     expect(ko[0]).toMatchObject({ name: "퍼널 차트", spec: { card: { title: "퍼널 차트", level: "basic" } } });
     for (const s of en) expect(`${s.reason} ${s.spec.card?.takeaway}`, s.type).not.toMatch(HANGUL);
     for (const s of ko) expect(`${s.reason} ${s.spec.card?.takeaway}`, s.type).toMatch(HANGUL);
-    // 한글 추천 스펙만 options.locale "ko-KR"을 적어요
+    // Only the Korean suggested specs set options.locale "ko-KR"
     for (const s of en) expect(s.spec.options?.locale, s.type).toBeUndefined();
     for (const s of ko) expect(s.spec.options?.locale, s.type).toBe("ko-KR");
   });
@@ -485,7 +486,7 @@ describe("variants", () => {
       expect(def, type).toBeTruthy();
       expect(new Set(list.map((x) => x.id)).size).toBe(list.length);
       const ko = variantsIn(type, "ko");
-      // 한국어 이름표에 남은 id가 없어요 (변형을 지우면 이름도 지워요)
+      // No leftover ids in the Korean labels (when a variant is removed, its name is removed too)
       expect(Object.keys(VARIANT_NAMES_KO[type] ?? {}).sort()).toEqual(list.map((x) => x.id).sort());
       const defaults = Object.fromEntries([...def!.options, ...COMMON_OPTIONS].map((o) => [o.name, o.default]));
       const koDef = localizeDef(def!, "ko");
@@ -493,9 +494,9 @@ describe("variants", () => {
         for (const [lang, d] of [["en", def!], ["ko", koDef]] as const) {
           const r = validateSpec(variantSpec(d, x.id), { lang });
           expect([...r.errors, ...r.warnings].map((i) => `${type}/${x.id}: ${i.message}`)).toEqual([]);
-          // 예시가 이미 그 값이면 변형이 예시와 같아져요 (예시를 바꾸면 변형도 다시 봐요)
+          // If the example already has that value, the variant would equal the example (when the example changes, review the variants too)
           const ex = (d.example.options ?? {}) as Record<string, unknown>;
-          // encoding만 바꾸는 변형(타임라인의 시각)은 그 자체로 예시와 달라요
+          // A variant that changes only encoding (the timeline's clock times) differs from the example by itself
           const changed = x.encoding !== undefined || Object.entries(x.options).some(([k, val]) => JSON.stringify(val) !== JSON.stringify(ex[k] ?? defaults[k] ?? (Array.isArray(val) ? [] : undefined)));
           expect(changed, `${type}/${x.id} (${lang})`).toBe(true);
         }

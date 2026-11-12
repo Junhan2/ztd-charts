@@ -12,7 +12,7 @@ import { getChartDef, validateSpec } from "../src/spec";
 import { symbolMapSample, symbolMapUsSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
-/** 마지막 ChartFrame props (이벤트, 설명) */
+/** The last ChartFrame props (events, description) */
 const state = vi.hoisted(() => ({ frame: null as unknown }));
 vi.mock("../src/core/ChartFrame", async (orig) => {
   const actual = await orig<typeof import("../src/core/ChartFrame")>();
@@ -31,7 +31,7 @@ afterEach(() => {
 const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
 const draw = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<SymbolMap data={data} size="v" label="n" width={720} animate={false} {...extra} />);
-/** 원 (등장 띠 안의 원만, 고리는 fill="none") */
+/** Circles (only the circles in the entrance bands; rings have fill="none") */
 const circles = (h: string) => [...h.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)" fill="(?!none)([^"]+)"/g)].map((m) => ({ x: +m[1], y: +m[2], r: +m[3], fill: m[4] }));
 const codes = (spec: object) => {
   const v = validateSpec(spec);
@@ -49,7 +49,7 @@ describe("place resolution (geo/places)", () => {
     expect(pick([{ lon: 126.98, lat: 37.57 }, { lon: 129.08, lat: 35.18 }])).toBe("kr-sido");
     expect(pick([{ lon: -74, lat: 40.7 }, { lon: 2.35, lat: 48.86 }])).toBe("world");
     expect(pick([])).toBe("world");
-    // 나라 이름도 세요
+    // Country names count too
     const c = choosePlaceMap("auto", () => [{ name: "France" }, { name: "Japan" }]);
     expect(c && "name" in c && c.name).toBe("world");
   });
@@ -70,15 +70,15 @@ describe("world map centre (geoLayout lon0)", () => {
     const atl = geoLayout(world);
     const pac = geoLayout(world, { lon0: 150 });
     const greenland = atl.shapes.findIndex((s) => s.id === "GRL");
-    // 그린란드(서경 73~12°)는 새 반대편 경선(서경 30°)에서 잘려 조각이 늘어요
+    // Greenland (73°W to 12°W) is cut at the new opposite meridian (30°W), so it has more pieces
     expect(pac.projected[greenland].rings.length).toBeGreaterThan(atl.projected[greenland].rings.length);
-    // 서경 29°는 지도 왼쪽 끝, 서경 31°는 오른쪽 끝
+    // 29°W is at the map's left edge, 31°W at its right edge
     const fr = geoFrame(pac, 720, 360);
     expect(fr.project(-29, 0)[0]).toBeLessThan(30);
     expect(fr.project(-31, 0)[0]).toBeGreaterThan(690);
-    // 도쿄는 가운데 가까이
+    // Tokyo is near the middle
     expect(Math.abs(fr.project(139.7, 35.7)[0] - 360)).toBeLessThan(40);
-    // 기본(0)은 예전 배치 그대로예요 (같은 객체)
+    // The default (0) keeps the old layout (the same object)
     expect(geoLayout(world, { lon0: 0 })).toBe(atl);
   });
 });
@@ -88,11 +88,11 @@ describe("SymbolMap", () => {
     const h = r(<SymbolMap data={symbolMapSample} size="users" label="city" width={720} animate={false} />);
     const cs = circles(h);
     expect(cs).toHaveLength(15);
-    // 넓이 비 = 값 비 (반지름은 0.1px로 반올림)
+    // Area ratio = value ratio (radii are rounded to 0.1px)
     const tokyo = cs[0];
     const jakarta = cs[2];
     expect((jakarta.r / tokyo.r) ** 2).toBeCloseTo(710 / 1180, 1);
-    // SVG 순서가 큰 원부터라 작은 원이 위에 와요
+    // The SVG order starts with the largest circle, so smaller circles sit on top
     for (let i = 1; i < cs.length; i++) expect(cs[i].r).toBeLessThanOrEqual(cs[i - 1].r);
     expect(cs[0].fill).toContain("accent");
     expect(cs.slice(1).every((c) => !c.fill.includes("accent"))).toBe(true);
@@ -163,9 +163,9 @@ describe("SymbolMap", () => {
     for (const data of cases)
       for (const extra of [{}, { theme: { accent: "#ff0000" } }, { map: "us-states" }, { focus: "europe" }, { width: 280 }, { sizeRange: [-5, 1e9] }, { highlight: () => true }])
         expect(draw(data, extra)).not.toMatch(/NaN|Infinity|undefined/);
-    // 등록하지 않은 지도는 안내 글을 그려요
+    // An unregistered map draws a help message
     expect(draw([{ n: "x", lon: 1, lat: 1, v: 1 }], { map: "mars" })).toContain("is not registered");
-    // GeoJSON 위 지점 (밖의 지점은 빼요)
+    // Places on a GeoJSON map (places outside it are left out)
     const zones = { type: "FeatureCollection" as const, features: [{ type: "Feature", properties: { zone: "A" }, geometry: { type: "Polygon", coordinates: [[[10, 50], [11, 50], [11, 51], [10, 51], [10, 50]]] } }] };
     expect(circles(draw([{ n: "in", lon: 10.5, lat: 50.5, v: 2 }, { n: "out", lon: 40, lat: 10, v: 3 }], { map: zones }))).toHaveLength(1);
   });

@@ -11,8 +11,8 @@ import { CHARTS, validateSpec } from "../src/spec";
 import { ThemeProvider } from "../src/theme/context";
 
 /**
- * cartesian-fixes.test.tsx와 같은 틀이에요. active를 주면 호버/키보드로 고른 구간을, spy를 켜면 setActive 호출을 기록해요.
- * frame은 마지막 ChartFrame props예요
+ * Same harness as cartesian-fixes.test.tsx. active sets the bin picked by hover or keyboard, spy records setActive calls.
+ * frame is the last ChartFrame props
  */
 const state = vi.hoisted(() => ({
   active: null as number | null,
@@ -59,7 +59,7 @@ const frame = () => state.frame as ChartFrameProps<unknown>;
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
 const desc = (h: string) => decode(/<desc[^>]*>([^<]*)<\/desc>/.exec(h)?.[1] ?? "");
 const texts = (h: string) => [...h.matchAll(/<text x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ x: +m[1], y: +m[2], text: decode(m[3]) }));
-/** 세로선 (x1 = x2)의 x와 점선 모양 */
+/** x and dash pattern of vertical lines (x1 = x2) */
 const vlines = (h: string) => [...h.matchAll(/<line x1="([-\d.]+)" x2="([-\d.]+)" y1="[-\d.]+" y2="[-\d.]+"([^>]*)>/g)].filter((m) => m[1] === m[2]).map((m) => ({ x: +m[1], dash: /stroke-dasharray="([^"]+)"/.exec(m[3])?.[1] ?? null }));
 const counts = () => frame().events.map((e) => e.value);
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -78,7 +78,7 @@ describe("histogram bins (layout/stats)", () => {
     expect(binEdges(v, { bins: 4 })).toEqual([0, 25, 50, 75, 100]);
     // Freedman-Diaconis: 2 × IQR 49.5 / ∛100 = 21.3 → 20
     expect(binEdges(v)).toEqual([0, 20, 40, 60, 80, 100]);
-    // Sturges: 20개면 ⌈log₂ 20⌉ + 1 = 6구간, 19 / 6 = 3.2 → 2.5
+    // Sturges: for 20 values ⌈log₂ 20⌉ + 1 = 6 bins, 19 / 6 = 3.2 → 2.5
     expect(binEdges(range(20))).toEqual([0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20]);
   });
 
@@ -109,7 +109,7 @@ describe("HistogramChart", () => {
     expect(desc(h)).toContain("1 outside the edges");
     expect(desc(h)).toContain("2 at or below 0 left out");
     expect(3 + 3 + 1 + 2).toBe(valid);
-    // 범위 밖은 그리지 않지만 그림 위 알림 줄에도 적어요
+    // Values outside the edges are not drawn, but the notice line above the plot mentions them too
     expect(texts(h).map((t) => t.text)).toContain("1 outside the edges · 2 at or below 0 left out");
   });
 
@@ -125,12 +125,12 @@ describe("HistogramChart", () => {
   });
 
   it("dots: a bin of 5 with 2 samples per dot is 2 filled dots and 1 ring", () => {
-    // 높이 200에서 가장 높은 열 30은 점 하나 = 1건으로는 안 들어가고 2건이면 들어가요
+    // At height 200 the tallest column, 30, does not fit at 1 dot = 1 sample, but fits at 2 samples per dot
     const data = [...Array(30).fill(0.5), ...Array(5).fill(1.5)].map((value) => ({ value }));
     const h = r(<HistogramChart data={data} edges={[0, 1, 2]} variant="dots" marks={[]} width={400} height={200} animate={false} />);
     expect(texts(h).map((t) => t.text)).toContain("1 dot = 2 samples");
     expect(frame().description).toContain("1 dot = 2 samples");
-    // 맨 위 알림 줄(y 22 위)의 점은 범례예요
+    // Dots in the top notice line (above y 22) are the legend
     const circles = [...h.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="[\d.]+" fill="([^"]+)"/g)].map((m) => ({ cx: +m[1], cy: +m[2], ring: m[3] === "none" })).filter((c) => c.cy > 22);
     const cols = [...new Set(circles.map((c) => c.cx))].sort((a, b) => a - b);
     expect(cols).toHaveLength(2);
@@ -147,7 +147,7 @@ describe("HistogramChart", () => {
     expect(frame().events).toHaveLength(shared.length - 1);
     expect(frame().events[0].label).toBe(`${shared[0]} to ${shared[1]}`);
     expect(frame().events.at(-1)!.label).toBe(`${shared.at(-2)} to ${shared.at(-1)}`);
-    // 그룹 a는 자기 값만으로 나누면 0~10이지만 함께 쓴 경계에서 개수를 세요
+    // Binned on its own values, group a would be 0~10, but it is counted on the shared edges
     const perGroup = (name: string) => frame().events.reduce((s, e) => s + Number(new RegExp(`${name} (\\d+) `).exec(e.formatted ?? "")![1]), 0);
     expect([perGroup("a"), perGroup("b")]).toEqual([40, 40]);
   });
@@ -167,7 +167,7 @@ describe("HistogramChart", () => {
     const values = [12, 15, 15, 18, 20, 21, 25, 30, 31, 33, 40, 48, 52, 60, 75, 90, 120, 160, 210, 300];
     const h = r(<HistogramChart data={values.map((ms) => ({ ms }))} value="ms" marks={["p50", "p95", "p99"]} width={640} animate={false} />);
     const tx = texts(h);
-    // 축 눈금 글자 두 개로 값을 픽셀로 바꾸는 자를 만들어요
+    // Build a value-to-pixel ruler from two axis tick labels
     const ticks = tx.filter((t) => /^\d+$/.test(t.text) && t.y === Math.max(...tx.map((u) => u.y)));
     const [a, b] = [ticks[0], ticks.at(-1)!];
     const px = (v: number) => a.x + ((v - +a.text) / (+b.text - +a.text)) * (b.x - a.x);
@@ -215,7 +215,7 @@ describe("HistogramChart", () => {
     ];
     const h = r(<HistogramChart data={data} unit="ms" width={480} animate={false} />);
     expect(frame().events.map((e) => `${e.label}=${e.value}`)).toEqual(["0ms to 100ms=50", "100ms to 200ms=50", "200ms to 300ms=0", "300ms to 400ms=0"]);
-    // 100건의 가운데는 첫 구간 끝 100ms예요. 미리 나눈 행은 어림이라 "about"을 붙여요
+    // The median of 100 samples is 100ms, the end of the first bin. Pre-binned rows are an estimate, so "about" is added
     expect(desc(h)).toContain("100 samples, median about 100ms, p95 about 190ms");
     expect(validateSpec({ type: "histogram", data }).valid).toBe(true);
     expect(validateSpec({ type: "histogram", data: [{ from: 0, n: 1 }] }).errors.map((e) => e.code)).toEqual(["missing_channel"]);
@@ -227,8 +227,8 @@ describe("HistogramChart", () => {
     r(<HistogramChart data={data} value="v" edges={[0, 1, 2, 3, 4]} unit="ms" width={480} animate={false} />);
     const tip = frame().tip!;
     expect(tip.title).toBe("2ms to 3ms");
-    // 구간 [0,1) 0건, [1,2) 2건, [2,3) 1건, [3,4] 5건 (4는 마지막 구간)
-    // 누적은 한 자리까지 적어요 (꼬리 구간이 마지막 구간 전에 100%로 반올림되지 않게)
+    // Bins [0,1) 0, [1,2) 2, [2,3) 1, [3,4] 5 (4 goes in the last bin)
+    // Cumulative shares keep one decimal (so a tail bin does not round to 100% before the last bin)
     expect(tip.rows.map((row) => `${row.label}=${row.value}`)).toEqual(["Count=1 · 12.5%", "Cumulative=37.5%"]);
     state.active = 3;
     r(<HistogramChart data={data} value="v" edges={[0, 1, 2, 3, 4]} unit="ms" width={480} animate={false} locale="ko" />);
@@ -251,7 +251,7 @@ describe("HistogramChart", () => {
     }
     r(<Probe />);
     const self = {};
-    // 2건인 구간에서 오른쪽 화살표를 누르면 0건인 다음 구간으로 가요
+    // ArrowRight from the bin with 2 samples goes to the next bin, which has 0
     root!.props.onKeyDown({ key: "ArrowRight", target: self, currentTarget: self, preventDefault() {} } as never);
     expect(state.calls).toEqual([[2, "keyboard"]]);
   });
@@ -262,7 +262,7 @@ describe("HistogramChart", () => {
     expect(desc(h)).toBe("No data.");
     expect(texts(h).map((t) => t.text)).toEqual(["No data."]);
     expect(h).not.toContain('tabindex="0"');
-    // 경계를 줘도 표본이 없으면 빈 상태예요
+    // Even with edges given, no samples means the empty state
     const edged = r(<HistogramChart data={[]} edges={[0, 1, 2]} width={480} animate={false} />);
     expect(frame().events).toEqual([]);
     expect(desc(edged)).toBe("No data.");
@@ -290,7 +290,7 @@ describe("HistogramChart", () => {
       );
       const body = /<svg[^>]*class="ztd-svg"[^>]*>([\s\S]*?)<\/svg>/.exec(browser)![1];
       expect(geometry(body).length).toBeGreaterThan(1000);
-      // 서버 SVG는 차트를 x, y, width, height가 붙은 안쪽 svg로 감싸요. 그 뒤 도형은 같아야 해요
+      // The server SVG wraps the chart in an inner svg with x, y, width and height. The shapes after that must be the same
       const inner = server.slice(server.indexOf('<svg x="'));
       expect(geometry(inner).replace(/^x=\S+ y=\S+ width=\S+ height=\S+ /, "")).toBe(geometry(body));
     }

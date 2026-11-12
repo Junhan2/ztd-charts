@@ -11,7 +11,7 @@ import { CHARTS, suggestCharts, validateSpec, variantSpec } from "../src/spec";
 import { timelineSample, timelineSampleKo, timelineScheduleSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 항목을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked item, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -54,7 +54,7 @@ type Row = Record<string, unknown>;
 const draw = (data: Row[], extra: Record<string, unknown> = {}) => r(<Timeline data={data} label="step" start="start" end="end" width={560} animate={false} {...extra} />);
 const item = (step: string, start: unknown, end: unknown, extra: Row = {}) => ({ step, start, end, ...extra });
 const BAD = /NaN|Infinity|undefined|\[object/;
-/** 막대(rect, 줄 칸 rect 빼고)와 점(path) 수 */
+/** Number of bars (rects, not counting the row band rects) and points (paths) */
 const bars = (h: string) => (h.match(/<rect [^>]*class="ztd-mark"/g) ?? []).length;
 const points = (h: string) => (h.match(/<path d="M[^"]*Z" [^>]*class="ztd-mark"/g) ?? []).length;
 const tickLabels = (h: string) => [...h.matchAll(/<text [^>]*font-size="10.5"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
@@ -97,7 +97,8 @@ describe("reading and layout", () => {
   });
 
   it("date-only schedules count calendar days, also across a daylight-saving change and a leap day", () => {
-    // 시간대를 바꿨다가 원래 시간대 이름으로 되돌려요. formatDate가 만든 Intl 포맷터는 그때 시간대를 기억해서, 이 시험만 쓰는 로캘(en-GB)로 그려 뒤 시험과 섞이지 않게 해요
+    // Switches the time zone, then restores the original zone name. The Intl formatters that formatDate builds remember the zone in effect at that time,
+    // so this test draws with a locale only it uses (en-GB), to keep them apart from the later tests
     const tz = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     process.env.TZ = "America/New_York";
     try {
@@ -133,7 +134,7 @@ describe("reading and layout", () => {
         expect(labels.join(" "), locale).not.toMatch(BAD);
       }
     expect(tickLabels(draw(spans[0][1], { locale: "en-US" }))).toContain("9:01 AM");
-    // 해 단위는 둥근 해에: 30년은 5년마다, 4년은 해마다, 분기 데이터 2년은 달 단위(timeTicks)
+    // Year ticks land on round years: 30 years every 5 years, 4 years every year, 2 years of quarterly data in months (timeTicks)
     expect(tickLabels(draw(spans[4][1], { locale: "en-US" }))).toEqual(["2000", "2005", "2010", "2015", "2020", "2025"]);
     expect(tickLabels(draw([item("a", "2021-06-01", "2025-03-01")], { locale: "en-US" }))).toEqual(["2022", "2023", "2024", "2025"]);
     expect(tickLabels(draw([item("a", "2024Q1", "2025Q4")], { locale: "en-US" }))[0]).toMatch(/^(Jan|Apr) 2024$/);
@@ -173,7 +174,7 @@ describe("edge inputs", () => {
         expect(h, JSON.stringify(data)).not.toMatch(BAD);
         expect(h).not.toContain("<b>");
       }
-    // 터무니없는 옵션 값
+    // Absurd option values
     const absurd: Row[] = [{ height: 0 }, { height: -50 }, { width: 1, height: 1e6 }, { sort: "bogus", xType: "band" }, { now: {}, referenceLines: "x" }, { stagger: -1, duration: 1e9 }, { highlight: ["nope", 99, -1] }, { hidden: "Design", group: "state" }];
     for (const o of absurd) expect(draw(timelineSample, o), JSON.stringify(o)).not.toMatch(BAD);
   });
@@ -183,7 +184,7 @@ describe("edge inputs", () => {
     const ev = frame().events;
     expect(ev.map((e) => `${e.label}: ${e.formatted}`)).toEqual(["swap: 3 min to 9 min, 6 min", "open: 2 min to 8 min, 6 min", "end: 0 min to 6 min, 6 min"]);
     expect(draw([item("open", 2, ""), item("later", 1, 9)])).toMatch(/stroke-dasharray="3 2"/);
-    // 혼자인 열린 항목은 이어 갈 곳이 없어서 점이에요
+    // A lone open item has nowhere to extend to, so it is a point
     expect(points(draw([item("open", 2, "")]))).toBe(1);
   });
 
@@ -207,7 +208,8 @@ describe("interaction", () => {
     state.active = 3;
     state.via = "keyboard";
     draw(timelineSample, { unit: " min" });
-    // 3번은 Run tests(15~18). 오른쪽은 같은 줄의 다음 Run tests(22~24), 왼쪽은 줄의 처음이라 그대로, 아래는 Fix failing test, 위는 Edit files
+    // Item 3 is Run tests (15~18). Right is the next Run tests on the same row (22~24), left stays put since it is first on the row,
+    // down is Fix failing test, up is Edit files
     for (const k of ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"]) press(k);
     expect(state.calls).toEqual([4, 5, 2]);
     expect(frame().announce).toBe("Run tests, 15 min to 18 min, 3 min");
@@ -228,7 +230,7 @@ describe("interaction", () => {
     const h = draw(data, { status: "s" });
     expect(h).not.toMatch(/fill="var\(--ztd-accent/);
     expect(h.match(/<rect [^>]*fill="var\(--ztd-ink[^>]*class="ztd-mark"/g)).toHaveLength(1);
-    // 숨기기도 status 값으로
+    // Hiding works by status value too
     draw(data, { status: "s", hidden: ["up"] });
     expect(frame().events.map((e) => e.formatted)).toEqual(["40 to 46, 6, down", "70 to 75, 5, degraded"]);
   });
@@ -237,15 +239,15 @@ describe("interaction", () => {
     const spec = { type: "timeline", data: timelineScheduleSample, encoding: { label: "task", start: "start", end: "end", group: "team" }, options: { hidden: ["Design"] } };
     expect(autoLegend(spec, timelineScheduleSample, "en-US").map((l) => l.label)).toEqual(["Product", "Engineering"]);
     expect(autoLegend(spec, timelineScheduleSample, "en-US", true).map((l) => l.label)).toEqual(["Product", "Design", "Engineering"]);
-    // 묶음이 빈 행은 범례에 이름 없는 칸을 만들지 않아요
+    // Rows with an empty group do not add an unnamed legend entry
     const blank = [...timelineScheduleSample, { task: "Retro", start: "2026-04-20", end: "2026-04-21", team: "" }];
     expect(autoLegend({ ...spec, data: blank, options: {} }, blank, "en-US").map((l) => l.label)).toEqual(["Product", "Design", "Engineering"]);
-    // 시작을 못 읽어 뺀 행의 묶음도 범례와 차트가 같은 색 자리를 써요
+    // Even the group of a row dropped for an unreadable start takes the same color slot in the legend and the chart
     const dropped = [{ task: "Ghost", start: null, end: "2026-01-02", team: "Ops" }, ...timelineScheduleSample];
     const legend = autoLegend({ ...spec, data: dropped, options: {} }, dropped, "en-US");
     const drawn = draw(dropped, { label: "task", group: "team" });
     expect(legend.map((l) => l.label)).toEqual(["Ops", "Product", "Design", "Engineering"]);
-    // 첫 색(ink)은 막대가 없는 Ops 자리라 ink 막대가 없어요 (예전엔 Research가 ink였어요)
+    // The first color (ink) belongs to Ops, which has no bar, so there is no ink bar (Research used to be ink)
     expect(drawn.match(/<rect [^>]*fill="var\(--ztd-ink[^>]*class="ztd-mark"/g)).toBeNull();
     expect(draw(timelineScheduleSample, { label: "task", group: "team" }).match(/<rect [^>]*fill="var\(--ztd-ink[^>]*class="ztd-mark"/g)).toHaveLength(1);
     expect(drawn.match(/<rect [^>]*class="ztd-mark"/g)).toHaveLength(4);
@@ -313,7 +315,8 @@ describe("status strip (options.statusStrip)", () => {
     const example = renderSpecToSVG(def.example, { width: 560, theme: "dark" });
     expect(validateSpec(def.example).warnings).toEqual([]);
     expect(example).toContain(STRIP);
-    // 띠가 상태 색을 맡아서 막대는 기본 색과 가장 긴 항목의 강조색, 변형은 띠 없이 막대가 상태 색(작업, 고침, 기다림)이에요
+    // The strip carries the status colors, so the bars use the default color and the accent for the longest item;
+    // the variant has no strip and colors the bars by status (Working, Fixing, Waiting)
     expect(markFills(example).size).toBe(2);
     const bars = variantSpec(def, "status-bars")!;
     const barsSvg = renderSpecToSVG(bars, { width: 560, theme: "dark" });
@@ -368,7 +371,7 @@ describe("spec, server and validation", () => {
     const lines = spec([item("a", 0, 10)], { referenceLines: [{ x: 5, label: "ok" }, { x: 99 }, { label: "no x" }, { y: 3 }], now: "later" });
     expect(codes(lines)).toEqual(["E bad_reference_line", "E bad_reference_line", "E bad_now", "W reference_line_outside"]);
     expect(codes(spec([item("a", "2026-01-01", "2026-02-01")], { now: "2026-01-15" }))).toEqual([]);
-    // 일, 월이 모호한 날짜는 start와 end 두 열을 함께 봐요 (차트의 dayFirstOf와 같은 규칙)
+    // Dates with an ambiguous day/month order are judged from the start and end columns together (the same rule as the chart's dayFirstOf)
     expect(codes(spec([item("a", "05/03/2026", "06/03/2026")]))).toEqual(["W date_order_ambiguous"]);
     expect(codes(spec([item("a", "05/03/2026", "25/03/2026")]))).toEqual([]);
     expect(codes(spec([item("a", "05/03/2026", "06/03/2026")], { dayFirst: false }))).toEqual([]);

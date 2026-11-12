@@ -7,8 +7,8 @@ import { skylineSample } from "../src/spec/samples";
 import { validateSpec } from "../src/spec/validate";
 
 /**
- * 기획서(next-charts SPEC 4.14) 완료 기준 중 브라우저 없이 확인하는 것들이에요.
- * 하네스는 cartesian-fixes.test.tsx와 같아요: state.active로 고른 기간을, spy로 setActive 호출을, frame()으로 마지막 ChartFrame props를 봐요
+ * The completion criteria of the plan (next-charts SPEC 4.14) that can be checked without a browser.
+ * The harness is the same as cartesian-fixes.test.tsx: state.active for the picked period, spy for setActive calls, frame() for the last ChartFrame props
  */
 const state = vi.hoisted(() => ({
   active: null as number | null,
@@ -52,7 +52,7 @@ const frame = () => state.frame as ChartFrameProps<unknown>;
 const keyEvent = (key: string) => ({ key, preventDefault() {} }) as never;
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
 const VIEWS: SkylineView[] = ["high", "low"];
-/** 시점마다 [최소, 최대] 깊이 */
+/** [min, max] depth per view */
 const depths = (view: SkylineView) => depthRange(view).slice(0, 2);
 const BACK = ["Input", "Cached", "Output", "Reasoning"];
 const FRONT = ["Failed", "Retried"];
@@ -62,7 +62,7 @@ const sky = (data: Data, props: Partial<SkylineChartProps<Record<string, string 
   renderToStaticMarkup(<SkylineChart data={data} x="day" y={BACK} front={FRONT} format="compact" width={760} height={420} animate={false} {...props} />);
 const r = (el: ReactElement) => renderToStaticMarkup(el);
 const days = (n: number, row: (i: number) => Record<string, number>): Data => Array.from({ length: n }, (_, i) => ({ day: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), ...row(i) }));
-/** 예시 데이터(7일) 바로 앞 한 주를 이어 붙인 2주. 예전 14일 예시와 숫자가 같아서, 1.5px 안 되는 앞줄 조각과 좁은 폭에서 이웃 기간을 합치는 경우를 그대로 봐요 */
+/** Two weeks: the example data (7 days) with the week just before it prepended. The numbers match the old 14-day example, so front row segments under 1.5px and the merging of neighboring periods at narrow widths are still covered */
 const twoWeeks: Data = [
   { day: "2026-10-23", Input: 410000, Cached: 317223, Output: 186999, Reasoning: 79534, Failed: 11000, Retried: 10000 },
   { day: "2026-10-24", Input: 446030, Cached: 337921, Output: 202044, Reasoning: 87942, Failed: 15314, Retried: 9190 },
@@ -74,34 +74,34 @@ const twoWeeks: Data = [
   ...skylineSample,
 ];
 
-/** 기간(class="ztd-mark" 묶음)마다 마크업 조각 */
+/** Markup chunk per period (class="ztd-mark" group) */
 const periods = (h: string) => h.split('<g class="ztd-mark"').slice(1);
 const xy = (points: string) => points.split(" ").map((p) => p.split(",").map(Number) as [number, number]);
-/** 뒷줄 뚜껑: neutralStrong 55% 테두리가 있는 면. 점 순서는 앞 왼쪽, 앞 오른쪽, 뒤 오른쪽, 뒤 왼쪽 */
+/** Back row top: the face with a 55% neutralStrong outline. Point order: front left, front right, back right, back left */
 const backLid = (g: string) => {
   const m = /<polygon points="([^"]+)" fill="([^"]+)" stroke="[^"]+" stroke-opacity="0.55" stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
 };
-/** 앞줄 뚜껑: low는 테두리 없이 바닥색(neutralSoft)으로 녹인 면, high는 계열 몫대로 나눈 면(lidParts) 위에 채움 없는 ink 40% 테두리 */
+/** Front row top: in low, a face blended into the floor color (neutralSoft) with no outline; in high, an unfilled 40% ink outline over faces split by each series' share (lidParts) */
 const frontLid = (g: string) => {
   const m = /<polygon points="([^"]+)" fill="([^"]+)"(?: stroke="[^"]+" stroke-opacity="0.4")? stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
 };
-/** high 시점에서 합계 0인 블록 자리: 채움 없는 점선 */
+/** The spot of a block whose total is 0 in the high view: an unfilled dashed outline */
 const emptyPad = (g: string) => /<polygon points="[^"]+" fill="none" stroke="[^"]+" stroke-opacity="0.7" stroke-dasharray="2 2"><\/polygon>/.test(g);
-/** 블록 대신 긋는 가는 선 (y1 = y2, 세로 틈 선과 달리 불투명도가 없어요) */
+/** The hairline drawn in place of a block (y1 = y2; unlike the vertical gap lines, it has no opacity) */
 const hairline = (g: string) => /<line x1="[\d.]+" x2="[\d.]+" y1="([\d.]+)" y2="\1" stroke="[^"]+"><\/line>/.test(g);
 
 describe("skyline: 생김새 (4.14)", () => {
   it("1: 합계가 같은 기간은 뚜껑 앞 모서리 y가 같아요 (1px 미만 조각이 섞여도, 두 시점 × 320·1200px × 7·40기간 × 최소·최대 깊이)", () => {
-    // 모든 기간의 합계가 1000이고 구성만 달라요. 짝수 기간은 0.3짜리(1px 미만) 조각을 끼워 쌓아요
+    // Every period totals 1000; only the mix differs. Even periods stack in segments of 0.3 (under 1px)
     const data = (n: number) => days(n, (i) => (i % 2 ? { Input: 400, Cached: 300, Output: 200, Reasoning: 100 } : { Input: 999.4, Cached: 0.3, Output: 0.3, Reasoning: 0 }));
     for (const view of VIEWS)
       for (const width of [320, 1200])
         for (const n of [7, 40])
           for (const depth of depths(view)) {
             const groups = periods(sky(data(n).map((d) => ({ ...d, Failed: 10, Retried: 5 })), { width, depth, view }));
-            // 합친 경우 덜 찬 첫 묶음은 합계가 달라서 빼요
+            // When periods are merged, the partial first group has a different total, so it is left out
             const full = n % Math.ceil(n / groups.length) === 0 || groups.length === n ? groups : groups.slice(1);
             const tops = full.map((g) => backLid(g)!.pts[0][1]);
             expect(Math.max(...tops) - Math.min(...tops), `${view} ${width}px ${n} periods depth ${depth}`).toBeLessThanOrEqual(0.5);
@@ -109,7 +109,7 @@ describe("skyline: 생김새 (4.14)", () => {
   });
 
   it("2: 뒷줄 뚜껑 뒤 모서리는 그 값의 뒷벽 눈금선 위에 있어요 (두 시점 × 390·1200px, 14기간)", () => {
-    // 합계가 50만, 100만, 150만인 기간: 눈금 0, 50만, 100만, 150만과 맞아떨어져요
+    // Periods totaling 500K, 1M and 1.5M: they line up with the ticks 0, 500K, 1M, 1.5M
     const totals = [500_000, 1_000_000, 1_500_000];
     const data = days(14, (i) => {
       const t = totals[i % 3];
@@ -158,7 +158,7 @@ describe("skyline: 생김새 (4.14)", () => {
         const at = `${width}px ${n} periods`;
         expect(hi.depthFront * hi.cy, at).toBeGreaterThan(0.3 * hi.s);
         expect(lo.depthFront * lo.cy, at).toBeLessThan(0.07 * lo.s);
-        // 앞줄 뚜껑 뒤 모서리(바닥 높이에서)와 뒷줄 바닥의 세로 거리
+        // Vertical distance between the back edge of the front row top (at floor level) and the back row's floor
         expect(hi.shift[1] - hi.depthFront * hi.cy, at).toBeGreaterThan(2);
       }
   });
@@ -174,7 +174,7 @@ describe("skyline: 생김새 (4.14)", () => {
           expect(L.ticks[0], at).toBe(0);
           L.ticks.slice(1).forEach((t, i) => expect((t - L.ticks[i]) * L.k, at).toBeGreaterThanOrEqual(14));
         }
-    // 대조: 520px, 높이 400에서는 깊이를 줄이지 않고, 눈금도 덜지 않아서 low와 같아요
+    // Control: at 520px and height 400 the depth is not reduced and no ticks are skipped, so the ticks match low
     const L = skylineLayout(input(520, 400, "high"));
     expect(L.depthBack / L.s).toBeCloseTo(0.42, 6);
     expect(L.ticks.length).toBeGreaterThanOrEqual(3);
@@ -186,7 +186,7 @@ describe("skyline: 생김새 (4.14)", () => {
       const h = sky(twoWeeks, { width: 760, view });
       const groups = periods(h);
       expect(groups).toHaveLength(14);
-      // 1.5px 안 되는 앞줄 조각이 실제로 그려졌는지 (부풀리면 순서가 뒤집혀요)
+      // Whether front row segments under 1.5px are really drawn (inflating them would flip the order)
       const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-(?:neutral|ink|accent2|accent3)/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
       expect(thin.length, view).toBeGreaterThan(0);
       const heights = groups.map((g) => -frontLid(g)!.pts[0][1]);
@@ -203,7 +203,7 @@ describe("skyline: 생김새 (4.14)", () => {
     expect(frontLid(low[3])).toBeNull();
     expect(hairline(low[5])).toBe(false);
     expect(frontLid(low[5])).toBeNull();
-    // 뒷줄 뚜껑 하나와 앞줄 뚜껑 하나뿐인 평범한 기간
+    // An ordinary period with just one back row top and one front row top
     expect(hairline(low[4])).toBe(false);
     expect(frontLid(low[4])).not.toBeNull();
     const high = periods(sky(data, { width: 390 }));
@@ -231,7 +231,7 @@ describe("skyline: 생김새 (4.14)", () => {
 
   it("6b: high 앞줄 뚜껑은 계열 몫대로 왼쪽부터 accent2, accent3로 나눠요. 0인 계열은 빠지고, 앞줄 계열 강조와 low는 0.9처럼 중립 뚜껑이에요", () => {
     const data = days(4, (i) => ({ Input: 600, Cached: 300, Output: 80, Reasoning: 20, Failed: i === 3 ? 0 : 30, Retried: 10 }));
-    /** 윗변이 수평인 accent2·accent3 면 = 뚜껑 조각 (옆면은 윗변이 기울어서 빠져요) */
+    /** accent2 and accent3 faces with a level top edge = top segments (side faces have a slanted top edge, so they are left out) */
     const parts = (g: string) =>
       [...g.matchAll(/<polygon points="([^"]+)" fill="(var\(--ztd-accent[23][^"]*)"><\/polygon>/g)].map((m) => ({ pts: xy(m[1]), fill: m[2] })).filter((q) => q.pts[0][1] === q.pts[1][1]);
     const width = (q: { pts: [number, number][] }) => q.pts[1][0] - q.pts[0][0];
@@ -262,15 +262,15 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     sky(twoWeeks, { width: 390 });
     const f = frame();
     const rows = f.tip!.rows.map((row) => row.label ?? "");
-    // 뒷줄 위→아래, 뒷줄 합계, 앞줄 위→아래, 앞줄 합계, 비율
+    // Back row top to bottom, back row total, front row top to bottom, front row total, ratio
     expect(rows).toEqual(["Reasoning", "Output", "Cached", "Input", "Back total", "Retried", "Failed", "Front total", "Front ÷ back"]);
-    /** 글 안에서 이름들이 이 순서로 나오는지 */
+    /** Whether the names appear in this order in the text */
     const inOrder = (text: string, names: string[]) => names.map((n) => text.indexOf(`${n} `)).every((at, i, all) => at >= 0 && (i === 0 || at > all[i - 1]));
     const tipBack = rows.slice(0, 4);
     const tipFront = rows.slice(5, 7);
     expect(f.announce).toMatch(/^10\/31 back: Reasoning /);
     expect(inOrder(f.announce!, tipBack)).toBe(true);
-    // 숨긴 표 글은 뒷줄 다음 앞줄, 두 줄 모두 툴팁과 같은 순서예요
+    // The hidden table text has the back row, then the front row, both in the same order as the tooltip
     expect(inOrder(f.events[8].formatted!, ["back", ...tipBack, "front", ...tipFront])).toBe(true);
   });
 
@@ -299,7 +299,7 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     expect(rowAfterKey("ArrowDown", true)).toBe("front");
     expect(rowAfterKey("ArrowUp", true)).toBe("back");
     expect(rowAfterKey("ArrowDown", false)).toBeNull();
-    // 앞줄이 있으면 ↑/↓를 차트가 받고 기간은 그대로예요
+    // With a front row, the chart takes ↑/↓ and the period stays the same
     state.active = 4;
     state.via = "keyboard";
     state.spy = true;
@@ -308,10 +308,10 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     expect(frame().onKey!(keyEvent("ArrowUp"))).toBe(true);
     expect(state.calls).toEqual([]);
     expect(frame().onKey!(keyEvent("ArrowRight"))).toBe(false);
-    // 앞줄이 없으면 ChartFrame 기본 규칙(기간 이동)으로 넘겨요
+    // Without a front row, the keys go to ChartFrame's default rule (moving between periods)
     sky(skylineSample, { width: 390, front: undefined });
     expect(frame().onKey!(keyEvent("ArrowDown"))).toBe(false);
-    // 기간마다 이벤트 하나: 40기간이 그대로 보여도(넓은 폭) 숨긴 표 60행 안이에요
+    // One event per period: even when all 40 periods show (wide charts), the hidden table stays within 60 rows
     state.active = null;
     const forty = days(40, (i) => ({ Input: 100 + i, Cached: 50, Output: 30, Reasoning: 10, Failed: 3, Retried: 1 }));
     for (const width of [390, 2400]) {
@@ -330,13 +330,13 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     const bars = [...h.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="[\d.]+" height="([\d.]+)" rx="[\d.]+" fill="([^"]+)"><\/rect>/g)].filter((m) => !m[0].includes('width="10"'));
     const total = (d: Data[number]) => BACK.reduce((a, k) => a + Number(d[k]), 0);
     const rates = data.map((d) => (total(d) > 0 ? (Number(d.Failed) + Number(d.Retried)) / total(d) : null));
-    // 뒷줄 합계 0인 7번째 기간은 막대가 없어요
+    // The 7th period, whose back row total is 0, has no bar
     expect(bars).toHaveLength(13);
     const heights = bars.map((m) => +m[3]);
     const valid = rates.filter((x): x is number => x !== null);
     const hiK = heights.indexOf(Math.max(...heights));
     heights.forEach((ht, k) => expect(ht / heights[hiK]).toBeCloseTo(valid[k] / valid[hiK], 2));
-    // 가장 큰 비율만 강조색
+    // Only the largest ratio gets the accent color
     expect(bars.filter((m) => m[4].includes("--ztd-accent"))).toHaveLength(1);
     const text = decode(h);
     expect(text).toContain(">Front ÷ back<");

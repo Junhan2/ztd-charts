@@ -107,7 +107,7 @@ describe("MCP 도구", () => {
     const b = firstJson((await call("suggest_chart", { rows: [{ cat: "A", sub: "a1", v: 3 }, { cat: "A", sub: "a2", v: 2 }, { cat: "B", sub: "b1", v: 4 }] })).content);
     expect(b.suggestions[0].type).toBe("treemap");
     expect((await call("suggest_chart", {})).isError).toBe(true);
-    // url은 http(s)만: 파일 경로를 주면 서버 컴퓨터의 파일을 읽지 않고 오류로 돌려줘요 (이 테스트 파일은 어디서나 있어요)
+    // url takes only http(s): a file path is not read from the server machine but comes back as an error (this test file exists on any machine)
     const local = await call("suggest_chart", { url: fileURLToPath(import.meta.url) });
     expect(local.isError).toBe(true);
     expect(local.content[0].text).toContain("http:// or https://");

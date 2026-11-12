@@ -10,7 +10,7 @@ import { CHARTS, validateSpec } from "../src/spec";
 import { networkSample, networkSampleKo } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 항목을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked item, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -54,7 +54,7 @@ const frame = () => state.frame as ChartFrameProps<unknown>;
 type L = { from: string; to: string; calls?: unknown };
 const L = (from: string, to: string, calls?: unknown): L => ({ from, to, calls });
 const draw = (data: readonly Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<NetworkChart data={data} source="from" target="to" value="calls" width={720} animate={false} {...extra} />);
-/** 호 path: 왼쪽 끝 x, 오른쪽 끝 x, 세로 반지름, 굵기, 색, 불투명도 (보이는 선만, 투명한 호버 선은 빼요) */
+/** Arc paths: left end x, right end x, vertical radius, width, color, opacity (visible lines only; transparent hover lines left out) */
 const arcs = (h: string) =>
   [...h.matchAll(/<path class="ztd-mark" d="M([\d.]+),([\d.]+)A([\d.]+),([\d.]+) 0 0 1 ([\d.]+),([\d.]+)" fill="none" stroke="([^"]+)" stroke-width="([\d.]+)"[^>]*opacity="([\d.]+)"/g)].map((m) => ({ x0: +m[1], y: +m[2], rx: +m[3], ry: +m[4], x1: +m[5], y1: +m[6], stroke: m[7], w: +m[8], opacity: +m[9] }));
 const dots = (h: string) => [...h.matchAll(/<circle class="ztd-mark" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)" fill="([^"]+)"/g)].map((m) => ({ x: +m[1], r: +m[3], fill: m[4] }));
@@ -78,7 +78,7 @@ describe("networkGraph and networkOrder", () => {
       ["B", 2, 10],
       ["C", 1, 1],
     ]);
-    // B의 링크는 값이 큰 것부터
+    // B's links, largest value first
     expect(g.nodes[1].links.map((k) => g.links[k].value)).toEqual([9, 1]);
   });
 
@@ -93,7 +93,7 @@ describe("networkGraph and networkOrder", () => {
     ]);
     expect(g.nodes.map((n) => n.name)).toEqual(["A", "B", "C", "D", "F"]);
     expect(g.links).toHaveLength(1);
-    // F는 도착으로만 나와요. 덩어리는 큰 것부터: D-F, 그다음 A, B, C 하나씩
+    // F appears only as a target. Components, largest first: D-F, then A, B, C one each
     expect(g.nodes.map((n) => n.component)).toEqual([1, 2, 3, 0, 0]);
     expect(g.components).toBe(4);
   });
@@ -108,9 +108,9 @@ describe("networkGraph and networkOrder", () => {
     const cost = (o: number[]) => arcCost(g, o.map((_, n) => o.indexOf(n)));
     const plain = networkGraph(rows);
     const costOf = (o: number[]) => arcCost(plain, o.map((_, n) => o.indexOf(n)));
-    // 표본에서 긴 호의 합(칸 수): 데이터 순서 75, 기본 순서 54 (28% 짧아요)
+    // Total arc length in the sample (in slots): data order 75, default order 54 (28% shorter)
     expect([costOf(networkOrder(plain, "data")), costOf(networkOrder(plain))]).toEqual([75, 54]);
-    // 묶음을 주면 묶음끼리 붙어 있어요
+    // With groups given, each group's nodes sit together
     const grouped = names(networkOrder(g, "auto", ["Money", "Edge"]));
     expect(grouped.slice(0, 2).sort()).toEqual(["Billing", "Payments"]);
     expect(grouped[2]).toBe("Web");
@@ -135,12 +135,12 @@ describe("NetworkChart", () => {
     const hot = a.filter((x) => ACCENT.test(x.stroke));
     // Gateway: Web, Mobile app, Auth, Search, Catalog, Cart, Orders, Logs
     expect(hot).toHaveLength(8);
-    // 강조 호는 모두 나머지 뒤에 그려요 (위에 얹혀요)
+    // Highlighted arcs are all drawn after the rest (they sit on top)
     expect(a.findIndex((x) => ACCENT.test(x.stroke))).toBe(a.length - hot.length);
     expect(labels(h).filter((t) => t.weight === 800).map((t) => t.text)).toEqual(["Gateway"]);
     expect(dots(h).filter((d) => ACCENT.test(d.fill))).toHaveLength(1);
     expect(labels(draw(networkSample, { highlight: "Payments" })).filter((t) => t.weight === 800).map((t) => t.text)).toEqual(["Payments"]);
-    // 맞는 노드가 없거나 "none"이면 강조색이 없어요
+    // No matching node, or "none": no accent color
     for (const highlight of ["Nope", "none"]) expect(draw(networkSample, { highlight })).not.toMatch(ACCENT);
   });
 
@@ -149,14 +149,14 @@ describe("NetworkChart", () => {
       const h = draw(networkSample, { width });
       const a = arcs(h);
       const k = a.map((x) => x.ry / x.rx);
-      // 모든 호가 같은 배율: 높이는 거리에 비례해요
+      // Every arc has the same ratio: height is proportional to distance
       expect(Math.max(...k) - Math.min(...k)).toBeLessThan(0.02);
       for (const x of a) {
         expect(x.y).toBe(x.y1);
         expect(x.rx).toBeCloseTo((x.x1 - x.x0) / 2, 1);
         expect(x.y - x.ry - x.w / 2).toBeGreaterThanOrEqual(0);
       }
-      // 굵기는 값을 따라요: 가장 굵은 호는 Web-Gateway(42)
+      // Width follows the value: the widest arc is Web-Gateway (42)
       const widest = a.reduce((m, x) => (x.w > m.w ? x : m));
       expect(widest.w).toBeGreaterThan(Math.min(...a.map((x) => x.w)));
     }
@@ -173,7 +173,7 @@ describe("NetworkChart", () => {
     draw(networkSample, { highlight: "Payments", unit: "K" });
     expect(frame().announce).toBe(`Payments, 7 connections, strongest link to Orders (${pay + 1}/14)`);
     expect(frame().tip!.rows.map((row) => `${row.label}=${row.value}`)).toEqual(["Connections=7", "Total=41K", "Strongest link=Orders 12K"]);
-    // 노드 다음은 링크, 값이 큰 것부터. 두 방향이 있는 쌍은 방향마다 값을 적어요
+    // Links come after the nodes, largest value first. A pair linked both ways gives the value for each direction
     const both = ev.find((e) => e.label === "Orders ↔ Payments")!;
     expect(both.formatted).toBe("Orders→Payments 9K, Payments→Orders 3K");
     expect(ev[14].label).toBe("Web → Gateway");
@@ -228,7 +228,7 @@ describe("NetworkChart", () => {
     expect(run(gw, "ArrowRight")).toEqual([ev[gw + 1].label]);
     expect(run(gw, "ArrowLeft")).toEqual([ev[gw - 1].label]);
     expect(run(0, "ArrowLeft")).toEqual([ev[13].label]);
-    // Gateway의 가장 굵은 링크는 Web(42), 그다음 Mobile app(36)
+    // Gateway's thickest link is Web (42), then Mobile app (36)
     expect(run(gw, "ArrowDown")).toEqual(["Web → Gateway"]);
     expect(run(null, "End")).toEqual([ev[13].label]);
     expect(onClick).not.toHaveBeenCalled();
@@ -243,14 +243,14 @@ describe("NetworkChart", () => {
         const h = draw(chain(n), { width });
         const xs = dots(h).map((d) => d.x);
         const span = Math.max(...xs) - Math.min(...xs);
-        // 이웃 간격은 88px까지, 줄은 가운데
+        // Neighbor spacing is at most 88px, and the row is centered
         expect(span, `${n} nodes at ${width}`).toBeLessThanOrEqual(88 * (n - 1) + 0.1);
         expect(Math.abs((Math.max(...xs) + Math.min(...xs)) / 2 - width / 2)).toBeLessThan(1);
         expect(Math.max(...arcs(h).map((a) => a.ry))).toBeLessThanOrEqual(44 * (n - 1) + 0.1);
         const height = +/viewBox="0 0 [\d.]+ ([\d.]+)"/.exec(h)![1];
         expect(height).toBeLessThanOrEqual(200);
       }
-    // 이름표가 길면 가로로 들어갈 만큼 넓히되 160px까지
+    // Long labels widen the spacing enough to fit horizontally, up to 160px
     const wide = dots(draw([L("Payments service", "Orders service", 1)])).map((d) => d.x);
     expect(wide[1] - wide[0]).toBeGreaterThan(88);
     expect(wide[1] - wide[0]).toBeLessThanOrEqual(160);
@@ -269,10 +269,10 @@ describe("NetworkChart", () => {
       const ls = labels(draw(networkSample, { width }));
       expect(ls.every((t) => t.tilt), String(width)).toBe(true);
       const xs = ls.map((t) => t.x).sort((a, b) => a - b);
-      // 기울인 이름표 사이 가로 간격 17px 이상 (줄 간격 12px)
+      // Tilted labels are at least 17px apart horizontally (line spacing 12px)
       for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(16.9);
     }
-    // 390px에서 표본 14개는 모두 적어요
+    // At 390px all 14 nodes of the sample get labels
     expect(labels(draw(networkSample, { width: 390 }))).toHaveLength(14);
     expect(labels(draw(networkSample, { showLabels: false }))).toHaveLength(0);
   });
@@ -297,13 +297,13 @@ describe("NetworkChart", () => {
       [L("<b>", '"&', 1)],
     ];
     for (const data of cases) for (const width of [280, 720]) expect(draw(data, { width })).not.toMatch(/NaN|Infinity|undefined/);
-    // 노드는 있는데 링크가 없으면 점만, 강조 없음
+    // Nodes without links: dots only, no highlight
     const lonely = draw([L("A", "A", 3), L("B", "C", 0)]);
     expect(arcs(lonely)).toHaveLength(0);
     expect(dots(lonely)).toHaveLength(3);
     expect(lonely).not.toMatch(ACCENT);
     expect(frame().description).toBe("Network. 3 nodes, 0 links, in 3 separate parts.");
-    // 값 필드가 없으면 행마다 1: 같은 쌍 두 행은 2
+    // Without a value field each row counts as 1: two rows of the same pair make 2
     r(<NetworkChart data={[{ from: "A", to: "B" }, { from: "A", to: "B" }, { from: "B", to: "C" }]} width={480} animate={false} />);
     expect(frame().events.map((e) => `${e.label}=${e.value}`)).toEqual(["A=1", "B=2", "C=1", "A → B=2", "B → C=1"]);
   });
@@ -319,7 +319,7 @@ describe("NetworkChart", () => {
     const h = draw(big);
     expect(h).not.toMatch(/NaN|Infinity|undefined/);
     expect(arcs(h).length).toBeGreaterThan(2500);
-    // 3,000개면 호버용 투명 선을 깔지 않아요
+    // With 3,000 links no transparent hover lines are laid down
     expect(h).not.toContain('stroke="transparent"');
     expect(h.length).toBeLessThan(700_000);
     const ls = labels(h);
@@ -335,7 +335,8 @@ describe("NetworkChart", () => {
       { label: "Money", color: "neutralStrong", shape: "circle" },
       { label: "Ops", color: "mix:0.6666666666666667", shape: "circle" },
     ]);
-    // 서버 SVG(테마 색이 든 글자)에서 범례 색과 그 묶음 노드의 점 색이 같아요. 묶음 없는 노드는 범례에 없는 네 번째 단계예요
+    // In the server SVG (markup with the theme colors in it), each legend color matches the dot color of that group's nodes.
+    // Nodes without a group get a fourth step that is not in the legend
     for (const theme of ["light", "dark"] as const) {
       const svg = renderSpecToSVG({ ...spec, card: { title: "t", legend: "auto" } }, { width: 720, theme });
       const at = svg.indexOf("<svg x=");
@@ -365,7 +366,7 @@ describe("NetworkChart", () => {
     expect(geometry(body).length).toBeGreaterThan(500);
     const inner = server.slice(server.indexOf('<svg x="'));
     expect(geometry(inner).replace(/^x=\S+ y=\S+ width=\S+ height=\S+ /, "")).toBe(geometry(body));
-    // 동작 줄이기도 같은 끝 상태
+    // Reduced motion ends in the same state too
     const direct = (extra: Record<string, unknown>) => geometry(draw(networkSample, extra));
     expect(direct({ animate: undefined, reducedMotion: true })).toBe(direct({}));
   });

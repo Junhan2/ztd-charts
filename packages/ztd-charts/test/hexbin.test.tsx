@@ -11,7 +11,7 @@ import { renderSpecToHTML, renderSpecToSVG } from "../src/server";
 import { MAX_CHART_SIZE, validateSpec, type ChartSpec } from "../src/spec";
 import { scatterHexSample, scatterHexSampleKo } from "../src/spec/samples";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 칸을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked cell, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -52,10 +52,10 @@ const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
 type P = { x: number; y: number };
 const draw = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<ScatterChart data={data} x="x" y="y" bin="hex" width={480} height={300} animate={false} {...extra} />);
-/** 색 단계 경로(칸 묶음): "M…l" 로 시작하는 칸 수 */
+/** Color step paths (cell groups), and the number of cells in one: each cell starts with "M…l" */
 const hexPaths = (h: string) => [...h.matchAll(/<path class="ztd-mark" d="([^"]+)"/g)].map((m) => m[1]);
 const cellCount = (d: string) => (d.match(/M/g) ?? []).length;
-/** 앞에서 쓴 seeded와 같은 고정 난수 */
+/** Seeded random numbers, the same generator as the seeded used earlier */
 function rnd(seed: number) {
   let s = seed >>> 0;
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -113,14 +113,14 @@ describe("hex grid", () => {
       expect(cols * rows, JSON.stringify(box)).toBeLessThanOrEqual(HEX_MAX_CELLS);
       expect(g.w).toBeGreaterThan(4);
     }
-    // 서버 렌더에 아주 큰 높이가 와도 정해진 한도 안에서 그리고, 툴팁 범위는 실제로 그린(넓힌) 칸의 범위예요
+    // Even when the server render gets a huge height, it draws within the set limit, and the tooltip ranges are those of the cells actually drawn (widened)
     const t0 = performance.now();
     const h = r(<ScatterChart data={cloud(5000)} x="x" y="y" bin="hex" binSize={4} width={2400} height={1e9} animate={false} />);
     expect(performance.now() - t0).toBeLessThan(3000);
     expect(h).not.toMatch(BAD);
     expect(frame().events.length).toBeGreaterThan(0);
     expect(frame().events.length).toBeLessThanOrEqual(HEX_MAX_CELLS);
-    // 스펙 높이는 10,000px까지라 서버 렌더는 그 끝(10,000 × 10,000, 폭 4면 칸 700만 개)으로 봐요
+    // A spec height goes up to 10,000px, so the server render is checked at that limit (10,000 × 10,000, 7 million cells at width 4)
     const svg = renderSpecToSVG({ type: "scatter", data: cloud(2000), encoding: { x: "x", y: "y" }, options: { bin: "hex", binSize: 4, height: MAX_CHART_SIZE } }, { width: MAX_CHART_SIZE });
     expect(svg).not.toMatch(BAD);
     expect(validateSpec({ type: "scatter", data: cloud(5), options: { bin: "hex", height: 1e9 } }).errors.map((e) => e.code)).toEqual(["out_of_range"]);
@@ -132,10 +132,10 @@ describe("hex grid", () => {
     expect(hexNeighbor(cells, 0, [1, 0])).toBe(1);
     expect(hexNeighbor(cells, 1, [1, 0])).toBe(2);
     expect(hexNeighbor(cells, 2, [1, 0])).toBe(-1);
-    // 짝수 줄(2)에서 위는 오른쪽 위(홀수 줄 같은 번호), 홀수 줄에서 위는 왼쪽 위라 같은 열로 돌아와요
+    // On an even row (2), up goes to the upper right (the same index on the odd row); on an odd row, up goes to the upper left, so it returns to the same column
     expect(hexNeighbor(cells, 0, [0, -1])).toBe(3);
     expect(hexNeighbor(cells, 3, [0, -1])).toBe(5);
-    // 아랫줄(3)이 비어서 두 줄 아래로 건너뛰어요
+    // The row below (3) is empty, so it skips two rows down
     expect(hexNeighbor(cells, 0, [0, 1])).toBe(6);
   });
 });
@@ -150,7 +150,7 @@ describe("scatter bin hex", () => {
     const cells = paths.reduce((s, d) => s + cellCount(d), 0);
     expect(cells).toBe(frame().events.length);
     expect(frame().events.reduce((s, e) => s + (e.value as number), 0)).toBe(20000);
-    // 칸 묶음과 범례 칸의 불투명도는 같은 단계 값이에요 (가장 진한 단계는 1)
+    // The cell groups and the legend swatches share the same step opacity (the darkest step is 1)
     const fills = new Set([...h.matchAll(/<path class="ztd-mark" d="[^"]+" fill="([^"]+)" opacity="([^"]+)"/g)].map((m) => `${m[1]}|${Number(m[2]).toFixed(3)}`));
     const swatches = new Set([...h.matchAll(/<rect x="[^"]+" y="3" width="12" height="9" rx="2" fill="([^"]+)" opacity="([^"]+)"/g)].map((m) => `${m[1]}|${Number(m[2]).toFixed(3)}`));
     expect(swatches.size).toBe(5);
@@ -193,7 +193,7 @@ describe("scatter bin hex", () => {
     expect(f.tip?.title).toBe("658 points");
     expect(f.tip?.rows.map((x) => x.label)).toEqual(["Size (KB)", "Latency"]);
     expect(f.tip?.rows[1].value).toMatch(/^\d+(\.\d)? to \d+(\.\d)? ms$/);
-    // 낭독도 툴팁처럼 축 이름을 붙여요
+    // The announcement adds the axis names too, like the tooltip
     expect(f.announce).toMatch(/^658 points, Size \(KB\) \d+(\.\d)? to \d+(\.\d)?, Latency \d+(\.\d)? to \d+(\.\d)? ms$/);
     expect(f.description).toContain("Binned into 3 hexagons. Densest: 658 points");
     const de = Array.from({ length: 1500 }, () => ({ x: 1000.5, y: 2.25 }));
@@ -202,7 +202,7 @@ describe("scatter bin hex", () => {
     draw(de, { locale: "ko-KR" });
     expect(frame().tip?.title).toBe("점 1,500개");
     expect(frame().tip?.rows[0].value).toContain("~");
-    // 가장자리 칸의 범위도 축 범위 안이에요 (0 아래 값을 말하지 않아요)
+    // Edge cells' ranges also stay within the axis range (no values below 0 are mentioned)
     draw([...cloud(2000), { x: 0, y: 0 }], { zero: true });
     const lows = frame().events.map((e) => e.label);
     expect(lows.some((l) => l.startsWith("x 0 to ") || l.includes(", y 0 to "))).toBe(true);
@@ -268,7 +268,7 @@ describe("scatter bin hex", () => {
     draw(line(5000, () => ({ x: 7, y: 7 })));
     expect(frame().events).toHaveLength(1);
     expect(frame().events[0].value).toBe(5000);
-    // 같은 수뿐이면 범례를 그리지 않아요
+    // When every count is the same, no legend is drawn
     expect(draw([{ x: 3, y: 4 }])).not.toContain('y="3" width="12" height="9"');
     draw([...cloud(300), { x: 1, y: 0 }, { x: 2, y: -5 }], { yScale: "log" });
     expect(frame().description).toContain("2 points with y at or below 0 are not shown on the log scale.");
@@ -284,7 +284,7 @@ describe("scatter bin hex", () => {
     const shared = hexFacetPlan(planFacets({ type: "scatter", data: scatterHexSample, by: "route", chartProps: cp, width: 632, locale: "en-US", lang: "en" }), cp, "en-US");
     const doms = shared.panels.map((pn) => JSON.stringify(pn.props.binDomain));
     expect(new Set(doms).size).toBe(1);
-    // 같은 범위의 끝은 패널이 혼자 센 가장 많은 칸과 같아요 (패널과 같은 그림 영역에서 셌어요)
+    // The top of the shared range equals the fullest cell a panel counts on its own (counted on the same plot area as the panel)
     const maxes = shared.panels.map((pn) => {
       draw(pn.props.data as Record<string, unknown>[], { ...cp, ...pn.props, binDomain: undefined });
       return Math.max(...frame().events.map((e) => e.value as number));
@@ -292,7 +292,7 @@ describe("scatter bin hex", () => {
     expect((shared.panels[0].props.binDomain as number[])[1]).toBe(Math.max(...maxes));
     const free = hexFacetPlan(planFacets({ type: "scatter", data: scatterHexSample, by: "route", chartProps: cp, scale: "free", width: 632, locale: "en-US", lang: "en" }), cp, "en-US");
     expect(free.panels.every((pn) => pn.props.binDomain === undefined)).toBe(true);
-    // 점이 하나도 그려지지 않는 패널도 깨지지 않아요
+    // A panel that draws no points at all does not break either
     const withEmpty = [...scatterHexSample.slice(0, 400), { route: "Broken", kb: "n/a", ms: null }];
     const svg = renderSpecToSVG({ type: "scatter", data: withEmpty, encoding: { x: "kb", y: "ms" }, options: { bin: "hex" }, facet: { by: "route" } }, { width: 632 });
     expect(svg).not.toMatch(BAD);
@@ -304,7 +304,7 @@ describe("scatter bin hex", () => {
     const sharedPlan = hexFacetPlan(planFacets({ type: "scatter", data: scatterHexSample, by: "route", chartProps: { x: "kb", y: "ms", bin: "hex" }, width: 632, locale: "en-US", lang: "en" }), { x: "kb", y: "ms", bin: "hex" }, "en-US");
     expect(sharedPlan.legend).toBeDefined();
     expect(sharedPlan.panels.every((pn) => pn.props.binLegend === false)).toBe(true);
-    // 브라우저(<Chart>)와 서버 SVG 모두 범례는 하나, 다섯 칸이고 끝 숫자는 모든 패널의 범위예요
+    // In both the browser (<Chart>) and the server SVG there is one legend with five swatches, and its end numbers cover all panels
     const html = r(<Chart spec={spec()} width={632} animate={false} />);
     expect((html.match(/class="ztd-facet-legend"/g) ?? []).length).toBe(1);
     const svg = renderSpecToSVG(spec(), { width: 632 });
@@ -313,7 +313,7 @@ describe("scatter bin hex", () => {
     expect(ends(svg)).toHaveLength(2);
     expect(ends(svg)[0]).toBe("1");
     expect(svg).not.toMatch(BAD);
-    // 패마다 축이 다르면(scale "free") 패널마다 자기 범례예요
+    // When each panel has its own axes (scale "free"), each panel gets its own legend
     const free = renderSpecToSVG(spec("free"), { width: 632 });
     expect(free).not.toContain("ztd-facet-legend");
     expect(swatches(free)).toBe(10);
@@ -325,7 +325,7 @@ describe("scatter bin hex", () => {
     expect(ok.warnings.map((w) => w.code)).not.toContain("unknown_option");
     for (const bad of [[5], [10, 0], [3, 3], [Number.NaN, 1], [0, Infinity], ["0", "9"]]) {
       expect(validateSpec(base({ xDomain: bad })).errors.map((e) => e.code), JSON.stringify(bad)).toEqual(["bad_domain"]);
-      // 차트는 잘못된 범위 대신 데이터 범위로 모든 점을 세요
+      // The chart counts every point with the data range instead of the invalid range
       const h = r(<Chart spec={base({ xDomain: bad })} width={480} animate={false} />);
       expect(h, JSON.stringify(bad)).not.toMatch(BAD);
       expect(frame().events.reduce((sum, e) => sum + (e.value as number), 0)).toBe(scatterHexSample.length);
@@ -364,14 +364,14 @@ describe("chart size limit", () => {
     expect(w).toBe(MAX_CHART_SIZE);
     expect(h).toBeLessThanOrEqual(MAX_CHART_SIZE + 400);
     expect(performance.now() - t0).toBeLessThan(5000);
-    // 보통 크기는 그대로예요
+    // Normal sizes are unchanged
     expect(size(renderSpecToSVG(spec(), { width: 720, height: 300 }))[0]).toBe(720);
     const html = renderSpecToHTML(spec(), { width: 1e9, height: 1e9 });
     expect(html).not.toContain("1000000000");
     expect(Math.max(...[...html.matchAll(/(?:width|height)="([\d.]+)"/g)].map((m) => Number(m[1])))).toBeLessThanOrEqual(MAX_CHART_SIZE);
   });
   it("the outer SVG keeps each side within 250,000 px by scaling the whole drawing (viewBox unchanged), and padding is capped", () => {
-    // 범례 항목 4만 개를 160px 카드에 놓으면 한 줄에 하나씩이라 문서가 70만 px를 넘어요
+    // 40,000 legend items in a 160px card go one per line, so the document is taller than 700,000 px
     const legend = Array.from({ length: 40000 }, (_, i) => ({ label: `Item ${i}`, color: "accent" }));
     const svg = renderSpecToSVG({ ...spec(), card: { title: "Long legend", legend } }, { width: 160 });
     const [w, h] = size(svg);

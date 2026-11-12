@@ -13,7 +13,7 @@ import { isPrivateAddress } from "../src/guard";
 const exec = promisify(execFile);
 const CLI = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
-/** 요청 수를 세는 작은 서버: /ok.csv, /bad.json(JSON이 아님), /big(20MB 넘게), 나머지 404 */
+/** A small server that counts requests: /ok.csv, /bad.json (not JSON), /big (over 20MB), 404 for the rest */
 let server: Server;
 let base = "";
 let hits = 0;
@@ -48,7 +48,7 @@ beforeAll(async () => {
 });
 afterAll(() => server?.close());
 
-/** 만든 React 코드를 TSX로 읽어 문법 오류와, 이름이 name인 JSX 속성의 실제 값을 돌려줘요 */
+/** Reads the generated React code as TSX and returns the syntax errors and the actual value of each JSX attribute, keyed by name */
 function parseSnippet(code: string) {
   const out = ts.transpileModule(code, { reportDiagnostics: true, fileName: "snippet.tsx", compilerOptions: { jsx: ts.JsxEmit.Preserve, target: ts.ScriptTarget.ES2022 } });
   const sf = ts.createSourceFile("snippet.tsx", code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX);
@@ -73,7 +73,7 @@ describe("reactSnippet: 따옴표, 역슬래시가 든 글도 컴파일돼요", 
     expect(errors).toEqual([]);
     expect(attrs).toMatchObject({ title: card.title, takeaway: card.takeaway, subtitle: card.subtitle, number: "01", level: "basic", unit: '"', label: "label" });
     expect(code).not.toContain("bad key");
-    // 평범한 글은 예전처럼 "…" 속성 그대로
+    // Plain text stays a "…" attribute, as before
     expect(code).toContain('number="01"');
   });
 });
@@ -124,9 +124,9 @@ describe("보안: allowPrivate: false는 내부망 주소를 요청 없이 막�
     expect(hits).toBe(before);
   });
   it("IPv4를 품는 IPv6 꼴(NAT64, 6to4, 옛 호환)은 안의 IPv4로 판단해요", () => {
-    // 127.0.0.1, 169.254.169.254, 192.168.1.1 을 품은 꼴과 지역용 NAT64, 옛 사이트 로컬
+    // Forms that embed 127.0.0.1, 169.254.169.254 and 192.168.1.1, plus local-use NAT64 and the old site-local range
     for (const a of ["::ffff:7f00:1", "::7f00:1", "64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "2002:7f00:1::", "2002:c0a8:101::", "64:ff9b:1::1", "fec0::1"]) expect(isPrivateAddress(a), a).toBe(true);
-    // 8.8.8.8 을 품은 꼴과 공용 IPv6는 그대로 가져와요 (IPv6 전용 망은 IPv4 사이트를 64:ff9b:: 꼴로 받아요)
+    // Forms that embed 8.8.8.8 and public IPv6 are fetched as usual (IPv6-only networks reach IPv4 sites in the 64:ff9b:: form)
     for (const a of ["8.8.8.8", "::ffff:808:808", "64:ff9b::808:808", "2002:808:808::", "2606:4700:4700::1111"]) expect(isPrivateAddress(a), a).toBe(false);
   });
   it("기본값은 지금처럼 가져와요", async () => {
@@ -158,7 +158,7 @@ describe("보안: evil.json (리뷰어 재현)", () => {
 });
 
 describe("svgToPng: 픽셀 한도", () => {
-  /** resvg를 가짜로 바꿔 넘겨받은 SVG 크기와 배율만 적어요. 실제로 큰 비트맵을 만들지 않아요 */
+  /** Swaps resvg for a fake that only records the SVG size and zoom it receives. No large bitmap is actually made */
   const capture = async (fn: () => Promise<unknown>) => {
     const seen: { w: number; h: number; zoom: number }[] = [];
     vi.doMock("@resvg/resvg-js", () => ({
@@ -184,11 +184,11 @@ describe("svgToPng: 픽셀 한도", () => {
   it("배율은 바깥 <svg>의 줄이지 않은 실제 크기로 정해서 크기 × 배율²이 PNG_MAX_PIXELS를 넘지 않아요", async () => {
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="450">', 2)).toBe(2);
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1000">', 4)).toBe(4);
-    // 차트 한 변 한도(10,000)보다 큰 문서도 그 크기 그대로 재요
+    // A document larger than the chart side limit (10,000) is still measured at its own size
     const seen = await capture(() => svgToPng('<svg xmlns="http://www.w3.org/2000/svg" width="10000" height="240000"></svg>', { scale: 4 }));
     expect(seen).toHaveLength(1);
     expect(pixels(seen[0])).toBeLessThanOrEqual(PNG_MAX_PIXELS * 1.0001);
-    // 안쪽 <svg>의 크기를 바깥 크기로 읽지 않아요
+    // The inner <svg>'s size is not read as the outer size
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9000 9000"><svg width="10" height="10"/></svg>', 2)).toBeNull();
   });
   it("바깥 <svg> 크기를 읽지 못하면(없음, %, 0, 음수) 그리지 않고 오류예요", async () => {

@@ -33,7 +33,7 @@ afterEach(() => {
 type Row = { x: string; y: number };
 const ev = (i: number): ChartEvent<Row> => ({ datum: null, index: i, key: `k${i}`, label: `L${i}`, value: i, formatted: String(i) });
 
-/** ChartFrame에 넘길 최소 ctx. setActive, click은 호출을 기록해요 */
+/** Minimal ctx to pass to ChartFrame. setActive and click record their calls */
 function fakeCtx(active: number | null) {
   const calls = { setActive: [] as unknown[][], click: [] as number[] };
   const c = {
@@ -66,7 +66,7 @@ function fakeCtx(active: number | null) {
   return { c, calls };
 }
 
-/** ChartFrame을 서버에서 그리고, 그린 루트 div 요소(onKeyDown 등 props)를 돌려줘요 */
+/** Renders ChartFrame on the server and returns the rendered root div element (its props, such as onKeyDown) */
 function frameRoot(Frame: typeof ChartFrame, props: Partial<ChartFrameProps<Row>> & { c: ChartCtx<Row> }) {
   let root: ReactElement<Record<string, unknown>> | null = null;
   function Probe() {
@@ -139,7 +139,7 @@ describe("ChartFrame 숨김 글자와 설명", () => {
         if (desc !== text) leaks.push(`${ch.type} ${locale}: ${desc}`);
       }
     }
-    // 게이지는 데이터가 없어도 값 0인 항목 하나를 만들어서(radial.tsx) ChartFrame이 빈 차트로 알 수 없어요
+    // The gauge makes one item with value 0 even without data (radial.tsx), so ChartFrame cannot tell it is an empty chart
     expect(leaks.filter((l) => !l.startsWith("gauge "))).toEqual([]);
   });
 
@@ -170,7 +170,7 @@ describe("ChartFrame 터치 해제 effect (perf)", () => {
 
 describe("useChart setActive (StrictMode)", () => {
   it("setState 갱신 함수를 두 번 돌려도 onHover는 바뀔 때 한 번만 불려요", async () => {
-    // StrictMode처럼 갱신 함수를 두 번 불러 보는 useState
+    // A useState that calls the updater twice, like StrictMode
     vi.resetModules();
     vi.doMock("react", async (orig) => {
       const R = await orig<typeof import("react")>();
@@ -220,7 +220,7 @@ describe("호버 맞추기(syncId)와 호버 표시", () => {
     c.setActive(null);
     leave();
     expect(got).toEqual([{ key: "k1", label: "Feb" }, null]);
-    // 날짜 x(타임스탬프 키)와 글자 범주처럼 키 꼴이 달라도 이름표가 같으면 맞춰요. 긴 이름표 목록은 훑지 않아요
+    // Keys of different forms, like a date x (timestamp key) and a text category, still match when the labels are equal. Long label lists are not scanned
     expect(syncIndex(["2025-01", "2025-02"], ["Jan", "Feb"], { key: "1738368000000", label: "Feb" })).toBe(1);
     const many = Array.from({ length: 1001 }, (_, i) => `L${i}`);
     expect(syncIndex(many.map((_, i) => `k${i}`), many, { key: "none", label: "L5" })).toBe(-1);
@@ -287,7 +287,8 @@ describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () 
 });
 
 describe("등장 시작 기준 (useViewport)", () => {
-  // 화면 높이 vh에서 top부터 h만큼인 차트의 관찰 결과. 관찰 영역은 CHART_VIEW.rootMargin의 아래쪽 값만큼 줄어요 ("-8%" 또는 "0px")
+  // Observer result for a chart spanning h from top in a viewport of height vh.
+  // The observed area shrinks by the bottom value of CHART_VIEW.rootMargin ("-8%" or "0px")
   const entryAt = (top: number, h: number, vh: number, rootMargin: string = CHART_VIEW.rootMargin) => {
     const bottom = rootMargin.trim().split(/\s+/)[2] ?? rootMargin;
     const inset = bottom.endsWith("%") ? (-parseFloat(bottom) / 100) * vh : -parseFloat(bottom);
@@ -298,10 +299,10 @@ describe("등장 시작 기준 (useViewport)", () => {
   const shown = (top: number, h: number, vh: number) => isShown(entryAt(top, h, vh), CHART_VIEW.threshold, CHART_VIEW.enoughPx);
 
   it("문서 카드 위쪽만 보이는 키 큰 차트도 시작해요 (1280x900에서 타일 지도, 막대 경주, 타임라인, 트리)", () => {
-    // 운영 사이트에서 7초 동안 비어 있던 자리 그대로: 차트 위 끝, 높이
+    // Exactly the slots that stayed empty for 7 seconds on the live site: chart top, height
     const prod = [[769.19, 515.09], [791.66, 284], [769.19, 236], [763.61, 406.5]];
     for (const [top, h] of prod) expect(shown(top, h, 900), `${top} ${h}`).toBe(true);
-    // 예전 기준(아래 8% 띠를 빼고 25%)으로는 넷 다 기다렸어요 (타임라인은 25%에 0.2px 모자랐어요)
+    // Under the old rule (25%, with a bottom band of 8% excluded) all four waited (the timeline was 0.2px short of 25%)
     for (const [top, h] of prod) expect(isShown(entryAt(top, h, 900, "0px 0px -8% 0px"), 0.25), `${top} ${h}`).toBe(false);
   });
 
@@ -373,7 +374,7 @@ describe("fitDomain (scale)", () => {
 });
 
 describe("로그 축 범위와 눈금 (scale, 차례 4 ⑯)", () => {
-  /** 범위(유효숫자 5자리)와 그 범위의 눈금 */
+  /** Domain (5 significant digits) and the ticks for that domain */
   const row = (lo: number, hi: number, px: number) => {
     const d = fitLogDomain(lo, hi);
     return [d.map((v) => +v.toPrecision(5)), logTicks(d[0], d[1], px)];
@@ -464,7 +465,7 @@ describe("Legend", () => {
 describe("StatCard", () => {
   const data = [452, 460, 455, 471, 480].map((v, i) => ({ day: `2025-06-0${i + 1}`, v }));
 
-  /** +6.2% 배지의 배경색 */
+  /** Background color of the +6.2% badge */
   const badgeBg = (h: string) => /<span style="[^"]*background:([^;"]+)[^"]*">\+6\.2%<\/span>/.exec(h)?.[1];
 
   it("shows the last value, a change badge from first to last, and tints the badge only when the move is good", () => {
@@ -498,7 +499,7 @@ describe("StatCard", () => {
     expect(h).toContain(">455K<");
     expect(h).toContain(">Jun 3<");
     expect(h).not.toContain("Last 5 days");
-    // 추세선이 짚은 점을 알려 주고, 값은 추세선이 읽어 줘요 (툴팁, 오른쪽 값 글자는 끔)
+    // The trend line reports which point is pointed at, and it reads out the value (its tooltip and the value label on the right are off)
     expect(typeof spark.onHover).toBe("function");
     expect(spark.tooltip).toBe(false);
     expect(spark.showValue).toBe(false);
