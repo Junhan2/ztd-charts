@@ -710,7 +710,7 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
     "lines": 34,
     "paths": 0,
     "rects": 124,
-    "sha1": "d0ed54ad2adf",
+    "sha1": "50f94db6d149",
     "texts": [
       "Input",
       "Cached",

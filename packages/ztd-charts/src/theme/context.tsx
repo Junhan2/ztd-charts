@@ -83,6 +83,8 @@ const TOKEN_SET = new Set<string>([
   "accent",
   "accentText",
   "onAccent",
+  "accent2",
+  "accent3",
   "onInk",
   "line",
   "line2",

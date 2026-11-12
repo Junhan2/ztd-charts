@@ -69,6 +69,7 @@ import { ThemeProvider } from "ztd-charts";
 | `dim` | #5B636D | #B3B9C2 | 축, 보조선 |
 | `accent` | #D6FD70 | #0B8FD8 | 강조 하나 |
 | `accentText` | #D6FD70 | #006DA8 | 글자로 쓰는 강조 |
+| `accent2` / `accent3` | #FF8CC1 / #38C6F6 | #D8488C / #659815 | 보조 강조: 분홍, 다른 테마의 강조색 (스카이라인 앞줄) |
 | `line` / `line2` | #2A2F36 / #22272D | #E6E9ED / #F0F2F5 | 테두리, 눈금 |
 | `neutral` / `neutralStrong` / `neutralSoft` | #3A414A / #5F6772 / #262B31 | #D5DAE0 / #9AA3AE / #EEF1F4 | 나머지 채움, 트랙 |
 

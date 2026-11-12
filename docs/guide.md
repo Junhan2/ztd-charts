@@ -69,6 +69,7 @@ Every color is a `--ztd-*` CSS variable, so CSS alone can change it without Reac
 | `dim` | #5B636D | #B3B9C2 | Axes, guide lines |
 | `accent` | #D6FD70 | #0B8FD8 | The one highlight |
 | `accentText` | #D6FD70 | #006DA8 | Accent used as text |
+| `accent2` / `accent3` | #FF8CC1 / #38C6F6 | #D8488C / #659815 | Second and third highlights: pink, and the other theme's accent (skyline front row) |
 | `line` / `line2` | #2A2F36 / #22272D | #E6E9ED / #F0F2F5 | Borders, ticks |
 | `neutral` / `neutralStrong` / `neutralSoft` | #3A414A / #5F6772 / #262B31 | #D5DAE0 / #9AA3AE / #EEF1F4 | Other fills, tracks |
 
