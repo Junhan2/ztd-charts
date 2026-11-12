@@ -74,7 +74,7 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
     v("kr-sido", "South Korea", { map: "kr-sido" }, { region: "sido", value: "rate" }, S.tileMapSample),
   ],
   timeline: [
-    v("status-strip", "Status strip", {}, { label: "run", status: "state" }),
+    v("status-strip", "Status strip", { statusStrip: true }, { status: "state" }),
     v("clock-times", "Clock times", {}, { start: "startAt", end: "endAt" }),
     v("by-duration", "Longest first", { sort: "duration" }),
     v("now", "Now line", { now: 30 }),

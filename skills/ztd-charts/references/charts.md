@@ -532,7 +532,7 @@
 - Use when: Items with a start and an end, such as a project schedule, deployment and job runs, an agent run log or an incident timeline
 - Avoid when: Each item has one value and no start or end (use bar), or the dependencies between tasks are the story
 - encoding: label, start, end, group?, status?
-- Chart options: xType: number|date, dayFirst, sort: none|start|duration, referenceLines, now, brush, hidden
+- Chart options: xType: number|date, dayFirst, sort: none|start|duration, referenceLines, now, statusStrip, brush, hidden
 - Default highlight: the largest value
 
 ```json

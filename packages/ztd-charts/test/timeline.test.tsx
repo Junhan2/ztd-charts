@@ -5,7 +5,7 @@ import { autoLegend, Chart } from "../src/charts/Chart";
 import { Timeline } from "../src/charts/timeline";
 import type { ChartFrameProps } from "../src/core/ChartFrame";
 import { formatDuration } from "../src/core/format";
-import { readTimeline, timelineRows } from "../src/layout/timeline";
+import { readTimeline, statusStrip, timelineRows } from "../src/layout/timeline";
 import { renderSpecToSVG } from "../src/server";
 import { CHARTS, suggestCharts, validateSpec } from "../src/spec";
 import { timelineSample, timelineSampleKo, timelineScheduleSample } from "../src/spec/samples";
@@ -258,6 +258,61 @@ describe("interaction", () => {
     expect(frame().onPointerDown).toBeTypeOf("function");
     draw(timelineSample);
     expect(frame().onPointerDown).toBeUndefined();
+  });
+});
+
+describe("status strip (options.statusStrip)", () => {
+  const STRIP = 'class="ztd-strip"';
+  const strip = (h: string) => h.slice(h.indexOf(STRIP));
+  const stripRects = (h: string) => [...strip(h).matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)].map((m) => m.slice(1).map(Number));
+
+  it("adds a bottom row that joins consecutive states; bars keep the default colors and show durations", () => {
+    const h = draw(timelineSample, { status: "state", statusStrip: true, unit: " min" });
+    // Working 0-18, Fixing 18-22, Working 22-25, Waiting 25-43, and Merged at 43 as a point
+    expect(stripRects(h)).toHaveLength(4);
+    expect(strip(h).match(/<path d="M/g)).toHaveLength(1);
+    expect(strip(h)).toContain(">Waiting<");
+    expect(bars(h)).toBe(8);
+    expect(h.match(/<rect [^>]*fill="var\(--ztd-accent[^>]*class="ztd-mark"/g)).toHaveLength(1);
+    expect(h.slice(0, h.indexOf(STRIP))).not.toContain(">Working<");
+    expect(h).toContain(">18 min<");
+    expect(frame().description).toBe(
+      "Timeline. 9 items on 8 rows, from 0 min to 43 min. Longest: Wait for CI, 18 min. Status strip: Working 0 min to 18 min, Fixing 18 min to 22 min, Working 22 min to 25 min, Waiting 25 min to 43 min, Merged 43 min.",
+    );
+    expect(h).not.toMatch(BAD);
+    // off by default, and nothing to draw without status
+    expect(draw(timelineSample, { status: "state" })).not.toContain(STRIP);
+    expect(draw(timelineSample, { statusStrip: true })).not.toContain(STRIP);
+  });
+
+  it("each moment takes the state of the latest-started item; the same state joins; hidden states leave a gap", () => {
+    const spans = (data: Row[]) => {
+      const m = readTimeline(data, { label: "step", status: "s" });
+      return statusStrip(m.items, m.items.map((_, k) => k)).spans.map((s) => `${s.status} ${s.t0}-${s.t1}`);
+    };
+    const data = [item("api", 0, 10, { s: "up" }), item("job", 4, 6, { s: "down" }), item("api", 12, 20, { s: "up" })];
+    expect(spans(data)).toEqual(["up 0-4", "down 4-6", "up 6-10", "up 12-20"]);
+    expect(spans([item("a", 0, 10, { s: "up" }), item("b", 5, 15, { s: "up" })])).toEqual(["up 0-15"]);
+    draw(data, { status: "s", statusStrip: true, hidden: ["down"] });
+    expect(frame().description).toContain("Status strip: up 0 to 10, up 12 to 20.");
+  });
+
+  it("pointing at the strip picks the item that set the state there, or the point under the pointer", () => {
+    state.spy = true;
+    const h = draw(timelineSample, { status: "state", statusStrip: true, unit: " min" });
+    const [x, y, w, bh] = stripRects(h)[1];
+    frame().onPointerMove!(x + w / 2, y + bh / 2, { pointerType: "mouse" } as never);
+    const last = stripRects(h)[3];
+    frame().onPointerMove!(last[0] + last[2] + 2, y + bh / 2, { pointerType: "mouse" } as never);
+    expect(state.calls.map((e) => (e === null ? null : frame().events[e].label))).toEqual(["Fix failing test", "Merged"]);
+  });
+
+  it("the Status strip variant validates, and the validator warns when status is missing", () => {
+    const def = CHARTS.find((c) => c.type === "timeline")!;
+    const spec = { ...def.example, encoding: { ...def.example.encoding, status: "state" }, options: { ...def.example.options, statusStrip: true } };
+    expect(validateSpec(spec).warnings).toEqual([]);
+    expect(renderSpecToSVG(spec, { width: 560, theme: "dark" })).toContain(STRIP);
+    expect(validateSpec({ ...def.example, options: { statusStrip: true } }).warnings.map((w) => w.code)).toEqual(["timeline_strip_needs_status"]);
   });
 });
 

@@ -619,6 +619,7 @@ const ENTRIES: ChartEntry[] = [
       op("sort", "enum", 'Row order: "none" keeps the data order, "start" puts the earliest start first, "duration" the longest total first', { enum: ["none", "start", "duration"], default: "none" }),
       op("referenceLines", "array", "Vertical lines on the time axis [{ x, label }]. x is a number or a date, like the data. Lines outside the axis range are not drawn"),
       op("now", "any", 'Time of a "Now" line, in the same form as the data. Items without an end run up to it. The chart never reads the clock, so server and browser draw the same'),
+      op("statusStrip", "boolean", "Adds a bottom row that joins consecutive items of the same status into one labelled segment. Bars then show durations, the longest in the accent. Needs encoding.status", { default: false }),
       op("brush", "any", 'Drag across the time axis to zoom in: "zoom" or true (keyboard: Shift+arrows, Enter). Escape or "Show all" zooms out', { default: false }),
       HIDDEN,
     ],

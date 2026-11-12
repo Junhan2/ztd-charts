@@ -14,7 +14,7 @@ import { overlaps, textWidth, truncate, type Box } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Highlight, Row, TooltipData, TooltipRow } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
-import { DAY, readTimeline, timelineDomain, timelineGroups, timelineRows, type TimeKind, type TimelineItem, type TimelineSort } from "../layout/timeline";
+import { DAY, readTimeline, statusStrip, timelineDomain, timelineGroups, timelineRows, type TimeKind, type TimelineItem, type TimelineSort } from "../layout/timeline";
 
 const en = {
   kind: "Timeline",
@@ -30,6 +30,7 @@ const en = {
   desc: (n: number, rows: number, a: string, b: string) => `${plural(n, "item")} on ${plural(rows, "row")}, from ${a} to ${b}`,
   longest: (label: string, d: string) => `Longest: ${label}, ${d}`,
   lines: "Reference lines",
+  strip: (parts: string, more: number) => `Status strip: ${parts}${more ? `, and ${more} more` : ""}.`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
@@ -47,6 +48,7 @@ const MSG: Record<ChartLang, typeof en> = {
     desc: (n, rows, a, b) => `항목 ${n}개, 줄 ${rows}개, ${a}부터 ${b}까지`,
     longest: (label, d) => `가장 긴 항목은 ${label}, ${d}`,
     lines: "기준선",
+    strip: (parts, more) => `상태 띠: ${parts}${more ? ` 외 ${more}개` : ""}.`,
   },
 };
 
@@ -77,6 +79,11 @@ export interface TimelineProps<T = Row> extends BaseChartProps<T>, BrushProps, D
   now?: unknown;
   /** 숨길 묶음(group 값, group이 없으면 status 값). 색과 줄은 모두 보일 때 그대로예요 */
   hidden?: readonly string[];
+  /**
+   * 맨 아랫줄에 상태 띠를 더해요. 시간 순서로 같은 상태가 이어지면 한 칸으로 합쳐 상태 색으로 칠하고 칸 안에 상태를 적어요.
+   * 막대는 상태 대신 기본 색(가장 긴 항목이 강조색)과 걸린 시간으로 그려요. status가 있어야 해요. 기본 false
+   */
+  statusStrip?: boolean;
 }
 
 /** 칸(겹친 항목 한 줄) 높이: 기본, 그림 높이 상한, 바닥. 칸이 아주 많으면 바닥(2px)으로 그리고 그만큼 높아져요 */
@@ -98,6 +105,9 @@ const OPEN_TINT = 0.28;
 const MIN_BAR_W = 3;
 /** 등장 지연의 상한(ms). 항목이 많아도 등장이 끝없이 늘어지지 않아요 */
 const MAX_DELAY = 600;
+/** 상태 띠(맨 아랫줄)와 위 칸 사이 틈. 띠 줄의 높이는 LANE_H, 칸 높이는 기본 칸의 막대와 같아요 */
+const STRIP_GAP = 6;
+const STRIP_BAR = LANE_H * 0.62;
 
 /**
  * 시간 눈금. 분, 초 단위가 필요한 짧은 범위(눈금 간격 30분 이하)와 해 단위 범위는 여기서 고르고, 그 사이(시, 일, 주, 월, 분기)는 라인 차트와 같은 timeTicks예요.
@@ -161,10 +171,13 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const sort: TimelineSort = props.sort === "start" || props.sort === "duration" ? props.sort : "none";
   const { rows, lane } = useMemo(() => timelineRows(items, sort), [items, sort]);
   const lanes = rows.reduce((s, r) => s + r.lanes, 0);
+  // 상태 띠: 켜고 상태가 있는 항목이 있을 때만. 칸들 아래에 한 줄을 더해요
+  const stripOn = props.statusStrip === true && props.status !== undefined && items.some((it) => it.status !== "");
+  const stripH = stripOn ? STRIP_GAP + LANE_H : 0;
   // 스펙에서 오면 배열이 아닐 수도 있어요 (검사기가 알려요)
   const refLines = Array.isArray(props.referenceLines) ? props.referenceLines : [];
   const top = refLines.length > 0 || props.now !== undefined ? 24 : 6;
-  const c = useChart(props, { height: () => top + AXIS_H + Math.max(40, Math.min(lanes * LANE_H, MAX_PLOT_H), lanes * MIN_LANE_H), duration: 700, stagger: 40 });
+  const c = useChart(props, { height: () => top + AXIS_H + stripH + Math.max(40, Math.min(lanes * LANE_H, MAX_PLOT_H), lanes * MIN_LANE_H), duration: 700, stagger: 40 });
   const { p, width: W, height: H, locale, fv } = c;
   const msg = MSG[c.lang];
   const zoom = useZoom(c.sig);
@@ -180,16 +193,26 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const hl = props.highlight;
   // 묶음 이름으로 강조한 묶음은 강조색이 곧 강조예요. 그 밖의 강조 항목(가장 긴 항목, 줄 이름)은 묶음 색 위에 테두리를 둘러요
   const namedGroups = useMemo(() => timelineGroupHighlight(hl as Highlight<never>, groups), [hl, groups]);
+  // 막대 색은 묶음, 없으면 상태. 상태 띠가 상태 색을 맡으면 막대는 기본 색이라 가장 긴 항목이 강조돼요 (범례는 그대로 상태이고 띠와 같은 색)
+  const barColored = groups.length > 0 && !(stripOn && byStatus);
   const hiItems = useMemo(() => {
     const dur = order.map((k) => items[k].end - items[k].start);
-    const at = resolveHighlight(hl, order.map((k) => items[k].datum), order.map((k) => items[k].label), dur, groups.length ? "none" : "max");
+    const at = resolveHighlight(hl, order.map((k) => items[k].datum), order.map((k) => items[k].label), dur, barColored ? "none" : "max");
     const out = new Set([...at].map((e) => order[e]));
     // 묶음 이름으로 강조하면 그 묶음의 항목 모두
     if (namedGroups.size) items.forEach((it, k) => namedGroups.has(groupOf.get(keyOf(it)) ?? -1) && out.add(k));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hl, order, items, groups.length, groupOf, namedGroups, byStatus]);
+  }, [hl, order, items, barColored, groupOf, namedGroups, byStatus]);
   const colors = useMemo<Swatch[] | null>(() => (groups.length ? categorical(p, groups.length, namedGroups) : null), [p, groups, namedGroups]);
+  const barColors = barColored ? colors : null;
+  // 띠 색: 범례가 상태면 범례 색 그대로, 범례가 묶음이면 상태끼리 같은 규칙(드문 상태가 진해요)으로 따로
+  const stripGroups = useMemo(() => (!stripOn ? [] : byStatus ? groups : timelineGroups(props.data, props.status!, true)), [stripOn, byStatus, groups, props.data, props.status]);
+  const stripColors = useMemo<Swatch[]>(
+    () => (!stripOn ? [] : byStatus && colors ? colors : categorical(p, stripGroups.length, timelineGroupHighlight(hl as Highlight<never>, stripGroups))),
+    [stripOn, byStatus, colors, p, stripGroups, hl],
+  );
+  const stripOf = useMemo(() => new Map(stripGroups.map((g, i) => [g, i])), [stripGroups]);
   const hiddenKey = Array.isArray(props.hidden) ? props.hidden.join("\u0001") : "";
   const off = useMemo(() => new Set(groups.length && hiddenKey ? hiddenKey.split("\u0001") : []), [groups.length, hiddenKey]);
 
@@ -219,12 +242,16 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   }, [items, kind, dateOnly, fv, locale]);
 
   // 줄 이름 칸, 그림 영역
-  const longestLabel = useMemo(() => rows.reduce((w, r) => Math.max(w, textWidth(r.label, ROW_FONT, 700)), 24), [rows]);
+  const stripName = stripOn ? msg.status : "";
+  const longestLabel = useMemo(() => rows.reduce((w, r) => Math.max(w, textWidth(r.label, ROW_FONT, 700)), Math.max(24, stripName ? textWidth(stripName, ROW_FONT, 700) : 0)), [rows, stripName]);
   const labelW = Math.min(W * 0.32, longestLabel + 10);
   const x0 = labelW + 10;
   const x1 = Math.max(x0 + 10, W - 16);
   const plotBottom = H - AXIS_H;
-  const laneH = (plotBottom - top) / Math.max(1, lanes);
+  // 칸들의 아래 끝. 상태 띠는 그 아래 한 줄이에요
+  const lanesBottom = plotBottom - stripH;
+  const stripY = lanesBottom + STRIP_GAP + LANE_H / 2;
+  const laneH = (lanesBottom - top) / Math.max(1, lanes);
   const bh = laneH >= 6 ? Math.min(18, Math.max(4, laneH * 0.62)) : Math.max(1, laneH * 0.8);
   // 양끝 안쪽으로 점 표시 반폭만큼 (축 끝의 점이 줄 이름에 붙지 않게)
   const xs = scaleLinear([v0, v1], [x0 + EDGE, x1 - EDGE]);
@@ -239,6 +266,8 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const shown = useMemo(() => order.filter((k) => !off.has(keyOf(items[k])) && items[k].end >= v0 && items[k].start <= v1), [order, off, items, v0, v1, byStatus]);
   const eventOf = useMemo(() => new Map(shown.map((k, e) => [k, e])), [shown]);
+  // 상태 띠는 보이는 항목(숨긴 묶음과 범위 밖 빼고)으로 만들어요
+  const strip = useMemo(() => (stripOn ? statusStrip(items, shown) : null), [stripOn, items, shown]);
 
   const stg = c.motion.stagger ?? 40;
   const textOn = c.showLabels && laneH >= BAR_TEXT_MIN_LANE;
@@ -257,10 +286,10 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   }, [shown, items, rows, rowOf, lane, x0, x1, v0, v1, top, laneH, stg]);
   const m = useMotion(marks, c.motion);
 
-  // 막대 안 상태 글자: 도착한 폭으로 한 번만 줄여요 (등장 중 매 프레임 줄이지 않아요). 점은 줄이지 않고 폭만 재요
+  // 막대 안 상태 글자: 도착한 폭으로 한 번만 줄여요 (등장 중 매 프레임 줄이지 않아요). 점은 줄이지 않고 폭만 재요. 상태 띠가 있으면 상태는 띠에만 적어요
   const statusFit = useMemo(() => {
     const out = new Map<number, { text: string; w: number }>();
-    if (!textOn) return out;
+    if (!textOn || stripOn) return out;
     for (const mk of marks) {
       const it = items[mk.data];
       if (!it.status) continue;
@@ -268,12 +297,12 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
       out.set(mk.data, { text, w: textWidth(text, BAR_FONT, 600) });
     }
     return out;
-  }, [marks, items, textOn]);
+  }, [marks, items, textOn, stripOn]);
 
   // 묶음이 빈 항목은 묶음 색 없이 회색이에요 (범례에도 없어요)
   const swOf = (k: number): Swatch => {
     const g = groupOf.get(keyOf(items[k]));
-    return colors && g !== undefined ? colors[g] : swatch(p, !colors && hiItems.has(k) ? "accent" : "neutral");
+    return barColors && g !== undefined ? barColors[g] : swatch(p, !barColors && hiItems.has(k) ? "accent" : "neutral");
   };
 
   // 같은 칸 다음 항목의 시작(px): 걸린 시간 글자를 막대 뒤에 쓸 자리
@@ -321,8 +350,15 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     toXRange: (r) => ({ from: b0 + r.from, to: b0 + r.to, fromKey: String(visB[r.from]), toKey: String(visB[r.to]), fromLabel: tText(visB[r.from]), toLabel: tText(visB[r.to]) }),
   });
 
-  // 포인터: 그 높이의 칸에서 x를 품은 항목, 없으면 10px 안에서 가장 가까운 항목
+  // 포인터: 그 높이의 칸에서 x를 품은 항목, 없으면 10px 안에서 가장 가까운 항목. 상태 띠에서는 그 시각의 띠 색을 정한 항목(점은 6px 안)이에요
   const pick = (px: number, py: number): number | null => {
+    if (strip && py >= lanesBottom + STRIP_GAP / 2 && py <= plotBottom) {
+      const at = strip.points.find((k) => Math.abs(xs(items[k].start) - px) <= 6);
+      if (at !== undefined) return eventOf.get(at) ?? null;
+      const t = xs.invert(px);
+      const piece = strip.pieces.find((q) => q.t0 <= t && t < q.t1);
+      return piece ? (eventOf.get(piece.k) ?? null) : null;
+    }
     const g = Math.floor((py - top) / laneH);
     if (g < 0 || g >= lanes) return null;
     let lo2 = 0;
@@ -471,7 +507,16 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const rad = Math.min(p.theme.radiusMark, bh / 2);
   const longest = useMemo(() => (shown.length ? shown[argMax(shown.map((k) => items[k].end - items[k].start))] : -1), [shown, items]);
   const linesText = lines.length ? ` ${msg.lines}: ${lines.map((l) => `${l.label ? `${l.label} ` : ""}${tText(l.t)}`).join(", ")}.` : "";
-  const desc = props.description ?? (shown.length ? `${msg.kind}. ${msg.desc(shown.length, rows.length, tText(v0 > lo ? v0 : lo), tText(v1 < hi ? v1 : hi))}. ${longest >= 0 && !items[longest].point ? `${msg.longest(items[longest].label, durs.text[longest])}.` : ""}${linesText}`.trim() : "");
+  // 상태 띠도 읽어 줘요: 시간 순서로 앞 8칸까지 (점은 그 시각)
+  let stripText = "";
+  if (strip) {
+    const parts = [
+      ...strip.spans.map((s) => ({ t: s.t0, text: `${s.status} ${msg.range(tText(s.t0), tText(s.t1))}` })),
+      ...strip.points.map((k) => ({ t: items[k].start, text: `${items[k].status} ${tText(items[k].start)}` })),
+    ].sort((a, b) => a.t - b.t);
+    if (parts.length) stripText = ` ${msg.strip(parts.slice(0, 8).map((q) => q.text).join(", "), Math.max(0, parts.length - 8))}`;
+  }
+  const desc = props.description ?? (shown.length ? `${msg.kind}. ${msg.desc(shown.length, rows.length, tText(v0 > lo ? v0 : lo), tText(v1 < hi ? v1 : hi))}. ${longest >= 0 && !items[longest].point ? `${msg.longest(items[longest].label, durs.text[longest])}.` : ""}${linesText}${stripText}`.trim() : "");
 
   return (
     <ChartFrame
@@ -516,7 +561,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
         const [xa, xb, o, y] = mi.v;
         const sw = swOf(k);
         const isHi = hiItems.has(k);
-        const ringed = (c.active === e && c.via === "keyboard") || (colors !== null && isHi && !namedGroups.has(groupOf.get(keyOf(it)) ?? -1));
+        const ringed = (c.active === e && c.via === "keyboard") || (barColors !== null && isHi && !namedGroups.has(groupOf.get(keyOf(it)) ?? -1));
         const op = c.dim(e) * Math.min(1, o * 1.5);
         const fade = m.fade(Math.min(e * stg, MAX_DELAY) + D * 0.4, 260);
         const status = statusFit.get(k);
@@ -537,8 +582,8 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
         const dur = textOn ? durs.text[k] : "";
         const dw = isHi ? durs.wHi[k] : durs.w[k];
         const durOut = dur && xa + w + 6 + dw < nextX[k] - 4;
-        // 상태가 있는 항목은 막대 안이 상태 자리예요. 상태가 안 들어가도 걸린 시간으로 바꿔 쓰지 않아요 (상태 띠에 상태와 시간이 섞이지 않게)
-        const durIn = dur && !durOut && !it.status && dw + 12 <= w;
+        // 상태가 있는 항목은 막대 안이 상태 자리예요. 상태가 안 들어가도 걸린 시간으로 바꿔 쓰지 않아요 (상태 띠에 상태와 시간이 섞이지 않게). 맨 아랫줄 상태 띠가 있으면 막대 안은 걸린 시간이에요
+        const durIn = dur && !durOut && (stripOn || !it.status) && dw + 12 <= w;
         return (
           <g key={mi.key} opacity={op}>
             <rect
@@ -568,6 +613,38 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
           </g>
         );
       })}
+      {strip ? (
+        // 맨 아랫줄 상태 띠: 막대가 거의 다 자란 뒤 나타나요. 짚기는 pick이 그 시각의 항목으로 바꿔요
+        <g className="ztd-strip" aria-hidden="true" opacity={m.fade(Math.min(shown.length * stg, MAX_DELAY) + D * 0.4, 260)}>
+          <Txt x={labelW} y={stripY} anchor="end" size={ROW_FONT} weight={600} fill={p.paint("muted")}>
+            {msg.status}
+          </Txt>
+          {strip.spans.map((s, i) => {
+            if (s.t1 < v0 || s.t0 > v1) return null;
+            const xa = Math.max(x0, xs(s.t0));
+            const w = Math.max(MIN_BAR_W, Math.min(x1, xs(s.t1)) - xa - 2);
+            const sw = stripColors[stripOf.get(s.status) ?? 0];
+            const text = c.showLabels ? truncate(s.status, w - 12, BAR_FONT, 600) : "";
+            return (
+              <g key={i}>
+                <rect x={xa} y={stripY - STRIP_BAR / 2} width={w} height={STRIP_BAR} rx={Math.min(p.theme.radiusMark, STRIP_BAR / 2)} fill={sw.fill} fillOpacity={s.open ? OPEN_TINT : 1} stroke={s.open ? sw.fill : "none"} strokeDasharray={s.open ? "3 2" : undefined} />
+                {text ? (
+                  <Txt x={xa + w / 2} y={stripY} anchor="middle" size={BAR_FONT} weight={600} fill={s.open ? p.paint("ink") : sw.text}>
+                    {text}
+                  </Txt>
+                ) : null}
+              </g>
+            );
+          })}
+          {strip.points.map((k) => {
+            const t = items[k].start;
+            if (t < v0 || t > v1) return null;
+            const x = xs(t);
+            const s = 7;
+            return <path key={`p${k}`} d={`M${x} ${stripY - s}L${x + s} ${stripY}L${x} ${stripY + s}L${x - s} ${stripY}Z`} fill={stripColors[stripOf.get(items[k].status) ?? 0].fill} stroke={p.paint("panel")} />;
+          })}
+        </g>
+      ) : null}
       <g aria-hidden="true" pointerEvents="none">
         {lineNodes}
       </g>

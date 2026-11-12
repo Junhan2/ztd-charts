@@ -51,6 +51,8 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 - `ztd-charts/geo/world`, `ztd-charts/geo/us-states` and `ztd-charts/geo/kr-sido`: map boundaries, one entry point per map, so a page that draws no map loads none.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
 
+New in 0.11.0: `statusStrip` on `Timeline` (`options.statusStrip` in a spec) adds the status strip as the bottom row. Consecutive items with the same `status` join into one labelled segment in the legend's status colors, and pointing at the strip picks the item that set the state there. The bars then show durations, with the longest in the accent. It is off by default, and the "Status strip" variant now shows this form.
+
 New in 0.10.0: two more theme colors, `accent2` (pink) and `accent3` (the other theme's accent: lime in light, sky in dark), each at least 3:1 against the card and `neutralSoft`. `SkylineChart` paints its front row with them in the high view and splits the top of each tile by series share, so failures and retries stay readable on days when they are only a pixel tall. Highlighting a front series and the low view keep the 0.9 colors. A theme given as a partial object takes the two colors from its base; a full `ChartTheme` written by hand needs the two new fields.
 
 New in 0.9.0: `SkylineChart` looks down on its floor by default (`view: "high"`), so the smaller outcome in front (failures, retries) reads as a row of tiles even on days when it is only a few pixels tall. Periods stay on a level axis, so a taller block always means more. `view: "low"` keeps the 0.8 look, which leaves more room for the value scale. `depth` runs from 0.1 to 0.45 in the high view (default 0.42) and from 0.1 to 0.32 in the low view (default 0.32).

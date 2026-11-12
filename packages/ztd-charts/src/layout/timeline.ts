@@ -241,3 +241,41 @@ export function timelineRows(items: readonly TimelineItem[], sort: TimelineSort 
   }
   return { rows, lane };
 }
+
+/** 상태 띠의 한 칸: 같은 상태가 이어지는 구간 [t0, t1). open은 끝이 아직 이어지는 항목으로 끝나요 */
+export interface StatusSpan {
+  status: string;
+  t0: number;
+  t1: number;
+  open: boolean;
+}
+
+/**
+ * 상태 띠(options.statusStrip): 순간마다 그때 이어지는 항목 가운데 가장 늦게 시작한 항목의 상태예요(같으면 나중 항목).
+ * 같은 상태가 맞닿으면 한 칸으로 합치고, 이어지는 항목이 없는 동안은 비워요. 상태가 빈 항목은 빼고, 점(시작 = 끝)은 points로 따로 줘요.
+ * pieces는 합치기 전 조각이라, 띠를 짚은 시각의 항목(items의 위치)을 찾을 때 써요
+ */
+export function statusStrip(items: readonly TimelineItem[], keys: readonly number[]): { spans: StatusSpan[]; pieces: { t0: number; t1: number; k: number }[]; points: number[] } {
+  const bars = keys.filter((k) => items[k].status && !items[k].point).sort((a, b) => items[a].start - items[b].start || a - b);
+  const cuts = Array.from(new Set(bars.flatMap((k) => [items[k].start, items[k].end]))).sort((a, b) => a - b);
+  const pieces: { t0: number; t1: number; k: number }[] = [];
+  // 시작 순서로 쌓아서 맨 위가 가장 늦게 시작한 항목이에요. 끝난 항목은 맨 위에 올 때 빼요
+  const stack: number[] = [];
+  let next = 0;
+  for (let c = 0; c + 1 < cuts.length; c++) {
+    const t = cuts[c];
+    while (next < bars.length && items[bars[next]].start <= t) stack.push(bars[next++]);
+    while (stack.length && items[stack[stack.length - 1]].end <= t) stack.pop();
+    if (stack.length) pieces.push({ t0: t, t1: cuts[c + 1], k: stack[stack.length - 1] });
+  }
+  const spans: StatusSpan[] = [];
+  for (const pc of pieces) {
+    const it = items[pc.k];
+    const last = spans[spans.length - 1];
+    if (last && last.status === it.status && last.t1 === pc.t0) {
+      last.t1 = pc.t1;
+      last.open = it.open && pc.t1 === it.end;
+    } else spans.push({ status: it.status, t0: pc.t0, t1: pc.t1, open: it.open && pc.t1 === it.end });
+  }
+  return { spans, pieces, points: keys.filter((k) => items[k].status && items[k].point) };
+}
