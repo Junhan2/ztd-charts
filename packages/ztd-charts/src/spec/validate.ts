@@ -718,6 +718,7 @@ function checkTimeline(rows: Record<string, unknown>[] | null, enc: Record<strin
     const axis = m.kind === "date" ? t("dates", "날짜") : t("numbers", "숫자");
     warn("encoding.start", "timeline_mixed_kinds", t(`The time axis reads ${axis}, and ${plural(s.mixed, "item uses", "items use")} the other kind (a number on a date axis or a date on a number axis), so ${s.mixed === 1 ? "it is" : "they are"} left out. Set options.xType to choose`, `시간 축은 ${axis}로 읽는데 다른 종류(날짜 축의 숫자, 숫자 축의 날짜)를 쓴 항목 ${s.mixed}개는 빼고 그려요. options.xType으로 정할 수 있어요`));
   }
+  if (o.statusStrip === true && !opt("status")) warn("options.statusStrip", "timeline_strip_needs_status", t("options.statusStrip draws encoding.status, which is not set, so no strip is drawn", "options.statusStrip은 encoding.status를 띠로 그려요. status가 없어서 띠를 그리지 않아요"));
   if (s.duplicate) warn("data", "timeline_duplicate", t(`${plural(s.duplicate, "item repeats", "items repeat")} another item exactly (same label, start, end and group). Both are drawn, in separate lanes`, `이름, 시작, 끝, 묶음이 모두 같은 항목이 ${s.duplicate}개 있어요. 둘 다 칸을 나눠 그려요`));
   const [lo, hi] = timelineDomain(m);
   /** 시각으로 읽히면 true (범위 밖이면 경고도). 데이터가 없으면(URL) 축 종류를 몰라서 값이 있는지만 봐요 */

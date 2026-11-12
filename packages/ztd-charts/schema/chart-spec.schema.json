@@ -8685,6 +8685,11 @@
             "now": {
               "description": "Time of a \"Now\" line, in the same form as the data. Items without an end run up to it. The chart never reads the clock, so server and browser draw the same"
             },
+            "statusStrip": {
+              "description": "Adds a bottom row that joins consecutive items of the same status into one labelled segment. Bars then show durations, the longest in the accent. Needs encoding.status",
+              "default": false,
+              "type": "boolean"
+            },
             "brush": {
               "description": "Drag across the time axis to zoom in: \"zoom\" or true (keyboard: Shift+arrows, Enter). Escape or \"Show all\" zooms out",
               "default": false

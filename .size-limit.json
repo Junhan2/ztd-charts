@@ -519,7 +519,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "20 KB"
+    "limit": "20.8 KB"
   },
   {
     "name": "BarRace",
@@ -603,7 +603,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "138.25 KB"
+    "limit": "139.15 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -615,7 +615,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "181.85 KB"
+    "limit": "182.9 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -627,7 +627,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "53.8 KB"
+    "limit": "53.85 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",

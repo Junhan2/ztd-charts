@@ -419,6 +419,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
       sort: '줄 순서: "none"은 데이터 순서, "start"는 이른 시작부터, "duration"은 걸린 시간 합이 긴 줄부터',
       referenceLines: "시간 축의 세로 기준선 [{ x, label }]. x는 데이터와 같은 꼴(숫자나 날짜)이고, 축 범위 밖이면 그리지 않아요",
       now: '"지금" 세로선의 시각(데이터와 같은 꼴). 끝이 없는 항목은 여기까지 이어요. 차트가 시계를 읽지 않아서 서버와 브라우저 그림이 같아요',
+      statusStrip: "맨 아랫줄에 상태 띠를 더해요. 시간 순서로 같은 상태가 이어지면 한 칸으로 합쳐 상태를 적고, 막대에는 걸린 시간을 적고 가장 긴 항목을 강조색으로 칠해요. encoding.status가 있어야 해요",
       brush: '시간 축을 끌어서 확대: "zoom"이나 true(키보드: Shift+화살표, Enter). Escape나 "전체 보기"로 돌아가요',
       hidden: HIDDEN,
     },
