@@ -339,7 +339,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "수평 바닥에 기간마다 블록을 세워서 높은 블록이 늘 더 많은 값이에요. 바닥을 내려다보는 시점이라 같은 단위의 작은 결과(실패, 재작업)가 같은 눈금의 앞줄에 타일로 줄지어 보여요. 강조 계열만 강조색으로 칠해요.",
     channels: { x: "기간 필드(날짜나 범주)", y: "블록에 쌓을 뒷줄 필드. 넓은 표에서는 배열", series: "계열 필드(긴 표, 뒷줄만)", front: "앞줄 필드: y와 같은 단위의 작은 결과(넓은 표만)" },
     options: { view: '시점: "high"는 바닥을 내려다봐서 앞줄이 타일로 보이고, "low"는 앞에서 봐서 값 눈금 자리가 넓어요', depth: '칸 폭 대비 뒷줄 깊이. "high" 시점은 0.1~0.45(기본 0.42), "low" 시점은 0.1~0.32(기본 0.32)이고, 밖의 값은 범위 안으로 묶어요', wall: "뒷벽 눈금과 오른쪽 눈금 글자", texture: "빗금을 그릴 줄. 인쇄할 때나 회색 단계를 구분하기 어려운 사용자에게", frontRate: '앞줄 합계가 뒷줄의 몇 %인지: "label"은 라벨과 툴팁에, "strip"은 바닥 아래 비율 띠로, false면 숨겨요', dayFirst: DAY_FIRST },
-    example: { data: S.skylineSampleKo, encoding: { x: "day", y: ["입력", "캐시", "출력", "추론"], front: ["실패", "재시도"] }, options: { format: "compact" }, card: { subtitle: "일별 토큰(최근 14일)", takeaway: "11월 5일이 가장 많았어요" } },
+    example: { data: S.skylineSampleKo, encoding: { x: "day", y: ["입력", "캐시", "출력", "추론"], front: ["실패", "재시도"] }, options: { format: "compact" }, card: { subtitle: "일별 토큰(최근 7일)", takeaway: "11월 5일이 가장 많았어요" } },
   },
   tileMap: {
     summary: "지역마다 같은 크기 타일 하나를 대략의 자리에 두고 값으로 칠한 지도",
@@ -423,7 +423,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
       brush: '시간 축을 끌어서 확대: "zoom"이나 true(키보드: Shift+화살표, Enter). Escape나 "전체 보기"로 돌아가요',
       hidden: HIDDEN,
     },
-    example: { data: S.timelineSampleKo, encoding: { label: "step", start: "start", end: "end" }, options: { unit: "분" }, card: { subtitle: "에이전트 실행 한 번, 계획부터 합치기까지(분)", takeaway: "43분 중 18분은 CI를 기다린 시간이에요" } },
+    example: { data: S.timelineSampleKo, encoding: { label: "step", start: "start", end: "end", status: "state" }, options: { unit: "분", statusStrip: true }, card: { subtitle: "에이전트 실행 한 번, 계획부터 합치기까지(분)", takeaway: "43분 중 18분은 CI를 기다린 시간이에요", legend: "auto" } },
   },
   tree: {
     summary: "계층의 부모와 자식 이어짐을 점과 곡선으로 그린 차트",

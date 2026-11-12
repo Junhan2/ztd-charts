@@ -1,4 +1,4 @@
-# Chart catalog: why these 33
+# Chart catalog: why each chart
 
 English · [한국어](catalog.ko.md)
 
@@ -91,7 +91,7 @@ Size is the Brotli size of a single chart import such as `import { BarChart } fr
 
 ## Added in November 2026
 
-What we added to the first 31 charts, and what we left out:
+The first additions after the original 31 charts (November 3, 2026), and what we left out. Charts added after that give their reason in the table above:
 
 | Addition | Decision | Why |
 |---|---|---|

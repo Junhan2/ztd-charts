@@ -444,7 +444,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"skyline","data":[{"day":"2026-10-23","Input":410000,"Cached":317223,"Output":186999,"Reasoning":79534,"Failed":11000,"Retried":10000},{"day":"2026-10-24","Input":446030,"Cached":337921,"Output":202044,"Reasoning":87942,"Failed":15314,"Retried":9190},{"day":"2026-10-25","Input":440886,"Cached":336150,"Output":202507,"Reasoning":87489,"Failed":15398,"Retried":6051}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 14 days","takeaway":"Nov 5 was the busiest day","level":"advanced"}}
+{"type":"skyline","data":[{"day":"2026-10-30","Input":509048,"Cached":387050,"Output":230518,"Reasoning":99954,"Failed":16653,"Retried":11318},{"day":"2026-10-31","Input":545022,"Cached":413595,"Output":248950,"Reasoning":108123,"Failed":90000,"Retried":126000},{"day":"2026-11-01","Input":566932,"Cached":440538,"Output":264628,"Reasoning":111944,"Failed":17316,"Retried":5841}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 7 days","takeaway":"Nov 5 was the busiest day","level":"advanced"}}
 ```
 
 ## histogram · Histogram (`<HistogramChart>`, Intermediate, Distribution)
@@ -536,7 +536,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"timeline","data":[{"step":"Plan","start":0,"end":3,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:00","endAt":"2026-11-10T09:03"},{"step":"Search code","start":3,"end":8,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:03","endAt":"2026-11-10T09:08"},{"step":"Edit files","start":8,"end":15,"run":"Agent run","state":"Working","startAt":"2026-11-10T09:08","endAt":"2026-11-10T09:15"}],"encoding":{"label":"step","start":"start","end":"end"},"options":{"unit":" min"},"card":{"number":"41","title":"Timeline","subtitle":"One agent run from plan to merge, in minutes","takeaway":"18 of 43 minutes went to waiting for CI","level":"intermediate"}}
+{"type":"timeline","data":[{"step":"Plan","start":0,"end":3,"state":"Working","startAt":"2026-11-10T09:00","endAt":"2026-11-10T09:03"},{"step":"Search code","start":3,"end":8,"state":"Working","startAt":"2026-11-10T09:03","endAt":"2026-11-10T09:08"},{"step":"Edit files","start":8,"end":15,"state":"Working","startAt":"2026-11-10T09:08","endAt":"2026-11-10T09:15"}],"encoding":{"label":"step","start":"start","end":"end","status":"state"},"options":{"unit":" min","statusStrip":true},"card":{"number":"41","title":"Timeline","subtitle":"One agent run from plan to merge, in minutes","takeaway":"18 of 43 minutes went to waiting for CI","level":"intermediate","legend":"auto"}}
 ```
 
 ## tree · Tree (`<Tree>`, Intermediate, Hierarchy)

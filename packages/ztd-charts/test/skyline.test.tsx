@@ -62,6 +62,17 @@ const sky = (data: Data, props: Partial<SkylineChartProps<Record<string, string 
   renderToStaticMarkup(<SkylineChart data={data} x="day" y={BACK} front={FRONT} format="compact" width={760} height={420} animate={false} {...props} />);
 const r = (el: ReactElement) => renderToStaticMarkup(el);
 const days = (n: number, row: (i: number) => Record<string, number>): Data => Array.from({ length: n }, (_, i) => ({ day: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), ...row(i) }));
+/** 예시 데이터(7일) 바로 앞 한 주를 이어 붙인 2주. 예전 14일 예시와 숫자가 같아서, 1.5px 안 되는 앞줄 조각과 좁은 폭에서 이웃 기간을 합치는 경우를 그대로 봐요 */
+const twoWeeks: Data = [
+  { day: "2026-10-23", Input: 410000, Cached: 317223, Output: 186999, Reasoning: 79534, Failed: 11000, Retried: 10000 },
+  { day: "2026-10-24", Input: 446030, Cached: 337921, Output: 202044, Reasoning: 87942, Failed: 15314, Retried: 9190 },
+  { day: "2026-10-25", Input: 440886, Cached: 336150, Output: 202507, Reasoning: 87489, Failed: 15398, Retried: 6051 },
+  { day: "2026-10-26", Input: 472300, Cached: 370227, Output: 221753, Reasoning: 92899, Failed: 13276, Retried: 4626 },
+  { day: "2026-10-27", Input: 456358, Cached: 366468, Output: 216506, Reasoning: 88261, Failed: 9041, Retried: 5714 },
+  { day: "2026-10-28", Input: 482495, Cached: 386711, Output: 226337, Reasoning: 92466, Failed: 8633, Retried: 9460 },
+  { day: "2026-10-29", Input: 519595, Cached: 405554, Output: 238274, Reasoning: 100345, Failed: 12610, Retried: 12608 },
+  ...skylineSample,
+];
 
 /** 기간(class="ztd-mark" 묶음)마다 마크업 조각 */
 const periods = (h: string) => h.split('<g class="ztd-mark"').slice(1);
@@ -170,16 +181,16 @@ describe("skyline: 생김새 (4.14)", () => {
     expect(L.ticks).toEqual(skylineLayout(input(520, 400, "low")).ticks);
   });
 
-  it("4: 앞줄 높이 순서가 앞줄 합계 순서와 같아요 (두 시점, 760px, 1.5px 미만 조각이 섞인 예시 데이터)", () => {
+  it("4: 앞줄 높이 순서가 앞줄 합계 순서와 같아요 (두 시점, 760px, 1.5px 미만 조각이 섞인 2주 데이터)", () => {
     for (const view of VIEWS) {
-      const h = sky(skylineSample, { width: 760, view });
+      const h = sky(twoWeeks, { width: 760, view });
       const groups = periods(h);
       expect(groups).toHaveLength(14);
       // 1.5px 안 되는 앞줄 조각이 실제로 그려졌는지 (부풀리면 순서가 뒤집혀요)
       const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-(?:neutral|ink|accent2|accent3)/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
       expect(thin.length, view).toBeGreaterThan(0);
       const heights = groups.map((g) => -frontLid(g)!.pts[0][1]);
-      const totals = skylineSample.map((d) => d.Failed + d.Retried);
+      const totals = twoWeeks.map((d) => Number(d.Failed) + Number(d.Retried));
       const order = (xs: number[]) => xs.map((_, i) => i).sort((a, b) => xs[a] - xs[b]);
       expect(order(heights), view).toEqual(order(totals));
     }
@@ -248,7 +259,7 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
   it("7: 툴팁 행, 라이브 영역 문장, 숨긴 표가 계열을 같은 순서(위→아래)로 읽어요", () => {
     state.active = 8;
     state.via = "keyboard";
-    sky(skylineSample, { width: 390 });
+    sky(twoWeeks, { width: 390 });
     const f = frame();
     const rows = f.tip!.rows.map((row) => row.label ?? "");
     // 뒷줄 위→아래, 뒷줄 합계, 앞줄 위→아래, 앞줄 합계, 비율
@@ -265,20 +276,20 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
 
   it("8: 자동 설명에 두 줄의 최고 기간과 비율이, 합쳤으면 합친 단위가 들어가요 (320px, 14·40기간, 앞줄 있음·없음)", () => {
     const desc = () => frame().description;
-    sky(skylineSample, { width: 760 });
+    sky(twoWeeks, { width: 760 });
     expect(desc()).toContain("Peak period 11/5 at 1.5M");
     expect(desc()).toContain("Front row (Failed, Retried) peaks at 10/31 with 216K, 16.4% of the back row");
     expect(desc()).not.toContain("summed");
-    sky(skylineSample, { width: 320 });
+    sky(twoWeeks, { width: 320 });
     expect(desc()).toContain("Peak period 11/4–11/5");
     expect(desc()).toContain("Front row (Failed, Retried) peaks at 10/31–11/1");
     expect(desc()).toContain("Neighboring periods are summed in groups of 2");
-    sky(skylineSample, { width: 320, front: undefined });
+    sky(twoWeeks, { width: 320, front: undefined });
     expect(desc()).not.toContain("Front row");
     const forty = days(40, (i) => ({ Input: 100 + i, Cached: 50, Output: 30, Reasoning: 10, Failed: i === 20 ? 40 : 2, Retried: 1 }));
     sky(forty, { width: 320 });
     expect(desc()).toMatch(/summed in groups of \d/);
-    sky(skylineSample, { width: 320, locale: "ko-KR" });
+    sky(twoWeeks, { width: 320, locale: "ko-KR" });
     expect(desc()).toContain("앞줄(Failed, Retried)이 가장 많은 기간");
     expect(desc()).toContain("이웃 기간을 2개씩 합쳤어요");
   });

@@ -524,15 +524,8 @@ export const candlestickSample = /* @__PURE__ */ (() => {
   return out;
 })();
 
-/** AI 에이전트의 하루 토큰 14일치. 2주 동안 약 51% 오르고, 10월 31일에 실패와 재시도가 튀어요 */
+/** AI 에이전트의 하루 토큰 7일치. 한 주 동안 약 23% 오르고, 10월 31일에 실패와 재시도가 튀어요 */
 export const skylineSample = [
-  { day: "2026-10-23", Input: 410000, Cached: 317223, Output: 186999, Reasoning: 79534, Failed: 11000, Retried: 10000 },
-  { day: "2026-10-24", Input: 446030, Cached: 337921, Output: 202044, Reasoning: 87942, Failed: 15314, Retried: 9190 },
-  { day: "2026-10-25", Input: 440886, Cached: 336150, Output: 202507, Reasoning: 87489, Failed: 15398, Retried: 6051 },
-  { day: "2026-10-26", Input: 472300, Cached: 370227, Output: 221753, Reasoning: 92899, Failed: 13276, Retried: 4626 },
-  { day: "2026-10-27", Input: 456358, Cached: 366468, Output: 216506, Reasoning: 88261, Failed: 9041, Retried: 5714 },
-  { day: "2026-10-28", Input: 482495, Cached: 386711, Output: 226337, Reasoning: 92466, Failed: 8633, Retried: 9460 },
-  { day: "2026-10-29", Input: 519595, Cached: 405554, Output: 238274, Reasoning: 100345, Failed: 12610, Retried: 12608 },
   { day: "2026-10-30", Input: 509048, Cached: 387050, Output: 230518, Reasoning: 99954, Failed: 16653, Retried: 11318 },
   { day: "2026-10-31", Input: 545022, Cached: 413595, Output: 248950, Reasoning: 108123, Failed: 90000, Retried: 126000 },
   { day: "2026-11-01", Input: 566932, Cached: 440538, Output: 264628, Reasoning: 111944, Failed: 17316, Retried: 5841 },
@@ -680,8 +673,8 @@ export const networkSampleKo = /* @__PURE__ */ relabel(networkSample, {
   Logs: "로그",
 });
 
-/** 에이전트 실행 한 번의 단계(분). startAt, endAt은 같은 단계의 시각이고, run, state는 한 줄짜리 상태 띠 꼴에 써요 */
-function timelineRows(names: Record<string, string>, states: Record<string, string>, run: string) {
+/** 에이전트 실행 한 번의 단계(분). startAt, endAt은 같은 단계의 시각이고, state는 단계의 상태로 기본 예시의 맨 아랫줄 상태 띠에 써요 */
+function timelineRows(names: Record<string, string>, states: Record<string, string>) {
   const steps: [string, number, number, string][] = [
     ["Plan", 0, 3, "Working"],
     ["Search code", 3, 8, "Working"],
@@ -694,13 +687,12 @@ function timelineRows(names: Record<string, string>, states: Record<string, stri
     ["Merged", 43, 43, "Merged"],
   ];
   const at = (m: number) => `2026-11-10T${String(9 + Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  return steps.map(([step, start, end, state]) => ({ step: names[step] ?? step, start, end, run, state: states[state] ?? state, startAt: at(start), endAt: at(end) }));
+  return steps.map(([step, start, end, state]) => ({ step: names[step] ?? step, start, end, state: states[state] ?? state, startAt: at(start), endAt: at(end) }));
 }
-export const timelineSample = /* @__PURE__ */ timelineRows({}, {}, "Agent run");
+export const timelineSample = /* @__PURE__ */ timelineRows({}, {});
 export const timelineSampleKo = /* @__PURE__ */ timelineRows(
   { Plan: "계획 세우기", "Search code": "코드 검색", "Edit files": "파일 수정", "Run tests": "시험 실행", "Fix failing test": "실패 고치기", "Open PR": "PR 올리기", "Wait for CI": "CI 기다림", Merged: "합침" },
   { Working: "작업", Fixing: "고침", Waiting: "기다림", Merged: "합침" },
-  "에이전트 실행",
 );
 
 /** 날짜로 적은 프로젝트 일정 (팀별 색, 출시는 하루짜리 사건) */
