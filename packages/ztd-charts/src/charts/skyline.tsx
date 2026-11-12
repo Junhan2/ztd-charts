@@ -6,7 +6,7 @@ import { evenIndex } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import { plural, type ChartLang } from "../core/i18n";
 import type { Mark, MotionItem } from "../core/motion";
-import { categoricalDots, emphasis, ramp, swatch, type Swatch } from "../core/palette";
+import { categoricalDots, emphasis, ramp, readableOn, swatch, type Swatch } from "../core/palette";
 import { fitDomain, niceDomain, ticksFor } from "../core/scale";
 import { prepSeries, syncKeyOf } from "../core/series";
 import { useSync } from "../core/sync";
@@ -14,7 +14,7 @@ import { textWidth } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData, TooltipRow } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
-import { luminance, parseColor } from "../theme/color";
+import { luminance, mixHex, parseColor } from "../theme/color";
 import type { Painter } from "../theme/context";
 
 type RowName = "back" | "front";
@@ -336,10 +336,40 @@ function outline(g: BlockGeom, h: number): [number, number][] {
 }
 
 /**
- * 쌓은 블록: 조각마다 앞면과 옆면, 옆면 그늘(빛은 왼쪽 위), 빗금, 조각 사이 1px 바탕색 틈, 합계 면인 뚜껑.
- * tile이면 1px이 안 되는 블록도 뚜껑을 그려요 (high 시점: 납작한 앞줄이 바닥 위 타일로 보여요)
+ * high 앞줄 색: accent2(분홍), accent3(다른 테마의 강조색) 순서. 셋째 계열부터는 둘을 번갈아 ink 쪽으로 30%씩 섞어요.
+ * 강조색과 같은 톤이라 바닥(neutralSoft) 위 납작한 타일도 3:1을 넘겨요
  */
-function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[]; hatch: string | null; lid: string; lidStroke: boolean; lidInk?: boolean; lidHatch?: boolean; shade: number; tile?: boolean }) {
+function frontPair(p: Painter, n: number): Swatch[] {
+  return Array.from({ length: n }, (_, j) => {
+    const token = j % 2 === 0 ? "accent2" : "accent3";
+    const k = Math.max(0.4, 1 - 0.3 * Math.floor(j / 2));
+    const raw = k === 1 ? p.theme[token] : mixHex(p.theme[token], p.theme.ink, k);
+    return { role: "mix", fill: k === 1 ? p.paint(token) : p.mix(token, "ink", k), text: readableOn(p, raw), raw };
+  });
+}
+
+/** 뚜껑을 계열 몫대로 왼쪽부터 나눈 면들. 몫은 그린 높이가 아니라 값으로 세서 1px이 안 되는 타일도 나눠요. 몫을 못 세면 null */
+function lidParts(g: BlockGeom, top: number, split: { fills: readonly string[]; values: readonly number[] } | undefined): ReactNode[] | null {
+  if (!split) return null;
+  const pos = (v: number) => (v > 0 ? v : 0);
+  const sum = split.values.reduce((a, v) => a + pos(v), 0);
+  if (!(sum > 0)) return null;
+  const out: ReactNode[] = [];
+  let acc = 0;
+  split.values.forEach((v, j) => {
+    const x0 = g.x + (g.w * acc) / sum;
+    acc += pos(v);
+    const x1 = g.x + (g.w * acc) / sum;
+    if (x1 > x0) out.push(<polygon key={`l${j}`} points={pts([[x0, top], [x1, top], [x1 + g.dx, top + g.dy], [x0 + g.dx, top + g.dy]])} fill={split.fills[j] ?? "none"} />);
+  });
+  return out;
+}
+
+/**
+ * 쌓은 블록: 조각마다 앞면과 옆면, 옆면 그늘(빛은 왼쪽 위), 빗금, 조각 사이 1px 바탕색 틈, 합계 면인 뚜껑.
+ * tile이면 1px이 안 되는 블록도 뚜껑을 그려요 (high 시점: 납작한 앞줄이 바닥 위 타일로 보여요). lidSplit이 있으면 뚜껑을 계열 몫대로 나눠 칠해요
+ */
+function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[]; hatch: string | null; lid: string; lidSplit?: { fills: readonly string[]; values: readonly number[] }; lidStroke: boolean; lidInk?: boolean; lidHatch?: boolean; shade: number; tile?: boolean }) {
   const { p, g, cum, colors, hatch } = props;
   const { dx, dy } = g;
   const right = g.x + g.w;
@@ -363,6 +393,7 @@ function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[
   if (h < 1 && !props.tile) return <g>{faces}</g>;
   const side = sideFace(top, g.base);
   const lid = pts([[g.x, top], [right, top], [right + dx, top + dy], [g.x + dx, top + dy]]);
+  const parts = lidParts(g, top, props.lidSplit);
   return (
     <g>
       {faces}
@@ -379,7 +410,8 @@ function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[
           <line x1={r1(right)} x2={r1(right)} y1={r1(top)} y2={r1(g.base)} stroke={p.paint("panel")} strokeOpacity={0.7} />
         </>
       ) : null}
-      <polygon points={lid} fill={props.lid} stroke={props.lidStroke ? p.paint(props.lidInk ? "ink" : "neutralStrong") : undefined} strokeOpacity={props.lidStroke ? (props.lidInk ? 0.4 : 0.55) : undefined} strokeLinejoin="round" />
+      {parts}
+      <polygon points={lid} fill={parts ? "none" : props.lid} stroke={props.lidStroke ? p.paint(props.lidInk ? "ink" : "neutralStrong") : undefined} strokeOpacity={props.lidStroke ? (props.lidInk ? 0.4 : 0.55) : undefined} strokeLinejoin="round" />
       {props.lidHatch && hatch ? <polygon points={lid} fill={hatch} /> : null}
     </g>
   );
@@ -525,17 +557,19 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const colors = useMemo(() => {
     const h = props.highlight;
     const byName = typeof h === "string" ? all.includes(h) : Array.isArray(h) && h.some((x) => typeof x === "string" && all.includes(x));
-    // 앞줄: high는 작은 표시용 단계(ink부터)라 납작한 블록도 바닥과 대비가 커요. low는 0.8까지처럼 회색 단계
-    const frontSw = (part: ReadonlySet<number>) => (high ? categoricalDots(p, nF, part) : ramp(p, nF, part));
+    // 앞줄: high는 accent2·accent3라 납작한 타일도 바닥 위에서 보여요(앞줄 계열을 강조하면 0.9처럼 강조 단계). low는 0.8까지처럼 회색 단계
+    const frontSw = (part: ReadonlySet<number>) => (!high ? ramp(p, nF, part) : part.size ? categoricalDots(p, nF, part) : frontPair(p, nF));
     if (nB === 1 && !byName) {
       const hi = resolveHighlight(h, periods.map((x) => x.datum as T), periods.map((x) => x.label), L.backTotal, "max");
-      return { periods: emphasis(p, shown, hi), back: [swatch(p, "neutral")], front: frontSw(new Set()) };
+      return { periods: emphasis(p, shown, hi), back: [swatch(p, "neutral")], front: frontSw(new Set()), split: high };
     }
     const totals = [...names.map((_, j) => sum(L.back.map((r) => r[j]))), ...frontFields.map((_, j) => sum(L.front.map((r) => r[j])))];
     // 계열 강조에는 이름과 인덱스만 써요. 판별 함수는 행을 받는 함수라서 계열 이름에 넘기지 않아요
     const hi = resolveHighlight(typeof h === "function" ? undefined : h, all, all, totals, "first");
     const part = (from: number, n: number) => new Set([...hi].filter((i) => i >= from && i < from + n).map((i) => i - from));
-    return { periods: null, back: ramp(p, nB, part(0, nB)), front: frontSw(part(nB, nF)) };
+    const fp = part(nB, nF);
+    // 뚜껑 나눔은 accent2·accent3일 때만. 앞줄 계열을 강조하면 0.9처럼 중립 뚜껑이에요
+    return { periods: null, back: ramp(p, nB, part(0, nB)), front: frontSw(fp), split: high && fp.size === 0 };
   }, [props.highlight, all, nB, nF, periods, L, p, shown, names, frontFields, high]);
   const swatches = (i: number, r: RowName) => (r === "front" ? colors.front : colors.periods ? [colors.periods[i]] : colors.back);
 
@@ -543,7 +577,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const hatchFill = `url(#${uid}h)`;
   const hatched = (r: RowName) => texture === "all" || (texture === "front" && r === "front");
   const backLid = p.mix("panel", "neutralSoft", 0.5);
-  /** high 시점 앞줄 뚜껑: 바닥(neutralSoft)보다 진한 중립 면에 빗금(범례의 앞줄 견본과 같은 무늬)과 ink 테두리 */
+  /** high 시점 앞줄 뚜껑: 계열 몫대로 나눠 계열 색으로 칠하고(몫을 못 셀 때만 이 중립 면), 빗금(범례의 앞줄 견본과 같은 무늬)과 ink 테두리 */
   const frontLid = p.paint("neutral");
 
   const geom = (i: number, r: RowName): BlockGeom => {
@@ -804,7 +838,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
                   // high: 합계 0은 바닥에 점선 빈 자리, 0보다 크면 1px이 안 돼도 뚜껑 타일까지 그려요. 길이는 바꾸지 않아요
                   // (0인지는 값으로 봐요. 차트가 아주 낮아 눈금 배율이 0이어도 값이 있는 블록은 빈 자리가 아니에요)
                   if (total(i, r) === 0) return <polygon key={r} points={pts([[g.x, g.base], [g.x + g.w, g.base], [g.x + g.w + g.dx, g.base + g.dy], [g.x + g.dx, g.base + g.dy]])} fill="none" stroke={p.paint("neutralStrong")} strokeOpacity={0.7} strokeDasharray="2 2" />;
-                  return <Prism key={r} p={p} g={g} cum={it.v} colors={swatches(i, r)} hatch={hatched(r) ? hatchFill : null} lid={r === "back" ? backLid : frontLid} lidStroke lidInk={r === "front"} lidHatch={r === "front"} shade={shade} tile />;
+                  return <Prism key={r} p={p} g={g} cum={it.v} colors={swatches(i, r)} hatch={hatched(r) ? hatchFill : null} lid={r === "back" ? backLid : frontLid} lidSplit={r === "front" && colors.split ? { fills: swatches(i, r).map((s) => s.fill), values: values(i, r) } : undefined} lidStroke lidInk={r === "front"} lidHatch={r === "front"} shade={shade} tile />;
                 }
                 // low: 0이 아닌데 1px이 안 되면 블록 대신 바닥에 가는 선 (맨 위 계열 색). 길이는 바꾸지 않아요
                 if (target > 0 && target < 1) {

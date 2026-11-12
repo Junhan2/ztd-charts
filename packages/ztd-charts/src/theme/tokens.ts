@@ -1,6 +1,7 @@
 /**
  * 색, 글꼴, 모서리 토큰.
  * 라이트 테마는 흰 카드와 하늘 강조, 다크 테마는 먹색 카드와 라임 강조예요.
+ * 보조 강조 accent2는 강조색과 같은 톤의 분홍, accent3는 다른 테마의 강조색(라이트는 라임, 다크는 하늘)이에요.
  * 랜딩 페이지도 이 두 테마를 그대로 써서 랜딩, 문서, CLI와 MCP 렌더, 사용자 코드가 같은 색으로 보여요.
  * 모서리는 랜딩의 겹친 모서리(28/18/14)를 따라 카드 18px, 코드 블록 14px이에요.
  */
@@ -22,6 +23,10 @@ export interface ChartTheme {
   accentText: string;
   /** 강조색 위 글자 */
   onAccent: string;
+  /** 보조 강조 1 (분홍). 강조색 옆에 두는 작은 결과(스카이라인 앞줄 첫 계열). 카드와 neutralSoft 위 도형 3:1 */
+  accent2: string;
+  /** 보조 강조 2 (라이트 라임, 다크 하늘). 스카이라인 앞줄 둘째 계열. 카드와 neutralSoft 위 도형 3:1 */
+  accent3: string;
   /** ink 색 도형 위 글자 */
   onInk: string;
   /** 테두리, 눈금선 */
@@ -61,6 +66,8 @@ export const COLOR_TOKENS: readonly ColorToken[] = [
   "accent",
   "accentText",
   "onAccent",
+  "accent2",
+  "accent3",
   "onInk",
   "line",
   "line2",
@@ -86,6 +93,8 @@ export const darkTheme: ChartTheme = {
   accent: "#D6FD70",
   accentText: "#D6FD70",
   onAccent: "#14171B",
+  accent2: "#FF8CC1",
+  accent3: "#38C6F6",
   onInk: "#14171B",
   line: "#2A2F36",
   line2: "#22272D",
@@ -113,6 +122,8 @@ export const lightTheme: ChartTheme = {
   accent: "#0B8FD8",
   accentText: "#006DA8",
   onAccent: "#14171B",
+  accent2: "#D8488C",
+  accent3: "#659815",
   onInk: "#FFFFFF",
   line: "#E6E9ED",
   line2: "#F0F2F5",

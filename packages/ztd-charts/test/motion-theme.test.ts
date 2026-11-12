@@ -91,6 +91,10 @@ describe("테마 대비 (WCAG AA)", () => {
     ["ink / neutral", t.ink, t.neutral, 4.5],
     ["ink / neutralSoft", t.ink, t.neutralSoft, 4.5],
     ["accent / panel (도형 3:1)", t.accent, t.panel, 3],
+    ["accent2 / panel (도형 3:1)", t.accent2, t.panel, 3],
+    ["accent3 / panel (도형 3:1)", t.accent3, t.panel, 3],
+    ["accent2 / neutralSoft (바닥 위 도형 3:1)", t.accent2, t.neutralSoft, 3],
+    ["accent3 / neutralSoft (바닥 위 도형 3:1)", t.accent3, t.neutralSoft, 3],
   ];
   for (const t of [darkTheme, lightTheme]) {
     for (const [name, fg, bg, min] of pairs(t)) {

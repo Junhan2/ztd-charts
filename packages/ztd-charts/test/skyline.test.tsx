@@ -71,7 +71,7 @@ const backLid = (g: string) => {
   const m = /<polygon points="([^"]+)" fill="([^"]+)" stroke="[^"]+" stroke-opacity="0.55" stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
 };
-/** 앞줄 뚜껑: low는 테두리 없이 바닥색(neutralSoft)으로 녹인 면, high는 ink 40% 테두리가 있는 타일 */
+/** 앞줄 뚜껑: low는 테두리 없이 바닥색(neutralSoft)으로 녹인 면, high는 계열 몫대로 나눈 면(lidParts) 위에 채움 없는 ink 40% 테두리 */
 const frontLid = (g: string) => {
   const m = /<polygon points="([^"]+)" fill="([^"]+)"(?: stroke="[^"]+" stroke-opacity="0.4")? stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
@@ -176,7 +176,7 @@ describe("skyline: 생김새 (4.14)", () => {
       const groups = periods(h);
       expect(groups).toHaveLength(14);
       // 1.5px 안 되는 앞줄 조각이 실제로 그려졌는지 (부풀리면 순서가 뒤집혀요)
-      const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-(?:neutral|ink)/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
+      const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-(?:neutral|ink|accent2|accent3)/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
       expect(thin.length, view).toBeGreaterThan(0);
       const heights = groups.map((g) => -frontLid(g)!.pts[0][1]);
       const totals = skylineSample.map((d) => d.Failed + d.Retried);
@@ -205,7 +205,7 @@ describe("skyline: 생김새 (4.14)", () => {
     expect(emptyPad(high[4])).toBe(false);
   });
 
-  it("6: 뚜껑은 모든 기간에서 같은 중립 색이고 계열 색을 쓰지 않아요 (앞줄 있음, 없음)", () => {
+  it("6: 뒷줄 뚜껑은 모든 기간에서 같은 중립 색이고 계열 색을 쓰지 않아요 (앞줄 있음, 없음)", () => {
     for (const front of [FRONT, undefined]) {
       const h = sky(skylineSample, { width: 390, front });
       const groups = periods(h);
@@ -215,8 +215,32 @@ describe("skyline: 생김새 (4.14)", () => {
       expect(lid).toContain("--ztd-panel");
       expect(lid).toContain("--ztd-neutral-soft");
       for (const token of ["accent", "neutral-strong", "ink"]) expect(lid).not.toContain(`--ztd-${token}`);
-      if (front) expect(new Set(groups.map((g) => frontLid(g)?.fill)).size).toBe(1);
     }
+  });
+
+  it("6b: high 앞줄 뚜껑은 계열 몫대로 왼쪽부터 accent2, accent3로 나눠요. 0인 계열은 빠지고, 앞줄 계열 강조와 low는 0.9처럼 중립 뚜껑이에요", () => {
+    const data = days(4, (i) => ({ Input: 600, Cached: 300, Output: 80, Reasoning: 20, Failed: i === 3 ? 0 : 30, Retried: 10 }));
+    /** 윗변이 수평인 accent2·accent3 면 = 뚜껑 조각 (옆면은 윗변이 기울어서 빠져요) */
+    const parts = (g: string) =>
+      [...g.matchAll(/<polygon points="([^"]+)" fill="(var\(--ztd-accent[23][^"]*)"><\/polygon>/g)].map((m) => ({ pts: xy(m[1]), fill: m[2] })).filter((q) => q.pts[0][1] === q.pts[1][1]);
+    const width = (q: { pts: [number, number][] }) => q.pts[1][0] - q.pts[0][0];
+    const high = periods(sky(data, { width: 520 }));
+    for (const g of high.slice(0, 3)) {
+      const [a, b, ...rest] = parts(g);
+      expect(rest).toHaveLength(0);
+      expect(a.fill).toContain("--ztd-accent2");
+      expect(b.fill).toContain("--ztd-accent3");
+      expect(width(a) / width(b)).toBeCloseTo(3, 0);
+      expect(frontLid(g)!.fill).toBe("none");
+    }
+    const last = parts(high[3]);
+    expect(last).toHaveLength(1);
+    expect(last[0].fill).toContain("--ztd-accent3");
+    for (const g of periods(sky(data, { width: 520, highlight: "Retried" }))) {
+      expect(parts(g)).toHaveLength(0);
+      expect(frontLid(g)!.fill).toContain("--ztd-neutral");
+    }
+    for (const g of periods(sky(data, { width: 520, view: "low" }))) expect(parts(g)).toHaveLength(0);
   });
 });
 
