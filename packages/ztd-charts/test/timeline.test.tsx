@@ -7,7 +7,7 @@ import type { ChartFrameProps } from "../src/core/ChartFrame";
 import { formatDuration } from "../src/core/format";
 import { readTimeline, statusStrip, timelineRows } from "../src/layout/timeline";
 import { renderSpecToSVG } from "../src/server";
-import { CHARTS, suggestCharts, validateSpec } from "../src/spec";
+import { CHARTS, suggestCharts, validateSpec, variantSpec } from "../src/spec";
 import { timelineSample, timelineSampleKo, timelineScheduleSample } from "../src/spec/samples";
 import { ThemeProvider } from "../src/theme/context";
 
@@ -307,12 +307,21 @@ describe("status strip (options.statusStrip)", () => {
     expect(state.calls.map((e) => (e === null ? null : frame().events[e].label))).toEqual(["Fix failing test", "Merged"]);
   });
 
-  it("the Status strip variant validates, and the validator warns when status is missing", () => {
+  it("the default example draws the strip, the status-bars variant colors the bars instead, and the validator warns when status is missing", () => {
     const def = CHARTS.find((c) => c.type === "timeline")!;
-    const spec = { ...def.example, encoding: { ...def.example.encoding, status: "state" }, options: { ...def.example.options, statusStrip: true } };
-    expect(validateSpec(spec).warnings).toEqual([]);
-    expect(renderSpecToSVG(spec, { width: 560, theme: "dark" })).toContain(STRIP);
-    expect(validateSpec({ ...def.example, options: { statusStrip: true } }).warnings.map((w) => w.code)).toEqual(["timeline_strip_needs_status"]);
+    const markFills = (svg: string) => new Set([...svg.matchAll(/<rect [^>]*class="ztd-mark"[^>]*>/g)].map((m) => /fill="([^"]+)"/.exec(m[0])?.[1]));
+    const example = renderSpecToSVG(def.example, { width: 560, theme: "dark" });
+    expect(validateSpec(def.example).warnings).toEqual([]);
+    expect(example).toContain(STRIP);
+    // 띠가 상태 색을 맡아서 막대는 기본 색과 가장 긴 항목의 강조색, 변형은 띠 없이 막대가 상태 색(작업, 고침, 기다림)이에요
+    expect(markFills(example).size).toBe(2);
+    const bars = variantSpec(def, "status-bars")!;
+    const barsSvg = renderSpecToSVG(bars, { width: 560, theme: "dark" });
+    expect(validateSpec(bars).warnings).toEqual([]);
+    expect(barsSvg).not.toContain(STRIP);
+    expect(markFills(barsSvg).size).toBe(3);
+    const noStatus = Object.fromEntries(Object.entries(def.example.encoding ?? {}).filter(([k]) => k !== "status"));
+    expect(validateSpec({ ...def.example, encoding: noStatus }).warnings.map((w) => w.code)).toEqual(["timeline_strip_needs_status"]);
   });
 });
 

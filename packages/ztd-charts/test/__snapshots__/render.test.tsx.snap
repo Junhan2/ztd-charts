@@ -707,10 +707,10 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
   },
   "skyline": {
     "circles": 0,
-    "lines": 34,
+    "lines": 20,
     "paths": 0,
-    "rects": 124,
-    "sha1": "50f94db6d149",
+    "rects": 68,
+    "sha1": "e73a40875ff6",
     "texts": [
       "Input",
       "Cached",
@@ -723,11 +723,11 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
       "1M",
       "1.5M",
       "Peak 1.5M",
-      "10/23",
-      "10/24",
-      "10/25",
-      "10/26",
-      "10/27",
+      "10/30",
+      "10/31",
+      "11/1",
+      "11/2",
+      "11/3",
     ],
   },
   "slope": {
@@ -850,9 +850,9 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
   "timeline": {
     "circles": 0,
     "lines": 10,
-    "paths": 1,
-    "rects": 9,
-    "sha1": "034bcbf87dad",
+    "paths": 2,
+    "rects": 13,
+    "sha1": "615487ade777",
     "texts": [
       "0 min",
       "5 min",

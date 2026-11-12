@@ -283,7 +283,7 @@ To use it straight from the repository, run `pnpm build`, then use `"command": "
 
 ## AI skill
 
-[skills/ztd-charts/SKILL.md](../skills/ztd-charts/SKILL.md) teaches an agent to pick a chart, write a spec, connect real data, write card copy, then validate and preview, in that order. The reference table for all 33 charts is [skills/ztd-charts/references/charts.md](../skills/ztd-charts/references/charts.md). Copy the folder to `.claude/skills/ztd-charts/` for Claude Code or `.cursor/skills/ztd-charts/` for Cursor. The summary [llms.txt](../llms.txt) is also served at the docs site root.
+[skills/ztd-charts/SKILL.md](../skills/ztd-charts/SKILL.md) teaches an agent to pick a chart, write a spec, connect real data, write card copy, then validate and preview, in that order. The reference table for every chart is [skills/ztd-charts/references/charts.md](../skills/ztd-charts/references/charts.md). Copy the folder to `.claude/skills/ztd-charts/` for Claude Code or `.cursor/skills/ztd-charts/` for Cursor. The summary [llms.txt](../llms.txt) is also served at the docs site root.
 
 ## Docs site
 
@@ -312,7 +312,7 @@ pnpm size         # size-limit
 
 ## QA results
 
-[docs/QA-report.md](QA-report.md) has all the numbers. We captured all 33 charts and the 5 examples at 1440, 1280 and 390px × dark and light, and measured clipping, overlap, contrast (real pixels), animation frames, the 10k-point stress test and bundle size.
+[docs/QA-report.md](QA-report.md) has all the numbers. We captured every chart and the 5 examples at 1440, 1280 and 390px × dark and light, and measured clipping, overlap, contrast (real pixels), animation frames, the 10k-point stress test and bundle size.
 
 The November 2026 evaluation on five axes (aesthetics, performance, quality, speed and real-world function), with what was fixed and the before and after numbers, is in [docs/EVALUATION-2026-11.md](EVALUATION-2026-11.md).
 

@@ -1,59 +1,59 @@
-# ztd charts 최종 보고
+# ztd charts final report
 
-> **옛 기록이에요.** 2026-10-29에 쓴 뒤로 고치지 않았어요. 그 뒤 차트가 33종이 됐고, npm에 `ztd-charts`로 게시했고, 실시간 선 차트(`LiveLineChart`)와 지표 카드(`StatCard`)가 생겼어요. 지금 숫자는 [QA-report.md](QA-report.md)에 있어요.
+> **Old record.** Written on 2026-10-29 and not updated since. Chart types, packages and features have grown since then. For the current state, see the [README](../README.md) and the [QA report](QA-report.md).
 
-## 무엇을 만들었나
+## What we built
 
-React용 애니메이션 차트 31종이에요. 순수 SVG(점이 많으면 캔버스)이고 런타임 의존성이 없어요. JSON 스펙 하나로 그릴 수 있고, CLI, MCP 서버, 에이전트 스킬이 같이 있어요. 카드(ChartCard), 그리드, 다크와 라이트 테마, 한국어 문서 사이트(갤러리, 예시 대시보드 5개)도 포함해요.
+We built 31 animated charts for React. They are pure SVG (canvas when there are many points) and have no runtime dependencies. You can draw each one from a single JSON spec, and a CLI, an MCP server and an agent skill come with them. The project also includes a card (ChartCard), a grid, dark and light themes, and a Korean documentation site (a gallery and 5 example dashboards).
 
-| 묶음 | 차트 |
+| Group | Charts |
 |---|---|
-| 비율 | 파이, 도넛, 와플, 마리메코 |
-| 계층 | 트리맵, 선버스트 |
-| 흐름 | 퍼널, 생키, 코드 |
-| 비교 | 막대, 폭포, 파레토, 레이더, 슬로프, 덤벨, 롤리팝 |
-| 추이 | 라인, 영역, 스트림, 스파크라인, 캘린더, 범프 |
-| 분포 | 박스(바이올린), 비스웜, 릿지라인 |
-| 관계 | 히트맵, 버블(산점도), 평행 좌표 |
-| KPI | 게이지, 불릿, 방사형 막대 |
+| Proportion | Pie, donut, waffle, Marimekko |
+| Hierarchy | Treemap, sunburst |
+| Flow | Funnel, Sankey, chord |
+| Comparison | Bar, waterfall, Pareto, radar, slope, dumbbell, lollipop |
+| Trend | Line, area, stream, sparkline, calendar, bump |
+| Distribution | Box (violin), beeswarm, ridgeline |
+| Relationship | Heatmap, bubble (scatter), parallel coordinates |
+| KPI | Gauge, bullet, radial bar |
 
-## 화면
+## Screenshots
 
-차트별 카드 화면은 [docs/screens/charts/](screens/charts/)에 있어요(`{테마}-{폭}/{type}.jpg`). 예시와 페이지 화면은 공개 저장소에 넣지 않아요.
+Card screenshots for each chart are in [docs/screens/charts/](screens/charts/) (`{theme}-{width}/{type}.jpg`). We do not put screenshots of the examples and pages in the public repository.
 
-| 라인 다크 1440 | 라인 라이트 1440 | 라인 다크 390 |
+| Line, dark, 1440 | Line, light, 1440 | Line, dark, 390 |
 |---|---|---|
 | ![](screens/charts/dark-1440/line.jpg) | ![](screens/charts/light-1440/line.jpg) | ![](screens/charts/dark-390/line.jpg) |
 
-## QA 숫자
+## QA numbers
 
-프로덕션 빌드(`vite build` + `vite preview`), Chromium 156 헤드리스, Apple M3 (8코어)에서 `qa/run-all.sh`로 쟀어요.
+We measured with `qa/run-all.sh` on a production build (`vite build` + `vite preview`), headless Chromium 156 and an Apple M3 (8 cores).
 
-| 항목 | 결과 |
+| Item | Result |
 |---|---|
-| 단위 테스트 (Vitest) | 201/201 통과 (ztd-charts 180, CLI 12, MCP 9) |
-| 타입 검사, 린트 | 4개 프로젝트 오류 0, ESLint 오류 0 경고 0 |
-| 번들 크기 (gzip) | 차트 하나 10.4~16 KB, 전체 67.8 KB, size-limit 통과 |
-| 스크린샷, 레이아웃 | 238장, 카드 484장에서 잘림, 겹침, 침범, 가로 넘침 0 |
-| 글자 대비 | 10,308개 중 미달 0, 최소 4.6:1 |
-| 접근성 | axe 위반 0 (6페이지 × 2테마), 상호작용 검사 12/12 |
-| 애니메이션 (31종) | 1×, 4× CPU 모두 60fps |
-| 갤러리 모두 다시 재생 (4× CPU) | 2칸 59.5fps, 3칸 60fps, long task 0 |
-| 1만 점 스트레스 (11종, 1×) | 첫 화면 최대 63ms, 다시 재생 60fps, 호버 p95 최대 8ms |
-| 1만 점 스트레스 (11종, 4×) | 첫 화면 최대 221ms(평행 좌표), 캘린더 201ms, 스트림 115ms |
-| 시각 회귀 | 같은 macOS 기준과 비교 62/62 통과. 커밋된 리눅스 기준과는 58장 실패(글자 안티앨리어싱 차이) |
+| Unit tests (Vitest) | 201/201 pass (ztd-charts 180, CLI 12, MCP 9) |
+| Type check, lint | 0 errors in 4 projects, ESLint 0 errors and 0 warnings |
+| Bundle size (gzip) | 10.4 to 16 KB for one chart, 67.8 KB for the full bundle, size-limit passes |
+| Screenshots, layout | 238 screenshots, and 0 clipping, overlap, intrusion or horizontal overflow across 484 cards |
+| Text contrast | 0 of 10,308 text elements below the threshold, minimum 4.6:1 |
+| Accessibility | 0 axe violations (6 pages × 2 themes), interaction checks 12/12 |
+| Animation (31 charts) | 60fps at both 1× and 4× CPU |
+| Replay all in the gallery (4× CPU) | 2 columns 59.5fps, 3 columns 60fps, 0 long tasks |
+| 10,000-point stress (11 charts, 1×) | First render up to 63ms, replay 60fps, hover p95 up to 8ms |
+| 10,000-point stress (11 charts, 4×) | First render up to 221ms (parallel coordinates), calendar 201ms, stream 115ms |
+| Visual regression | 62/62 pass against a baseline made on the same macOS. 58 fail against the committed Linux baseline (text antialiasing differences) |
 
-이번에 확인하고 고친 것:
+What we checked and fixed this time:
 
-- 오른쪽 끝 버블 툴팁은 운영 빌드 1440, 1280, 390에서 모두 카드 안에 있어요(오른쪽 여백 25px). 고칠 것은 없었고 QA 검사에 넣었어요.
-- `/data`의 "없는 주소"는 운영 빌드에서 오류 카드를 보여주고, 다시 시도하면 다시 불러와요. 이것도 QA 검사에 넣었어요.
-- 차트가 붙을 때 폭을 두 번 재던 것을 한 번으로 줄였어요(모든 차트). 캘린더는 칸 색인과 월 라벨 계산도 줄였어요. 캘린더 1만 점 4× 첫 화면이 223ms에서 201ms로, 가장 긴 작업이 121ms에서 99ms로 줄었어요.
-- 생키 SVG 스냅샷이 Node 26에서만 다르던 것(소수 14째 자리 차이)을 좌표 반올림으로 고쳤어요.
+- The tooltip of the rightmost bubble stays inside the card in the production build at 1440, 1280 and 390 (25px right margin). Nothing needed fixing, and we added it to the QA checks.
+- "Bad URL" on `/data` shows an error card in the production build, and retrying loads it again. We added this to the QA checks too.
+- Charts measured their width twice when they mounted. We cut that to once (all charts). For the calendar, we also cut the work for the cell index and month labels. The calendar's 10,000-point first render at 4× went from 223ms to 201ms, and its longest task from 121ms to 99ms.
+- The Sankey SVG snapshot differed only on Node 26 (a difference in the 14th decimal place). We fixed it by rounding coordinates.
 
-## 못 한 것
+## Not done
 
-- **이전 VM의 4× 성능 차이는 이 기기에서 재현되지 않았어요.** 이전에는 스트림 1만 점 다시 재생이 34fps, 캘린더 첫 화면이 511ms였어요. M3에서는 같은 4×에서 스트림이 60fps라서 고친 효과를 보여줄 수 없었어요. 프로파일을 보면 스트림 다시 재생은 곡선 경로 문자열 만들기가 대부분이고, 정수 반올림이나 점 줄이기는 모양이 바뀌어서 하지 않았어요. 느린 기기에서는 이전 숫자에 가까울 수 있어요.
-- **4× CPU에서 60fps가 안 되는 곳이 남아 있어요.** 1만 점 다시 재생에서 버블 55.7fps, 비스웜 52.6fps예요.
-- **시각 회귀 기준 이미지가 리눅스 전용이에요.** macOS에서는 글꼴 렌더링 차이로 실패해요. 플랫폼별 기준을 두거나 리눅스 CI에서만 비교해야 해요.
-- **실기기, Safari, Firefox는 재지 않았어요.** 숫자는 헤드리스 Chromium 기준이에요.
-- **npm에 배포하지 않았어요.** PNG 내보내기는 Pretendard가 설치돼 있어야 기준 이미지와 같고, 인터랙티브 HTML은 React를 esm.sh에서 가져와요.
+- **The 4× performance gap from the previous VM did not reproduce on this machine.** Before, the stream's 10,000-point replay ran at 34fps and the calendar's first render took 511ms. On the M3, the stream runs at 60fps at the same 4×, so we could not show the effect of a fix. The profile shows that most of the stream replay goes to building curve path strings. We did not round to integers or reduce points, because that changes the shape. On a slower machine, the numbers may be close to the earlier ones.
+- **Some cases still fall short of 60fps at 4× CPU.** In the 10,000-point replay, bubble runs at 55.7fps and beeswarm at 52.6fps.
+- **The visual regression baseline images are Linux only.** On macOS they fail because of font rendering differences. We need either a baseline per platform or comparisons only in Linux CI.
+- **We did not measure on real devices, Safari or Firefox.** The numbers come from headless Chromium.
+- **We did not publish to npm.** PNG export matches the baseline images only when Pretendard is installed, and the interactive HTML loads React from esm.sh.

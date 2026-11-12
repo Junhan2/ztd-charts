@@ -495,7 +495,7 @@ describe("variants", () => {
           expect([...r.errors, ...r.warnings].map((i) => `${type}/${x.id}: ${i.message}`)).toEqual([]);
           // 예시가 이미 그 값이면 변형이 예시와 같아져요 (예시를 바꾸면 변형도 다시 봐요)
           const ex = (d.example.options ?? {}) as Record<string, unknown>;
-          // encoding만 바꾸는 변형(타임라인의 상태 띠, 시각)은 그 자체로 예시와 달라요
+          // encoding만 바꾸는 변형(타임라인의 시각)은 그 자체로 예시와 달라요
           const changed = x.encoding !== undefined || Object.entries(x.options).some(([k, val]) => JSON.stringify(val) !== JSON.stringify(ex[k] ?? defaults[k] ?? (Array.isArray(val) ? [] : undefined)));
           expect(changed, `${type}/${x.id} (${lang})`).toBe(true);
         }

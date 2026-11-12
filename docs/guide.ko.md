@@ -283,7 +283,7 @@ Cursor(`.cursor/mcp.json` 또는 `~/.cursor/mcp.json`):
 
 ## AI 스킬
 
-[skills/ztd-charts/SKILL.md](../skills/ztd-charts/SKILL.md)는 에이전트에게 차트 고르기, 스펙 쓰기, 실제 데이터 연결, 카드 문구, 검증과 미리 보기 순서를 가르쳐요(영어로 써 있어요). 33종 참고표는 [skills/ztd-charts/references/charts.md](../skills/ztd-charts/references/charts.md). Claude Code는 `.claude/skills/ztd-charts/`, Cursor는 `.cursor/skills/ztd-charts/`에 폴더를 복사하면 돼요. 요약본 [llms.txt](../llms.txt)는 문서 사이트 루트에서도 열려요.
+[skills/ztd-charts/SKILL.md](../skills/ztd-charts/SKILL.md)는 에이전트에게 차트 고르기, 스펙 쓰기, 실제 데이터 연결, 카드 문구, 검증과 미리 보기 순서를 가르쳐요(영어로 써 있어요). 모든 차트의 참고표는 [skills/ztd-charts/references/charts.md](../skills/ztd-charts/references/charts.md). Claude Code는 `.claude/skills/ztd-charts/`, Cursor는 `.cursor/skills/ztd-charts/`에 폴더를 복사하면 돼요. 요약본 [llms.txt](../llms.txt)는 문서 사이트 루트에서도 열려요.
 
 ## 문서 사이트
 
@@ -312,7 +312,7 @@ pnpm size         # size-limit
 
 ## QA 결과
 
-[docs/QA-report.md](QA-report.md)에 숫자가 모두 있어요. 차트 33종과 예시 5개를 1440, 1280, 390px × 다크, 라이트로 찍고, 잘림, 겹침, 대비(실제 픽셀), 애니메이션 프레임, 1만 점 스트레스, 번들 크기를 쟀어요.
+[docs/QA-report.md](QA-report.md)에 숫자가 모두 있어요. 모든 차트와 예시 5개를 1440, 1280, 390px × 다크, 라이트로 찍고, 잘림, 겹침, 대비(실제 픽셀), 애니메이션 프레임, 1만 점 스트레스, 번들 크기를 쟀어요.
 
 2026년 11월에 심미성, 성능, 품질, 속도, 실제 기능성 다섯 축으로 평가하고 고친 내용과 전후 숫자는 [docs/EVALUATION-2026-11.md](EVALUATION-2026-11.md)에 있어요.
 

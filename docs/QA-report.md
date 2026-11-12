@@ -1,275 +1,339 @@
-# QA 리포트
+# QA report
 
-생성: 2026-11-09 07:16 UTC · 대상: 프로덕션 빌드(`vite build` + `vite preview`) · 브라우저: Chromium 156.0.8078.4 (Playwright headless shell)
+Generated 2026-11-12 08:44 UTC · Target: production build (`vite build` + `vite preview`) · Browser: Chromium 156.0.8078.4 (Playwright headless shell)
 
-이 리포트는 Playwright, Vitest, size-limit 으로 잰 숫자를 모은 거예요.
+This report collects the numbers measured with Playwright, Vitest and size-limit.
 
-## 요약
+## Summary
 
-| 항목 | 결과 | 기준 | 판정 |
+| Check | Result | Target | Verdict |
 |---|---|---|---|
-| 스크린샷 | 268장 (차트 36종 × 3폭 × 2테마, 예시 5개 섹션 × 3폭 × 2테마, 페이지) | 1440, 1280, 390 / 다크, 라이트 | 통과 |
-| 검사한 카드 | 564장 (갤러리 2칸, 3칸, 예시) | | |
-| 글자 잘림 | 0건 | 0 | 통과 |
-| 라벨 겹침 | 4건 | 0 | **미달** |
-| 머리글, 꼬리말 침범 | 0건 | 0 | 통과 |
-| svg 밖 도형 | 0개 | 0 | 통과 |
-| 제목 말줄임 | 0건 | 0 | 통과 |
-| 가로 넘침 (페이지) | 0건 | 0 | 통과 |
-| 글자 대비 (SVG + HTML) | 11,454개 중 미달 0개, 최소 4.6:1, 찍는 사이 움직인 2개는 뺌 | WCAG AA 4.5:1 (큰 글자 3:1) | 통과 |
-| 애니메이션 fps (차트 36종, 1× CPU) | 가장 낮은 60 fps, long task 0건 | 60 fps, 50ms 넘는 작업 0 | 통과 |
-| 애니메이션 fps (4× CPU 감속) | 가장 낮은 60 fps | 참고용 (중급 모바일 근사) | - |
-| 1만 점 스트레스 (12종) | 첫 화면 최대 66.6ms, 재생 최저 60 fps, 호버 p95 최대 7.3ms | | 표 참고 |
-| 번들 크기 (차트 하나, Brotli) | 11.8~24.2 KB, 전체 107.1 KB | size-limit 예산 | 통과 |
-| 단위 테스트 (Vitest) | 480/480 통과 | 전부 | 통과 |
-| 타입 검사 | 5개 프로젝트 | 오류 0 | 통과 |
-| 린트 (ESLint) | 오류 0, 경고 0 | 오류 0 | 통과 |
-| 접근성 (axe, 6페이지 × 2테마) | 위반 노드 0개 | 0 | 통과 |
-| 키보드, 동작 줄이기, 툴팁, 오류 상태 | 12/12 | 전부 | 통과 |
-| 시각 회귀 (36종 × 2테마) | 72장 비교, 실패 0 (기준 이미지와 플랫폼이 다르면 10장 참고) | 픽셀 차이 0.3% 이하 | 통과 |
+| Screenshots | 316 (44 charts × 3 widths × 2 themes, 5 example sections × 3 widths × 2 themes, pages) | 1440, 1280, 390 / dark, light | Pass |
+| Cards checked | 668 (gallery at 2 and 3 columns, examples) | | |
+| Clipped text | 6 | 0 | **Fail** |
+| Label overlaps | 86 | 0 | **Fail** |
+| Text in the card header or footer | 0 | 0 | Pass |
+| Shapes outside the svg | 60 | 0 | **Fail** |
+| Truncated titles | 0 | 0 | Pass |
+| Horizontal overflow (pages) | 0 | 0 | Pass |
+| Text contrast (SVG + HTML) | 14,436 checked, 10 below target, lowest 1.3:1 | WCAG AA 4.5:1 (3:1 for large text) | **Fail** |
+| Animation fps (44 charts, 1× CPU) | lowest 60 fps, 0 long tasks | 60 fps, no task over 50ms | Pass |
+| Animation fps (4× CPU slowdown) | lowest 60 fps | for reference (close to a mid-range phone) | - |
+| 10k-point stress (12 charts) | first render up to 56ms, replay at least 60 fps, hover p95 up to 3ms | | see the table |
+| Bundle size (one chart, Brotli) | 11.9 to 26.3 KB, everything 182.6 KB | size-limit budgets | Pass |
+| Unit tests (Vitest) | 865/865 passed | all | Pass |
+| Type check | 5 projects | 0 errors | Pass |
+| Lint (ESLint) | 0 errors, 0 warnings | 0 errors | Pass |
+| Accessibility (axe, 6 pages × 2 themes) | 0 violating nodes | 0 | Pass |
+| Keyboard, reduced motion, tooltip, error state | 12/12 | all | Pass |
+| Visual regression (44 charts × 2 themes) | 88 compared, 0 failed | at most 0.3% of pixels differ | Pass |
 
-## 1. 환경과 방법
+## 1. Environment and method
 
-- 기기: 14 vCPU (Apple M4 Pro), RAM 48 GB, Node v26.7.0, Chromium 156.0.8078.4
-- 화면: 1440×900, 1280×900, 390×900. 스크린샷과 레이아웃 검사는 `prefers-reduced-motion: reduce`로 최종 상태를 바로 그려요(애니메이션 끝 상태와 같은 그림).
-- **잘림**: 카드 안쪽(테두리 1px) 밖으로 1.5px 넘게 나간 글자. **겹침**: 같은 차트 SVG 글자끼리 글리프 상자(세로 70%)가 4px² 넘게, 작은 쪽 면적의 8% 넘게 겹친 경우. **침범**: 차트 글자가 카드 머리글이나 꼬리말 영역에 들어간 경우.
-- **대비**: 글자만 투명하게 만든 카드 스크린샷에서 글자 상자 안 배경 픽셀을 모아, 15% 넘게 차지하는 배경색 각각과 실제 글자색(조상 opacity까지 곱한 값)을 합성해 WCAG 대비를 계산하고 가장 나쁜 값을 써요. 그래서 도형 위 라벨, 반투명 면 위 라벨도 실제 화면 그대로 재요.
-- **성능**: 페이지에 requestAnimationFrame 기록기를 심고 `longtask`, `long-animation-frame` 관찰자를 붙여, 다시 재생 버튼을 누른 뒤 1.6초 동안 프레임 간격을 재요. 떨어진 프레임은 25ms 넘는 간격. 4× CPU는 CDP `Emulation.setCPUThrottlingRate`.
-- **호버 지연**: pointermove를 보낸 뒤 차트 DOM이 처음 바뀔 때까지(툴팁, 강조). 40번 측정한 p50, p95.
+- Machine: 14 vCPU (Apple M4 Pro), RAM 48 GB, Node v24.14.0, Chromium 156.0.8078.4
+- Screens: 1440×900, 1280×900 and 390×900. Screenshots and layout checks use `prefers-reduced-motion: reduce`, so the final state draws at once (the same picture as the end of the animation).
+- **Clipped**: text that goes more than 1.5px past the inside of the card (inside its 1px border). **Overlap**: two SVG texts in the same chart whose glyph boxes (70% of the height) overlap by more than 4px² and by more than 8% of the smaller box. **Header or footer**: chart text inside the card header or footer area.
+- **Contrast**: from a card screenshot with only the text made transparent, collect the background pixels inside each text box. Each background color that covers more than 15% of the box is blended with the real text color (including the opacity of its ancestors), the WCAG contrast is computed, and the worst value is kept. This measures labels on shapes and on translucent fills as they look on screen.
+- **Performance**: a requestAnimationFrame recorder plus `longtask` and `long-animation-frame` observers in the page record the frame intervals for 1.6 seconds after the replay button is pressed. A dropped frame is an interval over 25ms. 4× CPU uses the CDP `Emulation.setCPUThrottlingRate`.
+- **Hover latency**: from sending pointermove to the first change in the chart DOM (tooltip, highlight). p50 and p95 of 40 measurements.
 
-## 2. 스크린샷
+## 2. Screenshots
 
-갤러리 카드 36종을 찍은 216장은 `docs/screens/charts/{테마}-{폭}/{type}.jpg` 에 있어요 (JPEG 80%). 예시 섹션과 페이지 화면은 공개 저장소에 넣지 않아요.
+The 264 screenshots of the 44 gallery cards are in `docs/screens/charts/{theme}-{width}/{type}.jpg` (JPEG 80%). Screenshots of the example sections and site pages are not in the public repository.
 
-| 라인 다크 1440 | 라인 라이트 1440 | 라인 다크 390 |
+| Line, dark, 1440 | Line, light, 1440 | Line, dark, 390 |
 |---|---|---|
 | ![](screens/charts/dark-1440/line.jpg) | ![](screens/charts/light-1440/line.jpg) | ![](screens/charts/dark-390/line.jpg) |
 
-## 3. 레이아웃
+## 3. Layout
 
-| 화면 | 카드 | 잘림 | 겹침 | 침범 | svg 밖 | 제목 말줄임 |
+| Screen | Cards | Clipped | Overlaps | Header or footer | Outside svg | Truncated titles |
 |---|---|---|---|---|---|---|
-| gallery 1440 dark | 36 | 0 | 0 | 0 | 0 | 0 |
-| gallery-3col 1440 dark | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 1440 dark | 34 | 0 | 0 | 0 | 0 | 0 |
-| gallery 1440 light | 36 | 0 | 0 | 0 | 0 | 0 |
-| gallery-3col 1440 light | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 1440 light | 34 | 0 | 0 | 0 | 0 | 0 |
-| gallery 1280 dark | 36 | 0 | 0 | 0 | 0 | 0 |
-| gallery-3col 1280 dark | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 1280 dark | 34 | 0 | 0 | 0 | 0 | 0 |
-| gallery 1280 light | 36 | 0 | 0 | 0 | 0 | 0 |
-| gallery-3col 1280 light | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 1280 light | 34 | 0 | 0 | 0 | 0 | 0 |
-| gallery 390 dark | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 390 dark | 34 | 0 | 2 | 0 | 0 | 0 |
-| gallery 390 light | 36 | 0 | 0 | 0 | 0 | 0 |
-| examples 390 light | 34 | 0 | 2 | 0 | 0 | 0 |
+| gallery 1440 dark | 44 | 0 | 1 | 0 | 6 | 0 |
+| gallery-3col 1440 dark | 44 | 0 | 9 | 0 | 8 | 0 |
+| examples 1440 dark | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 1440 light | 44 | 0 | 1 | 0 | 6 | 0 |
+| gallery-3col 1440 light | 44 | 0 | 9 | 0 | 8 | 0 |
+| examples 1440 light | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 1280 dark | 44 | 0 | 2 | 0 | 8 | 0 |
+| gallery-3col 1280 dark | 44 | 0 | 14 | 0 | 4 | 0 |
+| examples 1280 dark | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 1280 light | 44 | 0 | 2 | 0 | 8 | 0 |
+| gallery-3col 1280 light | 44 | 0 | 14 | 0 | 4 | 0 |
+| examples 1280 light | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 390 dark | 44 | 0 | 17 | 0 | 4 | 0 |
+| examples 390 dark | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 390 light | 44 | 0 | 17 | 0 | 4 | 0 |
+| examples 390 light | 38 | 1 | 0 | 0 | 0 | 0 |
 
-남은 레이아웃 문제:
-- examples/saas-bar @390 dark: {"clipped":[],"overlaps":[{"a":"113","b":"Forecast","area":87},{"a":"122","b":"Forecast","area":26}],"marksOutside":0}
-- examples/saas-bar @390 light: {"clipped":[],"overlaps":[{"a":"113","b":"Forecast","area":87},{"a":"122","b":"Forecast","area":26}],"marksOutside":0}
+Layout problems that remain:
+- gallery/network @1440 dark: {"clipped":[],"overlaps":[{"a":"Users","b":"Notifications","area":199}],"marksOutside":0}
+- gallery/flowMap @1440 dark: {"clipped":[],"overlaps":[],"marksOutside":6}
+- gallery-3col/network @1440 dark: {"clipped":[],"overlaps":[{"a":"Web","b":"Search","area":118},{"a":"Search","b":"Catalog","area":240}],"marksOutside":0}
+- gallery-3col/flowMap @1440 dark: {"clipped":[],"overlaps":[],"marksOutside":8}
+- examples/marketing-line @1440 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":50.5}],"overlaps":[],"marksOutside":0}
+- gallery/network @1440 light: {"clipped":[],"overlaps":[{"a":"Users","b":"Notifications","area":199}],"marksOutside":0}
+- gallery/flowMap @1440 light: {"clipped":[],"overlaps":[],"marksOutside":6}
+- gallery-3col/network @1440 light: {"clipped":[],"overlaps":[{"a":"Web","b":"Search","area":118},{"a":"Search","b":"Catalog","area":240}],"marksOutside":0}
+- gallery-3col/flowMap @1440 light: {"clipped":[],"overlaps":[],"marksOutside":8}
+- examples/marketing-line @1440 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":50.5}],"overlaps":[],"marksOutside":0}
+- gallery/network @1280 dark: {"clipped":[],"overlaps":[{"a":"Billing","b":"Payments","area":162},{"a":"Users","b":"Notifications","area":306}],"marksOutside":0}
+- gallery/flowMap @1280 dark: {"clipped":[],"overlaps":[],"marksOutside":8}
+- gallery-3col/network @1280 dark: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":36},{"a":"Web","b":"Search","area":185}],"marksOutside":0}
+- gallery-3col/flowMap @1280 dark: {"clipped":[],"overlaps":[],"marksOutside":4}
+- examples/marketing-line @1280 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":130.5}],"overlaps":[],"marksOutside":0}
+- gallery/network @1280 light: {"clipped":[],"overlaps":[{"a":"Billing","b":"Payments","area":162},{"a":"Users","b":"Notifications","area":306}],"marksOutside":0}
+- gallery/flowMap @1280 light: {"clipped":[],"overlaps":[],"marksOutside":8}
+- gallery-3col/network @1280 light: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":36},{"a":"Web","b":"Search","area":185}],"marksOutside":0}
+- gallery-3col/flowMap @1280 light: {"clipped":[],"overlaps":[],"marksOutside":4}
+- examples/marketing-line @1280 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":130.5}],"overlaps":[],"marksOutside":0}
+- gallery/network @390 dark: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":93},{"a":"Web","b":"Search","area":250}],"marksOutside":0}
+- gallery/flowMap @390 dark: {"clipped":[],"overlaps":[],"marksOutside":4}
+- examples/marketing-line @390 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":385.5}],"overlaps":[],"marksOutside":0}
+- gallery/network @390 light: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":93},{"a":"Web","b":"Search","area":250}],"marksOutside":0}
+- gallery/flowMap @390 light: {"clipped":[],"overlaps":[],"marksOutside":4}
+- examples/marketing-line @390 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":385.5}],"overlaps":[],"marksOutside":0}
 
-## 4. 글자 대비
+## 4. Text contrast
 
-차트별 최소 대비 (갤러리, 모든 폭과 테마 중 가장 낮은 값):
+Lowest contrast per chart (gallery, the lowest value across all widths and themes):
 
-| 차트 | 다크 최소 | 라이트 최소 | 검사한 글자 |
+| Chart | Dark lowest | Light lowest | Texts checked |
 |---|---|---|---|
-| 파이 | 7.8 | 5.1 | 66 |
-| 도넛 | 7.8 | 5.6 | 90 |
-| 퍼널 | 7.8 | 5.6 | 102 |
-| 와플 | 7.8 | 4.8 | 60 |
-| 트리맵 | 7.8 | 4.8 | 156 |
-| 선버스트 | 5.1 | 4.8 | 78 |
-| 폭포 | 7.8 | 4.8 | 128 |
-| 파레토 | 7.8 | 4.8 | 132 |
-| 마리메코 | 7.8 | 5.1 | 136 |
-| 히트맵 | 4.6 | 4.8 | 468 |
-| 레이더 | 7.8 | 4.8 | 102 |
-| 버블 | 7.8 | 4.8 | 138 |
-| 라인 | 7.8 | 5.6 | 102 |
-| 영역 | 7.8 | 5.6 | 164 |
-| 스트림 | 5.1 | 5.1 | 138 |
-| 막대 | 7.8 | 5.1 | 144 |
-| 방사형 막대 | 7.8 | 4.8 | 54 |
-| 게이지 | 7.8 | 5.6 | 60 |
-| 불릿 | 7.8 | 4.8 | 84 |
-| 스파크라인 | 7.8 | 5.6 | 36 |
-| 슬로프 | 7.8 | 4.8 | 102 |
-| 덤벨 | 7.8 | 4.8 | 158 |
-| 롤리팝 | 7.8 | 5.6 | 138 |
-| 비스웜 | 7.8 | 5.6 | 98 |
-| 릿지라인 | 7.8 | 5.6 | 110 |
-| 생키 | 7.1 | 5.6 | 138 |
-| 코드 | 7.8 | 5.6 | 60 |
-| 캘린더 | 7.8 | 4.8 | 108 |
-| 범프 | 7.8 | 4.8 | 144 |
-| 박스 | 7.8 | 5.6 | 84 |
-| 평행 좌표 | 7.8 | 5.6 | 126 |
-| 캔들스틱 | 7.8 | 5.1 | 100 |
-| 비율 막대 | 5.1 | 5.1 | 140 |
-| 스카이라인 | 7.8 | 4.8 | 150 |
-| 히스토그램 | 7.8 | 4.8 | 132 |
-| 산점도 | 7.8 | 5.6 | 132 |
+| Pie chart | 7.8 | 5.1 | 66 |
+| Donut chart | 7.8 | 5.6 | 90 |
+| Funnel chart | 7.8 | 5.6 | 102 |
+| Waffle chart | 7.8 | 4.8 | 60 |
+| Treemap | 7.8 | 4.8 | 156 |
+| Sunburst | 5.1 | 4.8 | 78 |
+| Waterfall chart | 7.8 | 4.8 | 128 |
+| Pareto chart | 7.8 | 4.8 | 132 |
+| Marimekko chart | 7.8 | 5.1 | 136 |
+| Heatmap | 4.6 | 4.8 | 468 |
+| Radar chart | 7.8 | 4.8 | 102 |
+| Bubble chart | 7.8 | 4.8 | 138 |
+| Line chart | 7.8 | 5.6 | 102 |
+| Area chart | 7.8 | 5.6 | 164 |
+| Streamgraph | 5.1 | 5.1 | 138 |
+| Bar chart | 7.8 | 5.1 | 144 |
+| Radial bar chart | 7.8 | 4.8 | 54 |
+| Gauge | 7.8 | 5.6 | 60 |
+| Bullet chart | 7.8 | 4.8 | 84 |
+| Sparkline | 7.8 | 5.6 | 36 |
+| Slope chart | 7.8 | 4.8 | 102 |
+| Dumbbell chart | 7.8 | 4.8 | 158 |
+| Lollipop chart | 7.8 | 5.6 | 138 |
+| Beeswarm | 7.8 | 5.6 | 98 |
+| Ridgeline | 7.8 | 5.6 | 110 |
+| Sankey diagram | 7.1 | 5.6 | 138 |
+| Chord diagram | 7.8 | 5.6 | 60 |
+| Calendar heatmap | 7.8 | 4.8 | 108 |
+| Bump chart | 7.8 | 4.8 | 144 |
+| Box / violin plot | 7.8 | 5.6 | 84 |
+| Parallel coordinates | 7.8 | 5.6 | 126 |
+| Candlestick chart | 7.8 | 5.1 | 100 |
+| Segmented bar | 5.1 | 5.1 | 140 |
+| Skyline | 7.8 | 5.6 | 138 |
+| Histogram | 7.8 | 4.8 | 132 |
+| Scatter plot | 7.8 | 5.6 | 132 |
+| Tile grid map | 5.5 | 4.8 | 552 |
+| Choropleth map | 7.8 | 4.8 | 88 |
+| Bar race | 1.6 | 1.3 | 164 |
+| Network | 7.8 | 5.6 | 114 |
+| Timeline | 5.1 | 4.8 | 202 |
+| Tree | 7.8 | 4.8 | 210 |
+| Symbol map | 7.8 | 4.8 | 68 |
+| Flow map | 6.3 | 5.6 | 96 |
 
-예시 대시보드 카드 204장의 최소 대비: 4.8:1.
+Lowest contrast on the 228 example dashboard cards: 4.8:1.
 
-## 5. 애니메이션 성능
+Below target:
+- gallery/barRace @1440 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
+- gallery-3col/barRace @1440 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
+- gallery/barRace @1440 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
+- gallery-3col/barRace @1440 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
+- gallery/barRace @1280 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
+- gallery-3col/barRace @1280 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
+- gallery/barRace @1280 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
+- gallery-3col/barRace @1280 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
+- gallery/barRace @390 dark: "2026" 1.55:1 (needs 4.5), text #5B636D on #14171B
+- gallery/barRace @390 light: "2026" 1.33:1 (needs 4.5), text #B3B9C2 on #FFFFFF
 
-기준선(아무 애니메이션 없음): 60 fps, 프레임 간격 p95 16.7ms. 헤드리스 Chromium이 60Hz로 그린다는 뜻이에요.
+## 5. Animation performance
 
-차트 페이지에서 다시 재생을 누른 뒤 1.6초 (차트 하나가 움직임):
+Baseline (no animation): 60 fps, frame interval p95 16.8ms. This means headless Chromium paints at 60 Hz.
 
-| 차트 | fps 1× | p95 ms | 최대 ms | 떨어진 프레임 | long task | LoAF 최대 ms | fps 4× | p95 ms 4× | long task 4× |
+1.6 seconds after pressing replay on a chart page (one chart moving):
+
+| Chart | fps 1× | p95 ms | max ms | dropped frames | long tasks | LoAF max ms | fps 4× | p95 ms 4× | long tasks 4× |
 |---|---|---|---|---|---|---|---|---|---|
-| 파이 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 도넛 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 퍼널 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 와플 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 트리맵 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 선버스트 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 폭포 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 파레토 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 마리메코 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 히트맵 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 레이더 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 버블 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 라인 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 영역 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 스트림 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 막대 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
-| 방사형 막대 | 60 | 16.7 | 16.7 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 게이지 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 불릿 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 스파크라인 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 슬로프 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 덤벨 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| 롤리팝 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 비스웜 | 60 | 16.7 | 16.7 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 릿지라인 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| 생키 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 코드 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 캘린더 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 범프 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 박스 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
-| 평행 좌표 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 캔들스틱 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
-| 비율 막대 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 스카이라인 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| 히스토그램 | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| 산점도 | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Pie chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Donut chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Funnel chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Waffle chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Treemap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Sunburst | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Waterfall chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Pareto chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Marimekko chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Radar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bubble chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Line chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Area chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Streamgraph | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Bar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Radial bar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Gauge | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bullet chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Sparkline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Slope chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Dumbbell chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Lollipop chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Beeswarm | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Ridgeline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Sankey diagram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Chord diagram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Calendar heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Bump chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Box / violin plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Parallel coordinates | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Candlestick chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Segmented bar | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Skyline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Histogram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
+| Scatter plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Tile grid map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Choropleth map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bar race | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Network | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Timeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Tree | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Symbol map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Flow map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 
-여러 차트가 한꺼번에 움직일 때:
+Several charts moving at once:
 
-| 장면 | CPU | fps | p95 ms | 최대 ms | 떨어진 프레임 | long task |
+| Scene | CPU | fps | p95 ms | max ms | dropped frames | long tasks |
 |---|---|---|---|---|---|---|
-| 갤러리 모두 다시 재생: 2칸, 보이는 차트 4개 | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| 갤러리 모두 다시 재생: 2칸, 보이는 차트 4개 | 4× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 갤러리 모두 다시 재생: 3칸, 보이는 차트 6개 | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| 갤러리 모두 다시 재생: 3칸, 보이는 차트 6개 | 4× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 예시 스크롤 등장: marketing | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 예시 스크롤 등장: portfolio | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 예시 스크롤 등장: retention | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 예시 스크롤 등장: ops | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| 예시 스크롤 등장: marketing | 4× | 55.7 | 16.8 | 83.3 | 2 | 2 (최대 65ms) |
-| 예시 스크롤 등장: portfolio | 4× | 59.4 | 16.8 | 33.2 | 1 | 0 |
-| 예시 스크롤 등장: retention | 4× | 56.3 | 16.8 | 100 | 2 | 2 (최대 65ms) |
-| 예시 스크롤 등장: ops | 4× | 52.5 | 16.8 | 166.7 | 2 | 1 (최대 132ms) |
+| Gallery, replay all: 2 columns, 4 charts on screen | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Gallery, replay all: 2 columns, 4 charts on screen | 4× | 59 | 16.8 | 33.4 | 2 | 0 |
+| Gallery, replay all: 3 columns, 6 charts on screen | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Gallery, replay all: 3 columns, 6 charts on screen | 4× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: marketing | 1× | 59.4 | 16.7 | 33.4 | 1 | 0 |
+| Examples, entrance on scroll: portfolio | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: retention | 1× | 60 | 16.7 | 16.7 | 0 | 0 |
+| Examples, entrance on scroll: ops | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: marketing | 4× | 50.7 | 33.3 | 116.6 | 7 | 3 (max 79ms) |
+| Examples, entrance on scroll: portfolio | 4× | 51.9 | 33.4 | 66.7 | 11 | 1 (max 50ms) |
+| Examples, entrance on scroll: retention | 4× | 48.2 | 33.4 | 83.3 | 16 | 1 (max 66ms) |
+| Examples, entrance on scroll: ops | 4× | 45.2 | 33.4 | 149.9 | 12 | 3 (max 125ms) |
 
-## 6. 1만 점 스트레스
+## 6. 10k-point stress
 
-`/qa/stress/?type=...` 페이지. 첫 화면은 차트 컴포넌트 마운트부터 두 번째 requestAnimationFrame까지(그려진 뒤). 페이지 코드를 처음 받을 때 React가 내용을 보여 주기 전에 두는 대기(최대 300ms)는 넣지 않아요.
+The `/qa/stress/?type=...` page. First render runs from mounting the chart component to the second requestAnimationFrame (after the paint). It leaves out the wait (up to 300ms) that React adds before it shows content when the page code first loads.
 
-| 차트 | 행 | CPU | 방식 | 데이터 생성 ms | 첫 화면 ms | 로딩 long task | 재생 fps | 재생 p95 ms | 호버 p50 ms | 호버 p95 ms | DOM 노드 |
+| Chart | Rows | CPU | Drawing | Data generation ms | First render ms | Loading long tasks | Replay fps | Replay p95 ms | Hover p50 ms | Hover p95 ms | DOM nodes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 라인 | 10,000 | 1× | SVG | 4.9 | 36.1 | 0 | 60 | 16.8 | 2.3 | 5.7 | 228 |
-| 영역 | 10,000 | 1× | SVG | 0.5 | 30.3 | 0 | 60 | 16.7 | 3.1 | 3.9 | 226 |
-| 스파크라인 | 10,000 | 1× | SVG | 0.6 | 32.9 | 0 | 60 | 16.7 | 1.7 | 2.6 | 202 |
-| 버블 | 10,000 | 1× | 캔버스 | 0.9 | 33 | 0 | 60 | 16.7 | 1.9 | 3 | 217 |
-| 산점도 | 10,000 | 1× | 캔버스 | 1.1 | 48.4 | 0 | 60 | 16.8 | 1.8 | 7.3 | 222 |
-| 히트맵 | 10,000 | 1× | 캔버스 | 0.6 | 22.8 | 0 | 60 | 16.8 | 1 | 1.9 | 259 |
-| 비스웜 | 10,000 | 1× | 캔버스 | 0.6 | 32.6 | 0 | 60 | 16.7 | 1.7 | 3.4 | 240 |
-| 평행 좌표 | 10,000 | 1× | 캔버스 | 1.3 | 66.6 | 0 | 60 | 16.7 | 1.9 | 4.3 | 218 |
-| 캘린더 | 10,000 | 1× | 캔버스 | 2.4 | 59.1 | 0 | 60 | 16.7 | 2.3 | 4 | 640 |
-| 박스 | 10,000 | 1× | SVG | 0.6 | 34.5 | 0 | 60 | 16.7 | 0 | 0 | 150 |
-| 릿지라인 | 10,000 | 1× | SVG | 0.6 | 29.3 | 0 | 60 | 16.7 | 1.7 | 1.9 | 113 |
-| 스트림 | 10,000 | 1× | SVG | 1 | 30.7 | 0 | 60 | 16.8 | 2.5 | 4.8 | 212 |
-| 라인 | 10,000 | 4× | SVG | 18.7 | 114.8 | 1 (최대 90) | 60 | 16.8 | 9.4 | 11.1 | 228 |
-| 영역 | 10,000 | 4× | SVG | 2.8 | 70 | 0 | 60 | 16.8 | 6.5 | 7.1 | 226 |
-| 스파크라인 | 10,000 | 4× | SVG | 2 | 65.1 | 0 | 60 | 16.8 | 6.5 | 7.2 | 202 |
-| 버블 | 10,000 | 4× | 캔버스 | 3.8 | 67.2 | 0 | 52.6 | 33.4 | 2.8 | 5.7 | 217 |
-| 산점도 | 10,000 | 4× | 캔버스 | 3.2 | 127.1 | 1 (최대 103) | 53.8 | 33.3 | 3.3 | 10.6 | 222 |
-| 히트맵 | 10,000 | 4× | 캔버스 | 1.8 | 77.4 | 1 (최대 51) | 60 | 16.7 | 3.2 | 5 | 259 |
-| 비스웜 | 10,000 | 4× | 캔버스 | 2 | 101.7 | 1 (최대 73) | 50.1 | 33.4 | 3.5 | 6.2 | 240 |
-| 평행 좌표 | 10,000 | 4× | 캔버스 | 5.1 | 209.8 | 2 (최대 117) | 60 | 16.7 | 4 | 6.5 | 218 |
-| 캘린더 | 10,000 | 4× | 캔버스 | 7.3 | 212.9 | 2 (최대 99) | 59.4 | 16.8 | 5.2 | 7.7 | 640 |
-| 박스 | 10,000 | 4× | SVG | 2.6 | 98.1 | 1 (최대 67) | 60 | 16.7 | 0 | 0 | 150 |
-| 릿지라인 | 10,000 | 4× | SVG | 2.3 | 80 | 1 (최대 53) | 60 | 16.7 | 2.8 | 3.8 | 113 |
-| 스트림 | 10,000 | 4× | SVG | 3.3 | 85.1 | 1 (최대 54) | 60 | 16.8 | 7.7 | 9 | 212 |
+| Line chart | 10,000 | 1× | SVG | 4.8 | 32.5 | 0 | 60 | 16.7 | 2.3 | 2.6 | 228 |
+| Area chart | 10,000 | 1× | SVG | 0.6 | 27.9 | 0 | 60 | 16.8 | 1.5 | 1.7 | 226 |
+| Sparkline | 10,000 | 1× | SVG | 0.4 | 25.6 | 0 | 60 | 16.8 | 1.6 | 1.9 | 202 |
+| Bubble chart | 10,000 | 1× | Canvas | 0.9 | 26.5 | 0 | 60 | 16.8 | 0.8 | 1.4 | 217 |
+| Scatter plot | 10,000 | 1× | Canvas | 1 | 31.8 | 0 | 60 | 16.8 | 0.8 | 3 | 222 |
+| Heatmap | 10,000 | 1× | Canvas | 0.9 | 25.7 | 0 | 60 | 16.7 | 0.8 | 0.9 | 259 |
+| Beeswarm | 10,000 | 1× | Canvas | 0.5 | 27.1 | 0 | 60 | 16.8 | 0.8 | 1.3 | 240 |
+| Parallel coordinates | 10,000 | 1× | Canvas | 1.3 | 56 | 0 | 60 | 16.7 | 0.9 | 1.5 | 218 |
+| Calendar heatmap | 10,000 | 1× | Canvas | 2 | 51.8 | 0 | 60 | 16.8 | 1.1 | 1.9 | 640 |
+| Box / violin plot | 10,000 | 1× | SVG | 0.6 | 20.4 | 0 | 60 | 16.8 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 1× | SVG | 1.2 | 21.2 | 0 | 60 | 16.7 | 0.8 | 0.9 | 113 |
+| Streamgraph | 10,000 | 1× | SVG | 0.6 | 28.3 | 0 | 60 | 16.8 | 2.2 | 2.6 | 212 |
+| Line chart | 10,000 | 4× | SVG | 22.8 | 136.5 | 1 (max 103) | 59.4 | 16.8 | 9.9 | 11.5 | 228 |
+| Area chart | 10,000 | 4× | SVG | 3.6 | 97.1 | 1 (max 57) | 60 | 16.8 | 7.9 | 9.7 | 226 |
+| Sparkline | 10,000 | 4× | SVG | 3 | 83.6 | 1 (max 55) | 60 | 16.8 | 6.5 | 6.8 | 202 |
+| Bubble chart | 10,000 | 4× | Canvas | 4.3 | 61.2 | 0 | 53.8 | 33.3 | 2.9 | 6.3 | 217 |
+| Scatter plot | 10,000 | 4× | Canvas | 3.9 | 115.1 | 1 (max 93) | 53.2 | 33.4 | 3.2 | 11.9 | 222 |
+| Heatmap | 10,000 | 4× | Canvas | 1.7 | 68.5 | 0 | 60 | 16.8 | 3.1 | 4.1 | 259 |
+| Beeswarm | 10,000 | 4× | Canvas | 1.7 | 96.2 | 1 (max 69) | 50.1 | 33.4 | 3.1 | 4.4 | 240 |
+| Parallel coordinates | 10,000 | 4× | Canvas | 4.7 | 185.3 | 2 (max 109) | 60 | 16.8 | 3.6 | 5.4 | 218 |
+| Calendar heatmap | 10,000 | 4× | Canvas | 7.9 | 178.7 | 2 (max 94) | 60 | 16.8 | 4.1 | 5 | 640 |
+| Box / violin plot | 10,000 | 4× | SVG | 2.4 | 71.9 | 0 | 60 | 16.7 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 4× | SVG | 5.4 | 74.8 | 1 (max 52) | 60 | 16.8 | 3.6 | 4.5 | 113 |
+| Streamgraph | 10,000 | 4× | SVG | 2.3 | 81.1 | 1 (max 50) | 59.4 | 16.7 | 9.6 | 10.5 | 212 |
 
-## 7. 번들 크기
+## 7. Bundle size
 
-size-limit (KB (Brotli, size-limit + rolldown, react external)). `import { X } from "ztd-charts"` 하나를 번들한 크기라 공통 코어 약 9 KB가 들어 있어요.
+size-limit (KB (Brotli, size-limit + rolldown, react external)). Each row bundles one `import { X } from "ztd-charts"`, so it includes the shared core of about 9 KB.
 
 | import | Brotli KB |
 |---|---|
-| `PieChart` | 13.5 |
-| `DonutChart` | 13.5 |
-| `FunnelChart` | 12.3 |
-| `WaffleChart` | 12.4 |
+| `PieChart` | 13.9 |
+| `DonutChart` | 14 |
+| `FunnelChart` | 12.4 |
+| `WaffleChart` | 15.2 |
 | `Treemap` | 12.8 |
-| `SunburstChart` | 13.1 |
-| `WaterfallChart` | 13.1 |
-| `ParetoChart` | 13.4 |
-| `MarimekkoChart` | 12.9 |
-| `Heatmap` | 13.7 |
-| `RadarChart` | 12.9 |
-| `BubbleChart` | 15.5 |
-| `LineChart` | 24.2 |
-| `AreaChart` | 24.2 |
-| `StreamGraph` | 15.5 |
-| `BarChart` | 18.3 |
-| `RadialBarChart` | 11.8 |
+| `SunburstChart` | 13.3 |
+| `WaterfallChart` | 13.5 |
+| `ParetoChart` | 13.8 |
+| `MarimekkoChart` | 13.1 |
+| `Heatmap` | 14.3 |
+| `RadarChart` | 13.7 |
+| `BubbleChart` | 16.7 |
+| `LineChart` | 26.3 |
+| `AreaChart` | 26.3 |
+| `StreamGraph` | 16.5 |
+| `BarChart` | 21.9 |
+| `RadialBarChart` | 11.9 |
 | `GaugeChart` | 12 |
-| `BulletChart` | 12.6 |
-| `Sparkline` | 13.7 |
-| `SlopeChart` | 12.5 |
-| `DumbbellChart` | 12.1 |
-| `LollipopChart` | 12.9 |
-| `BeeswarmChart` | 14 |
-| `RidgelineChart` | 12.9 |
-| `SankeyChart` | 13.4 |
-| `ChordChart` | 12.4 |
-| `CalendarHeatmap` | 14.2 |
-| `BumpChart` | 13.7 |
-| `BoxPlot` | 14 |
-| `ParallelCoordinates` | 13.5 |
-| `CandlestickChart` | 19.2 |
-| `SegmentedBar` | 12.4 |
-| `SkylineChart` | 17.9 |
-| `HistogramChart` | 18.1 |
-| `ScatterChart` | 18.3 |
-| `StatCard` | 14.4 |
-| `LiveLineChart` | 13 |
-| ChartCard + ChartGrid + ThemeProvider | 5 |
+| `BulletChart` | 12.7 |
+| `Sparkline` | 14.6 |
+| `SlopeChart` | 12.8 |
+| `DumbbellChart` | 12.3 |
+| `LollipopChart` | 13.1 |
+| `BeeswarmChart` | 14.1 |
+| `RidgelineChart` | 13 |
+| `SankeyChart` | 13.6 |
+| `ChordChart` | 12.6 |
+| `CalendarHeatmap` | 15.1 |
+| `BumpChart` | 14.6 |
+| `BoxPlot` | 14.4 |
+| `ParallelCoordinates` | 13.6 |
+| `CandlestickChart` | 20.2 |
+| `SegmentedBar` | 12.5 |
+| `SkylineChart` | 19.4 |
+| `HistogramChart` | 18.3 |
+| `ScatterChart` | 22.5 |
+| `TileMap` | 15.9 |
+| `Choropleth` | 19 |
+| `SymbolMap` | 20.4 |
+| `FlowMap` | 21 |
+| `Tree` | 17 |
+| `Timeline` | 20.8 |
+| `BarRace` | 17.6 |
+| `NetworkChart` | 15.9 |
+| `StatCard` | 15.2 |
+| `LiveLineChart` | 13.7 |
+| Map: world (ztd-charts/geo/world) | 24.8 |
+| Map: us-states (ztd-charts/geo/us-states) | 10.7 |
+| Map: kr-sido (ztd-charts/geo/kr-sido) | 5.2 |
+| ChartCard + ChartGrid + ThemeProvider | 5.5 |
 | useChartData + parseCSV | 2.9 |
-| Chart (spec renderer, all charts) | 84.4 |
-| Everything (index.js) | 107.1 |
-| spec: validateSpec + specSchema | 24.6 |
+| Chart (spec renderer, all charts) | 139.1 |
+| Everything (index.js) | 182.6 |
+| spec: validateSpec + specSchema | 53.7 |
+| Interactive HTML code (React + AreaChart) | 100.4 |
 
-## 8. 테스트, 타입, 린트
+## 8. Tests, types, lint
 
-- Vitest: 480/480 통과, 파일 120개. 프로젝트별 cli 29, mcp 15, landing 1, docs 16, ztd-charts 419.
-  - 데이터 도우미(parseCSV 따옴표, 줄바꿈, BOM, 구분자, 통화와 퍼센트, fromRows, fromObjects, melt, normalizeData, LTTB), 포맷(만, 억, 조), 스케일과 시간 눈금, 글자 폭 실측 비교, 레이아웃(squarify, 생키 보존, 코드, 스택, KDE 넓이 1, 비스웜 겹침 0), 모션 엔진(스프링 수렴과 넘침 없음, 중간 재목표 속도 연속성, enter/exit), 테마 대비(토큰 쌍 22개 AA), 스펙 검증 메시지, ajv 2020으로 공개 스키마 교차 검증, 추천, 36종 × 2테마 SSR, 빈 데이터, CLI 끝단 테스트(로컬 HTTP 서버로 data.url 렌더 포함), MCP 도구 5개(메모리 전송 + 실제 stdio)
-- 타입 검사: 5개 프로젝트 통과.
-- ESLint: 파일 239개, 오류 0, 경고 0.
+- Vitest: 865/865 passed in 201 files. By project: cli 36, mcp 20, landing 1, docs 16, ztd-charts 792.
+  - Data helpers (parseCSV quotes, line breaks, BOM, delimiters, currency and percent, fromRows, fromObjects, melt, normalizeData, LTTB), Korean number units (10⁴, 10⁸, 10¹²), scales and time ticks, estimated text widths against measured ones, layouts (squarify, Sankey flow conservation, chord, stack, KDE area of 1, no beeswarm overlap), the motion engine (springs settle with no overshoot, the speed stays continuous when the target changes mid-way, enter/exit), theme contrast (22 token pairs at AA), spec validation messages, the public schemas cross-checked with ajv 2020, suggestions, SSR of 44 charts × 2 themes, empty data, CLI end-to-end tests (including data.url rendered from a local HTTP server), and the 5 MCP tools (in-memory transport and real stdio)
+- Type check: 5 projects, pass.
+- ESLint: 301 files, 0 errors, 0 warnings.
 
-## 9. 접근성
+## 9. Accessibility
 
-axe-core (WCAG 2.1 A, AA 규칙). SVG 안 글자 대비는 axe가 안 보기 때문에 4장의 픽셀 대비 검사로 따로 쟀어요.
+axe-core (WCAG 2.1 A and AA rules). axe does not check the contrast of text inside SVG, so section 4 measures it from pixels.
 
-| 페이지 | 테마 | 통과 규칙 | 위반 |
+| Page | Theme | Rules passed | Violations |
 |---|---|---|---|
 | / | dark | 33 | 0 |
 | /examples | dark | 28 | 0 |
@@ -284,90 +348,89 @@ axe-core (WCAG 2.1 A, AA 규칙). SVG 안 글자 대비는 axe가 안 보기 때
 | /docs | light | 31 | 0 |
 | /playground | light | 32 | 0 |
 
-- 통과: ArrowRight로 첫 항목 선택, aria-live 안내 (live="Purchase: 58% · 719 (1/4)" tooltip=1)
-- 통과: End로 마지막 항목 (live="Call: 8% · 100 (4/4)")
-- 통과: Escape로 선택 해제
-- 통과: role=group + svg role=img 제목/설명 (Donut chart. 4 items, total 1,240. Purchase 58%, Sign-up 21%, Inquiry 13%, Call 8%.)
-- 통과: 스크린리더 데이터 표 (4행)
-- 통과: prefers-reduced-motion이면 화면 밖에서도 처음부터 최종 그림 (막대 8개)
-- 통과: 화면에 25% 미만으로 보이면 등장을 기다려요 (막대 0개)
-- 통과: 스크롤해서 들어오면 등장 애니메이션 후 최종 그림 (중간 막대 4개, 끝 8개)
-- 통과: 1440px 오른쪽 끝 버블 툴팁이 카드 안 (오른쪽 여백 25.0px)
-- 통과: 1280px 오른쪽 끝 버블 툴팁이 카드 안 (오른쪽 여백 25.0px)
-- 통과: 390px 오른쪽 끝 버블 툴팁이 카드 안 (오른쪽 여백 25.0px)
-- 통과: /data 없는 주소면 오류 카드, 다시 시도하면 다시 불러옴 (다시 요청 1번)
+- Pass: ArrowRight selects the first item, and aria-live announces it (live="Purchase: 58% · 719 (1/4)" tooltip=1)
+- Pass: End moves to the last item (live="Call: 8% · 100 (4/4)")
+- Pass: Escape clears the selection
+- Pass: role=group, and svg role=img with a title and a description (Donut chart. 4 items, total 1,240. Purchase 58%, Sign-up 21%, Inquiry 13%, Call 8%.)
+- Pass: Screen reader data table (4 rows)
+- Pass: With prefers-reduced-motion, the final drawing shows at once, even off screen (8 bars)
+- Pass: While less than 25% is on screen, the entrance waits (0 bars)
+- Pass: Scrolled into view, the chart plays its entrance, then shows the final drawing (4 bars midway, 8 at the end)
+- Pass: 1440px: the tooltip of the rightmost bubble stays inside the card (right gap 25.0px)
+- Pass: 1280px: the tooltip of the rightmost bubble stays inside the card (right gap 25.0px)
+- Pass: 390px: the tooltip of the rightmost bubble stays inside the card (right gap 25.0px)
+- Pass: /data with a missing URL shows the error card, and Try again fetches once more (1 new request)
 
-## 10. 시각 회귀
+## 10. Visual regression
 
-`qa/visual.spec.ts`가 갤러리 카드 36종을 다크, 라이트로 `toHaveScreenshot` 비교해요 (기준 이미지 `qa/__screenshots__/{linux,darwin}/`, 운영체제별, 허용 픽셀 차이 0.3%). 마지막 실행: 72장 비교, 실패 0. 기하 회귀는 Vitest 스냅샷(차트별 도형 수, 첫 글자 16개, SVG 해시)으로도 잡아요.
+`qa/visual.spec.ts` compares the 44 gallery cards in dark and light with `toHaveScreenshot` (baselines in `qa/__screenshots__/{linux,darwin}/`, one set per operating system, at most 0.3% of pixels may differ). Last run: 88 compared, 0 failed. Vitest snapshots (shape count per chart, the first 16 texts, an SVG hash) also catch geometry regressions.
 
-커밋된 기준 이미지는 리눅스 VM에서 만든 거예요. 이번 실행은 macOS라 글자 가장자리 안티앨리어싱만 달라서 대부분 0.3%를 넘어요(카드 크기, 도형 위치는 같아요). 그래서 같은 macOS에서 바꾸기 전 커밋(8e38900)으로 기준을 만들고 지금 빌드와 비교했어요: 62장 모두 통과. 리눅스 기준은 그대로 두었어요(macOS 기준으로 바꾸면 리눅스에서 실패해요).
+Text antialiasing differs between operating systems, so each run compares with the baselines of its own system: CI uses `linux` and a run on macOS uses `darwin`. This run was on darwin arm64.
 
-## 반복 기록: 찾은 문제와 고친 결과
+## Iteration log: problems found and what fixed them
 
-측정하고, 고치고, 다시 쟀어요. 숫자는 고치기 전 → 고친 뒤.
+We measured, fixed, and measured again. Numbers read before → after.
 
-| # | 찾은 방법 | 문제 | 고친 것 | 결과 |
+| # | How we found it | Problem | Fix | Result |
 |---|---|---|---|---|
-| 1 | Chromium 실측 (Canvas measureText) | 글자 폭 추정이 한글을 0.92em으로 봐서 라벨 자리를 과하게 잡음 (Pretendard 실측 0.86em, 굵게 해도 같음) | 한글 0.87em, 굵기 보정은 라틴과 숫자에만 | 실측 대비 오차 10% 안 (단위 테스트로 고정) |
-| 2 | 갤러리 스크린샷 | 방사형 막대 라벨이 고리 시작점(7시 반)에서 겹침 | 12시에서 시작, 비어 있는 왼쪽 위 사분면에 라벨 | 겹침 0 |
-| 3 | 갤러리 스크린샷 | 다크에서 쌓은 영역의 ink(밝은 크림) 면이 화면을 덮음 | 넓은 면은 accent + neutralStrong→neutral 단계 (`ramp`) | 강조 계열만 눈에 띔 |
-| 4 | 갤러리 스크린샷 | 슬로프, 범프 끝 라벨이 잘림 ("우리 브…") | 폭 계산과 그리는 글자를 같게 | 잘림 0 |
-| 5 | 갤러리 스크린샷 | 히트맵, 캘린더가 튀는 값 하나 때문에 대부분 흐림 | 색 최댓값을 95퍼센타일로 (`robustMax`) | 1년 커밋 데이터가 읽힘 |
-| 6 | 빌드 결과 확인 | tsup 설정 3개가 병렬로 돌며 `clean`이 `server.d.ts`를 지움, rollup 트리 셰이킹이 `"use client"`를 지움 | 빌드 전에 한 번만 지우기, esbuild 트리 셰이킹만 사용 | `server.d.ts` 생성, ESM 첫 줄 `"use client"` |
-| 7 | size-limit + esbuild metafile | `export * as samples` 네임스페이스 객체(`__export` 호출)가 예시 데이터를 모든 차트 번들에 끌고 옴, 한글이 `\uXXXX`로 이스케이프 | 이름으로 내보내기, `charset: utf8` | 파이 차트 14.79 → 11.63 KB (gzip) |
-| 8 | size-limit | `<Chart spec>`이 레지스트리(예시 포함) 전체를 끌고 옴, `CHANNELS.pie` 같은 멤버 접근이 순수하지 않다고 판단돼 `CHARTS` 배열이 남음 | 채널만 담은 `spec/meta.ts`, 식별자 바인딩 | `<Chart>` 61.37 → 50.57 KB, 단일 차트 다시 11.6 KB |
-| 9 | Vitest + ajv | 차트별 스키마 `$id`에 `#pie` 조각이 있어 2020-12 규칙 위반 | `schema/charts/pie.schema.json` 주소로 | ajv 2020으로 31종 예시 모두 통과 |
-| 10 | Vitest | `hilight` 오타 제안이 `height`로 나옴 (거리 같음) | 같은 거리면 앞부분이 더 겹치는 쪽 | `"highlight"인가요?` |
-| 11 | 대비 검사 (글자 숨긴 화면 표본) | 히트맵 중간 진하기 칸 숫자 4.00~4.45:1. ink와 onAccent 둘 다 4.5가 안 되는 밝기 구간(휘도 0.13~0.19)이 있음 | 흰색, 검은색까지 후보 (`readableOn`). 둘 중 하나는 어떤 바탕에서도 4.58 이상 | 최소 4.55:1 |
-| 12 | 대비 검사 | 레이더 고리 숫자가 강조 다각형 채움 위에서 4.19:1 | muted 대신 ink | 통과 |
-| 13 | 대비 검사 | 스트림그래프 "영화" 라벨 4.13:1 (섞은 회색 위 검정) | 섞은 색 위 글자도 `readableOn` | 통과 |
-| 14 | 대비 검사 | 생키 가운데 열 라벨이 흐름 띠 위에서 1.91:1 | 카드 바탕색 받침 | 통과 |
-| 15 | 넘침 검사 | 3칸 갤러리 1280px에서 가로 스크롤 (scrollWidth 1350) | 화면에 안 보이는 데이터 표를 `div.ztd-sr`로 감싸기 (표는 width 1px를 무시해요) | 1280 |
-| 16 | 넘침 검사 | `/data` 390px에서 scrollWidth 872 | 코드 블록에 `min-w-0`을 줬지만 그대로였어요 (35번에서 다시 고침) | 872 |
-| 17 | 레이아웃 검사 | 폭포 차트 마지막 막대 호버 영역이 svg 밖으로 | 호버 영역을 차트 폭 안으로 | 0 |
-| 18 | 대비 검사 | 390px p95 지연 차트에서 "SLO 250ms" 라벨을 강조선이 지나감 (1.03:1) | 기준선 라벨에 바탕색 받침 | 통과 |
-| 19 | axe | `label-content-name-mismatch` 32곳 (로고, 복사 버튼, "코드" 링크) | 보이는 글자가 접근 가능한 이름에 단어로 들어가게 | 0 |
-| 20 | axe | 로딩 상태 `div`에 role 없이 `aria-label` | `role="status"` | 0 |
-| 21 | axe | 라이트 탭 비활성 글자 4.26:1, "필수" 배지 4.42:1 | 탭은 muted-foreground, 라이트 `accentText` #B83800 → #B03500 | 통과 |
-| 22 | 키보드, 동작 테스트 | 화면에 24%만 보이는 차트가 등장하지 않아 테스트가 실패 | 버그 아님(25% 기준). 테스트를 스크롤 후 확인하도록 바꾸고 "화면 밖에선 기다림"도 검사 | 통과 |
-| 23 | 성능 기록 (CPU 4배 느리게) | 와플 53.2fps, 캘린더 카드 56.3fps. 칸 수백 개를 프레임마다 React로 다시 그림 | 등장을 CSS 키프레임으로, 엔진은 시작 시점만 | 둘 다 60fps |
-| 24 | 성능 기록 (CPU 4배) | 갤러리 "모두 다시 재생" 2칸 39.7fps, long task 123ms. 3칸 33.2fps, long task 7개(최대 131ms) | 화면 밖 차트는 다시 재생을 미뤘다가 가까워지면 준비 | 2칸 58.5fps (69ms 1개), 3칸 56.5fps (78ms 1개) |
-| 25 | 1만 점 스트레스 | 평행 좌표 다시 재생 14.1fps (프레임마다 1만 줄을 캔버스에 다시 그림) | 한 번 그리고 CSS clip으로 드러내기 | 60fps |
-| 26 | 1만 점 스트레스 | 라인 첫 화면 183ms. x를 두 번 파싱하고 값마다 Intl 포맷터를 새로 찾음 | x 한 번 파싱, 포맷터 하나, 1천 개 넘는 라벨과 툴팁은 읽을 때 만들기 | 111ms (31번 뒤 56ms) |
-| 27 | 1만 점 스트레스 | 스트림 다시 재생 51.3fps, 쌓은 영역 55.7fps | 보간 전에 폭에 맞춰 구간 평균으로 줄이기 | 둘 다 60fps |
-| 28 | 스트레스 페이지의 화면 낭독기 표 행 수 | 라인, 영역, 스트림, 스파크라인의 숨은 데이터 표가 비어 있음. 지연 배열에 `has` 트랩이 없어 `slice`, `map`이 빈 칸을 건너뜀 | `has` 트랩 추가, 단위 테스트로 고정 | 0행 → 61행 |
-| 29 | 스트레스 스크린샷 | 캘린더가 4,000일에서 멈춰 27년 중 11년만 그림 | 상한 없이 모든 날, 4,000일 넘으면 캔버스 | 1만 일 모두 |
-| 30 | 스트레스 스크린샷 | 화면보다 몇 배 큰 차트(27년 캘린더, 3,000px)는 25%가 한 번에 안 보여 등장이 시작되지 않음. 그 전 캘린더 스트레스 숫자는 빈 차트를 잰 것 | 화면 절반을 채우면 보이는 걸로 (기준 비율도 잘게) | 칸이 그려짐, 다시 측정 |
-| 31 | CPU 프로파일 | 비스웜 1만 점 첫 화면 480ms (long task 456ms). 렌더마다 툴팁 1만 개를 다시 만들고 값 포맷 (개발 모드 320ms), 폭을 재기 전 기본 폭으로 배치를 한 번 더 함 | 툴팁은 읽을 때 만들기, 폭 재기 전 렌더 건너뛰기, 막힌 구간을 합쳐 쓸어 보는 배치 (Node 3~7배 빠름) | 1배 CPU 65ms (long task 50ms), 4배 1,863 → 306ms |
-| 32 | 스트레스 스크린샷 | 비스웜 띠가 꽉 차면 넘친 점이 위아래 끝선에 줄로 쌓이고 중앙값 라벨이 점에 묻힘 | 넘친 점은 띠 안에 황금비 수열로 흩기, 라벨에 바탕 받침 | 끝선 줄 0 |
-| 33 | 호버 지연 | 캘린더 호버 13.8ms (호버마다 날짜 4,000개를 다시 포맷), 툴팁 자리 계산이 레이아웃을 강제 | 툴팁 데이터 고정, 반응형이면 배율 1, 포인터 위치는 들어올 때만 재기 | 0.5~1.2ms |
-| 34 | 호버 지연 | 산점도 호버 10ms, 첫 화면 98ms. 축 포맷터를 렌더마다 새로 만들어 툴팁 1만 개가 매번 다시 만들어짐 | 포맷터 메모, 툴팁 지연 생성 | 호버 0.8ms, 첫 화면 46ms |
-| 35 | 넘침 검사 (원인 추적) | `/data` 390px 넘침은 기본 열 정의가 없는 그리드 때문. 한 칸짜리 자동 트랙이 가장 긴 코드 줄만큼 늘어남 | `grid-cols-1` (minmax(0, 1fr)), 같은 패턴 3곳 더 | 모든 페이지 390 |
-| 36 | QA 스크립트 검토 | 시각 회귀 단계가 비교 전에 기준 이미지를 다시 만들어 항상 통과 | 없는 기준만 만들고 커밋된 기준과 비교 | 진짜 비교 |
-| 37 | 캔버스 프로파일 (CPU 4배) | 27년 캘린더 등장 중 프레임마다 1만 칸 경로를 다시 만들고 라벨 400여 개를 다시 렌더 | 완성 격자를 한 번 그려 두고 주(열)별 투명도만 바꿔 옮기기, 바뀐 열만 지우기, 라벨 메모 | 1배 CPU long task는 첫 화면 1개. 4배는 남음 (리포트 참고) |
-| 38 | 탐색 테스트 (사람처럼 클릭) | 산점도 오른쪽 끝 점의 툴팁이 카드 밖으로 잘림. 위치에 따라 세 단계(-8%, -50%, -92%)로만 옮김 | 가운데 정렬을 CSS `clamp()`로 차트 양끝 4px 안에 가두기 (툴팁 폭을 재지 않음) | 잘림 0 |
-| 39 | 탐색 테스트 + 운영 빌드 재현 | `/data`의 "404 오류" 버튼이 오류 대신 빈 차트를 보여줌. 정적 서버가 없는 파일에 200과 index.html을 주고, `readResponse`가 HTML을 CSV로 읽음 | HTML을 받으면 "데이터 대신 HTML 페이지를 받았어요" 오류. 버튼 이름은 "없는 주소" | 오류 카드와 다시 시도 버튼 |
-| 40 | 탐색 테스트 | 상태 버튼을 누르면 화면이 튐, 로딩이 끝나지 않음 (개발 서버 콘솔에 HMR 오류) | 운영 빌드에서 다시 재현: 스크롤 12 → 12px, 카드 높이 376px 고정. 테스트 중 소스를 고치며 생긴 HMR 오류로 판단 | 재현 안 됨 |
-| 41 | 운영 빌드 탐색 테스트 (vite preview) | 38번 툴팁 고정이 운영 빌드에서도 되는지 확인이 안 됐어요 | 고칠 것 없음. 1440, 1280(2칸, 3칸), 390 × 다크, 라이트에서 오른쪽 끝 버블에 올려 확인하고 `a11y.spec.ts`에 넣음 | 10곳 모두 카드 안, 오른쪽 여백 25px |
-| 42 | 운영 빌드 탐색 테스트 | 39번 "없는 주소" 오류 카드가 운영 빌드에서 확인이 안 됐어요 | 고칠 것 없음. 오류 카드, 다시 시도(다시 요청 1번), 정상으로 돌아오기를 1440, 390에서 확인하고 `a11y.spec.ts`에 넣음 | 오류 카드 표시, 다시 시도 동작 |
-| 43 | Vitest (Node 26) | 생키 SVG 스냅샷 해시가 Node 26에서만 달라요. 라벨 받침 사각형 y가 소수 14째 자리에서 다름 (V8 실수 계산 차이) | 받침 사각형 좌표를 소수 둘째 자리로 | Node 22, 26 모두 통과 |
-| 44 | 성능 기록 (캘린더 1만, CPU 8배) | 마운트 때 폭을 ref 콜백에서 재고, 레이아웃 효과에서 바로 한 번 더 재서 레이아웃을 두 번 강제 (두 번째 37ms) | ResizeObserver가 있으면 바로 다시 재지 않기 (관찰자가 그리기 전에 첫 폭을 알려줘요). 모든 차트에 해당 | long task 377 → 325ms (트레이스) |
-| 45 | CPU 프로파일 (캘린더 1만) | 칸 찾기 표에 문자열 키 1만 개, 폭을 재기 전에도 월 라벨 자리를 계산 | 평평한 `Int32Array` 색인, 폭 재기 전에는 월 라벨 건너뛰기 | 4배 CPU 첫 화면 223 → 201ms, 가장 긴 작업 121 → 99ms (Apple Silicon, 3번 평균) |
-| 46 | CPU 프로파일 (스트림 1만 다시 재생, CPU 8배) | 프레임마다 층 5개 × 점 620개 곡선을 경로 문자열로 만드는 데 대부분 (`monotonePath` 611ms / 1.6초). 계산은 5µs, 숫자 문자열화가 150µs | 고치지 않음. 정수로 반올림하면 2배 빠르지만 곡선 모양이 바뀌고, 점을 줄이면 화질이 떨어져요. 이 기기에서는 4배 CPU 60fps, 8배 58.8~59.4fps라 차이를 보여줄 수도 없어요 | 그대로 (리포트 참고) |
-| 47 | 시각 회귀 (macOS) | 커밋된 기준 이미지가 리눅스에서 만든 거라 macOS에서 62장 중 58장 실패 (글자 안티앨리어싱만 다름). 리포트는 "31장 중 30장"으로 잘못 셌어요. 테스트가 실패하면 워커가 새로 떠서 모듈 변수가 비워짐 | 기록을 테마별 파일로. 같은 macOS에서 바꾸기 전 커밋으로 기준을 만들어 지금 빌드와 비교 | 개수 62/58로 바르게 표시. 같은 플랫폼 비교 62장 모두 통과 |
-| 48 | 1만 점 스트레스 (외부 검토) | 첫 화면이 모든 차트에서 314~334ms로 거의 같음. 11/4에 측정 페이지를 처음 열 때 받게(lazy) 바꾼 뒤, React 19가 받은 내용을 보여 주기 전에 두는 대기(최대 300ms)까지 시계에 들어감 | 페이지가 붙은 직후(레이아웃 효과)에 시계를 켜고 차트를 올리기. 지금 판, 고친 판, lazy 이전 방식을 번갈아 5번씩 재서 확인 | 라인 313 → 31ms, 평행 좌표 346 → 63ms (lazy 이전 방식 34, 61ms) |
-| 49 | 문서 페이지 첫 화면 (48번 원인 추적) | 문서 앱은 브라우저에서 처음부터 그려서(createRoot), lazy 페이지는 빈 자리를 먼저 보임. 운영 빌드(vite preview)에서 `/charts/line/`, `/docs/`, `/examples/`를 처음 열면 페이지 코드는 55ms쯤 왔는데 본문은 380~410ms에 나옴 | 고치지 않음. 이번 범위 밖이라 따로 정하기로 | 빈 칸 324~356ms (그대로) |
-| 50 | 스크린샷 (예시, 390px) | SaaS 예시의 막대 차트(신규 고객)에서 예측 구간의 "Forecast"와 목표선 "Goal 100" 라벨이 11월 값(113)을 가리고 12월 값(122)은 위가 잘림. 11/7에 넣은 주석에서 생김 | 고치지 않음. 주석 라벨과 값 라벨의 자리 잡기를 바꿔야 해서 따로 하기로 | 겹침 4건 (다크, 라이트 각 2건, 그대로) |
+| 1 | Chromium measurement (Canvas measureText) | The text width estimate counted Hangul at 0.92em, so labels got too much room (Pretendard measures 0.86em, bold too) | Hangul at 0.87em, and the bold correction only for Latin letters and digits | Within 10% of the measured width (pinned by a unit test) |
+| 2 | Gallery screenshot | Radial bar labels overlapped where the rings start (7:30) | Start at 12 o'clock and put the labels in the empty upper-left quadrant | 0 overlaps |
+| 3 | Gallery screenshot | In dark mode, the ink (light cream) fill of stacked areas covered the screen | Large areas use accent and then neutralStrong→neutral steps (`ramp`) | Only the highlighted series stands out |
+| 4 | Gallery screenshot | Slope and bump end labels were clipped ("Our bra…") | The width calculation and the drawn text now match | 0 clipped |
+| 5 | Gallery screenshot | In heatmap and calendar, one outlier washed out most cells | The color maximum is the 95th percentile (`robustMax`) | A year of commit data is readable |
+| 6 | Build output check | Three tsup configs ran in parallel and `clean` deleted `server.d.ts`; rollup tree shaking removed `"use client"` | Clean once before the build, and use only esbuild tree shaking | `server.d.ts` is generated, and the first ESM line is `"use client"` |
+| 7 | size-limit + esbuild metafile | The `export * as samples` namespace object (an `__export` call) pulled the sample data into every chart bundle, and Hangul was escaped as `\uXXXX` | Named exports, `charset: utf8` | Pie chart 14.79 → 11.63 KB (gzip) |
+| 8 | size-limit | `<Chart spec>` pulled in the whole registry (examples included). A member access such as `CHANNELS.pie` was judged impure, so the `CHARTS` array stayed | `spec/meta.ts` with only the channels, and identifier bindings | `<Chart>` 61.37 → 50.57 KB, a single chart back to 11.6 KB |
+| 9 | Vitest + ajv | The per-chart schema `$id` had a `#pie` fragment, which breaks the 2020-12 rules | Use the `schema/charts/pie.schema.json` address | All 31 examples pass with ajv 2020 |
+| 10 | Vitest | The typo `hilight` suggested `height` (same distance) | On a tie, prefer the name that shares more of the beginning | `Did you mean "highlight"?` |
+| 11 | Contrast check (screen samples with the text hidden) | Heatmap numbers on mid-intensity cells were 4.00 to 4.45:1. There is a luminance band (0.13 to 0.19) where neither ink nor onAccent reaches 4.5 | White and black are candidates too (`readableOn`). One of the two reaches at least 4.58 on any background | Lowest 4.55:1 |
+| 12 | Contrast check | Radar ring numbers on the highlighted polygon fill were 4.19:1 | ink instead of muted | Pass |
+| 13 | Contrast check | The streamgraph "Film" label was 4.13:1 (black on a mixed gray) | Text on mixed colors also uses `readableOn` | Pass |
+| 14 | Contrast check | Sankey labels in the middle column were 1.91:1 on the flow bands | A plate in the card background color behind them | Pass |
+| 15 | Overflow check | The 3-column gallery at 1280px scrolled sideways (scrollWidth 1350) | Wrap the off-screen data table in `div.ztd-sr` (a table ignores width 1px) | 1280 |
+| 16 | Overflow check | `/data` at 390px had scrollWidth 872 | Gave the code block `min-w-0`, but nothing changed (fixed again in #35) | 872 |
+| 17 | Layout check | The hover area of the last waterfall bar went outside the svg | Keep hover areas inside the chart width | 0 |
+| 18 | Contrast check | At 390px, the highlight line crossed the "SLO 250ms" label on the p95 latency chart (1.03:1) | A background plate behind reference line labels | Pass |
+| 19 | axe | `label-content-name-mismatch` in 32 places (logo, copy button, "Code" link) | The visible text appears as words in the accessible name | 0 |
+| 20 | axe | A loading-state `div` had `aria-label` without a role | `role="status"` | 0 |
+| 21 | axe | Inactive light tab text 4.26:1, "Required" badge 4.42:1 | Tabs use muted-foreground, light `accentText` #B83800 → #B03500 | Pass |
+| 22 | Keyboard and motion tests | A chart only 24% on screen did not play its entrance, so the test failed | Not a bug (the threshold is 25%). The test now scrolls first and also checks that the entrance waits while off screen | Pass |
+| 23 | Performance recording (CPU 4x slower) | Waffle 53.2 fps, calendar card 56.3 fps. React re-rendered hundreds of cells every frame | The entrance uses CSS keyframes, and the engine only sets the start time | Both 60 fps |
+| 24 | Performance recording (CPU 4x) | Gallery "Replay all": 2 columns at 39.7 fps with a 123ms long task, 3 columns at 33.2 fps with 7 long tasks (max 131ms) | Off-screen charts delay their replay and get ready as they come near | 2 columns 58.5 fps (one 69ms task), 3 columns 56.5 fps (one 78ms task) |
+| 25 | 10k-point stress | Parallel coordinates replayed at 14.1 fps (it redrew 10k lines on the canvas every frame) | Draw once and reveal it with a CSS clip | 60 fps |
+| 26 | 10k-point stress | Line first render 183ms. It parsed x twice and looked up a new Intl formatter for every value | Parse x once, use one formatter, and build labels and tooltips for more than 1,000 items when they are read | 111ms (56ms after #31) |
+| 27 | 10k-point stress | Stream replay 51.3 fps, stacked area 55.7 fps | Reduce to bucket averages that fit the width before interpolating | Both 60 fps |
+| 28 | Screen reader table row count on the stress page | The hidden data tables of line, area, stream and sparkline were empty. The lazy array had no `has` trap, so `slice` and `map` skipped the slots | Added a `has` trap, pinned by a unit test | 0 rows → 61 rows |
+| 29 | Stress screenshot | The calendar stopped at 4,000 days and drew only 11 of 27 years | Every day with no cap, and a canvas above 4,000 days | All 10k days |
+| 30 | Stress screenshot | A chart several times taller than the screen (a 27-year calendar, 3,000px) is never 25% on screen at once, so its entrance never started. The earlier calendar stress numbers measured an empty chart | A chart that fills half the screen counts as visible (with finer thresholds) | The cells are drawn, measured again |
+| 31 | CPU profile | Beeswarm 10k first render 480ms (long task 456ms). Every render rebuilt 10k tooltips and formatted the values (320ms in dev mode), and it ran the layout once more at a default width before the width was measured | Build tooltips when they are read, skip the render before the width is known, and a sweep layout that merges blocked ranges (3 to 7 times faster in Node) | 1x CPU 65ms (long task 50ms), 4x 1,863 → 306ms |
+| 32 | Stress screenshot | When the beeswarm band was full, the overflow dots piled up in lines on the top and bottom edges, and the median label was buried under the dots | Scatter the overflow dots inside the band with a golden-ratio sequence, and a plate behind the label | 0 lines on the edges |
+| 33 | Hover latency | Calendar hover 13.8ms (it formatted 4,000 dates on every hover), and the tooltip position calculation forced a layout | Fixed tooltip data, scale 1 when responsive, and the pointer position measured only on enter | 0.5 to 1.2ms |
+| 34 | Hover latency | Scatter hover 10ms, first render 98ms. The axis formatter was new on every render, so all 10k tooltips were rebuilt every time | Memoized formatter, lazy tooltips | Hover 0.8ms, first render 46ms |
+| 35 | Overflow check (root cause) | The `/data` overflow at 390px came from a grid with no column definition. Its single auto track grew to the longest code line | `grid-cols-1` (minmax(0, 1fr)), and the same pattern in 3 more places | All pages 390 |
+| 36 | QA script review | The visual regression step made new baselines before comparing, so it always passed | Make only missing baselines and compare with the committed ones | A real comparison |
+| 37 | Canvas profile (CPU 4x) | During the entrance of the 27-year calendar, every frame rebuilt the 10k cell paths and re-rendered about 400 labels | Draw the finished grid once and change only the opacity per week (column), clear only the columns that changed, memoize the labels | At 1x CPU, one long task on the first render. Still there at 4x (see the report) |
+| 38 | Exploratory test (clicking like a person) | The tooltip of the rightmost scatter point was cut off outside the card. It moved in only three steps (-8%, -50%, -92%) by position | Keep the centered tooltip within 4px of both chart edges with CSS `clamp()` (no tooltip width measurement) | 0 clipped |
+| 39 | Exploratory test, reproduced in the production build | The "404 error" button on `/data` showed an empty chart instead of an error. The static server returns 200 and index.html for a missing file, and `readResponse` read the HTML as CSV | An HTML response gives the error "Got an HTML page instead of data". The button is now "Bad URL" | Error card and Try again button |
+| 40 | Exploratory test | Pressing a state button made the page jump, and loading never finished (HMR error in the dev server console) | Reproduced again in the production build: scroll 12 → 12px, card height fixed at 376px. Judged to be an HMR error caused by editing the source during the test | Not reproduced |
+| 41 | Exploratory test in the production build (vite preview) | It was not yet checked that the #38 tooltip fix works in the production build | Nothing to fix. Hovered the rightmost bubble at 1440, 1280 (2 and 3 columns) and 390 × dark and light, and added the check to `a11y.spec.ts` | Inside the card in all 10 places, 25px right gap |
+| 42 | Exploratory test in the production build | The #39 "Bad URL" error card was not yet checked in the production build | Nothing to fix. Checked the error card, Try again (1 new request) and the return to normal at 1440 and 390, and added the check to `a11y.spec.ts` | The error card shows, Try again works |
+| 43 | Vitest (Node 26) | The Sankey SVG snapshot hash differed only on Node 26. The y of the label plate rectangle differed at the 14th decimal place (a V8 floating-point difference) | Round the plate rectangle coordinates to 2 decimal places | Passes on Node 22 and 26 |
+| 44 | Performance recording (calendar 10k, CPU 8x) | On mount, the width was measured in the ref callback and again right away in a layout effect, which forced layout twice (the second took 37ms) | When ResizeObserver exists, do not measure again right away (the observer reports the first width before the paint). Applies to every chart | Long task 377 → 325ms (trace) |
+| 45 | CPU profile (calendar 10k) | The cell lookup table had 10k string keys, and the month label positions were computed even before the width was measured | A flat `Int32Array` index, and no month labels before the width is known | 4x CPU first render 223 → 201ms, longest task 121 → 99ms (Apple Silicon, mean of 3 runs) |
+| 46 | CPU profile (stream 10k replay, CPU 8x) | Most of each frame went into turning the curves of 5 layers × 620 points into path strings (`monotonePath` 611ms of 1.6s). The math takes 5µs, and turning the numbers into strings takes 150µs | Not fixed. Rounding to integers is 2 times faster but changes the curve shape, and fewer points lower the quality. On this machine it runs at 60 fps at 4x CPU and 58.8 to 59.4 fps at 8x, so a difference cannot even be shown | Unchanged (see the report) |
+| 47 | Visual regression (macOS) | The committed baselines came from Linux, so on macOS 58 of 62 failed (only the text antialiasing differs). The report miscounted this as "30 of 31". When a test fails, a new worker starts and the module variables are empty | Write the records to one file per theme. Make baselines on the same macOS from the commit before the change and compare the current build with them | Counts shown correctly as 62/58. All 62 pass in the same-platform comparison |
+| 48 | 10k-point stress (outside review) | The first render was almost the same for every chart, 314 to 334ms. After the measuring page became lazy-loaded on 11/4, the clock also counted the wait React 19 adds before it shows loaded content (up to 300ms) | Start the clock and mount the chart right after the page attaches (a layout effect). Checked by alternating the current version, the fixed version and the approach before lazy loading, 5 runs each | Line 313 → 31ms, parallel coordinates 346 → 63ms (approach before lazy loading: 34 and 61ms) |
+| 49 | Docs page first render (root cause of #48) | The docs app renders in the browser from scratch (createRoot), so a lazy page first shows an empty space. In the production build (vite preview), on the first visit to `/charts/line/`, `/docs/` or `/examples/`, the page code arrived at about 55ms but the content appeared at 380 to 410ms | Not fixed. Out of scope here, to be decided separately | Empty for 324 to 356ms (unchanged) |
+| 50 | Screenshot (examples, 390px) | On the SaaS example bar chart (new customers), the "Forecast" label of the forecast range and the "Goal 100" label of the goal line covered the November value (113), and the top of the December value (122) was clipped. The annotations added on 11/7 caused it | Not fixed. It needs a change in how annotation labels and value labels are placed, so it is a separate task | 4 overlaps (2 each in dark and light, unchanged) |
 
 
-## 못 한 것, 한계
+## Not covered, and limits
 
-- **실기기 성능은 재지 않았어요.** 숫자는 1장에 적은 기기의 헤드리스 Chromium이에요. 4× CPU 감속은 중급 휴대폰의 근사일 뿐이고, Safari와 Firefox에서는 프레임을 재지 않았어요(크로미움 전용 CDP를 써요).
-- **기기가 바뀌면 4× 숫자도 크게 바뀌어요.** 이전 리포트(4 vCPU Xeon VM)에서는 4× CPU에서 스트림 1만 점 다시 재생 34fps(long task 74ms), 캘린더 1만 첫 화면 511ms였어요. Apple Silicon에서는 같은 4×가 훨씬 가벼워서 스트림은 60fps가 나와요. 캘린더는 마운트 때 겹친 레이아웃과 색인을 줄여 4×에서 약 10% 빨라졌어요(반복 기록 44, 45). 스트림 다시 재생은 경로 문자열을 만드는 비용이 바닥이라 고치지 않았어요(46). 느린 기기에서는 이전 숫자에 가까울 수 있어요.
-- **글자 폭은 추정이에요.** 서버와 브라우저가 같은 레이아웃을 내도록 Pretendard 기준 평균 폭을 써요. 다른 글꼴(특히 폭이 넓은 영문 글꼴)로 바꾸면 라벨 자리가 조금 어긋날 수 있어요. 레이아웃 검사는 Pretendard에서만 했어요.
-- **SVG 텍스트 대비만 픽셀로 쟀어요.** 툴팁(호버 상태)은 대비 검사에 안 들어가요. 툴팁은 ink 바탕에 onInk 글자라 토큰 단위 테스트로 AA를 확인했어요. 툴팁 위치는 오른쪽 끝 버블 하나만 세 폭에서 확인했어요. 찍는 사이 1px 넘게 움직인 글자(실시간 차트의 최신 값 꼬리표 등)도 바탕을 잘못 읽어서 빼요. 꼬리표는 accent 바탕에 onAccent 글자라 같은 토큰 단위 테스트로 확인해요.
-- **CSS 변수만 바꾼 테마**에서는 히트맵, 스트림 라벨 글자색 자동 선택이 ThemeProvider 토큰 기준이라 정확하지 않을 수 있어요. ThemeProvider로 바꾸면 정확해요.
-- **PNG 렌더(resvg)**는 Pretendard가 설치돼 있을 때 기준 이미지와 같은 글꼴이 나와요. 없으면 시스템 한글 글꼴로 그려요.
-- **`--interactive` HTML은 글꼴만 인터넷에서 받아요.** 서버가 그린 차트를 그대로 두고, 그 차트의 코드와 React를 파일 안에 넣어 움직이게 해요. 인터넷이 없으면 시스템 글꼴로 보여요.
-- **지도와 3D 차트**는 범위 밖이에요.
+- **No measurements on real devices.** The numbers come from headless Chromium on the machine in section 1. The 4× CPU slowdown only approximates a mid-range phone, and frames were not measured in Safari or Firefox (the recorder uses Chromium-only CDP).
+- **The 4× numbers change a lot with the machine.** An earlier report (4 vCPU Xeon VM) measured, at 4× CPU, a 10k-point stream replay at 34 fps (long task 74ms) and a 10k calendar first render at 511ms. On Apple Silicon the same 4× is much lighter, and the stream runs at 60 fps. The calendar got about 10% faster at 4× after a duplicate layout on mount and its index were cut down (iterations 44 and 45). The stream replay was left as is, because building the path strings is its floor (46). On slow devices the numbers can be close to the earlier ones.
+- **Text widths are estimates.** So that the server and the browser produce the same layout, the charts use average widths based on Pretendard. With another font (especially a wide Latin font), label positions can be slightly off. The layout checks ran only with Pretendard.
+- **Only SVG text contrast is measured from pixels.** Tooltips (the hover state) are not in the contrast check. Tooltips use onInk text on an ink background, and a token unit test confirms AA. The tooltip position was checked only for the rightmost bubble at three widths. Text that moved more than 1px during the capture (such as the latest-value tag of a live chart) is also left out, because its background reads wrong. The tag uses onAccent text on an accent background, which the same token unit test checks.
+- **With a theme that changes only CSS variables**, the automatic label color on heatmap and stream labels can be off, because it follows the ThemeProvider tokens. A theme set through ThemeProvider is exact.
+- **PNG rendering (resvg)** uses the same font as the baselines when Pretendard is installed. Without it, it draws with a system font.
+- **`--interactive` HTML downloads only the font from the internet.** It keeps the chart the server drew and puts that chart's code and React inside the file to make it move. Without internet it shows a system font.

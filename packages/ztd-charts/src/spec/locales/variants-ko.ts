@@ -36,7 +36,7 @@ export const VARIANT_NAMES_KO: Record<string, Record<string, string>> = {
   network: { "by-degree": "많이 이어진 순서", "as-given": "데이터 순서", "dots-by-degree": "연결 수로 점 크기" },
   tileMap: { "three-steps": "색 3단계", "lowest-dark": "낮은 값을 진하게", "no-legend": "범례 없이", "kr-sido": "한국 시도" },
   barRace: { "top-five": "위쪽 5개", "first-frame": "첫해", "no-highlight": "강조 없이" },
-  timeline: { "status-strip": "상태 띠", "clock-times": "시각으로", "by-duration": "긴 줄부터", now: "지금 선", zoom: "끌어서 확대" },
+  timeline: { "status-bars": "막대에 상태 색", "clock-times": "시각으로", "by-duration": "긴 줄부터", now: "지금 선", zoom: "끌어서 확대" },
   tree: { radial: "원형", sized: "값으로 점 크기, 큰 순서로" },
   choropleth: { europe: "유럽", "us-states": "미국 주", "kr-sido": "한국 시도", "custom-geojson": "직접 만든 GeoJSON" },
   symbolMap: { "by-continent": "대륙별 색", "by-country": "좌표 없이 나라 이름으로", "us-states": "미국 매장", europe: "유럽", "kr-sido": "한국" },

@@ -473,7 +473,7 @@ const ENTRIES: ChartEntry[] = [
       op("frontRate", "any", 'Front row total as a share of the back row: "label" in a label and the tooltip, "strip" as a rate strip under the floor, false hides it', { default: "label" }),
       DAY_FIRST,
     ],
-    example: { data: S.skylineSample, encoding: { x: "day", y: ["Input", "Cached", "Output", "Reasoning"], front: ["Failed", "Retried"] }, options: { format: "compact" }, card: { subtitle: "Daily tokens, last 14 days", takeaway: "Nov 5 was the busiest day" } },
+    example: { data: S.skylineSample, encoding: { x: "day", y: ["Input", "Cached", "Output", "Reasoning"], front: ["Failed", "Retried"] }, options: { format: "compact" }, card: { subtitle: "Daily tokens, last 7 days", takeaway: "Nov 5 was the busiest day" } },
   },
   {
     type: "histogram",
@@ -623,7 +623,7 @@ const ENTRIES: ChartEntry[] = [
       op("brush", "any", 'Drag across the time axis to zoom in: "zoom" or true (keyboard: Shift+arrows, Enter). Escape or "Show all" zooms out', { default: false }),
       HIDDEN,
     ],
-    example: { data: S.timelineSample, encoding: { label: "step", start: "start", end: "end" }, options: { unit: " min" }, card: { subtitle: "One agent run from plan to merge, in minutes", takeaway: "18 of 43 minutes went to waiting for CI" } },
+    example: { data: S.timelineSample, encoding: { label: "step", start: "start", end: "end", status: "state" }, options: { unit: " min", statusStrip: true }, card: { subtitle: "One agent run from plan to merge, in minutes", takeaway: "18 of 43 minutes went to waiting for CI", legend: "auto" } },
   },
   {
     type: "tree",

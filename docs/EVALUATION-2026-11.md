@@ -1,129 +1,131 @@
-# ztd charts 평가와 개선 (2026-11)
+# ztd charts evaluation and improvements (2026-11)
 
-2026-11-03, 브랜치 `feat/eval-and-new-charts`. 기준은 PR #1의 마지막 커밋 `30b5bea`(차트 31종)이고, 이번 작업 뒤는 차트 33종이에요. 측정 기기는 Apple M4 Pro(14코어), RAM 48 GB, Node 24.14, Chromium 156이에요. 화면 검사 방법은 [QA-report.md](QA-report.md) 1절과 같아요.
+> **Old record.** This describes the state on 2026-11-03 and has not been updated since. For the current state, see the [README](../README.md) and the [QA report](QA-report.md).
 
-## 한눈에
+2026-11-03, branch `feat/eval-and-new-charts`. The baseline is the last commit of PR #1, `30b5bea` (31 charts), and after this work there are 33 charts. We measured on an Apple M4 Pro (14 cores) with 48 GB RAM, using Node 24.14 and Chromium 156. The screen checks use the same method as section 1 of [QA-report.md](QA-report.md).
 
-| 축 | 기준 `30b5bea` | 이번 작업 뒤 | 한 일 |
+## At a glance
+
+| Area | Baseline `30b5bea` | After this work | What we did |
 |---|---|---|---|
-| 심미성 | 잘림, 겹침, 대비 검사는 통과. 예시 3곳은 요약 문구가 말하는 항목과 색으로 강조한 항목이 달랐고, 와플은 왼쪽으로 치우쳤어요. 시각 회귀는 62장 중 58장 실패 | 카드 522장에서 잘림, 겹침, 침범 0건. 글자 11,024개 대비 최소 4.6:1. 시각 회귀 66장 실패 0 | 예시 문구와 강조 맞춤, 와플 가운데 정렬, 캔들 가격표에 가리는 눈금 글자 숨김, 기준 이미지를 기기별로 나눔 |
-| 성능 | 31종 다시 재생 최저 60 fps. 1만 점 첫 화면 최대 60.0 ms | 33종 최저 60 fps. 1만 점 최대 61.3 ms. 차트 묶음은 차트마다 약 0.49 kB 커짐 | 등장 중 매 프레임 다시 만들던 값을 데이터가 바뀔 때만 계산 |
-| 품질 | 시험 201건 통과, 린트와 타입 오류 0. 검토에서 데이터를 틀리게 그리거나 입력이 먹지 않는 결함 9갈래 | 시험 206건 통과, 린트 경고 0, 타입 오류 0 | 결함마다 재현한 뒤 고치고 같은 방법으로 다시 확인 |
-| 속도 | 갤러리 첫 그림 204 ms, 긴 작업 합계 153 ms (CPU 4배 감속: 696 ms, 723 ms) | 84 ms, 0 ms (244 ms, 333 ms) | 화면 가까이 온 카드만 그려요 |
-| 실제 기능성 | 터치로 누르면 툴팁이 안 뜸, 점이 많은 차트를 서버에서 그리면 경고, 새로 고침마다 차트가 사라졌다 다시 나옴, 차트별 스키마 경로가 막힘 | 모두 고침. 캔들스틱, 비율 막대, 눈금 게이지, 끌어서 구간 고르기와 확대를 더함 | 조사한 사례에서 되풀이된 형태만 골라 구현 |
+| Aesthetics | Clipping, overlap and contrast checks passed. In 3 examples, the item named in the takeaway differed from the item highlighted in color, and the waffle leaned to the left. Visual regression: 58 of 62 failed | 0 clipping, overlap or intrusion across 522 cards. Minimum contrast 4.6:1 across 11,024 text elements. Visual regression: 0 of 66 failed | Matched example takeaways to the highlights, centered the waffle, hid tick labels covered by the candlestick price tag, split baseline images by machine |
+| Performance | Replay of 31 charts: minimum 60 fps. 10,000-point first render: maximum 60.0 ms | 33 charts: minimum 60 fps. 10,000 points: maximum 61.3 ms. Chart bundles grew by about 0.49 kB per chart | Stopped rebuilding values on every frame of the entrance. They are now computed only when the data changes |
+| Quality | 201 tests passed, 0 lint and type errors. Review found 9 kinds of defects that drew data wrong or ignored input | 206 tests passed, 0 lint warnings, 0 type errors | Reproduced each defect, fixed it, and checked it again the same way |
+| Speed | Gallery first paint 204 ms, total long tasks 153 ms (4× CPU slowdown: 696 ms, 723 ms) | 84 ms, 0 ms (244 ms, 333 ms) | Limited drawing to the cards that come near the screen |
+| Real-world functionality | Tapping did not show a tooltip, server-rendering a chart with many points gave a warning, charts disappeared and came back on every refresh, per-chart schema paths were blocked | All fixed. Added candlestick, segmented bar, tick gauge, and drag to select a range and zoom | Implemented only the patterns that recurred in the cases we researched |
 
-## 1. 심미성
+## 1. Aesthetics
 
-갤러리와 예시 5개를 다크, 라이트로 직접 보고, QA 화면 검사(잘림, 겹침, 침범, 실제 픽셀로 잰 대비)를 33종 × 3폭 × 2테마로 돌렸어요.
+We looked at the gallery and the 5 examples ourselves in dark and light, and ran the QA screen checks (clipping, overlap, intrusion, and contrast measured on actual pixels) on 33 charts × 3 widths × 2 themes.
 
-- 예시의 요약 문구가 말하는 항목과 강조한 항목이 달랐던 3곳을 맞췄어요: 기능별 사용률(롤리팝) "API", 분기 목표 달성(방사형 막대) "해지 방어", 리전별 지연 분포(릿지라인) "프랑크푸르트".
-- 와플: 칸 묶음과 요약 글이 카드 왼쪽에 붙어 있던 것을 가운데로 옮겼어요.
-- 캔들스틱: 마지막 종가 가격표 밑에 깔리던 가격 축 눈금 글자를 숨겨요. 처음 QA에서 이 겹침이 대비 미달 16건, 겹침 16건으로 잡혔고 지금은 0건이에요.
-- 시각 회귀: 기준 이미지가 리눅스에서 만든 것뿐이라 맥에서 돌리면 운영체제가 달라 62장 중 58장이 실패했어요. `qa/__screenshots__/{linux,darwin}`으로 나눠 이 맥에서는 66장 모두 통과해요.
+- We fixed 3 places in the examples where the item named in the takeaway differed from the highlighted item: Feature usage (lollipop) "API", Quarterly goals (radial bar) "Churn prevention", Latency by region (ridgeline) "Frankfurt".
+- Waffle: The cell grid and the summary sat against the left edge of the card. We moved them to the center.
+- Candlestick: We now hide the price axis tick labels that sat under the last close price tag. The first QA run caught this overlap as 16 contrast failures and 16 overlaps. Now there are 0.
+- Visual regression: The only baseline images were made on Linux, so on a Mac 58 of 62 failed because the operating system differs. We split them into `qa/__screenshots__/{linux,darwin}`, and all 66 now pass on this Mac.
 
-## 2. 성능
+## 2. Performance
 
-| 항목 | 기준 | 뒤 |
+| Item | Baseline | After |
 |---|---|---|
-| 차트별 다시 재생 (1×, 4× CPU) | 31종 최저 60 fps, 긴 작업 0건 | 33종 최저 60 fps, 긴 작업 0건 |
-| 갤러리 모두 다시 재생 (2칸, 3칸) | 60 fps | 60 fps (3칸 4×에서 한 프레임 떨어져 59.5 fps) |
-| 1만 점 첫 화면, 1× (11종 최대) | 60.0 ms (평행 좌표) | 61.3 ms (평행 좌표) |
-| 1만 점 첫 화면, 4× | 라인 146 ms, 영역 125 ms, 평행 좌표 272 ms, 캘린더 227 ms | 136 ms, 104 ms, 207 ms, 191 ms |
-| 1만 점 다시 재생, 4× | 버블 54.4 fps, 비스웜 52 fps | 58.1 fps, 55.7 fps |
-| 호버 반응 p95 (11종 최대, 1×) | 6.3 ms | 6.8 ms |
+| Replay per chart (1×, 4× CPU) | 31 charts, minimum 60 fps, 0 long tasks | 33 charts, minimum 60 fps, 0 long tasks |
+| Replay all in the gallery (2 columns, 3 columns) | 60 fps | 60 fps (59.5 fps at 3 columns and 4×, from one dropped frame) |
+| 10,000-point first render, 1× (max of 11 charts) | 60.0 ms (parallel coordinates) | 61.3 ms (parallel coordinates) |
+| 10,000-point first render, 4× | Line 146 ms, area 125 ms, parallel coordinates 272 ms, calendar 227 ms | 136 ms, 104 ms, 207 ms, 191 ms |
+| 10,000-point replay, 4× | Bubble 54.4 fps, beeswarm 52 fps | 58.1 fps, 55.7 fps |
+| Hover response p95 (max of 11 charts, 1×) | 6.3 ms | 6.8 ms |
 
-1만 점 기준값은 같은 기기에서 1시간 40분 먼저 잰 값이라, ±10% 안팎의 차이는 잡음으로 봐 주세요.
+The 10,000-point baseline values were measured on the same machine 1 hour 40 minutes earlier, so please treat differences of around ±10% as noise.
 
-정리 단계에서 네 관점(재사용, 단순화, 효율, 고칠 깊이)으로 바뀐 코드를 다시 봤고 다음을 반영했어요.
+In the cleanup step, we reviewed the changed code again from four angles (reuse, simplification, efficiency, depth of the fix) and applied the following.
 
-- 캔들스틱: 이벤트 목록, 이동평균 경로, 시간 눈금, 설명문, 가격 범위를 등장 애니메이션 매 프레임마다 다시 만들던 것을 데이터나 크기가 바뀔 때만 만들어요. 비율 막대와 눈금 게이지도 같은 방식이에요.
-- 끌어서 고르는 중에 같은 점 위에서 움직이면 다시 그리지 않아요.
-- 표(스크린리더용) 비교 글자는 이벤트 배열이 바뀔 때만, 표를 보여줄 때만 만들어요.
-- 라인과 캔들스틱이 따로 갖고 있던 구간 고르기, 확대, 키보드 처리를 `core/brush.tsx`의 `useZoom`, `useChartBrush`로 합쳤어요. 확대는 데이터가 바뀐 그 렌더에서 바로 풀려서 옛 구간으로 한 번 더 계산하지 않아요.
+- Candlestick: The event list, moving average paths, time ticks, description and price range were rebuilt on every frame of the entrance animation. Now they are built only when the data or size changes. The segmented bar and the tick gauge work the same way.
+- While you drag to select, moving over the same point no longer redraws.
+- The comparison text for the table (for screen readers) is built only when the event array changes, and only when the table is shown.
+- Line and candlestick each had their own range selection, zoom and keyboard handling. We merged them into `useZoom` and `useChartBrush` in `core/brush.tsx`. Zoom now resets in the same render where the data changes, so there is no extra pass with the old range.
 
-정리 전후로 33종 전체의 서버 렌더 SVG 해시(구조 스냅샷)가 같고, 시각 회귀 66장도 기준 이미지와 차이 0.3% 안이에요.
+Before and after the cleanup, the server-rendered SVG hashes (structure snapshots) of all 33 charts are the same, and all 66 visual regression images are within 0.3% of the baseline images.
 
-### 번들 크기 (size-limit, brotli)
+### Bundle size (size-limit, brotli)
 
-| 묶음 | 기준 | 뒤 | 예산 |
+| Bundle | Baseline | After | Budget |
 |---|---|---|---|
-| PieChart (차트 하나 대표) | 12.21 kB | 12.68 kB | 13.5 kB |
+| PieChart (representing a single chart) | 12.21 kB | 12.68 kB | 13.5 kB |
 | LineChart, AreaChart | 15.98 kB | 18.50, 18.51 kB | 16.5 → 18.7 kB |
-| CandlestickChart (새) | - | 15.60 kB | 16 kB |
-| SegmentedBar (새) | - | 11.73 kB | 13.5 kB |
-| Chart 스펙 렌더러 | 53.18 kB (31종) | 59.79 kB (33종) | 56 → 61 kB |
-| 전체 (index.js) | 67.84 kB | 75.34 kB | 72 → 77 kB |
+| CandlestickChart (new) | - | 15.60 kB | 16 kB |
+| SegmentedBar (new) | - | 11.73 kB | 13.5 kB |
+| Chart spec renderer | 53.18 kB (31 charts) | 59.79 kB (33 charts) | 56 → 61 kB |
+| Full bundle (index.js) | 67.84 kB | 75.34 kB | 72 → 77 kB |
 
-- 모든 차트가 약 0.49 kB(3.8%) 커졌어요. 공통 부품의 결함 수정 비용이에요. 압축 전 기준으로 `motion.ts` +561 B(빈 값 처리, 구간별 늘이기), `ChartFrame.tsx` +336 B(터치, 끌기, 키보드 처리), `useMotion.ts` +254 B(같은 이름 항목 구분), `format.ts` +240 B(-0, 단위 올림)예요.
-- 라인과 영역은 구간 고르기와 확대 기능으로 2.5 kB 더 커졌어요.
-- 캔들스틱 이동평균선을 공용 `linePath`로 그리면 곡선 계산 코드까지 딸려 와서 묶음이 15.94 kB가 돼요. 그래서 직선은 캔들스틱 안에서 그대로 이어요 (15.60 kB).
+- Every chart grew by about 0.49 kB (3.8%). This is the cost of the defect fixes in the shared parts. Before compression, the additions are `motion.ts` +561 B (empty value handling, stretching each segment separately), `ChartFrame.tsx` +336 B (touch, drag and keyboard handling), `useMotion.ts` +254 B (telling apart items with the same name) and `format.ts` +240 B (-0, rolling up to the next unit).
+- Line and area grew by another 2.5 kB for range selection and zoom.
+- Drawing the candlestick moving average lines with the shared `linePath` also pulls in the curve code, which makes the bundle 15.94 kB. So the candlestick joins its straight lines itself (15.60 kB).
 
-## 3. 품질: 고친 결함
+## 3. Quality: fixed defects
 
-코드 검토 에이전트와 실제 사용 점검 에이전트가 찾은 것 중 재현된 것만 고쳤어요. 고친 뒤에는 같은 재현 방법으로 다시 확인했어요.
+Of the issues that the code review agent and the real-use check agent found, we fixed only the ones we could reproduce. After each fix, we checked again with the same reproduction steps.
 
-| 증상 | 재현 | 전 → 후 |
+| Symptom | Reproduction | Before → after |
 |---|---|---|
-| 같은 이름 항목이 하나로 합쳐짐 | 파이에 A, B, A | 조각 2 → 3개. 폭포 3 → 4, 생키 띠 2 → 3, 롤리팝 2 → 3 |
-| 빈 값이 숫자로 바뀌는 변화가 안 그려짐 | 애니메이션 목표 비교에 NaN | "같음" → "다름". 평행 좌표 빈 축에 값이 생기는 갱신이 그려짐 |
-| 음수가 섞인 쌓기 | 영역, 스트림에 음수 계열 | 음수 층이 위 층과 겹쳐 그려짐 → 양수는 0 위로, 음수는 0 아래로 |
-| 서머타임 날짜 | 뉴욕 시간대 캘린더 | 날짜 중복, 누락 → 없음 |
-| 터치로 누르면 툴팁이 안 뜸 | 라인, 캘린더, 평행 좌표 | 안 뜸 → 뜸 |
-| 서버 렌더 뒤 화면이 바뀜 | 점 2,000개 차트(캔버스로 바뀌는 크기) | 하이드레이션 오류 1 → 0건 |
-| 새로 고침마다 차트가 사라짐 | `refreshMs`를 준 `<Chart spec>` | 불러오는 동안 빈칸이 됐다가 차트가 처음부터 다시 등장 → 차트 유지 |
-| 호버가 엉뚱한 도형을 고름 | 큰 원 안의 작은 원(버블), 겹친 산(릿지라인) | 작은 원, 아래 산을 못 고름 → 그려진 순서대로 위의 도형 |
-| 길이가 바뀌는 영역 전환 | 영역 차트 데이터 개수 변경 | 바닥선이 흔들림 → 278 px에 고정 |
-| 빈 값을 축 최솟값에 그림 | 평행 좌표 NaN | 진짜 최솟값과 헷갈림 → 그 축에서 선을 끊음 |
-| 숫자 표기 | -0.03, 9,999.96 (만 단위) | "-0" → "0", "10,000" → "1만" |
-| 차트별 스키마 경로가 막힘 | `ztd-charts/schema/charts/line.schema.json` | `ERR_PACKAGE_PATH_NOT_EXPORTED` → 찾음 (시험 추가) |
+| Items with the same name merged into one | A, B, A in a pie | Slices 2 → 3. Waterfall 3 → 4, Sankey links 2 → 3, lollipop 2 → 3 |
+| A change from an empty value to a number was not drawn | NaN in the animation target comparison | "same" → "different". In parallel coordinates, an update that adds a value to an empty axis is now drawn |
+| Stacking with negative values | Negative series in area and stream | Negative layers drawn overlapping the layers above → positive values above 0, negative values below 0 |
+| Daylight saving time dates | Calendar in the New York time zone | Duplicate and missing dates → none |
+| Tapping does not show a tooltip | Line, calendar, parallel coordinates | Not shown → shown |
+| Screen changes after server rendering | Chart with 2,000 points (the size where it switches to canvas) | Hydration errors 1 → 0 |
+| Chart disappears on every refresh | `<Chart spec>` with `refreshMs` set | Blank while loading, then the chart enters again from the start → the chart stays |
+| Hover picks the wrong shape | Small circle inside a large circle (bubble), overlapping ridges (ridgeline) | Could not pick the small circle or the lower ridge → picks the shape on top in drawing order |
+| Area transition when the length changes | Changing the number of data points in an area chart | Bottom edge wobbles → fixed at 278 px |
+| Empty values drawn at the axis minimum | NaN in parallel coordinates | Confused with a real minimum → the line breaks at that axis |
+| Number formatting | -0.03, 9,999.96 (Korean ten-thousand units) | "-0" → "0", "10,000" → "1만" |
+| Per-chart schema path blocked | `ztd-charts/schema/charts/line.schema.json` | `ERR_PACKAGE_PATH_NOT_EXPORTED` → found (test added) |
 
-새로 고침 결함은 처음에 `useChartData`의 `loading` 뜻을 바꿔 고쳤다가, 정리 단계에서 원인인 `Chart.tsx`의 조건으로 옮겼어요. 그래서 공개 함수 `useChartData`는 기준과 같고, 출처가 바뀌어 다시 불러오는 동안 차트가 빈칸이 되던 경우도 같이 막혀요.
+We first fixed the refresh defect by changing what `loading` means in `useChartData`. In the cleanup step, we moved the fix to the cause, a condition in `Chart.tsx`. So the public function `useChartData` is the same as in the baseline, and the fix also prevents the chart from going blank while it reloads after its source changes.
 
-## 4. 속도: 문서 첫 화면
+## 4. Speed: docs first load
 
-정리 전(`30b5bea`)과 뒤 빌드를 같은 기기에서 연달아 3번씩 연 중앙값이에요. 캐시는 껐어요.
+These are medians of opening the builds before the cleanup (`30b5bea`) and after it, 3 times each in a row on the same machine. We turned the cache off.
 
-| 화면 | 첫 그림 (FCP) | 첫 차트 | 긴 작업 합계 (가장 긴 것) |
+| Page | First paint (FCP) | First chart | Total long tasks (longest) |
 |---|---|---|---|
-| 갤러리, 1× | 204 → 84 ms | 113 → 129 ms | 153 (78) → 0 ms |
-| 갤러리, 4× CPU | 696 → 244 ms | 382 → 458 ms | 723 (300) → 333 (96) ms |
-| 예시, 1× | 184 → 116 ms | 113 → 82 ms | 134 (74) → 0 ms |
-| 예시, 4× CPU | 664 → 360 ms | 391 → 260 ms | 686 (296) → 383 (163) ms |
-| 라인 차트 문서, 1× | 116 → 116 ms | 79 → 82 ms | 0 → 0 ms |
-| 라인 차트 문서, 4× CPU | 376 → 392 ms | 256 → 263 ms | 336 (159) → 351 (164) ms |
+| Gallery, 1× | 204 → 84 ms | 113 → 129 ms | 153 (78) → 0 ms |
+| Gallery, 4× CPU | 696 → 244 ms | 382 → 458 ms | 723 (300) → 333 (96) ms |
+| Examples, 1× | 184 → 116 ms | 113 → 82 ms | 134 (74) → 0 ms |
+| Examples, 4× CPU | 664 → 360 ms | 391 → 260 ms | 686 (296) → 383 (163) ms |
+| Line chart docs, 1× | 116 → 116 ms | 79 → 82 ms | 0 → 0 ms |
+| Line chart docs, 4× CPU | 376 → 392 ms | 256 → 263 ms | 336 (159) → 351 (164) ms |
 
-갤러리와 예시는 화면에서 800 px 안으로 들어온 카드만 그려서 첫 그림이 빨라지고 긴 작업이 줄었어요. 대신 갤러리 첫 차트는 관찰자 신호를 한 번 기다려서 16 ms(4×에서 76 ms) 늦어요. 차트 하나짜리 문서 화면은 차이가 없어요.
+The gallery and the examples now draw only the cards that come within 800 px of the screen, so first paint got faster and long tasks went down. In exchange, the gallery's first chart waits once for the observer signal, so it is 16 ms later (76 ms at 4×). Docs pages with a single chart show no difference.
 
-## 5. 실제 기능성
+## 5. Real-world functionality
 
-- 기준 커밋 사본에서 확인한 것: 묶은 패키지를 ESM, CJS로 불러오기, `bundler`와 `NodeNext` 설정의 타입, React 18에서 쓰는 API, 공개 JSON 스키마가 모든 예시 스펙을 통과하는지. 모두 됐어요.
-- 막혔던 것: README가 안내하는 차트별 스키마 경로. `exports`에 `./schema/*`를 더해 고쳤어요.
-- 손으로 확인한 상호작용 (Ego Lite, 정리 뒤 빌드):
-  - 캔들스틱(투자 포트폴리오 예시)을 끄는 동안 "+14.5% 9월 23일~10월 24일" 칩과 "최고 81,100원", "최저 65,700원" 꼬리표가 떠요. 놓으면 확대되고, Escape로 돌아와요.
-  - p95 지연 라인(운영 예시)을 끌면 확대되고 "전체 보기"로 돌아와요.
-  - 키보드는 Shift+화살표로 넓히면 "… 구간 +0.8%, 최고 244ms, 최저 217ms. Enter를 누르면 확대해요"를 읽어 줘요. Enter로 확대하고 Escape로 돌아와요.
-  - 이 동안 콘솔 오류는 0건이에요.
+- What we checked on a copy of the baseline commit: importing the bundled package as ESM and CJS, types under the `bundler` and `NodeNext` settings, the API on React 18, and whether every example spec passes the public JSON schema. All of them worked.
+- What was blocked: the per-chart schema paths that the README points to. We fixed it by adding `./schema/*` to `exports`.
+- Interactions checked by hand (Ego Lite, build after the cleanup):
+  - While you drag across the candlestick (Investment portfolio example), a "+14.5% Sep 23 to Oct 24" chip and "High 81,100 won" and "Low 65,700 won" tags appear. Releasing zooms in, and Escape goes back.
+  - Dragging on the p95 latency line (Operations example) zooms in, and "Show all" goes back.
+  - With the keyboard, widening the range with Shift+Arrow reads out "… range +0.8%, high 244ms, low 217ms. Press Enter to zoom in". Enter zooms in and Escape goes back.
+  - There were 0 console errors during these checks.
 
-## 6. 새로 넣은 것
+## 6. What we added
 
-새로 넣은 것과 고른 이유는 [catalog.ko.md](catalog.ko.md#2026년-11월-추가)에 있어요.
+What we added and why we chose it are in [catalog.md](catalog.md#added-in-november-2026).
 
-| 추가 | 쓰는 곳 |
+| Addition | Where it is used |
 |---|---|
-| 캔들스틱 `candlestick`: 시가, 고가, 저가, 종가, 거래량, 이동평균(최대 3개), 마지막 종가 가격표. 상승은 강조색, 하락은 회색 | 예시 "투자 포트폴리오" |
-| 비율 막대 `segmented`: 한 줄 구성비, 28 px(안에 비중) 또는 8 px, 아래 값과 비중 목록 | 예시 "투자 포트폴리오" |
-| 끌어서 구간 고르기와 확대 `brush`: 라인, 영역, 캔들스틱. `true`는 구간 등락과 최고, 최저, `"zoom"`은 확대 | 예시 "운영/인프라 모니터링" |
-| 눈금 게이지 `GaugeChart variant="ticks"` | 예시 "운영/인프라 모니터링" |
+| Candlestick `candlestick`: open, high, low, close, volume, moving averages (up to 3), last close price tag. Up candles in the accent color, down candles in gray | Example "Investment portfolio" |
+| Segmented bar `segmented`: composition in a single row, 28 px (shares inside) or 8 px, with a list of values and shares below | Example "Investment portfolio" |
+| Drag to select a range and zoom `brush`: line, area, candlestick. `true` shows the range change, high and low, and `"zoom"` zooms in | Example "Operations and infrastructure monitoring" |
+| Tick gauge `GaugeChart variant="ticks"` | Example "Operations and infrastructure monitoring" |
 
-## 7. 남은 과제
+## 7. Remaining work
 
-- CLI PNG 그리기 글꼴: `pretendard`가 개발용 의존성이라 npm으로 받은 CLI는 시스템 글꼴로 그려요. 한글 글꼴이 없는 리눅스 CI에서는 글자가 깨질 수 있어요. 이 맥에는 Pretendard가 깔려 있어서 시험에서 드러나지 않았어요.
-- `moduleResolution: node10`(예전 TypeScript 기본값)에서는 `/spec`, `/server` 타입을 못 찾아요. `typesVersions`를 더할지 정해야 해요.
-- 스크립트 없이 여는 HTML 내보내기에서 카드의 다시 재생 단추가 동작하지 않아요.
-- 끌어서 고르기와 확대는 Playwright QA 묶음에 아직 없어요 (지금은 위의 손 확인뿐).
-- 갤러리 첫 차트가 관찰자 신호를 기다려 조금 늦어요. 첫 화면 카드 몇 장은 바로 그릴지 정해야 해요.
-- 공통 부품이 결함 수정으로 차트마다 0.49 kB 커졌어요. 줄일 곳을 찾을 만해요.
-- 예시 "투자 포트폴리오"의 비율 막대 카드가 옆 캔들스틱 카드 높이에 맞춰 늘어나 빈 공간이 커요.
-- `catalog.md`, `llms.txt`, QA 보고서의 번들 크기 열은 이름이 gzip이지만 값은 size-limit이 잰 brotli예요.
-- 정리 단계에서 동작이 바뀌어 건너뛴 것: 캔들 호버 흐림(0.55)과 공통 흐림(0.38) 맞추기, 눈금 글자가 겹칠 때 쓰는 대체 표기가 형식과 로캘을 잃는 것, 릿지라인 높이가 값 없는 그룹까지 세는 것, 캔버스 전환 판단을 `useChart`로 모으기.
-- 검토에서 나왔지만 이번에 고치지 않은 것: 등장 중 순차 지연이 멈추는 경우, 계열을 바꿀 때 강조 도형의 겹침 순서, 정렬이나 거르기 뒤 숫자로 준 강조의 뜻, 표 화살표 키가 1차원, 생키 순환 데이터, 캔버스 색 변수와 화면 배율이 바뀔 때 다시 그리기, 50×50 히트맵 SVG 끊김.
+- Font for CLI PNG rendering: `pretendard` is a dev dependency, so the CLI installed from npm renders with system fonts. In Linux CI without a Korean font, text can break. This Mac has Pretendard installed, so the tests did not reveal it.
+- With `moduleResolution: node10` (the old TypeScript default), the `/spec` and `/server` types are not found. We need to decide whether to add `typesVersions`.
+- In the HTML export opened without scripts, the card's replay button does not work.
+- Drag to select and zoom are not in the Playwright QA suite yet (for now there are only the hand checks above).
+- The gallery's first chart is a little late because it waits for the observer signal. We need to decide whether to draw the few cards on the first screen right away.
+- Defect fixes in the shared parts made every chart 0.49 kB larger. It is worth looking for places to cut.
+- In the "Investment portfolio" example, the segmented bar card stretches to the height of the candlestick card next to it, which leaves a lot of empty space.
+- The bundle size columns in `catalog.md`, `llms.txt` and the QA report are labeled gzip, but the values are brotli as measured by size-limit.
+- Skipped in the cleanup step because they change behavior: matching the candlestick hover dimming (0.55) to the shared dimming (0.38), the fallback labels used when tick labels overlap losing their format and locale, the ridgeline height counting groups with no values, and moving the canvas switch decision into `useChart`.
+- Found in review but not fixed this time: the staggered delay stopping during the entrance, the stacking order of highlighted shapes when the series change, what a numeric highlight means after sorting or filtering, table arrow keys moving in 1 dimension only, cyclic Sankey data, redrawing the canvas when color variables or the screen scale change, and stutter in the 50×50 heatmap SVG.
