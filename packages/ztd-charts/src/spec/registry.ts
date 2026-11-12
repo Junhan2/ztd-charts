@@ -459,14 +459,15 @@ const ENTRIES: ChartEntry[] = [
   },
   {
     type: "skyline",
-    level: "intermediate",
+    level: "advanced",
     group: "trend",
     summary: "Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front",
     useWhen: "7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard",
     avoidWhen: "Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)",
-    why: "Volume per period as blocks on a level floor, so a taller block always means more. Only the highlighted series gets the accent, and a smaller outcome in the same unit (failures, rework) stands in its own front row on the same scale.",
+    why: "Volume per period as blocks on a level floor, so a taller block always means more. The view looks down on the floor, so the smaller outcome in the same unit (failures, rework) reads as a row of tiles in front, on the same scale. Only the highlighted series gets the accent.",
     options: [
-      op("depth", "number", "Back row depth as a share of the period slot, from 0.1 to 0.32. Values outside are pulled into the range", { default: 0.32 }),
+      op("view", "enum", 'Camera height: "high" looks down on the floor so the front row reads as tiles, "low" looks from the front and leaves more room for the value scale', { enum: ["high", "low"], default: "high" }),
+      op("depth", "number", 'Back row depth as a share of the period slot: 0.1 to 0.45 in the "high" view (default 0.42), 0.1 to 0.32 in the "low" view (default 0.32). Values outside are pulled into the range'),
       op("wall", "boolean", "Value grid on the back wall, with its labels on the right", { default: true }),
       op("texture", "enum", "Rows that get the hatch pattern, for print and for readers who cannot tell the grays apart", { enum: ["front", "all", "none"], default: "front" }),
       op("frontRate", "any", 'Front row total as a share of the back row: "label" in a label and the tooltip, "strip" as a rate strip under the floor, false hides it', { default: "label" }),

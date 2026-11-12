@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEPTH_RANGE, rowAfterKey, SkylineChart, skylineLayout, type SkylineChartProps } from "../src/charts/skyline";
+import { depthRange, rowAfterKey, SkylineChart, skylineLayout, type SkylineChartProps, type SkylineView } from "../src/charts/skyline";
 import type { ChartFrameProps } from "../src/core/ChartFrame";
 import { skylineSample } from "../src/spec/samples";
 import { validateSpec } from "../src/spec/validate";
@@ -51,7 +51,9 @@ afterEach(() => {
 const frame = () => state.frame as ChartFrameProps<unknown>;
 const keyEvent = (key: string) => ({ key, preventDefault() {} }) as never;
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
-const COS = 2 / Math.sqrt(5);
+const VIEWS: SkylineView[] = ["high", "low"];
+/** 시점마다 [최소, 최대] 깊이 */
+const depths = (view: SkylineView) => depthRange(view).slice(0, 2);
 const BACK = ["Input", "Cached", "Output", "Reasoning"];
 const FRONT = ["Failed", "Retried"];
 
@@ -69,91 +71,138 @@ const backLid = (g: string) => {
   const m = /<polygon points="([^"]+)" fill="([^"]+)" stroke="[^"]+" stroke-opacity="0.55" stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
 };
-/** 앞줄 뚜껑: 테두리 없이 바닥색(neutralSoft)으로 녹인 면 */
+/** 앞줄 뚜껑: low는 테두리 없이 바닥색(neutralSoft)으로 녹인 면, high는 ink 40% 테두리가 있는 타일 */
 const frontLid = (g: string) => {
-  const m = /<polygon points="([^"]+)" fill="([^"]+)" stroke-linejoin="round"><\/polygon>/.exec(g);
+  const m = /<polygon points="([^"]+)" fill="([^"]+)"(?: stroke="[^"]+" stroke-opacity="0.4")? stroke-linejoin="round"><\/polygon>/.exec(g);
   return m ? { pts: xy(m[1]), fill: m[2] } : null;
 };
+/** high 시점에서 합계 0인 블록 자리: 채움 없는 점선 */
+const emptyPad = (g: string) => /<polygon points="[^"]+" fill="none" stroke="[^"]+" stroke-opacity="0.7" stroke-dasharray="2 2"><\/polygon>/.test(g);
 /** 블록 대신 긋는 가는 선 (y1 = y2, 세로 틈 선과 달리 불투명도가 없어요) */
 const hairline = (g: string) => /<line x1="[\d.]+" x2="[\d.]+" y1="([\d.]+)" y2="\1" stroke="[^"]+"><\/line>/.test(g);
 
 describe("skyline: 생김새 (4.14)", () => {
-  it("1: 합계가 같은 기간은 뚜껑 앞 모서리 y가 같아요 (1px 미만 조각이 섞여도, 320·1200px × 7·40기간 × 깊이 0.1·0.32)", () => {
+  it("1: 합계가 같은 기간은 뚜껑 앞 모서리 y가 같아요 (1px 미만 조각이 섞여도, 두 시점 × 320·1200px × 7·40기간 × 최소·최대 깊이)", () => {
     // 모든 기간의 합계가 1000이고 구성만 달라요. 짝수 기간은 0.3짜리(1px 미만) 조각을 끼워 쌓아요
     const data = (n: number) => days(n, (i) => (i % 2 ? { Input: 400, Cached: 300, Output: 200, Reasoning: 100 } : { Input: 999.4, Cached: 0.3, Output: 0.3, Reasoning: 0 }));
-    for (const width of [320, 1200])
-      for (const n of [7, 40])
-        for (const depth of DEPTH_RANGE) {
-          const groups = periods(sky(data(n).map((d) => ({ ...d, Failed: 10, Retried: 5 })), { width, depth }));
-          // 합친 경우 덜 찬 첫 묶음은 합계가 달라서 빼요
-          const full = n % Math.ceil(n / groups.length) === 0 || groups.length === n ? groups : groups.slice(1);
-          const tops = full.map((g) => backLid(g)!.pts[0][1]);
-          expect(Math.max(...tops) - Math.min(...tops), `${width}px ${n} periods depth ${depth}`).toBeLessThanOrEqual(0.5);
-        }
+    for (const view of VIEWS)
+      for (const width of [320, 1200])
+        for (const n of [7, 40])
+          for (const depth of depths(view)) {
+            const groups = periods(sky(data(n).map((d) => ({ ...d, Failed: 10, Retried: 5 })), { width, depth, view }));
+            // 합친 경우 덜 찬 첫 묶음은 합계가 달라서 빼요
+            const full = n % Math.ceil(n / groups.length) === 0 || groups.length === n ? groups : groups.slice(1);
+            const tops = full.map((g) => backLid(g)!.pts[0][1]);
+            expect(Math.max(...tops) - Math.min(...tops), `${view} ${width}px ${n} periods depth ${depth}`).toBeLessThanOrEqual(0.5);
+          }
   });
 
-  it("2: 뒷줄 뚜껑 뒤 모서리는 그 값의 뒷벽 눈금선 위에 있어요 (390·1200px, 14기간)", () => {
+  it("2: 뒷줄 뚜껑 뒤 모서리는 그 값의 뒷벽 눈금선 위에 있어요 (두 시점 × 390·1200px, 14기간)", () => {
     // 합계가 50만, 100만, 150만인 기간: 눈금 0, 50만, 100만, 150만과 맞아떨어져요
     const totals = [500_000, 1_000_000, 1_500_000];
     const data = days(14, (i) => {
       const t = totals[i % 3];
       return { Input: t * 0.4, Cached: t * 0.3, Output: t * 0.2, Reasoning: t * 0.1, Failed: t * 0.01, Retried: t * 0.01 };
     });
-    for (const width of [390, 1200]) {
-      const h = sky(data, { width });
-      const grid = new Map([...h.matchAll(/<line x1="[\d.]+" x2="[\d.]+" y1="([\d.]+)" y2="\1" stroke="[^"]+"><\/line><text x="[\d.]+" y="[\d.]+"[^>]*>([^<]+)<\/text>/g)].map((m) => [m[2], +m[1]]));
-      expect([...grid.keys()], `${width}px`).toEqual(["0", "500K", "1M", "1.5M"]);
-      periods(h).forEach((g, i) => {
-        const rear = backLid(g)!.pts[2][1];
-        const label = ["500K", "1M", "1.5M"][i % 3];
-        expect(Math.abs(rear - grid.get(label)!), `${width}px period ${i}`).toBeLessThanOrEqual(0.5);
-      });
+    for (const view of VIEWS)
+      for (const width of [390, 1200]) {
+        const h = sky(data, { width, view });
+        const grid = new Map([...h.matchAll(/<line x1="[\d.]+" x2="[\d.]+" y1="([\d.]+)" y2="\1" stroke="[^"]+"><\/line><text x="[\d.]+" y="[\d.]+"[^>]*>([^<]+)<\/text>/g)].map((m) => [m[2], +m[1]]));
+        expect([...grid.keys()], `${view} ${width}px`).toEqual(["0", "500K", "1M", "1.5M"]);
+        periods(h).forEach((g, i) => {
+          const rear = backLid(g)!.pts[2][1];
+          const label = ["500K", "1M", "1.5M"][i % 3];
+          expect(Math.abs(rear - grid.get(label)!), `${view} ${width}px period ${i}`).toBeLessThanOrEqual(0.5);
+        });
+      }
+  });
+
+  it("3: 뒷줄 옆면은 다음 칸에 들어가지 않고, 앞줄 앞면은 같은 기간 뒷줄과 50% 넘게, 이웃 기간과 0% 겹치며, 두 줄 바닥 차가 1.5px 넘어요 (두 시점)", () => {
+    for (const view of VIEWS)
+      for (const width of [320, 390, 768, 1200])
+        for (const n of [7, 14, 40])
+          for (const depth of depths(view)) {
+            const L = skylineLayout({ width, height: 400, back: [Array(n).fill(10)], front: [Array(n).fill(1)], n, depth, view, wall: true, legendH: 24, below: 52, tickFmt: () => (v) => String(v) });
+            const at = `${view} ${width}px ${n} periods depth ${depth}`;
+            expect(L.s, at).toBeGreaterThanOrEqual(20);
+            expect(L.shown, at).toBeLessThanOrEqual(40);
+            for (let i = 0; i < L.shown; i++) {
+              const front: [number, number] = [L.slotX(i), L.slotX(i) + L.w];
+              const back = (k: number): [number, number] => [L.slotX(k) + L.shift[0], L.slotX(k) + L.shift[0] + L.w];
+              const overlap = (a: [number, number], b: [number, number]) => Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0])) / L.w;
+              if (i < L.shown - 1) expect(back(i)[1] + L.depthBack * L.cx, at).toBeLessThan(L.slotX(i + 1));
+              expect(overlap(front, back(i)), at).toBeGreaterThanOrEqual(0.5);
+              if (i > 0) expect(overlap(front, back(i - 1)), at).toBe(0);
+            }
+            expect(L.shift[1], at).toBeGreaterThanOrEqual(1.5);
+          }
+  });
+
+  it("3b: high 시점은 앞줄 뚜껑이 칸 폭의 0.3배 넘는 타일이고, 앞줄 뚜껑 뒤 모서리와 뒷줄 바닥 사이에 바닥이 2px 넘게 보여요 (low는 0.07배 아래)", () => {
+    for (const width of [320, 390, 768, 1200])
+      for (const n of [7, 14, 40]) {
+        const input = { width, height: 400, back: [Array(n).fill(10)], front: [Array(n).fill(1)], n, wall: true, legendH: 24, below: 52, tickFmt: () => (v: number) => String(v) };
+        const hi = skylineLayout({ ...input, view: "high" });
+        const lo = skylineLayout({ ...input, view: "low" });
+        const at = `${width}px ${n} periods`;
+        expect(hi.depthFront * hi.cy, at).toBeGreaterThan(0.3 * hi.s);
+        expect(lo.depthFront * lo.cy, at).toBeLessThan(0.07 * lo.s);
+        // 앞줄 뚜껑 뒤 모서리(바닥 높이에서)와 뒷줄 바닥의 세로 거리
+        expect(hi.shift[1] - hi.depthFront * hi.cy, at).toBeGreaterThan(2);
+      }
+  });
+
+  it("3c: 낮은 차트에서 high 깊이는 세로 자리의 40% 이하이고 눈금 글자 간격은 14px 이상이에요 (두 시점, 높이 150·200). 보통 크기는 깊이가 그대로예요", () => {
+    const input = (width: number, height: number, view: SkylineView) => ({ width, height, back: [Array(14).fill(10)], front: [Array(14).fill(1)], n: 14, view, wall: true, legendH: 40, below: 52, tickFmt: () => (v: number) => String(v) });
+    for (const view of VIEWS)
+      for (const width of [260, 390])
+        for (const height of [150, 200]) {
+          const L = skylineLayout(input(width, height, view));
+          const at = `${view} ${width}px ${height}px`;
+          if (view === "high") expect(L.floor - L.wallBase, at).toBeLessThanOrEqual(0.4 * (L.floor - L.top) + 1e-9);
+          expect(L.ticks[0], at).toBe(0);
+          L.ticks.slice(1).forEach((t, i) => expect((t - L.ticks[i]) * L.k, at).toBeGreaterThanOrEqual(14));
+        }
+    // 대조: 520px, 높이 400에서는 깊이를 줄이지 않고, 눈금도 덜지 않아서 low와 같아요
+    const L = skylineLayout(input(520, 400, "high"));
+    expect(L.depthBack / L.s).toBeCloseTo(0.42, 6);
+    expect(L.ticks.length).toBeGreaterThanOrEqual(3);
+    expect(L.ticks).toEqual(skylineLayout(input(520, 400, "low")).ticks);
+  });
+
+  it("4: 앞줄 높이 순서가 앞줄 합계 순서와 같아요 (두 시점, 760px, 1.5px 미만 조각이 섞인 예시 데이터)", () => {
+    for (const view of VIEWS) {
+      const h = sky(skylineSample, { width: 760, view });
+      const groups = periods(h);
+      expect(groups).toHaveLength(14);
+      // 1.5px 안 되는 앞줄 조각이 실제로 그려졌는지 (부풀리면 순서가 뒤집혀요)
+      const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-(?:neutral|ink)/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
+      expect(thin.length, view).toBeGreaterThan(0);
+      const heights = groups.map((g) => -frontLid(g)!.pts[0][1]);
+      const totals = skylineSample.map((d) => d.Failed + d.Retried);
+      const order = (xs: number[]) => xs.map((_, i) => i).sort((a, b) => xs[a] - xs[b]);
+      expect(order(heights), view).toEqual(order(totals));
     }
   });
 
-  it("3: 뒷줄 옆면은 다음 칸에 들어가지 않고, 앞줄 앞면은 같은 기간 뒷줄과 50% 넘게, 이웃 기간과 0% 겹치며, 두 줄 바닥 차가 1.5px 넘어요", () => {
-    for (const width of [320, 390, 768, 1200])
-      for (const n of [7, 14, 40])
-        for (const depth of DEPTH_RANGE) {
-          const L = skylineLayout({ width, height: 400, back: [Array(n).fill(10)], front: [Array(n).fill(1)], n, depth, wall: true, legendH: 24, below: 52, tickFmt: () => (v) => String(v) });
-          const at = `${width}px ${n} periods depth ${depth}`;
-          expect(L.s, at).toBeGreaterThanOrEqual(20);
-          expect(L.shown, at).toBeLessThanOrEqual(40);
-          for (let i = 0; i < L.shown; i++) {
-            const front: [number, number] = [L.slotX(i), L.slotX(i) + L.w];
-            const back = (k: number): [number, number] => [L.slotX(k) + L.shift[0], L.slotX(k) + L.shift[0] + L.w];
-            const overlap = (a: [number, number], b: [number, number]) => Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0])) / L.w;
-            if (i < L.shown - 1) expect(back(i)[1] + L.depthBack * COS, at).toBeLessThan(L.slotX(i + 1));
-            expect(overlap(front, back(i)), at).toBeGreaterThanOrEqual(0.5);
-            if (i > 0) expect(overlap(front, back(i - 1)), at).toBe(0);
-          }
-          expect(L.shift[1], at).toBeGreaterThanOrEqual(1.5);
-        }
-  });
-
-  it("4: 앞줄 높이 순서가 앞줄 합계 순서와 같아요 (760px, 1.5px 미만 조각이 섞인 예시 데이터)", () => {
-    const h = sky(skylineSample, { width: 760 });
-    const groups = periods(h);
-    expect(groups).toHaveLength(14);
-    // 1.5px 안 되는 앞줄 조각이 실제로 그려졌는지 (부풀리면 순서가 뒤집혀요)
-    const thin = groups.flatMap((g) => [...g.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="([\d.]+)" fill="var\(--ztd-neutral/g)].map((m) => +m[1])).filter((v) => v > 0 && v < 1.5);
-    expect(thin.length).toBeGreaterThan(0);
-    const heights = groups.map((g) => -frontLid(g)!.pts[0][1]);
-    const totals = skylineSample.map((d) => d.Failed + d.Retried);
-    const order = (xs: number[]) => xs.map((_, i) => i).sort((a, b) => xs[a] - xs[b]);
-    expect(order(heights)).toEqual(order(totals));
-  });
-
-  it("5: 0이 아닌 합계가 1px이 안 되면 가는 선, 0이면 아무것도 없어요 (390px, 14기간)", () => {
+  it("5: low는 0이 아닌 합계가 1px이 안 되면 가는 선, 0이면 아무것도 없어요. high는 1px이 안 돼도 뚜껑 타일, 0이면 점선 빈 자리예요 (390px, 14기간)", () => {
     const data = days(14, (i) => ({ Input: 600, Cached: 300, Output: 80, Reasoning: 20, Failed: i === 3 ? 0.001 : i === 5 ? 0 : 40, Retried: 0 }));
-    const groups = periods(sky(data, { width: 390 }));
-    expect(hairline(groups[3])).toBe(true);
-    expect(frontLid(groups[3])).toBeNull();
-    expect(hairline(groups[5])).toBe(false);
-    expect(frontLid(groups[5])).toBeNull();
+    const low = periods(sky(data, { width: 390, view: "low" }));
+    expect(hairline(low[3])).toBe(true);
+    expect(frontLid(low[3])).toBeNull();
+    expect(hairline(low[5])).toBe(false);
+    expect(frontLid(low[5])).toBeNull();
     // 뒷줄 뚜껑 하나와 앞줄 뚜껑 하나뿐인 평범한 기간
-    expect(hairline(groups[4])).toBe(false);
-    expect(frontLid(groups[4])).not.toBeNull();
+    expect(hairline(low[4])).toBe(false);
+    expect(frontLid(low[4])).not.toBeNull();
+    const high = periods(sky(data, { width: 390 }));
+    expect(hairline(high[3])).toBe(false);
+    expect(frontLid(high[3])).not.toBeNull();
+    expect(emptyPad(high[3])).toBe(false);
+    expect(frontLid(high[5])).toBeNull();
+    expect(emptyPad(high[5])).toBe(true);
+    expect(frontLid(high[4])).not.toBeNull();
+    expect(emptyPad(high[4])).toBe(false);
   });
 
   it("6: 뚜껑은 모든 기간에서 같은 중립 색이고 계열 색을 쓰지 않아요 (앞줄 있음, 없음)", () => {
@@ -278,9 +327,13 @@ describe("skyline: 검사 규칙과 빈 상태 (4.13)", () => {
     expect(codes(spec(days(7, () => ({ Input: 0, Cached: 0, Output: 0, Reasoning: 0, Failed: 0, Retried: 0 }))))).toEqual(["!skyline_all_zero"]);
     expect(codes(spec(ok.map((d) => ({ ...d, A: 1, B: 1 })), { x: "day", y: BACK, front: [...FRONT, "A", "B"] }))).toEqual(["!skyline_front_many"]);
     expect(codes(spec(ok, undefined, { depth: 0.5 }))).toEqual(["!skyline_depth_range"]);
+    expect(codes(spec(ok, undefined, { depth: 0.4 }))).toEqual([]);
+    expect(codes(spec(ok, undefined, { depth: 0.4, view: "low" }))).toEqual(["!skyline_depth_range"]);
+    expect(codes(spec(ok, undefined, { view: "iso" }))).toEqual(["bad_enum"]);
     const ko = validateSpec(spec(ok.map((d, i) => (i === 3 ? { ...d, Input: -1 } : d))), { lang: "ko" });
     expect(ko.errors[0]).toMatchObject({ path: "encoding.y", message: "스카이라인은 0부터 쌓아요. 음수가 있으면 bar를 쓰세요" });
-    expect(validateSpec(spec(ok, undefined, { depth: 0.05 }), { lang: "ko" }).warnings[0].message).toContain("depth는 0.1~0.32예요");
+    expect(validateSpec(spec(ok, undefined, { depth: 0.05 }), { lang: "ko" }).warnings[0].message).toContain("high 시점의 depth는 0.1~0.45예요");
+    expect(validateSpec(spec(ok, undefined, { depth: 0.05, view: "low" }), { lang: "ko" }).warnings[0].message).toContain("low 시점의 depth는 0.1~0.32예요");
   });
 
   it("값이 모두 0이면 블록 대신 빈 상태 글을 그리고, depth는 범위 안으로 묶어요", () => {
@@ -289,7 +342,8 @@ describe("skyline: 검사 규칙과 빈 상태 (4.13)", () => {
     expect(h).toContain(">Nothing to draw<");
     expect(periods(h)).toHaveLength(0);
     expect(r(<SkylineChart data={zero} x="day" y={BACK} width={390} locale="ko-KR" animate={false} />)).toContain(">그릴 값이 없어요<");
-    const deep = skylineLayout({ width: 760, height: 400, back: [[1, 2, 3]], front: [], n: 3, depth: 0.9, wall: true, legendH: 0, below: 26, tickFmt: () => String });
-    expect(deep.depthBack / deep.s).toBeCloseTo(0.32, 6);
+    const deep = (view: SkylineView) => skylineLayout({ width: 760, height: 400, back: [[1, 2, 3]], front: [], n: 3, depth: 0.9, view, wall: true, legendH: 0, below: 26, tickFmt: () => String });
+    expect(deep("high").depthBack / deep("high").s).toBeCloseTo(0.45, 6);
+    expect(deep("low").depthBack / deep("low").s).toBeCloseTo(0.32, 6);
   });
 });

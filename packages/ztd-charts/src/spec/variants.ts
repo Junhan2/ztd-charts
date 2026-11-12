@@ -63,7 +63,7 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
   parallel: [v("as-measured", "No flipped axes", { invert: [] })],
   candlestick: [v("plain", "Candles only", { ma: [] }), v("zoom", "Drag to zoom", { brush: "zoom" }), v("green-up", "Green up, red down", { upColor: "#16A34A", downColor: "#DC2626" })],
   segmented: [v("thin", "Thin bar", { variant: "thin" }), v("bar-only", "Bar only", { list: false })],
-  skyline: [v("rate-strip", "Rate strip", { frontRate: "strip" }), v("shallow", "Shallow blocks", { depth: 0.16 }), v("no-wall", "Without wall", { wall: false }), v("textured", "Texture on every row", { texture: "all" })],
+  skyline: [v("rate-strip", "Rate strip", { frontRate: "strip" }), v("low-view", "Low view", { view: "low" }), v("shallow", "Shallow blocks", { depth: 0.16 }), v("no-wall", "Without wall", { wall: false }), v("textured", "Texture on every row", { texture: "all" })],
   histogram: [v("dots", "Dots", { variant: "dots" }), v("step", "Outline", { variant: "step" }), v("log", "Log bins", { log: true }), v("kde", "Density curve", { kde: true }), v("no-marks", "Without percentile lines", { marks: [] })],
   scatter: [v("fit", "Trend line", { fit: "linear" }), v("quadrants", "Quadrants", { refLines: { x: 5, y: 2000 } }), v("jitter", "Jitter", { jitter: { amount: 0.3 } }), v("hex", "Hexagon density", { bin: "hex", binSize: 28, highlight: null }, { series: null, label: null })],
   network: [v("by-degree", "Most connected first", { sort: "degree" }), v("as-given", "Data order", { sort: "data" }), v("dots-by-degree", "Dots by connections", { nodeSize: "degree" })],
