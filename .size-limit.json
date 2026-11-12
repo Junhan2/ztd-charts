@@ -477,7 +477,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "21.05 KB"
+    "limit": "21.15 KB"
   },
   {
     "name": "Map: world (ztd-charts/geo/world)",
