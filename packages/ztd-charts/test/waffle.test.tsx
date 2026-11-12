@@ -9,7 +9,7 @@ import { renderSpecToSVG } from "../src/server";
 import { validateSpec, type ChartSpec } from "../src/spec";
 import { seatSample, seatSampleKo } from "../src/spec/samples";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 묶음을, spy를 켜면 setActive 호출을 기록해요. frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked group, spy records setActive calls. frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({
   active: null as number | null,
   via: "pointer" as "pointer" | "keyboard",
@@ -60,7 +60,7 @@ const assembly = [
 const MAJORITY = [{ value: 151, label: "Majority 151" }];
 const arc = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => renderToStaticMarkup(<WaffleChart data={data} label="party" value="seats" shape="arc" width={640} animate={false} {...extra} />);
 const circles = (h: string) => [...h.matchAll(/<circle [^>]*>/g)].map((m) => m[0]);
-/** 묶음마다 점 수 (빈자리는 -1) */
+/** Dot count per group (empty seats are -1) */
 const perGroup = (h: string, tag = "circle") => {
   const out: Record<string, number> = {};
   for (const m of h.matchAll(new RegExp(`<${tag} [^>]*data-k="(-?\\d+)"`, "g"))) out[m[1]] = (out[m[1]] ?? 0) + 1;
@@ -80,9 +80,9 @@ describe("arc layout (arcSeats)", () => {
     expect(arcSeats(2).seats.map((s) => s.a)).toEqual([-Math.PI / 2, Math.PI / 2]);
     expect(arcSeats(5).rows).toBe(1);
     expect(arcSeats(300).rows).toBe(10);
-    // 점 3000개도 줄 수가 많아지지 않아요 (줄 수는 점 수의 제곱근을 따라 늘어요)
+    // Even 3000 dots do not make too many rows (the row count grows with the square root of the dot count)
     expect(arcSeats(ARC_MAX_DOTS).rows).toBeLessThan(40);
-    // 줄 간격이 같아요
+    // Rows are evenly spaced
     const radii = [...new Set(arcSeats(300).seats.map((s) => s.r))].sort((a, b) => a - b);
     const steps = radii.slice(1).map((r, i) => r - radii[i]);
     expect(Math.max(...steps) - Math.min(...steps)).toBeLessThan(1e-9);
@@ -94,10 +94,10 @@ describe("waffle shape arc", () => {
     const h = arc(assembly, { referenceLines: MAJORITY });
     expect(circles(h)).toHaveLength(300);
     expect(perGroup(h)).toEqual({ 0: 128, 1: 109, 2: 34, 3: 17, 4: 12 });
-    // 그린 순서(왼쪽부터 각도 순서)로 묶음 번호가 줄지 않아요
+    // In drawing order (by angle, from the left) group numbers never go down
     const order = [...h.matchAll(/<circle [^>]*data-k="(-?\d+)"/g)].map((m) => Number(m[1]));
     expect(order.every((k, i) => i === 0 || k >= order[i - 1])).toBe(true);
-    // 격자는 그대로예요
+    // The grid is unchanged
     expect(renderToStaticMarkup(<WaffleChart data={assembly} label="party" value="seats" width={640} animate={false} />)).not.toContain("<circle");
   });
 
@@ -141,13 +141,13 @@ describe("waffle shape arc", () => {
     const at = (refs: unknown[]) => refLines(arc(assembly, { referenceLines: refs }));
     expect(at(MAJORITY)).toHaveLength(1);
     expect(at([{ y: 151 }, { value: "151" }, { value: -1 }, { value: 301 }, { value: Number.NaN }, null])).toHaveLength(0);
-    // 과반선(151)은 가운데에서 위로 뻗어요 (점 300개는 150석째 다음이 가운데 줄이에요). 100석 선은 왼쪽이에요
+    // The majority line (151) rises from the middle (with 300 dots the middle line comes right after seat 150). The 100-seat line is on the left
     const [[x0, y0, x1, y1]] = at(MAJORITY);
     expect(x1).toBeGreaterThanOrEqual(320);
     expect(x1 - 320).toBeLessThan(8);
     expect(at([{ value: 100 }])[0][2]).toBeLessThan(250);
     expect(y1).toBeLessThan(y0);
-    // 0과 전체에 놓인 선은 맨 아랫줄 밑에 가로로 그어요
+    // Lines at 0 and at the total are drawn horizontally below the bottom row
     const [left, right] = at([{ value: 0 }, { value: 300 }]);
     expect(left[1]).toBe(left[3]);
     expect(right[1]).toBe(right[3]);
@@ -172,7 +172,7 @@ describe("waffle shape arc", () => {
     expect(frame().description).toContain("Party B 149, 20 empty.");
     arc(seatSampleKo, { label: "ticket", value: "seats", total: 400, locale: "ko-KR", referenceLines: [{ value: 260, label: "손익분기" }] });
     expect(frame().announce).toBe("얼리버드, 400 중 118, 30%, 손익분기까지 142 모자라요");
-    // 기준선이 없으면 거리는 말하지 않아요
+    // Without a reference line, no distance is announced
     arc(assembly);
     expect(frame().announce).toBe("Party A, 128 of 300, 43%");
   });
@@ -203,7 +203,7 @@ describe("waffle shape arc", () => {
     expect(texts(arc(assembly, { summaryLabel: "Largest", summaryNote: "Five groups" }))).toEqual(["300", "Largest 128", "Five groups"]);
     state.active = 1;
     expect(texts(arc(assembly))).toContain("Party B 109");
-    // 키보드로 고른 묶음은 그 묶음 <g>에 테두리를 걸어 점마다 그려요 (초점 고리). 나머지 묶음은 흐려요
+    // A group picked by keyboard gets a stroke on its <g>, so every dot is outlined (focus ring). The other groups are dimmed
     state.via = "keyboard";
     const focused = arc(assembly);
     const ringed = /<g stroke="[^"]+" stroke-width="[\d.]+">((?:<circle [^>]*><\/circle>)+)<\/g>/.exec(focused);
@@ -214,12 +214,13 @@ describe("waffle shape arc", () => {
   it("fits a long centre name by a smaller size, then two lines, and shortens it only when neither fits", () => {
     const customers = [{ party: "New", seats: 38 }, { party: "Returning", seats: 62 }];
     const at = (width: number) => texts(arc(customers, { width, summaryLabel: "New customers", summaryNote: "62 returning" }));
-    // 문서 변형 카드 폭(480)에서는 한 줄 그대로, 390에서는 이름을 두 줄로 나누고 아래 글은 반원 바닥 밑으로 (예전에는 "New cust… 38")
+    // At the docs variant card width (480) it stays on one line; at 390 the name splits into two lines
+    // and the note goes below the half circle's base (it used to be "New cust… 38")
     expect(at(480)).toEqual(["100", "New customers 38", "62 returning"]);
     expect(at(342)).toEqual(["100", "New", "customers 38", "62 returning"]);
-    // 두 줄을 놓으면 전체 숫자가 12px보다 작아지는 폭(390 화면의 카드)에서는 범례의 묶음 이름으로 바꿔요
+    // At widths where two lines would make the total number smaller than 12px (the card on a 390 screen), the group's legend name is used instead
     expect(at(300)[1]).toBe("New 38");
-    // 묶음 이름도 길면 그때 줄여요
+    // If the group name is long too, it is shortened at that point
     const long = [{ party: "Newly registered members", seats: 38 }, { party: "Returning", seats: 62 }];
     expect(texts(arc(long, { width: 300, summaryLabel: "New customers this quarter" }))[1]).toMatch(/^New.*… 38$/);
   });
@@ -229,15 +230,15 @@ describe("waffle shape arc", () => {
     const draw = () => texts(arc(customers, { width: 480, summaryLabel: "New customers", summaryNote: "62 returning" }));
     state.active = 1;
     state.via = "keyboard";
-    // "Returning 62" 아래 "62 returning"을 또 적지 않아요
+    // No second "62 returning" under "Returning 62"
     expect(draw()).toEqual(["100", "Returning 62"]);
-    // 다른 묶음을 고르면 아래 글은 그대로예요 (다른 말이라서)
+    // When another group is picked, the note below stays (it says something different)
     state.active = 0;
     expect(draw()).toEqual(["100", "New 38", "62 returning"]);
-    // 값이 겹치기만 하는 글은 같은 말이 아니에요 ("620 returning"은 62가 아니에요)
+    // Text that only contains the value is not the same statement ("620 returning" is not 62)
     state.active = 1;
     expect(texts(arc(customers, { width: 480, summaryNote: "620 returning" }))).toEqual(["100", "Returning 62", "620 returning"]);
-    // 한국어 글에 붙은 단위(명)는 같은 말로 봐요
+    // A unit attached to Korean text ("명") still counts as the same statement
     const ko = [{ party: "신규", seats: 38 }, { party: "재구매", seats: 62 }];
     expect(texts(arc(ko, { width: 480, summaryNote: "재구매 62명" }))).toEqual(["100", "재구매 62"]);
   });
@@ -301,7 +302,7 @@ describe("validateSpec for shape arc", () => {
     expect(codes({ shape: "arc", cells: 50, columns: 5 })).toEqual(["W:ignored_option@options.cells", "W:ignored_option@options.columns"]);
     expect(codes({ referenceLines: MAJORITY })).toEqual(["W:ignored_option@options.referenceLines"]);
     expect(codes({ shape: "ring" })).toEqual(["E:bad_enum@options.shape"]);
-    // 격자는 예전 그대로예요
+    // The grid is as before
     expect(codes({ cells: 50, columns: 5, total: 200 })).toEqual([]);
   });
 });

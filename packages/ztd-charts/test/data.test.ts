@@ -192,7 +192,7 @@ describe("스케일과 눈금", () => {
 
 describe("글자 폭 추정", () => {
   it("Pretendard 실측과 10% 안", () => {
-    // 크롬에서 잰 실제 폭(em)
+    // Actual widths measured in Chrome (em)
     const real: [string, number, number][] = [
       ["모바일", 400, 2.58],
       ["전환 유형별 비중", 400, 6.52],

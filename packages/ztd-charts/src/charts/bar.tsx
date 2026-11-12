@@ -82,8 +82,9 @@ interface BarSeg {
   hi: boolean;
   /** diverging: the segment's position counted from the zero line (0 for the middle series). Used for the entrance order and rounded corners */
   ring?: number;
-  /** diverging: whether this is the segment at the low or high end of the row (rounded corners) */
+  /** diverging: whether this is the segment at the low end of the row (rounded corners) */
   endLo?: boolean;
+  /** diverging: whether this is the segment at the high end of the row (rounded corners) */
   endHi?: boolean;
 }
 

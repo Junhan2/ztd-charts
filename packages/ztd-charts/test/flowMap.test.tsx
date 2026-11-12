@@ -30,7 +30,7 @@ const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
 const places: Record<string, [number, number]> = { Paris: [2.35, 48.86], Madrid: [-3.7, 40.42], Berlin: [13.4, 52.52], Tokyo: [139.69, 35.69], "Los Angeles": [-118.24, 34.05] };
 const draw = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<FlowMap data={data} source="from" target="to" value="v" places={places} width={720} animate={false} {...extra} />);
-/** 흐름 선: d와 굵기 (화살촉, 투명 호버 선은 빼요) */
+/** Flow lines: d and width (arrowheads and transparent hover lines left out) */
 const links = (h: string) => [...h.matchAll(/<path d="(M[^"]+Q[^"]+)" fill="none" stroke="(?!transparent)([^"]+)" stroke-width="([\d.]+)"([^>]*)>/g)].map((m) => ({ d: m[1], stroke: m[2], w: +m[3], clip: m[4].includes("clip-path") }));
 const nums = (d: string) => d.match(/-?[\d.]+/g)!.map(Number);
 const codes = (spec: object) => {
@@ -43,23 +43,24 @@ describe("FlowMap", () => {
   it("draws thicker flows first, so thinner ones sit above, with the largest in the accent and an arrowhead at each target", () => {
     const h = r(<FlowMap data={flowMapSample} source="from" target="to" value="teu" places={flowMapPlaces} width={720} animate={false} />);
     const ls = links(h);
-    // 태평양 가운데 지도라 가장 큰 상하이 → 로스앤젤레스는 한 줄이에요. 대서양 가장자리를 건너는 셋(로테르담 → 뉴욕, 산투스 → 로테르담, 상하이 → 산투스)은 조각이 둘이에요
+    // The map is Pacific-centered, so the largest flow, Shanghai → Los Angeles, is one line.
+    // The three that cross the map edge in the Atlantic (Rotterdam → New York, Santos → Rotterdam, Shanghai → Santos) come in two pieces
     expect(ls.length).toBe(11 + 3);
     for (let i = 1; i < ls.length; i++) expect(ls[i].w).toBeLessThanOrEqual(ls[i - 1].w);
     expect(ls[0].stroke).toContain("accent");
     expect(ls[0].clip).toBe(false);
     expect(ls.filter((l) => l.stroke.includes("accent"))).toHaveLength(1);
-    // 화살촉: 흐름마다 도착지에 하나, 끊긴 흐름은 나가는 끝과 들어오는 끝에도 하나씩
+    // Arrowheads: one at each flow's destination, plus one each at the outgoing and the incoming end of a cut flow
     const heads = [...h.matchAll(/<path d="(M[^"]+Z)" fill="[^"]+" opacity/g)].map((m) => (m[1].match(/M/g) ?? []).length);
     expect(heads.reduce((a, b) => a + b, 0)).toBe(11 + 3 * 2);
     expect(h).not.toMatch(/NaN|Infinity|undefined/);
-    // 등장 전 길이 표시(pathLength)는 움직일 때만 붙어요 (서버 그림에는 없어요)
+    // The pre-entrance length attribute (pathLength) is added only when animating (not in the server render)
     expect(h).not.toContain("pathLength");
   });
   it("opposite flows between the same pair bend to opposite sides", () => {
     const h = draw([{ from: "Paris", to: "Berlin", v: 5 }, { from: "Berlin", to: "Paris", v: 3 }]);
     const [a, b] = links(h).map((l) => nums(l.d));
-    // 곡선 조절점이 파리와 베를린을 잇는 선의 서로 다른 쪽에 있어요
+    // The curve control points lie on opposite sides of the line from Paris to Berlin
     const [px, py] = a;
     const [bx, by] = b;
     const side = (cx: number, cy: number) => Math.sign((bx - px) * (cy - py) - (by - py) * (cx - px));
@@ -71,14 +72,14 @@ describe("FlowMap", () => {
     const h = draw([{ from: "Tokyo", to: "Los Angeles", v: 5 }], { center: "atlantic" });
     const ls = links(h);
     expect(ls).toHaveLength(2);
-    // 나가는 끝, 들어오는 끝, 도착지에 같은 화살촉
+    // The same arrowhead at the outgoing end, the incoming end and the destination
     expect([...h.matchAll(/<path d="(M[^"]+Z)" fill="[^"]+" opacity/g)].map((m) => (m[1].match(/M/g) ?? []).length)).toEqual([1, 2]);
     expect(ls.every((l) => l.clip)).toBe(true);
     for (const l of ls) {
       const [x0, , , , x1] = nums(l.d);
       expect(Math.abs(x1 - x0)).toBeLessThan(360);
     }
-    // 같은 반구 안의 흐름은 한 조각이고 자르지 않아요
+    // A flow within one hemisphere is one piece and is not clipped
     expect(links(draw([{ from: "Paris", to: "Tokyo", v: 5 }])).map((l) => l.clip)).toEqual([false]);
   });
   it("flows cut at the map edge stay inside the svg where the globe's edge falls outside it", () => {
@@ -107,7 +108,7 @@ describe("FlowMap", () => {
     expect(chooseCenter("auto", [{ a: 4.5, b: -74, w: 9 }, { a: 121.5, b: -118.2, w: 2 }], [])).toBe(0);
     expect(chooseCenter("auto", [], [])).toBe(0);
     expect(chooseCenter("pacific", [], [])).toBe(150);
-    // 지점: 지도 끝(반대편 경선 20° 안)에 놓이는 수가 적은 쪽
+    // Places: the center that puts fewer of them at the map edge (within 20° of the opposite meridian)
     expect(chooseCenter("auto", [], [178, -175, 170, 10])).toBe(150);
     expect(chooseCenter("auto", [], [-25, -35, 140])).toBe(0);
   });

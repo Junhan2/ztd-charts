@@ -37,7 +37,7 @@ describe("모션 엔진", () => {
     expect(e.get("a")![0]).toBeCloseTo(before + v1, 6);
     e.step(232);
     const v2 = e.get("a")![0] - (before + v1);
-    // 방향은 바뀌어도 첫 프레임 속도는 이어져요 (급정지 없음)
+    // The direction changes, but the first frame's velocity carries over (no sudden stop)
     expect(Math.abs(v2 - v1)).toBeLessThan(Math.abs(v1) * 0.6 + 1);
   });
 

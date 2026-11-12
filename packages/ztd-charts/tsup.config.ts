@@ -1,11 +1,11 @@
 import { defineConfig } from "tsup";
 
 const external = ["react", "react-dom", "react-dom/server", "react/jsx-runtime"];
-// 한글을 \uXXXX로 바꾸지 않아요 (글자당 6바이트 -> 3바이트)
+// Keeps Hangul as is instead of \uXXXX escapes (6 bytes -> 3 bytes per character)
 const esbuildOptions = (o: { charset?: string }) => {
   o.charset = "utf8";
 };
-// 소스 맵은 싣지 않아요: npm 묶음 크기의 60% 였고, 배포 JS 는 압축하지 않아 그대로 읽혀요
+// Source maps are not shipped: they were 60% of the npm package size, and the published JS (all but the minified standalone.js) is not minified, so it reads as is
 
 export default defineConfig([
   {
@@ -22,8 +22,8 @@ export default defineConfig([
     banner: { js: '"use client";' },
   },
   {
-    // 지도 경계는 입구마다 따로예요 (ztd-charts/geo/world 등). 지도를 그리지 않는 쪽은 경계 데이터를 싣지 않아요.
-    // index, spec과 따로 묶어서 그 둘의 조각 나눔이 그대로예요 (작은 이름표 krRegions, usStates만 입구마다 한 벌씩 들어요)
+    // Map boundaries get their own entry points (ztd-charts/geo/world and so on). Code that draws no map ships no boundary data.
+    // Bundled apart from index and spec, so their chunk splitting stays as it is (only the small name tables krRegions and usStates get one copy per entry)
     entry: { "geo/world": "src/geo/world.ts", "geo/us-states": "src/geo/us-states.ts", "geo/kr-sido": "src/geo/kr-sido.ts" },
     format: ["esm", "cjs"],
     dts: true,
@@ -47,7 +47,7 @@ export default defineConfig([
     esbuildOptions,
   },
   {
-    // 브라우저에서 import map으로 바로 쓰는 한 파일짜리 번들 (renderSpecToHTML의 예전 { libraryUrl } 방식. CLI --interactive는 이제 차트 하나만 실은 dist/client를 써요)
+    // A single-file bundle used directly in the browser through an import map (the old { libraryUrl } way of renderSpecToHTML. CLI --interactive now uses dist/client, which carries a single chart)
     entry: { standalone: "src/index.ts" },
     format: ["esm"],
     dts: false,

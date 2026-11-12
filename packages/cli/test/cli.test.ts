@@ -72,7 +72,7 @@ describe("ztd-charts CLI", () => {
     expect(JSON.parse(readFileSync(join(dir, "pie.schema.json"), "utf8")).properties.type.const).toBe("pie");
     await run("example", "donut", "--out", "donut.json");
     expect(JSON.parse(readFileSync(join(dir, "donut.json"), "utf8")).type).toBe("donut");
-    // 이름 붙은 변형: 예시 options 위에 덮어쓰고, 모르는 이름은 있는 이름을 알려 줘요
+    // Named variants: applied over the example's options, and an unknown name lists the names that exist
     expect(JSON.parse((await run("example", "bar", "--variant", "horizontal")).out).options.orientation).toBe("horizontal");
     const bad = await run("example", "bar", "--variant", "nope");
     expect(bad.code).toBe(1);
@@ -98,7 +98,7 @@ describe("ztd-charts CLI", () => {
     await run("render", "donut.json", "--out", "d.html", "--interactive");
     const html = readFileSync(join(dir, "d.html"), "utf8");
     expect(html).toContain("<!doctype html>");
-    // 서버 그림을 이어받는 코드(React와 도넛 하나)를 글자 그대로 넣어요. CDN도 base64도 없어요
+    // The code that hydrates the server-drawn chart (React and one donut) is inlined as plain text. No CDN, no base64
     expect(html).toContain('id="ztd-chart-config"');
     expect(html).not.toContain("esm.sh");
     expect(html).not.toContain("data:text/javascript;base64,");
@@ -114,15 +114,15 @@ describe("ztd-charts CLI", () => {
     expect(readFileSync(join(dir, "geo-w.png")).subarray(1, 4).toString()).toBe("PNG");
     await run("render", "world.json", "--out", "geo-w.html", "--interactive");
     const html = readFileSync(join(dir, "geo-w.html"), "utf8");
-    // 세계 지도 파일 하나만 (미국 주, 한국 시도는 빼요)
+    // Only the world map file (US states and Korean provinces are left out)
     expect(html).toContain("Natural Earth 1:110m countries");
     expect(html).not.toContain("US Census Bureau");
     expect(html).not.toContain("geoBoundaries KOR");
-    // "auto"도 데이터로 고른 지도를 넣어요
+    // "auto" also embeds the map the data picks
     writeFileSync(join(dir, "us.json"), JSON.stringify({ ...spec, data: [{ c: "CA", v: 1 }, { c: "TX", v: 2 }], options: {} }));
     await run("render", "us.json", "--out", "us.html", "--interactive");
     expect(readFileSync(join(dir, "us.html"), "utf8")).toContain("US Census Bureau");
-    // React 코드는 지도를 입구에서 불러와 넘기고, 스펙 코드는 등록해요
+    // The React snippet imports the map from its entry point and passes it in; the spec snippet registers it
     expect(reactSnippet(spec)).toContain('import { world } from "ztd-charts/geo/world";');
     expect(reactSnippet(spec)).toContain("map={world}");
     expect(specSnippet(spec)).toContain("registerMap(world);");
@@ -180,7 +180,7 @@ describe("ztd-charts CLI", () => {
     expect(r2.out).toContain("Skipped (already exists)");
     expect(readdirSync(join(dir, "app/charts")).sort()).toEqual(["Dashboard.tsx", "README.md", "funnel.spec.json", "sales.csv"]);
     expect((await run("validate", "app/charts/funnel.spec.json")).code).toBe(0);
-    // "npx ztd-charts" 는 명령이 없는 라이브러리 패키지라 안내 명령은 CLI 패키지 이름으로, 대시보드는 Next.js App Router에서도 돌게
+    // "npx ztd-charts" is the library package, which has no command, so the instructions use the CLI package name; the dashboard is made to run in the Next.js App Router too
     const readme = readFileSync(join(dir, "app/charts/README.md"), "utf8");
     expect(readme).toContain("npx ztd-charts-cli validate charts/funnel.spec.json");
     expect(readme).not.toMatch(/npx ztd-charts /);
@@ -200,7 +200,7 @@ describe("ztd-charts CLI", () => {
     expect((await run("nope")).code).toBe(1);
     expect((await run("validate", "없음.json")).err).toContain("File not found");
     expect((await run("validate", "없음.json", "--locale", "ko")).err).toContain("파일이 없어요");
-    // 없는 데이터 파일을 빈 데이터로 읽고 0으로 끝나지 않아요
+    // A missing data file is not read as empty data with exit code 0
     const s = await run("suggest", "없음.csv");
     expect(s.code).toBe(1);
     expect(s.err).toContain("File not found: 없음.csv");
@@ -211,7 +211,7 @@ describe("ztd-charts CLI", () => {
     expect(jpg.err).toContain(".svg, .png or .html");
     expect(existsSync(join(dir, "d.jpg"))).toBe(false);
     expect((await run("render", "donut.json", "--out", "w.svg", "--width", "abc")).err).toContain("--width takes a number above 0");
-    // 한 변은 10,000px까지: 더 큰 --width, --height는 줄여서 그려요
+    // Each side is capped at 10,000px: a larger --width or --height is reduced
     expect((await run("render", "donut.json", "--out", "huge.svg", "--width", "1e9", "--height", "1e9")).code).toBe(0);
     expect(/^<svg[^>]*? width="(\d+)"/.exec(readFileSync(join(dir, "huge.svg"), "utf8"))?.[1]).toBe("10000");
     expect(existsSync(join(dir, "w.svg"))).toBe(false);
@@ -241,37 +241,37 @@ describe("CLI API", () => {
     const code = reactSnippet(CHARTS[0].example);
     expect(code).toContain('import { ChartCard, PieChart } from "ztd-charts"');
     expect(code).toContain('label="device"');
-    // card.legend: "auto"가 string으로 넓어지지 않게 타입을 달아요 (TS에서 바로 컴파일)
+    // Adds a type so card.legend: "auto" does not widen to string (compiles as is in TS)
     expect(specSnippet(CHARTS[0].example)).toContain("const spec: ChartSpec = {");
     const sourced = reactSnippet({ ...CHARTS[0].example, card: { title: "올해 기기 비중", source: "앱 로그", note: "10월", accent: "올해" } });
     for (const s of ['source="앱 로그"', 'note="10월"', 'accent="올해"']) expect(sourced).toContain(s);
-    // 내려받기: <Chart spec>처럼 차트가 그리는 열만, 고른 형식만
+    // Download: as with <Chart spec>, only the columns the chart draws and only the chosen formats
     const dl = reactSnippet({ ...CHARTS[0].example, card: { title: "기기 비중", download: ["csv"] } });
     expect(dl).toContain('import { ChartCard, DownloadButtons, PieChart } from "ztd-charts";');
     expect(dl).toContain('actions={<DownloadButtons data={data} columns={["device","sales"]} filename="기기 비중" formats={["csv"]} />}');
     expect(reactSnippet(CHARTS[0].example)).not.toContain("DownloadButtons");
-    // 스펙 툴팁 틀(차례 3 ⑩)은 templateTooltip(…) 함수로
+    // A spec tooltip template becomes a templateTooltip(…) call
     const tipped = reactSnippet({ type: "line", data: [{ m: "1월", v: 1 }], encoding: { x: "m", y: "v" }, options: { tooltip: { template: "{label} · {value}" }, locale: "ko" } });
     expect(tipped).toContain('tooltip={templateTooltip("{label} · {value}", "ko")}');
     expect(tipped).toContain('import { LineChart, templateTooltip } from "ztd-charts";');
-    // 작은 여러 개(spec.facet)는 <ChartFacets>로: highlight는 패널을 고르고 다른 프롭은 chartProps로
+    // Small multiples (spec.facet) become <ChartFacets>: highlight picks the panel, and the other props go to chartProps
     const faceted = reactSnippet({ type: "line", data: [{ w: "W1", r: "A", v: 1 }], encoding: { x: "w", y: "v" }, options: { highlight: "A", unit: "건" }, facet: { by: "r", columns: 4 } });
     expect(faceted).toContain('import { ChartFacets, LineChart } from "ztd-charts";');
     expect(faceted).toContain('<ChartFacets chart={LineChart} type="line" data={data} by="r" columns={4} highlight="A" chartProps={{ x: "w", y: "v", unit: "건" }} />');
-    // 스펙은 믿을 수 없는 입력: 양의 정수가 아닌 columns와 두 값이 아닌 scale은 코드에서 빼고, by는 이스케이프해요
+    // The spec is untrusted input: a columns value that is not a positive integer and a scale value that is not one of its two values are left out of the code, and by is escaped
     const hostile = reactSnippet({ type: "line", data: [{ w: "W1", r: "A", v: 1 }], encoding: { x: "w", y: "v" }, facet: { by: 'r" onFocus={alert(3)} x="', columns: "2} onLoad={alert(1)" as unknown as number, scale: "free} onClick={alert(2)" as "free" } });
     expect(hostile).not.toMatch(/columns=|scale=/);
     expect(hostile).not.toContain("alert(1)");
     expect(hostile).not.toContain("alert(2)");
-    // by는 JSX 속성이 아니라 문자열 식 안에만 들어가요
+    // by goes only inside a string expression, not into a quoted JSX attribute
     expect(hostile).toContain('by={"r\\" onFocus={alert(3)} x=\\""}');
-    // 네트워크 묶음(노드 이름 → 묶음 이름)도 객체 식 안의 문자열로만 들어가요
+    // Network groups (node name → group name) also go in only as strings inside an object expression
     const groups = reactSnippet({ type: "network", data: [{ from: "A", to: "B" }], encoding: { source: "from", target: "to" }, options: { groups: { '"} onClick={alert(4)} x={"': "Edge" } } });
     expect(groups).toContain('<NetworkChart data={data} source="from" target="to" groups={{"\\"} onClick={alert(4)} x={\\"":"Edge"}} />');
-    // 트리의 뿌리 이름과 접을 가지 이름도 문자열 식 안에만 들어가요
+    // The tree's root label and the names of branches to collapse also go only inside string expressions
     const tree = reactSnippet({ type: "tree", data: [{ g: "A", l: "B" }], encoding: { group: "g", label: "l" }, options: { rootLabel: '"/><b onClick={alert(4)}>', collapsed: ['A"} onLoad={alert(5)'] } });
     expect(tree).toContain('<Tree data={data} label="l" group="g" rootLabel={"\\"/><b onClick={alert(4)}>"} collapsed={["A\\"} onLoad={alert(5)"]} />');
-    // 막대 위 선(차례 3 ⑪)도 채널이라 그대로 넘어가요
+    // The line over bars is a channel too, so it passes through as is
     expect(reactSnippet({ type: "bar", data: [{ m: "1월", 올해: 1, 작년: 2 }], encoding: { x: "m", y: "올해", line: "작년" } })).toContain('line="작년"');
   });
   it("render는 44종 모두 PNG로 그려요", async () => {
@@ -288,7 +288,7 @@ describe("CLI API", () => {
     expect(Buffer.compare(a.png!, b.png!)).toBe(0);
   });
   it("npm 패키지에 PNG용 Pretendard 다섯 굵기와 OFL 라이선스가 실려요", async () => {
-    // 글꼴이 하나도 없는 리눅스(node:22-slim 같은 컨테이너)에서는 이 글꼴이 빠지면 PNG의 글자가 모두 사라져요
+    // On Linux with no fonts at all (containers like node:22-slim), all PNG text disappears when these fonts are missing
     const { stdout } = await exec("npm", ["pack", "--dry-run", "--json"], { cwd: fileURLToPath(new URL("..", import.meta.url)) });
     const files = (JSON.parse(stdout) as { files: { path: string }[] }[])[0].files.map((f) => f.path);
     for (const w of ["Regular", "Medium", "SemiBold", "Bold", "ExtraBold"]) expect(files).toContain(`fonts/Pretendard-${w}.otf`);
@@ -307,7 +307,7 @@ describe("CLI API", () => {
     const png = async (s: Parameters<typeof render>[0]) => (await render(s, { format: "png", width: 560, scale: 1 })).png!;
     const a = await png(spec);
     expect(a.equals(await png(spec))).toBe(true);
-    // 흔들림이 실제로 그림을 바꿔요
+    // The jitter really changes the image
     expect(a.equals(await png(def.example))).toBe(false);
   });
   it("suggest", () => {

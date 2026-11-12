@@ -71,7 +71,7 @@ export interface DonutChartProps<T = Row> extends PieChartProps<T> {
   centerValue?: "total" | "highlight" | number | null;
   /** Caption under the center number. Example: "Conversions" */
   centerLabel?: string;
-  /** Right-side legend. "auto" puts it on the right when wide enough, below when narrow. Default "auto" */
+  /** Legend position: "right", "bottom" or "none". "auto" puts it on the right when the chart is at least 300px wide, below when narrower. Default "auto" */
   legend?: "auto" | "right" | "bottom" | "none";
 }
 

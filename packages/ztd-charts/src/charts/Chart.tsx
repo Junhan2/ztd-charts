@@ -192,8 +192,7 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     return shown(series.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const })));
   }
   if (def.type === "timeline") {
-    // One item per group. Same color function (categorical) and highlight (group name) as the chart
-    // Colors are split by group, or by status (the status strip) when there is none. Same rule as the chart
+    // One item per group, or per status when there is no group (the bars or the status strip show those colors). Same values, color function (categorical) and highlight (by name) as the chart
     const byStatus = typeof enc.group !== "string";
     const field = byStatus ? enc.status : enc.group;
     if (typeof field !== "string") return [];
@@ -208,7 +207,7 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
       const g = strGetter(enc.series, "series");
       series = uniq(rows.map((r, i) => g(r, i)));
     }
-    // Lines over bars (round 3 ⑪): list the bars (not highlighted when there is no highlight) together with the lines (first line in the accent color, the rest gray)
+    // Lines over bars: list the bars (not highlighted when there is no highlight) together with the lines (first line in the accent color, the rest gray)
     const lines = barLineFields(def.type, enc, opt);
     if (lines.length) {
       const barHi = resolveHighlight(h as never, series as never[], series, series.map(() => 0), "none");

@@ -99,7 +99,8 @@ export interface GeoFrame {
 }
 
 /**
- * Builds the paths for the given size. A region with an empty path (smaller than 1px on screen) gets an empty string.
+ * Builds the paths for the given size. A region that is not drawn (neither colored by value nor a faint background region) or that lies entirely outside the view gets an empty string.
+ * A region under 1px is drawn as a 1.6px square (see ringsPath).
  * With box, fits that plane box instead of the map box (point maps pass a box widened to include points at sea outside the map)
  */
 export function geoFrame(g: GeoLayout, w: number, h: number, pad = 2, box: readonly number[] = g.box): GeoFrame {

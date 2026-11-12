@@ -1,6 +1,8 @@
-// 등장이 끝난 차트에 다른 데이터를 주면 useMotion이 engine.update로 넘어가고, 빠진 항목은 옛 data를 든 채 exiting으로 남아요.
-// 그 옛 번호로 새 데이터의 배열을 읽으면 렌더가 던져서 페이지 전체가 하얘졌어요 (문서 갤러리의 언어 전환, 타일 지도 미국 51칸 → 한국 16칸).
-// jsdom이 없어서 react-dom/client가 쓰는 만큼만 흉내 낸 작은 DOM에 차트를 붙여요. window가 있어야 isBrowser가 참이 되고 애니메이션이 켜져요
+// When a chart whose entrance has finished gets new data, useMotion switches to engine.update, and removed items stay as exiting, still holding the old data.
+// Reading the new data's arrays with those old indexes made the render throw, and the whole page went white
+// (the docs gallery's language switch, a tile map going from 51 US cells to 16 Korean cells).
+// There is no jsdom, so the chart mounts on a small DOM that imitates only what react-dom/client uses.
+// window must exist for isBrowser to be true and for animation to turn on
 import type { ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -64,7 +66,7 @@ class FakeNode {
   blur() {}
 }
 
-/** requestAnimationFrame 대신 모아 두었다가 정한 시각으로 돌려요 */
+/** Collected in place of requestAnimationFrame, then run at a chosen time */
 const frames: ((t: number) => void)[] = [];
 
 function installDom() {
@@ -105,7 +107,7 @@ let doc: FakeNode & Record<string, unknown>;
 
 beforeAll(async () => {
   doc = installDom();
-  // window가 생긴 뒤에 불러야 env.ts의 isBrowser가 참이에요. 새로 불러온 지도 등록표에도 내장 지도를 다시 올려요 (setup-maps.ts와 같게)
+  // Importing after window exists makes isBrowser in env.ts true. The freshly loaded map registry gets the built-in maps again too (as in setup-maps.ts)
   vi.resetModules();
   const [react, client, chart, spec, geo, world, us, kr] = await Promise.all([
     import("react"),
@@ -126,7 +128,7 @@ afterAll(() => {
   vi.resetModules();
 });
 
-/** 모아 둔 프레임을 now + ms 시각으로 돌려요. 계속 움직이는 차트(실시간 선)가 끝없이 돌지 않게 몇 바퀴까지만 */
+/** Runs the collected frames at time now + ms. Only a few rounds, so a chart that keeps moving (the live line) does not loop forever */
 function flush(ms: number) {
   const t = performance.now() + ms;
   for (let k = 0; k < 4 && frames.length; k++) for (const fn of frames.splice(0)) fn(t);
@@ -161,12 +163,12 @@ describe("데이터가 바뀔 때 빠지는 항목 (useMotion exiting)", () => {
         if (errors.length) failures.push(`${def.type} / ${label}: ${String((errors[0] as Error)?.message ?? errors[0])}`);
         return errors.length === 0;
       };
-      // 붙이고, 등장을 끝까지 돌려요. 등장이 시작됐는지(프레임을 요청했는지)도 세요
+      // Mount and run the entrance to the end. Also count whether the entrance started (requested a frame)
       let ok = await run("mount", () => root.render(draw(en)));
       if (frames.length) entered++;
       if (ok) ok = await run("entrance", () => flush(60_000));
       for (const [label, s] of ok ? steps : []) {
-        // 바꾼 직후(빠지는 항목이 옛 data로 남아 있어요), 전환 중간, 전환 끝
+        // Right after the change (removed items still hold the old data), mid-transition, end of the transition
         if (!(await run(label, () => root.render(draw(s))))) break;
         if (!(await run(`${label} (mid)`, () => flush(150)))) break;
         if (!(await run(`${label} (end)`, () => flush(60_000)))) break;
@@ -175,7 +177,7 @@ describe("데이터가 바뀔 때 빠지는 항목 (useMotion exiting)", () => {
       frames.length = 0;
     }
     expect(failures).toEqual([]);
-    // 애니메이션이 실제로 켜졌는지: 모든 차트가 등장 프레임을 요청해야 해요 (꺼져 있으면 update 경로를 안 거쳐요)
+    // Whether animation was really on: every chart must request an entrance frame (when it is off, the update path is never taken)
     expect(entered).toBe(spec.CHARTS.length);
   }, 60_000);
 });

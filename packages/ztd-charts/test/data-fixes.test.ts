@@ -18,7 +18,7 @@ const codes = (spec: unknown) => validateSpec(spec).errors.map((e) => `${e.path}
 const pie = { type: "pie", data: [{ label: "a", value: 1 }] };
 
 describe("보안: 테마 값과 범례 색 (CLI, MCP의 SVG, HTML)", () => {
-  // 리뷰어 evil.json 그대로
+  // The reviewer's evil.json, verbatim
   const evil = { type: "pie", data: [{ label: "a", value: 1 }], card: { title: "Sales", legend: [{ label: "L", color: 'x"/><script>alert(document.domain)</script><x y="' }] }, theme: { accent: "red}</style><script>alert(2)</script><style>" } };
 
   it("evil.json은 검증에서 bad_theme_value, bad_legend_color로 막혀요", () => {
@@ -259,7 +259,7 @@ describe("Chart, 서버 렌더", () => {
       const html = () => S.renderToStaticMarkup(R.createElement(C, { spec: { type: "pie", data: { url: "https://x/a.json" } } as never, animate: false }));
       expect(html()).toContain("<svg");
       expect(html()).not.toContain("HTTP 500");
-      // 데이터가 없을 때만 오류 화면
+      // The error screen only when there is no data
       st = state({ data: [] });
       expect(html()).toContain("HTTP 500");
     } finally {
@@ -297,7 +297,7 @@ describe("추천: 연도, YYYYMMDD, 1월~12월은 시간", () => {
 describe("추천: 열 역할 (차례 2 ⑮)", () => {
   const FIX = new URL("./fixtures/suggest/", import.meta.url);
   const rowsOf = (f: string) => parseCSV(readFileSync(new URL(f, FIX), "utf8"));
-  // 1차 08, 09번(5만, 20만 행)과 같은 꼴: 순번 t와 무작위로 걷는 값 a, b, c 200행
+  // Same shape as round 1 cases 08 and 09 (50k and 200k rows): an index t and random-walk values a, b, c, 200 rows
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const walk = () => {
@@ -307,7 +307,8 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
   const [wa, wb, wc] = [walk(), walk(), walk()];
   const big = Array.from({ length: 200 }, (_, t) => ({ t, a: wa(), b: wb(), c: wc() }));
   type Want = { types: string[]; x?: string; y?: string[]; yAnyOf?: string[]; series?: string | null; none?: boolean };
-  // 사람이 고른 축, 값, 계열 (1차 csv_cases.mjs). 차트 종류는 받아들일 수 있는 무리로 넓혔어요 (5, 6번 파이, 12번 막대는 견뎌 보려고 고른 것)
+  // Axis, values and series picked by a person (round 1 csv_cases.mjs). Chart types are widened to the acceptable set
+  // (the pies for 5 and 6 and the bar for 12 were picked as stress tests)
   const cases: [string, () => Record<string, unknown>[], Want][] = [
     ["01 line gaps", () => rowsOf("01-line-gaps.csv"), { types: ["line", "area"], x: "month", y: ["Alpha", "Beta"] }],
     ["02 formatted numbers", () => rowsOf("02-formatted-numbers.csv"), { types: ["bar", "lollipop"], x: "item", yAnyOf: ["plain", "thousands", "percent", "currency", "spaced"] }],
@@ -371,8 +372,8 @@ describe("parseColor", () => {
 });
 
 /**
- * useChartData는 효과(useEffect)가 돌아야 해서, 이 블록만 작은 가짜 React로 불러요.
- * 위의 SSR 테스트는 진짜 React를 그대로 써요 (vi.doMock은 이 뒤 동적 import에만 걸려요)
+ * useChartData needs its effects (useEffect) to run, so only this block loads it with a small fake React.
+ * The SSR tests above use the real React as is (vi.doMock applies only to the dynamic imports after it)
  */
 describe("useChartData", () => {
   type Hook = { status: string; loading: boolean; data: unknown[]; error: Error | null; reload: () => void };
@@ -436,7 +437,7 @@ describe("useChartData", () => {
     };
     return { fake, mount };
   }
-  /** 가짜 React로 모듈을 새로 불러요. before에서 다른 모듈도 바꿀 수 있어요 */
+  /** Loads the module fresh with the fake React. before can swap other modules too */
   async function withFakeReact<M>(load: () => Promise<M>, before?: () => void) {
     const { fake, mount } = fakeReact();
     vi.resetModules();
@@ -455,7 +456,7 @@ describe("useChartData", () => {
     return { useChartData: mod.useChartData, mount };
   };
   const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-  /** "slow" 주소는 50ms 뒤, 나머지는 5ms 뒤 응답해요. 취소되면 AbortError */
+  /** A "slow" URL responds after 50ms, any other after 5ms. AbortError when aborted */
   const fakeFetch = (input: RequestInfo | URL, init?: RequestInit) =>
     new Promise<Response>((res, rej) => {
       const url = input instanceof Request ? input.url : String(input);
@@ -520,7 +521,7 @@ describe("useChartData", () => {
     const h = mount((p: { url: string }) => useChartData(p.url, { refreshMs: 20 }) as Hook, { url: "https://x/slow.json" });
     try {
       await tick(200);
-      // 새로 고침이 이어서 돌아 status는 loading일 수 있어요. 데이터가 왔는지와 요청이 겹치지 않았는지를 봐요
+      // A refresh keeps running, so status may be loading. Check that the data arrived and that requests did not overlap
       expect(h.get().data).toHaveLength(1);
       expect(h.get().error).toBeNull();
       expect(most).toBe(1);

@@ -127,7 +127,7 @@ describe("카드 출처 줄과 제목 강조 (차례 2 ⑭)", () => {
     expect(renderSpecToSVG(spec, { width: 560 })).not.toMatch(/Download|<button/);
   });
   it("CSV: BOM, CRLF, 글자 칸은 모두 따옴표, 수식처럼 시작하는 글자는 앞에 '", () => {
-    // "+1 234"처럼 toNumber가 수로 읽는 글자는 수식이 될 수 없어 그대로 둬요
+    // Text that toNumber reads as a number, like "+1 234", cannot be a formula, so it is left as is
     const row = { a: "=1+1", b: -5, c: "-5", d: "＝cmd", e: "x;y", f: 'say "hi"', g: null, h: new Date(2024, 2, 5), i: "+82-10-1234", j: Number.NaN, k: "+1 234" };
     const text = csvText([row], Object.keys(row));
     expect(text.charCodeAt(0)).toBe(0xfeff);

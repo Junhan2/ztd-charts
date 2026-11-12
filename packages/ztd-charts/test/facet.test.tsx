@@ -12,7 +12,7 @@ import { ThemeProvider } from "../src/theme/context";
 import { darkTheme } from "../src/theme/tokens";
 
 const REGIONS = ["North", "South", "East", "West", "Central", "Coast", "Hills", "Lakes"];
-/** 지역 8곳 × 12주 주문. 지역마다 크기와 기울기가 달라요 (North, South는 내려가요) */
+/** Orders for 8 regions × 12 weeks. Each region has its own size and slope (North and South go down) */
 const orders = REGIONS.flatMap((region, r) => Array.from({ length: 12 }, (_, w) => ({ week: `2025-${String(w + 1).padStart(2, "0")}-01`, region, orders: 100 + r * 40 + (r < 2 ? -w * 6 : w * (r + 1) * 3) })));
 const spec = (extra: Partial<ChartSpec> = {}): ChartSpec => ({ type: "line", data: orders, encoding: { x: "week", y: "orders" }, facet: { by: "region" }, card: { title: "Weekly orders" }, ...extra });
 const input = (over: Partial<FacetInput> = {}): FacetInput => ({ type: "line", data: orders, by: "region", chartProps: { x: "week", y: "orders" }, width: 632, locale: "en-US", lang: "en", ...over });
@@ -55,17 +55,17 @@ describe("facet: 나누기와 배치", () => {
     expect(plan.panels[1].props.ariaLabel).toBe("Orders, (blank)");
     expect(plan.description).toContain("(blank)");
     expect(planFacets(input({ data: rows, chartProps: { x: "w", y: "v" }, by: "g", lang: "ko", locale: "ko-KR" })).panels[1].label).toBe("(빈 값)");
-    // 그린 그림에도 보이는 제목, 검사기는 빠지는 행이 없어서 경고하지 않아요
+    // The title shows in the drawn chart too, and the validator does not warn because no rows are left out
     const s: ChartSpec = { type: "line", data: rows, encoding: { x: "w", y: "v" }, facet: { by: "g" }, card: { title: "Orders" } };
     expect(renderSpecToSVG(s)).toMatch(/<g data-facet="">[^]*?>\(blank\)<\/text>/);
     expect(renderToStaticMarkup(<Chart spec={s} width={632} animate={false} />)).toContain('aria-label="Orders, (blank)"');
     expect(validateSpec(s).warnings.map((x) => x.code)).not.toContain("facet_many_panels");
   });
   it("패널 140px 이상으로 들어가는 만큼, 390px 화면 카드 안은 두 칸, 마지막 줄이 혼자 남지 않게 고르게", () => {
-    // 390px 화면의 카드 안 폭: 390 - 좌우 여백 32 - 판 여백 20 - 카드 42 = 296
+    // Inner card width on a 390px screen: 390 - side margins 32 - stage padding 20 - card 42 = 296
     expect(facetColumns(296, 8)).toBe(2);
     expect(facetColumns(632, 8)).toBe(4);
-    // 7칸이 들어가도 8개는 4칸 두 줄
+    // Even when 7 columns fit, 8 panels go in 4 columns, two rows
     expect(facetColumns(1100, 8)).toBe(4);
     expect(facetColumns(632, 8, 3)).toBe(3);
     expect(facetColumns(632, 2)).toBe(2);
@@ -78,15 +78,15 @@ describe("facet: 같은 값 축과 자유 축", () => {
     const all = extent(orders.map((r) => r.orders));
     const want = fitDomain(all[0], all[1], Math.max(2, Math.round(plan.ph / 70)), { zero: false });
     for (const pn of plan.panels) expect(pn.props.yDomain).toEqual(want);
-    // 날짜 x도 한 범위
+    // Date x shares one domain too
     const xs = orders.map((r) => Date.parse(`${r.week}T00:00:00`));
     expect(plan.panels[0].props.xDomain).toEqual(extent(xs));
-    // 값 축 글자는 왼쪽 열에만, x 글자는 아래가 빈 패널에만 (8개 4칸이면 아래 줄 4개)
+    // Value axis labels only in the left column, x labels only on panels with nothing below (with 8 panels in 4 columns, the 4 in the bottom row)
     expect(plan.panels.map((p) => p.props.showYAxis)).toEqual([true, false, false, false, true, false, false, false]);
     expect(plan.panels.map((p) => p.props.showXAxis)).toEqual([false, false, false, false, true, true, true, true]);
   });
   it("같은 값 축이면 날짜 범위가 다른 패널도 x 눈금(자리와 글자 꼴)이 같고, 자유 축은 패널마다예요", () => {
-    // 한 지역은 1~12월, 다른 지역은 6~8월. 두 패널 모두 아래 줄이라 x 글자를 그려요
+    // One region spans January to December, the other June to August. Both panels are in the bottom row, so both draw x labels
     const months = (from: number, to: number, region: string) => Array.from({ length: to - from + 1 }, (_, i) => ({ m: `2025-${String(from + i).padStart(2, "0")}-01`, region, v: 10 + i }));
     const rows = [...months(1, 12, "Year"), ...months(6, 8, "Summer")];
     const xTicks = (scale: "shared" | "free") =>
@@ -102,14 +102,14 @@ describe("facet: 같은 값 축과 자유 축", () => {
     expect(free[1]).not.toBe(free[0]);
   });
   it("같은 값 축에서 x 값이 적으면(1~12주) 모든 패널이 첫 x부터 같은 간격으로 솎은 같은 눈금을 그려요", () => {
-    // 지역 8곳 × x 1~12. 한 지역은 3~9주만 있어도 같은 눈금이에요
+    // 8 regions × x 1~12. Even when one region has only weeks 3~9, the ticks are the same
     const rows = REGIONS.flatMap((region, r) => Array.from({ length: 12 }, (_, w) => ({ w: w + 1, region, v: 100 + r * 10 + w })).filter((d) => r !== 5 || (d.w >= 3 && d.w <= 9)));
     const s: ChartSpec = { type: "line", data: rows, encoding: { x: "w", y: "v" }, facet: { by: "region" } };
     const plan = planFacets(input({ data: rows, chartProps: { x: "w", y: "v" } }));
     const lists = plan.panels.map((p) => (p.props.xTicks as { label: string }[]).map((t) => t.label).join(" "));
     expect(new Set(lists).size).toBe(1);
     expect(lists[0]).toBe("1 3 5 7 9 11");
-    // 그린 그림: 아래 줄 네 패널의 x 글자가 모두 같은 목록 (720px 서버 그림의 안쪽 폭 632px, 4칸)
+    // Drawn chart: the four bottom-row panels all have the same x label list (632px inner width of the 720px server render, 4 columns)
     const drawn = renderToStaticMarkup(<Chart spec={s} width={632} animate={false} />)
       .split('data-facet="')
       .slice(1)
@@ -125,7 +125,7 @@ describe("facet: 같은 값 축과 자유 축", () => {
       expect(pn.props.showYAxis).toBe(true);
       expect(pn.props.showXAxis).toBe(true);
     }
-    // 패널마다 그린 y 눈금 글자가 달라요
+    // Each panel draws different y tick labels
     const html = renderToStaticMarkup(<Chart spec={spec({ facet: { by: "region", scale: "free" } })} width={632} animate={false} />);
     const ticks = html
       .split('data-facet="')
@@ -150,7 +150,7 @@ describe("facet: 묶음, 강조, 접근성", () => {
     expect(plan.panels.find((p) => p.value === "West")?.props.highlight).toBeUndefined();
     expect(plan.panels.filter((p) => p.value !== "West").every((p) => p.props.highlight === "none")).toBe(true);
     expect(planFacets(input({ highlight: "last" })).panels.every((p) => p.props.highlight === "last" && !p.isPicked)).toBe(true);
-    // 그린 그림: 강조색 선은 West 패널에만
+    // Drawn chart: the accent line is only in the West panel
     const accent = darkTheme.accent.toLowerCase();
     const svg = renderSpecToSVG(spec({ options: { highlight: "West" } }), { theme: "dark" });
     const panels = svg.split("<g data-facet=").slice(1);
@@ -215,7 +215,7 @@ describe("facet: 검사와 스키마", () => {
     expect(validateSpec(scale).errors.find((e) => e.path === "facet.scale")?.message).toBe('facet.scale must be "shared" or "free"');
     expect(validateSpec(scale, { lang: "ko" }).errors.find((e) => e.path === "facet.scale")?.message).toBe('facet.scale 값은 "shared"나 "free"여야 해요');
     expect(validateSpec(spec({ facet: { by: "region", columns: 3, scale: "free" } })).valid).toBe(true);
-    // 검사를 거치지 않는 <Chart>에서도 틀린 columns는 없는 것으로 봐요
+    // Even in <Chart>, which skips validation, an invalid columns value is treated as absent
     expect(facetColumns(632, 8, "2} onLoad" as unknown as number)).toBe(facetColumns(632, 8));
   });
   it("지역마다 같은 주는 더한 것으로 보지 않아요 (중복 x 경고는 패널마다)", () => {

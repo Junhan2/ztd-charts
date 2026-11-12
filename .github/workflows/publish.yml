@@ -1,12 +1,12 @@
-# 버전 태그(예: v0.7.1)를 올리면 ztd-charts, ztd-charts-cli, ztd-charts-mcp 를 npm 에 게시해요.
-# npm 의 trusted publishing(OIDC)을 써서 저장해 둔 토큰이 없고, 사람이 승인 링크를 누를 일도 없어요.
-# 태그는 세 package.json 의 버전과 같아야 하고, CI 와 같은 검사를 먼저 통과해야 해요.
-# Actions 탭에서 손으로 돌리면 같은 순서를 밟되 npm publish --dry-run 으로 끝나서 아무것도 보내지 않아요.
-# npmjs.com 에는 세 패키지마다 trusted publisher 로 Junhan2, ztd-charts, publish.yml 을 등록하고 npm publish 를 허용해 둬야 해요.
+# Pushing a version tag (e.g. v0.7.1) publishes ztd-charts, ztd-charts-cli and ztd-charts-mcp to npm.
+# It uses npm trusted publishing (OIDC), so there is no stored token and no one has to click an approval link.
+# The tag must match the version in the three package.json files, and the same checks as CI must pass first.
+# Run by hand from the Actions tab, it takes the same steps but ends with npm publish --dry-run, so nothing is sent.
+# On npmjs.com, each of the three packages must have Junhan2, ztd-charts, publish.yml registered as its trusted publisher, with npm publish allowed.
 #
-# build 는 게시 권한 없이 패키지를 설치하고 검사를 돌려요. npm 토큰을 요청할 수 있는 것은 publish 뿐이고,
-# publish 는 외부 코드를 돌리지 않아요: build 가 묶어 둔 파일(tarball)을 받아 그대로 게시해요.
-# 액션은 모두 커밋으로 고정해서, 태그가 옮겨지거나 도용돼도 여기서 새 코드가 돌지 않아요.
+# build installs the packages and runs the checks without publish rights. Only publish can request an npm token,
+# and publish runs no outside code: it takes the files build packed (tarballs) and publishes them as they are.
+# Every action is pinned to a commit, so a moved or stolen tag cannot run new code here.
 name: Publish to npm
 
 on:
@@ -14,7 +14,7 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-# 한 번에 한 버전만 게시해요: 두 번째 태그는 첫 번째가 끝날 때까지 기다려요
+# Publish one version at a time: a second tag waits until the first one finishes
 concurrency:
   group: publish
   cancel-in-progress: false
@@ -31,16 +31,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # pnpm 판은 package.json 의 packageManager 에서 읽어요
+      # The pnpm version is read from packageManager in package.json
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      # Node 26: CI 와 같은 판이에요
+      # Node 26: the same version as CI
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
-          # 게시용 빌드는 캐시를 쓰지 않아요. 오염된 캐시가 게시물에 닿지 않게요
+          # The publish build uses no cache, so a poisoned cache cannot reach what gets published
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      # 세 패키지는 늘 같은 버전이에요. 태그로 시작했으면 그 버전이 태그와도 같아야 해요
+      # The three packages always share one version. When the run starts from a tag, that version must also match the tag
       - name: The three packages share one version, and the tag names it
         run: |
           expected=""
@@ -60,7 +60,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm size
-      # 빌드가 다시 쓰는 packages/ztd-charts/schema 는 커밋하는 파일이라, 빌드 뒤에도 바뀐 파일이 없어야 해요
+      # The build rewrites packages/ztd-charts/schema, which is committed, so no file may be changed after the build
       - name: Generated files are committed
         run: |
           if [ -n "$(git status --porcelain)" ]; then
@@ -69,7 +69,7 @@ jobs:
             echo "::error::Generated files are out of date. Run pnpm build, then commit the changes."
             exit 1
           fi
-      # pnpm pack 은 workspace:* 를 그 버전 숫자로 바꿔서 묶어요. 하나라도 남아 있으면 설치가 안 되는 패키지라 여기서 멈춰요
+      # pnpm pack replaces workspace:* with that version number when it packs. If any is left, the package cannot be installed, so stop here
       - name: Pack the three packages
         run: |
           mkdir -p "$GITHUB_WORKSPACE/tarballs"
@@ -94,7 +94,7 @@ jobs:
     name: Publish
     needs: build
     runs-on: ubuntu-latest
-    # 패키지마다 npm 에 보일 때까지 최대 15분을 기다려요. 0.7.0 때는 셋을 합쳐 10분쯤 걸렸을 길이예요
+    # Wait up to 15 minutes per package until it shows on npm. For 0.7.0, the three together would have taken about 10 minutes
     timeout-minutes: 50
     permissions:
       contents: read
@@ -108,11 +108,11 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
-      # 라이브러리를 먼저 올려요. CLI 와 MCP 가 같은 버전의 라이브러리를 필요로 해서요.
-      # npm 은 게시를 받고 나서 몇 분 뒤에야 그 버전을 보여 줘요(0.7.0 때 라이브러리 4분 10초, MCP 1분 16초).
-      # 그래서 올린 버전이 npm 에 보일 때까지 기다렸다가 다음 패키지를 올려요. 기다리지 않으면 MCP 가 먼저 보여서 그동안 설치가 깨져요.
-      # 이미 npm 에 있는 버전은 건너뛰어요. 그래서 중간에 멈춘 실행을 다시 돌려도 되고,
-      # 이미 게시된 버전에서 손으로 돌려도 실패하지 않아요(npm 은 게시된 버전의 --dry-run 도 거절해요)
+      # Publish the library first, because the CLI and MCP need the library of the same version.
+      # npm shows a version only a few minutes after accepting it (for 0.7.0: 4 min 10 s for the library, 1 min 16 s for MCP).
+      # So wait until the published version shows on npm before publishing the next package. Without the wait, MCP shows first and installs break in the meantime.
+      # Versions already on npm are skipped, so a run that stopped halfway can be rerun,
+      # and a manual run on an already published version does not fail (npm rejects even --dry-run for a published version)
       - name: Publish, or only try it on a manual run
         run: |
           echo "npm $(npm --version)"

@@ -12,7 +12,7 @@ import { contrastRatio, parseColor } from "../src/theme/color";
 import { ThemeProvider } from "../src/theme/context";
 import { themes } from "../src/theme/tokens";
 
-/** tileMap.test.tsx와 같은 틀: active를 주면 고른 막대를, frame은 마지막 ChartFrame props예요 */
+/** Same harness as tileMap.test.tsx: active sets the picked bar, frame is the last ChartFrame props */
 const state = vi.hoisted(() => ({ active: null as number | null, via: "pointer" as "pointer" | "keyboard", frame: null as unknown }));
 vi.mock("../src/core/useChart", async (orig) => {
   const actual = await orig<typeof import("../src/core/useChart")>();
@@ -44,10 +44,10 @@ const r = (el: ReactElement) => renderToStaticMarkup(el);
 const frame = () => state.frame as ChartFrameProps<unknown>;
 type R = Record<string, unknown>;
 const draw = (data: R[], extra: R = {}) => r(<BarRace data={data} label="brand" value="sales" frame="year" width={720} animate={false} {...extra} />);
-/** 지금 보이는 막대: "이름=값" (순위 순) */
+/** Bars in view: "name=value" (in rank order) */
 const bars = () => frame().events.map((e) => `${e.label}=${e.value}`);
 const row = (brand: string, year: unknown, sales: unknown) => ({ brand, year, sales });
-/** 시점 글자 (크게 깔리는 글자, 굵기 800, 크기 18 이상) */
+/** Frame label (the large text behind the bars, weight 800, size 18 or more) */
 const bigLabel = (h: string) => /<text [^>]*font-size="(?:1[89]|[2-7]\d)(?:\.\d+)?" [^>]*font-weight="800"[^>]*>([^<]*)<\/text>/.exec(h)?.[1];
 const top = (year: number, n = 8) =>
   barRaceSample
@@ -65,7 +65,7 @@ describe("BarRace", () => {
     expect(bars()).toEqual(top(2020));
     draw(barRaceSample, { top: 8, startFrame: "2020" });
     expect(bars()).toEqual(top(2020));
-    // 데이터에 없는 시점이면 마지막 시점
+    // A frame not in the data falls back to the last frame
     draw(barRaceSample, { top: 8, startFrame: 1999 });
     expect(bars()).toEqual(top(2026));
     expect(frame().description).toBe("Bar race chart. 12 items ranked over 12 frames, from 2015 to 2026. At 2026, Lumen leads with 900.");
@@ -76,10 +76,10 @@ describe("BarRace", () => {
     expect(pick([2021, 2019, 2020])).toBe("2021");
     expect(pick([2021, 2019, 2020], 2019)).toBe("2019");
     expect(frame().description).toMatch(/from 2019 to 2021/);
-    // 날짜 글자는 라인 차트와 같은 규칙(prepSeries)으로 로캘에 맞춰요
+    // Date labels follow the locale by the same rule as the line chart (prepSeries)
     expect(pick(["2024-03-01", "2024-01-01", "2024-02-01"])).toBe("3/1");
     expect(frame().description).toMatch(/from 1\/1 to 3\/1/);
-    // 두 해에 걸친 달은 연도까지 (시점 글자가 겹치지 않게)
+    // Months spanning two years include the year (so frame labels do not repeat)
     expect(pick(["2023-12-01", "2024-12-01", "2024-01-01"])).toBe("Dec 2024");
     expect(pick(["b", 2, "a"])).toBe("a");
     expect(frame().description).toMatch(/from b to a/);
@@ -112,11 +112,11 @@ describe("BarRace", () => {
     expect(frame().tip!.rows.map((x) => `${x.label}=${x.value}`)).toEqual(["2026=512", "Rank=4th (up 3 places)"]);
     draw(barRaceSampleKo, { top: 8, locale: "ko-KR" });
     expect(frame().announce).toBe("2026, 버텍스, 4위, 512, 3계단 오름");
-    // 키보드로 고르지 않았고 넘겨 보지도 않았으면 읽지 않아요 (재생 중에도)
+    // Not picked by keyboard and not stepped: nothing is announced (during playback too)
     state.active = null;
     draw(barRaceSample);
     expect(frame().announce).toBe("");
-    // 영어 서수: 11th, 12th, 13th, 21st, 22nd
+    // English ordinals: 11th, 12th, 13th, 21st, 22nd
     const many = Array.from({ length: 23 }, (_, i) => row(`I${i}`, 1, 100 - i));
     draw(many, { top: 23 });
     expect([10, 11, 12, 20, 21, 22].map((i) => frame().events[i].formatted!.split(", ")[1])).toEqual(["11th", "12th", "13th", "21st", "22nd", "23rd"]);
@@ -136,7 +136,7 @@ describe("BarRace", () => {
       return accent(extra);
     };
     expect(light({})).toEqual(["Lumen"]);
-    // 2015년 Lumen은 10위지만 강조는 그대로 Lumen이에요 (순위가 아니라 이름)
+    // In 2015 Lumen is 10th, but the highlight stays on Lumen (by name, not by rank)
     expect(light({ startFrame: 2015 })).toEqual(["Lumen"]);
     expect(frame().events.findIndex((e) => e.label === "Lumen")).toBe(9);
     expect(light({ highlight: "Aurora", startFrame: 2015 })).toEqual(["Aurora"]);
@@ -153,7 +153,7 @@ describe("BarRace", () => {
     expect(bars()).toEqual(["Loss=4", "Flat=0", "Gain=-3"]);
     draw(data, { startFrame: 1 });
     expect(bars()).toEqual(["Gain=12", "Flat=0", "Loss=-8"]);
-    // 모두 0, 빈 데이터, 이름 없는 행
+    // All zeros, empty data, a row without a name
     expect(draw([row("A", 1, 0), row("B", 1, 0)])).not.toMatch(/NaN/);
     expect(draw([])).not.toMatch(/NaN|role="slider"/);
     expect(frame().events).toEqual([]);
@@ -184,7 +184,7 @@ describe("BarRace", () => {
     const two = draw([row("A", 1, 3), row("A", 2, 5)]);
     expect(two).toMatch(/aria-label="Play"/);
     expect(two).toMatch(/role="slider"[^>]*aria-valuemax="1" aria-valuenow="1" aria-valuetext="2"/);
-    // 정적 그림에는 단추가 없어요 (SVG 밖 HTML)
+    // Static output has no buttons (they are HTML outside the SVG)
     const ex = CHARTS.find((c) => c.type === "barRace")!.example;
     expect(renderSpecToSVG(ex)).not.toMatch(/<button|role="slider"/);
   });
@@ -194,10 +194,10 @@ describe("BarRace", () => {
     const spans = [...h.slice(h.indexOf('role="slider"')).matchAll(/<span style="([^"]+)"/g)].slice(0, 3).map((m) => m[1]);
     const num = (s: string, k: string) => Number(new RegExp(`(?:^|;)${k}:(-?[\\d.]+)px`).exec(s)?.[1]);
     const [track, , handle] = spans;
-    // 테두리를 넣은 크기로 정해 두어서 content-box 페이지와 border-box 페이지에서 같아요
+    // Sized with the border included, so it is the same on content-box and border-box pages
     expect(handle).toContain("box-sizing:border-box");
     expect(num(handle, "top") + num(handle, "height") / 2).toBe(num(track, "top") + num(track, "height") / 2);
-    // 가로 가운데는 값 자리 (가운데 시점 50%)
+    // The handle's horizontal center is the value position (middle frame, 50%)
     expect(handle).toContain(`left:calc(50% - ${num(handle, "width") / 2}px)`);
   });
 
@@ -218,7 +218,7 @@ describe("BarRace", () => {
     const hit = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
     const n = (x: string | undefined) => Number(x ?? 0);
     const attr = (tag: string, k: string) => new RegExp(`\\s${k}="([^"]*)"`).exec(tag)?.[1];
-    /** 그린 그림에서 시점 글자 상자와, 그 밖의 막대, 값, 순위 표시 상자 */
+    /** From the drawn chart: the frame label box, and the boxes of everything else (bars, values, rank marks) */
     const boxes = (h: string, label: string) => {
       let big: (Box & { key: string }) | null = null;
       const others: Box[] = [];
@@ -231,7 +231,7 @@ describe("BarRace", () => {
         if (text === label && size >= 18) big = { x0: x - w, x1: x, y0: y - size * 0.74, y1: y + size * 0.08, key: `${x},${y},${size}` };
         else if (attr(tag, "text-anchor") === "start") others.push({ x0: text.length <= 3 && /^\d+$/.test(text) ? x - 9 : x, x1: x + w, y0: y - size / 2, y1: y + size / 2 });
       }
-      // 막대: roundRectPath는 "M{왼쪽+모서리},{위}H{오른쪽-모서리}"로 시작하고, 첫 V가 오른쪽 아래 모서리 앞이에요
+      // Bars: roundRectPath starts with "M{left+corner},{top}H{right-corner}", and the first V comes just before the bottom-right corner
       for (const m of h.matchAll(/<path d="M([\d.]+),([\d.]+)H([\d.]+)A[^V]*V([\d.]+)/g)) others.push({ x0: n(m[1]) - 4, x1: n(m[3]) + 4, y0: n(m[2]), y1: n(m[4]) + 4 });
       return { big, others };
     };
@@ -297,7 +297,7 @@ describe("BarRace", () => {
     const on = svgOf(html());
     expect(on).toBeTruthy();
     expect(on).toBe(svgOf(html(false)));
-    // 독립 SVG의 차트 몸통은 같은 마크업이에요 (useId 값만 그 렌더의 것)
+    // The standalone SVG's chart body is the same markup (only the useId values are that render's own)
     const stat = renderSpecToSVG(spec, { theme: "light", width: 720, padding: 24 });
     const strip = (s: string) => s.replace(/«[^»]*»|:r[0-9a-z]+:|_r_[0-9a-z]+_|r[0-9a-z]+c\b/g, "ID");
     expect(strip(stat)).toContain(strip(on!));

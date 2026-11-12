@@ -62,7 +62,7 @@ function save(blob: Blob, name: string): void {
 
 /** PNG scale (same as the CLI's default scale) */
 const PNG_SCALE = 2;
-/** Margin around the exported image (chart coordinates). Keeps the drawing off the edges and also fits text that spills slightly past the viewBox (up to 7 in the examples of the 36 charts) */
+/** Margin around the exported image (chart coordinates). Keeps the drawing off the edges and also fits text that spills slightly past the viewBox (up to 7 in the chart examples, measured when there were 36 charts) */
 const PAD = 16;
 
 interface Snapshot {
