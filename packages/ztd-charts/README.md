@@ -51,6 +51,8 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 - `ztd-charts/geo/world`, `ztd-charts/geo/us-states` and `ztd-charts/geo/kr-sido`: map boundaries, one entry point per map, so a page that draws no map loads none.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
 
+New in 0.11.2: the period label behind a `BarRace` (the large year or date) now meets WCAG AA contrast on the card, instead of 1.55:1 in dark and 1.33:1 in light. It uses the theme's `ink` at the lowest opacity that reaches the minimum for its size: 3:1 for large text (36% in dark, 47% in light), and 4.5:1 when a narrow chart draws it below 18.66px (48% and 60%). It stays quiet behind the bars, and a custom theme gets its own opacity from its `ink` and `panel` colors.
+
 New in 0.11.1: the Skyline example shows the last 7 days instead of 14, so each day keeps its own block and date in a gallery card, and the Timeline example shows the status strip with a status legend. The timeline variant "Status strip" is now "Status colors on bars" (`status-bars`), which colors the bars by status without the strip.
 
 New in 0.11.0: `statusStrip` on `Timeline` (`options.statusStrip` in a spec) adds the status strip as the bottom row. Consecutive items with the same `status` join into one labelled segment in the legend's status colors, and pointing at the strip picks the item that set the state there. The bars then show durations, with the longest in the accent. It is off by default, and the "Status strip" variant now shows this form.

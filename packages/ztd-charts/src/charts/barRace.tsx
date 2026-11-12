@@ -11,7 +11,20 @@ import { textWidth, truncate } from "../core/text";
 import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../core/types";
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
+import { contrastRatio, parseColor } from "../theme/color";
 import { useChartLocale, type Painter } from "../theme/context";
+import type { ChartTheme } from "../theme/tokens";
+
+/**
+ * Opacity of the period label behind the bars: the lowest step (0.01) at which the theme's ink is 0.05 above `need`
+ * on the card, so the label stays quiet but readable in any theme. Full ink when a color cannot be read.
+ */
+function watermarkOpacity(theme: ChartTheme, need: number): number {
+  const ink = parseColor(theme.ink);
+  if (!ink || !parseColor(theme.panel)) return 1;
+  for (let k = 1; k <= 100; k++) if (contrastRatio([ink[0], ink[1], ink[2], (ink[3] * k) / 100], theme.panel, theme.bg) >= need + 0.05) return k / 100;
+  return 1;
+}
 
 const en = {
   kind: "Bar race chart",
@@ -456,6 +469,8 @@ export function BarRace<T = Row>(props: BarRaceProps<T>) {
   const big = L.label;
   const labelY = L.band ? PAD + plotH + PAD + L.band - 7 : PAD + plotH - big * 0.08;
   const stepOnly = c.reduced && c.hydrated;
+  // WCAG AA: 3:1 for large text (18.66px bold and up), 4.5:1 for the smaller label of narrow charts and the band under the bars
+  const markOpacity = useMemo(() => watermarkOpacity(p.theme, big >= 18.66 ? 3 : 4.5), [p.theme, big]);
 
   return (
     <ChartFrame
@@ -497,7 +512,7 @@ export function BarRace<T = Row>(props: BarRaceProps<T>) {
       }
     >
       {nI && frameLabel && big ? (
-        <Txt x={W - 2} y={labelY} anchor="end" baseline="auto" size={big} weight={800} fill={p.paint("dim")} opacity={0.45} letterSpacing={-big * 0.03}>
+        <Txt x={W - 2} y={labelY} anchor="end" baseline="auto" size={big} weight={800} fill={p.paint("ink")} opacity={markOpacity} letterSpacing={-big * 0.03}>
           {frameLabel}
         </Txt>
       ) : null}

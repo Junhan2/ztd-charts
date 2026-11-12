@@ -1,6 +1,6 @@
 # QA report
 
-Generated 2026-11-12 08:44 UTC · Target: production build (`vite build` + `vite preview`) · Browser: Chromium 156.0.8078.4 (Playwright headless shell)
+Generated 2026-11-12 12:58 UTC · Target: production build (`vite build` + `vite preview`) · Browser: Chromium 156.0.8078.4 (Playwright headless shell)
 
 This report collects the numbers measured with Playwright, Vitest and size-limit.
 
@@ -10,18 +10,18 @@ This report collects the numbers measured with Playwright, Vitest and size-limit
 |---|---|---|---|
 | Screenshots | 316 (44 charts × 3 widths × 2 themes, 5 example sections × 3 widths × 2 themes, pages) | 1440, 1280, 390 / dark, light | Pass |
 | Cards checked | 668 (gallery at 2 and 3 columns, examples) | | |
-| Clipped text | 6 | 0 | **Fail** |
-| Label overlaps | 86 | 0 | **Fail** |
+| Clipped text | 0 | 0 | Pass |
+| Label overlaps | 0 | 0 | Pass |
 | Text in the card header or footer | 0 | 0 | Pass |
-| Shapes outside the svg | 60 | 0 | **Fail** |
+| Shapes outside the svg | 12 | 0 | **Fail** |
 | Truncated titles | 0 | 0 | Pass |
 | Horizontal overflow (pages) | 0 | 0 | Pass |
-| Text contrast (SVG + HTML) | 14,436 checked, 10 below target, lowest 1.3:1 | WCAG AA 4.5:1 (3:1 for large text) | **Fail** |
+| Text contrast (SVG + HTML) | 14,430 checked, 0 below target, lowest 3.1:1 | WCAG AA 4.5:1 (3:1 for large text) | Pass |
 | Animation fps (44 charts, 1× CPU) | lowest 60 fps, 0 long tasks | 60 fps, no task over 50ms | Pass |
-| Animation fps (4× CPU slowdown) | lowest 60 fps | for reference (close to a mid-range phone) | - |
-| 10k-point stress (12 charts) | first render up to 56ms, replay at least 60 fps, hover p95 up to 3ms | | see the table |
-| Bundle size (one chart, Brotli) | 11.9 to 26.3 KB, everything 182.6 KB | size-limit budgets | Pass |
-| Unit tests (Vitest) | 865/865 passed | all | Pass |
+| Animation fps (4× CPU slowdown) | lowest 59.4 fps | for reference (close to a mid-range phone) | - |
+| 10k-point stress (12 charts) | first render up to 62.8ms, replay at least 60 fps, hover p95 up to 2.8ms | | see the table |
+| Bundle size (one chart, Brotli) | 11.9 to 26.3 KB, everything 182.7 KB | size-limit budgets | Pass |
+| Unit tests (Vitest) | 866/866 passed | all | Pass |
 | Type check | 5 projects | 0 errors | Pass |
 | Lint (ESLint) | 0 errors, 0 warnings | 0 errors | Pass |
 | Accessibility (axe, 6 pages × 2 themes) | 0 violating nodes | 0 | Pass |
@@ -32,7 +32,7 @@ This report collects the numbers measured with Playwright, Vitest and size-limit
 
 - Machine: 14 vCPU (Apple M4 Pro), RAM 48 GB, Node v24.14.0, Chromium 156.0.8078.4
 - Screens: 1440×900, 1280×900 and 390×900. Screenshots and layout checks use `prefers-reduced-motion: reduce`, so the final state draws at once (the same picture as the end of the animation).
-- **Clipped**: text that goes more than 1.5px past the inside of the card (inside its 1px border). **Overlap**: two SVG texts in the same chart whose glyph boxes (70% of the height) overlap by more than 4px² and by more than 8% of the smaller box. **Header or footer**: chart text inside the card header or footer area.
+- **Clipped**: text that goes more than 1.5px past the inside of the card (inside its 1px border). Text hidden for screen readers (a 1x1 clipped box) is not on screen, so it is skipped here and in the contrast check. **Overlap**: two SVG texts in the same chart whose glyph boxes (70% of the height) overlap by more than 4px² and by more than 8% of the smaller box. A rotated label uses its own rotated box, not its upright bounding box. **Header or footer**: chart text inside the card header or footer area. **Outside the svg**: a shape whose visible part (its box cut by its clip paths) goes more than 3px past the svg.
 - **Contrast**: from a card screenshot with only the text made transparent, collect the background pixels inside each text box. Each background color that covers more than 15% of the box is blended with the real text color (including the opacity of its ancestors), the WCAG contrast is computed, and the worst value is kept. This measures labels on shapes and on translucent fills as they look on screen.
 - **Performance**: a requestAnimationFrame recorder plus `longtask` and `long-animation-frame` observers in the page record the frame intervals for 1.6 seconds after the replay button is pressed. A dropped frame is an interval over 25ms. 4× CPU uses the CDP `Emulation.setCPUThrottlingRate`.
 - **Hover latency**: from sending pointermove to the first change in the chart DOM (tooltip, highlight). p50 and p95 of 40 measurements.
@@ -49,50 +49,26 @@ The 264 screenshots of the 44 gallery cards are in `docs/screens/charts/{theme}-
 
 | Screen | Cards | Clipped | Overlaps | Header or footer | Outside svg | Truncated titles |
 |---|---|---|---|---|---|---|
-| gallery 1440 dark | 44 | 0 | 1 | 0 | 6 | 0 |
-| gallery-3col 1440 dark | 44 | 0 | 9 | 0 | 8 | 0 |
-| examples 1440 dark | 38 | 1 | 0 | 0 | 0 | 0 |
-| gallery 1440 light | 44 | 0 | 1 | 0 | 6 | 0 |
-| gallery-3col 1440 light | 44 | 0 | 9 | 0 | 8 | 0 |
-| examples 1440 light | 38 | 1 | 0 | 0 | 0 | 0 |
-| gallery 1280 dark | 44 | 0 | 2 | 0 | 8 | 0 |
-| gallery-3col 1280 dark | 44 | 0 | 14 | 0 | 4 | 0 |
-| examples 1280 dark | 38 | 1 | 0 | 0 | 0 | 0 |
-| gallery 1280 light | 44 | 0 | 2 | 0 | 8 | 0 |
-| gallery-3col 1280 light | 44 | 0 | 14 | 0 | 4 | 0 |
-| examples 1280 light | 38 | 1 | 0 | 0 | 0 | 0 |
-| gallery 390 dark | 44 | 0 | 17 | 0 | 4 | 0 |
-| examples 390 dark | 38 | 1 | 0 | 0 | 0 | 0 |
-| gallery 390 light | 44 | 0 | 17 | 0 | 4 | 0 |
-| examples 390 light | 38 | 1 | 0 | 0 | 0 | 0 |
+| gallery 1440 dark | 44 | 0 | 0 | 0 | 0 | 0 |
+| gallery-3col 1440 dark | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 1440 dark | 38 | 0 | 0 | 0 | 0 | 0 |
+| gallery 1440 light | 44 | 0 | 0 | 0 | 0 | 0 |
+| gallery-3col 1440 light | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 1440 light | 38 | 0 | 0 | 0 | 0 | 0 |
+| gallery 1280 dark | 44 | 0 | 0 | 0 | 6 | 0 |
+| gallery-3col 1280 dark | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 1280 dark | 38 | 0 | 0 | 0 | 0 | 0 |
+| gallery 1280 light | 44 | 0 | 0 | 0 | 6 | 0 |
+| gallery-3col 1280 light | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 1280 light | 38 | 0 | 0 | 0 | 0 | 0 |
+| gallery 390 dark | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 390 dark | 38 | 0 | 0 | 0 | 0 | 0 |
+| gallery 390 light | 44 | 0 | 0 | 0 | 0 | 0 |
+| examples 390 light | 38 | 0 | 0 | 0 | 0 | 0 |
 
 Layout problems that remain:
-- gallery/network @1440 dark: {"clipped":[],"overlaps":[{"a":"Users","b":"Notifications","area":199}],"marksOutside":0}
-- gallery/flowMap @1440 dark: {"clipped":[],"overlaps":[],"marksOutside":6}
-- gallery-3col/network @1440 dark: {"clipped":[],"overlaps":[{"a":"Web","b":"Search","area":118},{"a":"Search","b":"Catalog","area":240}],"marksOutside":0}
-- gallery-3col/flowMap @1440 dark: {"clipped":[],"overlaps":[],"marksOutside":8}
-- examples/marketing-line @1440 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":50.5}],"overlaps":[],"marksOutside":0}
-- gallery/network @1440 light: {"clipped":[],"overlaps":[{"a":"Users","b":"Notifications","area":199}],"marksOutside":0}
-- gallery/flowMap @1440 light: {"clipped":[],"overlaps":[],"marksOutside":6}
-- gallery-3col/network @1440 light: {"clipped":[],"overlaps":[{"a":"Web","b":"Search","area":118},{"a":"Search","b":"Catalog","area":240}],"marksOutside":0}
-- gallery-3col/flowMap @1440 light: {"clipped":[],"overlaps":[],"marksOutside":8}
-- examples/marketing-line @1440 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":50.5}],"overlaps":[],"marksOutside":0}
-- gallery/network @1280 dark: {"clipped":[],"overlaps":[{"a":"Billing","b":"Payments","area":162},{"a":"Users","b":"Notifications","area":306}],"marksOutside":0}
-- gallery/flowMap @1280 dark: {"clipped":[],"overlaps":[],"marksOutside":8}
-- gallery-3col/network @1280 dark: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":36},{"a":"Web","b":"Search","area":185}],"marksOutside":0}
-- gallery-3col/flowMap @1280 dark: {"clipped":[],"overlaps":[],"marksOutside":4}
-- examples/marketing-line @1280 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":130.5}],"overlaps":[],"marksOutside":0}
-- gallery/network @1280 light: {"clipped":[],"overlaps":[{"a":"Billing","b":"Payments","area":162},{"a":"Users","b":"Notifications","area":306}],"marksOutside":0}
-- gallery/flowMap @1280 light: {"clipped":[],"overlaps":[],"marksOutside":8}
-- gallery-3col/network @1280 light: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":36},{"a":"Web","b":"Search","area":185}],"marksOutside":0}
-- gallery-3col/flowMap @1280 light: {"clipped":[],"overlaps":[],"marksOutside":4}
-- examples/marketing-line @1280 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":130.5}],"overlaps":[],"marksOutside":0}
-- gallery/network @390 dark: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":93},{"a":"Web","b":"Search","area":250}],"marksOutside":0}
-- gallery/flowMap @390 dark: {"clipped":[],"overlaps":[],"marksOutside":4}
-- examples/marketing-line @390 dark: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":385.5}],"overlaps":[],"marksOutside":0}
-- gallery/network @390 light: {"clipped":[],"overlaps":[{"a":"Mobile app","b":"Web","area":93},{"a":"Web","b":"Search","area":250}],"marksOutside":0}
-- gallery/flowMap @390 light: {"clipped":[],"overlaps":[],"marksOutside":4}
-- examples/marketing-line @390 light: {"clipped":[{"text":"8 panels by region. Seoul ends highest at 556. Lower at the end than at the start: Busan, Gwangju.","side":"right","px":385.5}],"overlaps":[],"marksOutside":0}
+- gallery/flowMap @1280 dark: {"clipped":[],"overlaps":[],"marksOutside":6}
+- gallery/flowMap @1280 light: {"clipped":[],"overlaps":[],"marksOutside":6}
 
 ## 4. Text contrast
 
@@ -138,7 +114,7 @@ Lowest contrast per chart (gallery, the lowest value across all widths and theme
 | Scatter plot | 7.8 | 5.6 | 132 |
 | Tile grid map | 5.5 | 4.8 | 552 |
 | Choropleth map | 7.8 | 4.8 | 88 |
-| Bar race | 1.6 | 1.3 | 164 |
+| Bar race | 3.1 | 3.1 | 164 |
 | Network | 7.8 | 5.6 | 114 |
 | Timeline | 5.1 | 4.8 | 202 |
 | Tree | 7.8 | 4.8 | 210 |
@@ -147,87 +123,75 @@ Lowest contrast per chart (gallery, the lowest value across all widths and theme
 
 Lowest contrast on the 228 example dashboard cards: 4.8:1.
 
-Below target:
-- gallery/barRace @1440 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
-- gallery-3col/barRace @1440 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
-- gallery/barRace @1440 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
-- gallery-3col/barRace @1440 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
-- gallery/barRace @1280 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
-- gallery-3col/barRace @1280 dark: "2026" 1.55:1 (needs 3), text #5B636D on #14171B
-- gallery/barRace @1280 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
-- gallery-3col/barRace @1280 light: "2026" 1.33:1 (needs 3), text #B3B9C2 on #FFFFFF
-- gallery/barRace @390 dark: "2026" 1.55:1 (needs 4.5), text #5B636D on #14171B
-- gallery/barRace @390 light: "2026" 1.33:1 (needs 4.5), text #B3B9C2 on #FFFFFF
-
 ## 5. Animation performance
 
-Baseline (no animation): 60 fps, frame interval p95 16.8ms. This means headless Chromium paints at 60 Hz.
+Baseline (no animation): 60 fps, frame interval p95 16.7ms. This means headless Chromium paints at 60 Hz.
 
 1.6 seconds after pressing replay on a chart page (one chart moving):
 
 | Chart | fps 1× | p95 ms | max ms | dropped frames | long tasks | LoAF max ms | fps 4× | p95 ms 4× | long tasks 4× |
 |---|---|---|---|---|---|---|---|---|---|
-| Pie chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Donut chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Funnel chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Waffle chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Treemap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Pie chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Donut chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Funnel chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Waffle chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Treemap | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Sunburst | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Waterfall chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Pareto chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Marimekko chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Radar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Bubble chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Line chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Area chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Pareto chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Marimekko chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Radar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bubble chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Line chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Area chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Streamgraph | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Bar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Radial bar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Gauge | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Bullet chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Sparkline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Slope chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Dumbbell chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Bullet chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Sparkline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Slope chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Dumbbell chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Lollipop chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Beeswarm | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Ridgeline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Sankey diagram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Beeswarm | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Ridgeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Sankey diagram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 59.4 | 16.8 | 0 |
 | Chord diagram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Calendar heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Bump chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Box / violin plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Parallel coordinates | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Candlestick chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Segmented bar | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Skyline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
-| Histogram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| Scatter plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Tile grid map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Choropleth map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Bar race | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Network | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Timeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Tree | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Symbol map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Flow map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Calendar heatmap | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bump chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Box / violin plot | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Parallel coordinates | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Candlestick chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Segmented bar | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Skyline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Histogram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Scatter plot | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Tile grid map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Choropleth map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bar race | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Network | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Timeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Tree | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Symbol map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Flow map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 
 Several charts moving at once:
 
 | Scene | CPU | fps | p95 ms | max ms | dropped frames | long tasks |
 |---|---|---|---|---|---|---|
-| Gallery, replay all: 2 columns, 4 charts on screen | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| Gallery, replay all: 2 columns, 4 charts on screen | 4× | 59 | 16.8 | 33.4 | 2 | 0 |
+| Gallery, replay all: 2 columns, 4 charts on screen | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Gallery, replay all: 2 columns, 4 charts on screen | 4× | 59.5 | 16.8 | 33.2 | 1 | 0 |
 | Gallery, replay all: 3 columns, 6 charts on screen | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| Gallery, replay all: 3 columns, 6 charts on screen | 4× | 60 | 16.8 | 16.8 | 0 | 0 |
-| Examples, entrance on scroll: marketing | 1× | 59.4 | 16.7 | 33.4 | 1 | 0 |
+| Gallery, replay all: 3 columns, 6 charts on screen | 4× | 59.5 | 16.8 | 33.3 | 1 | 0 |
+| Examples, entrance on scroll: marketing | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
 | Examples, entrance on scroll: portfolio | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| Examples, entrance on scroll: retention | 1× | 60 | 16.7 | 16.7 | 0 | 0 |
+| Examples, entrance on scroll: retention | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
 | Examples, entrance on scroll: ops | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| Examples, entrance on scroll: marketing | 4× | 50.7 | 33.3 | 116.6 | 7 | 3 (max 79ms) |
-| Examples, entrance on scroll: portfolio | 4× | 51.9 | 33.4 | 66.7 | 11 | 1 (max 50ms) |
-| Examples, entrance on scroll: retention | 4× | 48.2 | 33.4 | 83.3 | 16 | 1 (max 66ms) |
-| Examples, entrance on scroll: ops | 4× | 45.2 | 33.4 | 149.9 | 12 | 3 (max 125ms) |
+| Examples, entrance on scroll: marketing | 4× | 52.6 | 33.2 | 100 | 5 | 3 (max 69ms) |
+| Examples, entrance on scroll: portfolio | 4× | 54.4 | 33.3 | 66.7 | 7 | 1 (max 50ms) |
+| Examples, entrance on scroll: retention | 4× | 45.6 | 33.4 | 100 | 19 | 1 (max 63ms) |
+| Examples, entrance on scroll: ops | 4× | 40.8 | 33.4 | 166.7 | 16 | 3 (max 143ms) |
 
 ## 6. 10k-point stress
 
@@ -235,30 +199,30 @@ The `/qa/stress/?type=...` page. First render runs from mounting the chart compo
 
 | Chart | Rows | CPU | Drawing | Data generation ms | First render ms | Loading long tasks | Replay fps | Replay p95 ms | Hover p50 ms | Hover p95 ms | DOM nodes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Line chart | 10,000 | 1× | SVG | 4.8 | 32.5 | 0 | 60 | 16.7 | 2.3 | 2.6 | 228 |
-| Area chart | 10,000 | 1× | SVG | 0.6 | 27.9 | 0 | 60 | 16.8 | 1.5 | 1.7 | 226 |
-| Sparkline | 10,000 | 1× | SVG | 0.4 | 25.6 | 0 | 60 | 16.8 | 1.6 | 1.9 | 202 |
-| Bubble chart | 10,000 | 1× | Canvas | 0.9 | 26.5 | 0 | 60 | 16.8 | 0.8 | 1.4 | 217 |
-| Scatter plot | 10,000 | 1× | Canvas | 1 | 31.8 | 0 | 60 | 16.8 | 0.8 | 3 | 222 |
-| Heatmap | 10,000 | 1× | Canvas | 0.9 | 25.7 | 0 | 60 | 16.7 | 0.8 | 0.9 | 259 |
-| Beeswarm | 10,000 | 1× | Canvas | 0.5 | 27.1 | 0 | 60 | 16.8 | 0.8 | 1.3 | 240 |
-| Parallel coordinates | 10,000 | 1× | Canvas | 1.3 | 56 | 0 | 60 | 16.7 | 0.9 | 1.5 | 218 |
-| Calendar heatmap | 10,000 | 1× | Canvas | 2 | 51.8 | 0 | 60 | 16.8 | 1.1 | 1.9 | 640 |
-| Box / violin plot | 10,000 | 1× | SVG | 0.6 | 20.4 | 0 | 60 | 16.8 | 0 | 0 | 150 |
-| Ridgeline | 10,000 | 1× | SVG | 1.2 | 21.2 | 0 | 60 | 16.7 | 0.8 | 0.9 | 113 |
-| Streamgraph | 10,000 | 1× | SVG | 0.6 | 28.3 | 0 | 60 | 16.8 | 2.2 | 2.6 | 212 |
-| Line chart | 10,000 | 4× | SVG | 22.8 | 136.5 | 1 (max 103) | 59.4 | 16.8 | 9.9 | 11.5 | 228 |
-| Area chart | 10,000 | 4× | SVG | 3.6 | 97.1 | 1 (max 57) | 60 | 16.8 | 7.9 | 9.7 | 226 |
-| Sparkline | 10,000 | 4× | SVG | 3 | 83.6 | 1 (max 55) | 60 | 16.8 | 6.5 | 6.8 | 202 |
-| Bubble chart | 10,000 | 4× | Canvas | 4.3 | 61.2 | 0 | 53.8 | 33.3 | 2.9 | 6.3 | 217 |
-| Scatter plot | 10,000 | 4× | Canvas | 3.9 | 115.1 | 1 (max 93) | 53.2 | 33.4 | 3.2 | 11.9 | 222 |
-| Heatmap | 10,000 | 4× | Canvas | 1.7 | 68.5 | 0 | 60 | 16.8 | 3.1 | 4.1 | 259 |
-| Beeswarm | 10,000 | 4× | Canvas | 1.7 | 96.2 | 1 (max 69) | 50.1 | 33.4 | 3.1 | 4.4 | 240 |
-| Parallel coordinates | 10,000 | 4× | Canvas | 4.7 | 185.3 | 2 (max 109) | 60 | 16.8 | 3.6 | 5.4 | 218 |
-| Calendar heatmap | 10,000 | 4× | Canvas | 7.9 | 178.7 | 2 (max 94) | 60 | 16.8 | 4.1 | 5 | 640 |
-| Box / violin plot | 10,000 | 4× | SVG | 2.4 | 71.9 | 0 | 60 | 16.7 | 0 | 0 | 150 |
-| Ridgeline | 10,000 | 4× | SVG | 5.4 | 74.8 | 1 (max 52) | 60 | 16.8 | 3.6 | 4.5 | 113 |
-| Streamgraph | 10,000 | 4× | SVG | 2.3 | 81.1 | 1 (max 50) | 59.4 | 16.7 | 9.6 | 10.5 | 212 |
+| Line chart | 10,000 | 1× | SVG | 4.2 | 33.7 | 0 | 60 | 16.7 | 2.3 | 2.8 | 228 |
+| Area chart | 10,000 | 1× | SVG | 0.6 | 26.6 | 0 | 60 | 16.7 | 1.7 | 1.9 | 226 |
+| Sparkline | 10,000 | 1× | SVG | 0.5 | 26.3 | 0 | 60 | 16.7 | 1.6 | 2.2 | 202 |
+| Bubble chart | 10,000 | 1× | Canvas | 1 | 26.7 | 0 | 60 | 16.7 | 0.8 | 1.7 | 217 |
+| Scatter plot | 10,000 | 1× | Canvas | 0.9 | 31.5 | 0 | 60 | 16.8 | 0.8 | 2.5 | 222 |
+| Heatmap | 10,000 | 1× | Canvas | 0.5 | 29 | 0 | 60 | 16.8 | 0.8 | 0.9 | 259 |
+| Beeswarm | 10,000 | 1× | Canvas | 0.7 | 29.3 | 0 | 60 | 16.8 | 0.8 | 1.3 | 240 |
+| Parallel coordinates | 10,000 | 1× | Canvas | 1.7 | 62.8 | 0 | 60 | 16.7 | 1 | 2 | 218 |
+| Calendar heatmap | 10,000 | 1× | Canvas | 1.9 | 51.2 | 0 | 60 | 16.8 | 1.3 | 2.1 | 640 |
+| Box / violin plot | 10,000 | 1× | SVG | 0.7 | 25.1 | 0 | 60 | 16.8 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 1× | SVG | 0.9 | 30.3 | 0 | 60 | 16.8 | 0.8 | 1 | 113 |
+| Streamgraph | 10,000 | 1× | SVG | 1.3 | 28.4 | 0 | 60 | 16.8 | 2.1 | 2.4 | 212 |
+| Line chart | 10,000 | 4× | SVG | 18 | 119.3 | 1 (max 91) | 60 | 16.7 | 9.3 | 11.3 | 228 |
+| Area chart | 10,000 | 4× | SVG | 2.7 | 78.2 | 0 | 60 | 16.8 | 6.2 | 7 | 226 |
+| Sparkline | 10,000 | 4× | SVG | 2.6 | 64.7 | 0 | 60 | 16.8 | 6.4 | 7.4 | 202 |
+| Bubble chart | 10,000 | 4× | Canvas | 3 | 66.6 | 0 | 53.8 | 33.3 | 3 | 5.6 | 217 |
+| Scatter plot | 10,000 | 4× | Canvas | 3.7 | 130.2 | 1 (max 108) | 53.2 | 33.3 | 3.6 | 12.1 | 222 |
+| Heatmap | 10,000 | 4× | Canvas | 4.9 | 84.8 | 1 (max 54) | 60 | 16.7 | 3.7 | 4.4 | 259 |
+| Beeswarm | 10,000 | 4× | Canvas | 2.4 | 107.7 | 1 (max 73) | 50.7 | 33.3 | 3.8 | 6.1 | 240 |
+| Parallel coordinates | 10,000 | 4× | Canvas | 5.5 | 201.5 | 2 (max 117) | 60 | 16.8 | 4.1 | 5.6 | 218 |
+| Calendar heatmap | 10,000 | 4× | Canvas | 6.8 | 194.3 | 2 (max 100) | 60 | 16.7 | 4.8 | 7.3 | 640 |
+| Box / violin plot | 10,000 | 4× | SVG | 3.5 | 83.7 | 1 (max 51) | 60 | 16.7 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 4× | SVG | 3.1 | 85.2 | 1 (max 56) | 60 | 16.7 | 3.3 | 4.2 | 113 |
+| Streamgraph | 10,000 | 4× | SVG | 2.5 | 89.1 | 1 (max 55) | 60 | 16.8 | 8.7 | 10.1 | 212 |
 
 ## 7. Bundle size
 
@@ -308,7 +272,7 @@ size-limit (KB (Brotli, size-limit + rolldown, react external)). Each row bundle
 | `FlowMap` | 21 |
 | `Tree` | 17 |
 | `Timeline` | 20.8 |
-| `BarRace` | 17.6 |
+| `BarRace` | 17.9 |
 | `NetworkChart` | 15.9 |
 | `StatCard` | 15.2 |
 | `LiveLineChart` | 13.7 |
@@ -317,14 +281,14 @@ size-limit (KB (Brotli, size-limit + rolldown, react external)). Each row bundle
 | Map: kr-sido (ztd-charts/geo/kr-sido) | 5.2 |
 | ChartCard + ChartGrid + ThemeProvider | 5.5 |
 | useChartData + parseCSV | 2.9 |
-| Chart (spec renderer, all charts) | 139.1 |
-| Everything (index.js) | 182.6 |
+| Chart (spec renderer, all charts) | 139.2 |
+| Everything (index.js) | 182.7 |
 | spec: validateSpec + specSchema | 53.7 |
 | Interactive HTML code (React + AreaChart) | 100.4 |
 
 ## 8. Tests, types, lint
 
-- Vitest: 865/865 passed in 201 files. By project: cli 36, mcp 20, landing 1, docs 16, ztd-charts 792.
+- Vitest: 866/866 passed in 201 files. By project: cli 36, mcp 20, landing 1, docs 16, ztd-charts 793.
   - Data helpers (parseCSV quotes, line breaks, BOM, delimiters, currency and percent, fromRows, fromObjects, melt, normalizeData, LTTB), Korean number units (10⁴, 10⁸, 10¹²), scales and time ticks, estimated text widths against measured ones, layouts (squarify, Sankey flow conservation, chord, stack, KDE area of 1, no beeswarm overlap), the motion engine (springs settle with no overshoot, the speed stays continuous when the target changes mid-way, enter/exit), theme contrast (22 token pairs at AA), spec validation messages, the public schemas cross-checked with ajv 2020, suggestions, SSR of 44 charts × 2 themes, empty data, CLI end-to-end tests (including data.url rendered from a local HTTP server), and the 5 MCP tools (in-memory transport and real stdio)
 - Type check: 5 projects, pass.
 - ESLint: 301 files, 0 errors, 0 warnings.

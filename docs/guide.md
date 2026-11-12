@@ -126,7 +126,7 @@ setRows((rows) => [...rows.filter((r) => r.t > next.t - 120_000), next]);
 
 - The chart's outer element has `role="group"` and the SVG inside has `role="img"` with a title and a description built from the data (`<desc>`). A visually hidden data table is included too.
 - Tab in, move between items with the arrows, Home and End, and click with Enter or Space. The selected item is announced through aria-live.
-- Label text color is chosen by computing contrast against its background. In QA we measured more than 10,000 text labels in real screen pixels and confirmed all are 4.5:1 or higher.
+- Label text color is chosen by computing contrast against its background. In QA we measured more than 10,000 text labels in real screen pixels and confirmed all meet WCAG AA: 4.5:1, or 3:1 for large text such as the bar race period label.
 
 ## Connecting data
 

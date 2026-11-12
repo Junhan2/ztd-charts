@@ -531,7 +531,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "17.7 KB"
+    "limit": "17.9 KB"
   },
   {
     "name": "NetworkChart",
@@ -603,7 +603,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "139.15 KB"
+    "limit": "139.3 KB"
   },
   {
     "name": "Everything (index.js)",

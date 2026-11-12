@@ -8,7 +8,9 @@ import { textWidth } from "../src/core/text";
 import { renderSpecToSVG } from "../src/server";
 import { CHARTS, validateSpec } from "../src/spec";
 import { barRaceSample, barRaceSampleKo } from "../src/spec/samples";
+import { contrastRatio, parseColor } from "../src/theme/color";
 import { ThemeProvider } from "../src/theme/context";
+import { themes } from "../src/theme/tokens";
 
 /** tileMap.test.tsx와 같은 틀: active를 주면 고른 막대를, frame은 마지막 ChartFrame props예요 */
 const state = vi.hoisted(() => ({ active: null as number | null, via: "pointer" as "pointer" | "keyboard", frame: null as unknown }));
@@ -253,6 +255,27 @@ describe("BarRace", () => {
       }
       expect([...keys], `${name}: one size and place in every frame`).toHaveLength(1);
     }
+  });
+
+  it("the frame label is the theme's ink, just above the WCAG AA minimum for its size in both themes", () => {
+    const ex = CHARTS.find((c) => c.type === "barRace")!.example;
+    const needs = new Set<number>();
+    for (const width of [720, 330])
+      for (const theme of ["dark", "light"] as const) {
+        const svg = renderSpecToSVG({ ...ex, card: undefined }, { theme, width });
+        const tag = /<text([^>]*font-size="(?:1[89]|[2-7]\d)(?:\.\d+)?"[^>]*font-weight="800"[^>]*)>[^<]+<\/text>/.exec(svg)?.[1] ?? "";
+        const fill = /\sfill="([^"]*)"/.exec(tag)?.[1];
+        const opacity = Number(/\sopacity="([^"]*)"/.exec(tag)?.[1]);
+        // large text (18.66px bold and up) needs 3:1, smaller text 4.5:1
+        const need = Number(/\sfont-size="([^"]*)"/.exec(tag)?.[1]) >= 18.66 ? 3 : 4.5;
+        needs.add(need);
+        expect(fill, `${theme} ${width}px`).toBe(themes[theme].ink);
+        const ink = parseColor(fill)!;
+        const ratio = contrastRatio([ink[0], ink[1], ink[2], opacity], themes[theme].panel);
+        expect(ratio, `${theme} ${width}px at opacity ${opacity}`).toBeGreaterThanOrEqual(need);
+        expect(ratio, `${theme} ${width}px stays quiet`).toBeLessThan(need + 0.3);
+      }
+    expect([...needs].sort(), "both a large and a small label were drawn").toEqual([3, 4.5]);
   });
 
   it("1,000 items with top 10 over 500 frames draws only 10 bars", () => {
