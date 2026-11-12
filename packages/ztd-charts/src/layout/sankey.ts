@@ -1,6 +1,6 @@
 /**
- * 생키 배치:
- * 깊이(가장 긴 경로)로 열을 정하고, 열 안에서 위치를 여러 번 이완(relaxation)한 다음 겹침을 풀어요.
+ * Sankey layout:
+ * Sets columns by depth (the longest path), relaxes the positions within each column several times, then resolves overlaps.
  */
 export interface SankeyNodeIn {
   id: string;
@@ -33,7 +33,7 @@ export interface SankeyLink {
   target: SankeyNode;
   value: number;
   width: number;
-  /** 출발점, 도착점 y (가운데) */
+  /** y at the source and target ends (center) */
   y0: number;
   y1: number;
 }
@@ -75,8 +75,8 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   });
   for (const n of nodes) n.value = Math.max(n.inLinks.reduce((a, l) => a + l.value, 0), n.outLinks.reduce((a, l) => a + l.value, 0));
 
-  // 깊이: 시작 노드에서 가장 긴 경로. 순환을 만드는 되돌아가는 링크는 한 번의 깊이 우선 탐색으로 찾아 빼요
-  // (빼지 않으면 순환 안의 노드 깊이가 노드 수까지 부풀어 링크가 거꾸로 그려져요)
+  // Depth: the longest path from a start node. Back links that form cycles are found with one depth-first search and removed
+  // (left in, node depths inside a cycle inflate up to the node count and links are drawn backward)
   let frontier = nodes.filter((n) => !n.inLinks.length);
   if (!frontier.length) frontier = nodes.slice(0, 1);
   const state = new Map<SankeyNode, 1 | 2>();
@@ -160,7 +160,7 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   for (let it = 0; it < iterations; it++) {
     alpha *= 0.99;
     const a = Math.pow(0.99, it);
-    // 오른쪽에서 왼쪽
+    // Right to left
     for (let c = columns.length - 2; c >= 0; c--) {
       for (const n of columns[c]) {
         if (!n.outLinks.length) continue;
@@ -176,7 +176,7 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
       }
       resolve(columns[c]);
     }
-    // 왼쪽에서 오른쪽
+    // Left to right
     for (let c = 1; c < columns.length; c++) {
       for (const n of columns[c]) {
         if (!n.inLinks.length) continue;
@@ -194,7 +194,7 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
     }
   }
   void alpha;
-  // 링크 위치: 상대 노드의 높이 순서대로 쌓아요
+  // Link positions: stacked in the vertical order of the nodes at the other end
   for (const n of nodes) {
     n.outLinks.sort((a, b) => a.target.y0 - b.target.y0);
     n.inLinks.sort((a, b) => a.source.y0 - b.source.y0);
@@ -214,7 +214,7 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   return { nodes, links };
 }
 
-/** 링크 띠 path (가로 베지어) */
+/** Link band path (horizontal Bezier) */
 export function sankeyLinkPath(l: { source: { x1: number }; target: { x0: number }; y0: number; y1: number; width: number }, t = 1): string {
   const xs = l.source.x1;
   const xt = xs + (l.target.x0 - xs) * t;

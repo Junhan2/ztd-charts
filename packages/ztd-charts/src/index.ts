@@ -69,7 +69,7 @@ export { type XRange } from "./core/brush";
 export { templateTooltip } from "./charts/tooltipTemplate";
 export { Chart, CHART_COMPONENTS, encodingToProps, autoLegend, resolveDef, type ChartProps } from "./charts/Chart";
 export type { ChartSpec, SpecCard, SpecData, SpecFacet, ChartDef, ValidationResult, SpecIssue } from "./spec/types";
-// resolveDef 와 encodingToProps 의 타입에 나와요. 내보내지 않으면 쓰는 쪽의 선언 파일 생성이 TS2742 로 멈출 수 있어요
+// It appears in the types of resolveDef and encodingToProps. Without this export, declaration file generation in consuming projects can fail with TS2742
 export type { ChartMeta } from "./spec/meta";
 export { validateSpec, formatIssues } from "./spec/validate";
 

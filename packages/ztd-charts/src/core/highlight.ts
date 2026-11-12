@@ -1,11 +1,11 @@
 import type { Highlight } from "./types";
 
-/** 이름 대신 쓰는 강조 낱말 (resolveHighlight가 받는 것과 같아요) */
+/** Highlight keywords usable instead of names (the same ones resolveHighlight accepts) */
 export const HIGHLIGHT_KEYWORDS: readonly string[] = ["max", "min", "first", "last", "none"];
 
 /**
- * 강조 대상을 인덱스 집합으로.
- * labels: 항목 라벨, values: 비교용 값
+ * Turns the highlight target into a set of indexes.
+ * labels: item labels, values: values for comparison
  */
 export function resolveHighlight<T>(
   h: Highlight<T> | undefined,
@@ -40,7 +40,7 @@ export function resolveHighlight<T>(
   }
   if (typeof h === "function") {
     data.forEach((d, i) => {
-      // 히트맵의 빈 칸처럼 행이 없는 항목은 판별 함수에 넘기지 않아요
+      // Items without a row, such as empty heatmap cells, are not passed to the predicate
       if (i < n && d !== null && d !== undefined && h(d, i)) out.add(i);
     });
     return out;

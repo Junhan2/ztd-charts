@@ -3,27 +3,27 @@ import { useEffect, useRef, useState } from "react";
 export interface CanvasLayerProps {
   width: number;
   height: number;
-  /** 그리기. 진행도 t(0~1)와 실제 색을 읽는 함수를 받아요 */
+  /** Draw callback. Receives the progress t (0 to 1) and a function that reads the actual color */
   draw: (ctx: CanvasRenderingContext2D, t: number, color: (cssVar: string, fallback: string) => string) => void;
-  /** 0~1 등장 진행도 */
+  /** Entrance progress, 0 to 1 */
   progress: number;
-  /** 바뀌면 다시 그려요 */
+  /** Redraws when this changes */
   version: unknown;
-  /** 오른쪽을 이만큼(px) 가려요. 한 번 그린 그림을 CSS로 드러낼 때 (프레임마다 다시 그리지 않아요) */
+  /** Hides this many px on the right. For revealing a drawing made once through CSS (no redraw on every frame) */
   clipRight?: number;
-  /** 그리기 전에 전체를 지우지 않아요. 바뀐 부분만 다시 그리는 draw용 (크기가 바뀌면 캔버스는 어차피 비워져요) */
+  /** Skips clearing the whole canvas before drawing. For a draw that redraws only the changed parts (a resize clears the canvas anyway) */
   manualClear?: boolean;
 }
 
 /**
- * 점이 아주 많을 때 쓰는 캔버스 바닥층. SVG(축, 라벨) 아래에 깔려요.
- * CSS 변수 색은 그릴 때 계산된 값으로 읽어요. React가 다시 렌더하지 않는 변화(CSS만으로 바꾼 테마, 화면 배율)에도 다시 그려요.
+ * Canvas base layer for charts with very many points. It sits under the SVG (axes, labels).
+ * CSS variable colors are read as computed values at draw time. It also redraws on changes React does not re-render for (a theme switched by CSS alone, the screen's pixel ratio).
  */
 export function CanvasLayer(props: CanvasLayerProps) {
   const ref = useRef<HTMLCanvasElement | null>(null);
-  // 마지막 그림이 읽은 CSS 변수와 그 값. 테마가 바뀌었는지는 이 변수만 다시 읽어 봐요
+  // The CSS variables the last drawing read, with their values. A theme change is detected by re-reading only these variables
   const used = useRef(new Map<string, string>());
-  // 올리면 다시 그려요
+  // Incrementing this redraws
   const [tick, setTick] = useState(0);
   const { width, height, draw, progress, version, clipRight, manualClear } = props;
   useEffect(() => {
@@ -56,12 +56,12 @@ export function CanvasLayer(props: CanvasLayerProps) {
     if (!cv || typeof matchMedia !== "function") return undefined;
     const ac = new AbortController();
     const redraw = () => setTick((n) => n + 1);
-    // 쓰던 색이 달라졌을 때만 다시 그려요. 테마와 상관없는 속성이 바뀌면 변수 몇 개만 읽고 끝나요
+    // Redraws only when a color in use has changed. A change to an attribute unrelated to the theme costs only a few variable reads
     const check = () => {
       const cs = getComputedStyle(cv);
       for (const [v, c] of used.current) if (cs.getPropertyValue(v).trim() !== c) return redraw();
     };
-    // 배율 쿼리는 지금 배율에만 맞아서, 바뀌면 새 배율로 다시 걸어요 (다른 모니터로 옮기기, 브라우저 확대)
+    // The resolution query matches only the current ratio, so it is registered again for the new ratio when that changes (moving to another monitor, browser zoom)
     const watchDpr = () => {
       matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener?.(
         "change",
@@ -74,7 +74,7 @@ export function CanvasLayer(props: CanvasLayerProps) {
     };
     watchDpr();
     matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", check, { signal: ac.signal });
-    // 테마 전환은 html, body나 감싼 요소의 속성(class, data-theme, data-bs-theme, style 등)을 바꿔요. 이름이 제각각이라 조상의 속성을 다 봐요
+    // A theme switch changes attributes (class, data-theme, data-bs-theme, style and so on) on html, body or a wrapping element. The names vary, so every attribute of the ancestors is watched
     const mo = new MutationObserver(check);
     for (let el = cv.parentElement; el; el = el.parentElement) mo.observe(el, { attributes: true });
     return () => {

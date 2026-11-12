@@ -21,11 +21,11 @@ type RowName = "back" | "front";
 
 const en = {
   kind: "Skyline",
-  /** 이벤트의 series와 라이브 영역에 쓰는 줄 이름 */
+  /** Row names used in the event's series and in the live region */
   row: { back: "back", front: "front" },
   total: { back: "Back total", front: "Front total" },
   sum: "total",
-  /** 앞줄이 없을 때 툴팁의 합계 */
+  /** Tooltip total when there is no front row */
   sumLabel: "Total",
   rate: "Front ÷ back",
   peak: (v: string) => `Peak ${v}`,
@@ -33,7 +33,7 @@ const en = {
   range: (a: string, b: string) => `${a}–${b}`,
   nothing: "Nothing to draw",
   ofBack: (rate: string) => `${rate} of the back row`,
-  /** 숨긴 표 한 칸: 줄 이름, 합계, 계열 목록 */
+  /** One cell of the hidden table: row name, total, series list */
   cell: (row: string, total: string, list: string) => `${row ? `${row} ` : ""}${total}${list ? ` (${list})` : ""}`,
   desc: (nB: number, names: string, from: string, to: string) => `${plural(nB, "series", "series")} (${names}) stacked from ${from} to ${to}`,
   descPeak: (at: string, v: string) => `Peak period ${at} at ${v}`,
@@ -67,73 +67,73 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface SkylineChartProps<T = Row> extends BaseChartProps<T>, DayFirstProps {
-  /** 기간 필드. 날짜, 숫자, 범주 모두 돼요. 기본 "x" */
+  /** Period field. Dates, numbers and categories all work. Default "x" */
   x?: Accessor<T, unknown>;
-  /** 뒷줄에 쌓을 값 필드. 배열이면 넓은 표의 여러 열 */
+  /** Value fields to stack in the back row. An array means several columns of a wide table */
   y?: Accessor<T, number> | string[];
-  /** 계열 필드 (긴 표, 뒷줄만) */
+  /** Series field (long table, back row only) */
   series?: Accessor<T, string>;
-  /** 앞줄에 쌓을 필드 (넓은 표만). 뒷줄과 같은 단위의 작은 결과(실패, 재시도) */
+  /** Fields to stack in the front row (wide table only). Small outcomes in the same unit as the back row (failures, retries) */
   front?: string | string[];
-  /** 칸 폭 대비 뒷줄 깊이. high 시점은 0.1~0.45(기본 0.42), low 시점은 0.1~0.32(기본 0.32). high는 낮은 차트에서 값 눈금 자리를 남기려고 깊이를 줄여요 */
+  /** Back row depth relative to the slot width. The high view takes 0.1 to 0.45 (default 0.42), the low view 0.1 to 0.32 (default 0.32). In short charts, high reduces the depth to leave room for the value ticks */
   depth?: number;
   /**
-   * 시점. "high"(기본)는 바닥을 내려다봐서 앞줄 뚜껑이 바닥 위 타일로 보이고, "low"는 거의 정면에서 봐서 값 눈금 자리가 넓어요.
-   * 두 시점 모두 기간은 가로로 놓여서 더 높은 블록이 늘 더 많아요
+   * View angle. "high" (default) looks down at the floor, so the front row's tops read as tiles on the floor; "low" looks almost straight on, leaving more room for the value ticks.
+   * In both views the periods run horizontally, so a taller block always means more
    */
   view?: SkylineView;
-  /** 뒷벽 눈금. 기본 true */
+  /** Ticks on the back wall. Default true */
   wall?: boolean;
-  /** 빗금을 그릴 줄. 기본 "front" */
+  /** Rows that get hatching. Default "front" */
   texture?: "front" | "all" | "none";
-  /** 앞줄 합계가 뒷줄의 몇 %인지: "label"(라벨과 툴팁), "strip"(바닥 아래 비율 띠), false(숨김). 기본 "label" */
+  /** The front row total as a percentage of the back row: "label" (labels and tooltip), "strip" (a ratio strip under the floor), false (hidden). Default "label" */
   frontRate?: "label" | "strip" | false;
-  /** 강조: 계열이 여럿이면 계열 이름(앞줄 이름도 돼요, 기본 첫 계열), 하나면 기간(기본 가장 큰 기간). 판별 함수는 계열이 하나일 때 기간의 행을 받아요 */
+  /** Highlight: with several series, a series name (front row names work too; default the first series); with one series, a period (default the largest period). With one series, a predicate receives the period's row */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
 export type SkylineView = "high" | "low";
 
 interface ViewGeom {
-  /** 깊이 1px이 화면에서 오른쪽으로, 위로 가는 거리 */
+  /** How far 1px of depth moves right and up on screen */
   cx: number;
   cy: number;
-  /** 칸 폭에 대한 비율: 앞면 폭, 앞줄 깊이, 두 줄 사이 */
+  /** Ratios of the slot width: front face width, front row depth, gap between the two rows */
   face: number;
   front: number;
   gap: number;
-  /** 뒷줄 깊이(칸 폭 대비)의 최소, 최대, 기본. 최대는 뒷줄 옆면이 다음 칸에 닿기 전까지예요 */
+  /** Minimum, maximum and default back row depth (relative to the slot width). The maximum stops just before the back row's side face reaches the next slot */
   depth: readonly [number, number, number];
 }
 
 /**
- * 시점마다 기하. 2/√5, 1/√5를 숫자로 적어요 (Math.sqrt 호출은 번들러가 지우지 못해 다른 차트 묶음에도 남아요).
- * low는 0.8까지의 모양이에요: 깊이가 오른쪽 위로 2:1(26.57°)로 누워서 앞줄 뚜껑이 1~5px뿐이에요.
- * high는 같은 2:1을 세운 것(63.43°)이에요. 바닥을 내려다봐서 앞줄 뚜껑이 칸 폭의 0.38배 높이 타일이 되고,
- * 기간 축은 low처럼 가로예요. 뒷줄은 0.23칸 오른쪽으로 비켜나서 앞면이 같은 기간 앞줄과 57% 겹쳐요
+ * Geometry per view. 2/√5 and 1/√5 are written as numbers (the bundler cannot drop a Math.sqrt call, so it would stay in other charts' bundles too).
+ * low is the look used up to 0.8: depth recedes up and to the right at 2:1 (26.57°), so the front row's tops are only 1 to 5px.
+ * high stands the same 2:1 upright (63.43°). It looks down at the floor, so the front row's tops become tiles 0.38 slot widths tall,
+ * and the period axis stays horizontal as in low. The back row is offset 0.23 slots to the right, so its front face overlaps the same period's front row by 57%
  */
 const VIEWS: Record<SkylineView, ViewGeom> = {
   low: { cx: 0.8944271909999159, cy: 0.4472135954999579, face: 0.52, front: 0.14, gap: 0.05, depth: [0.1, 0.32, 0.32] },
   high: { cx: 0.4472135954999579, cy: 0.8944271909999159, face: 0.54, front: 0.42, gap: 0.1, depth: [0.1, 0.45, 0.42] },
 };
-/** 시점의 뒷줄 깊이 [최소, 최대, 기본] */
+/** The view's back row depth [min, max, default] */
 export const depthRange = (view: SkylineView = "high") => VIEWS[view].depth;
-/** 칸이 이보다 좁으면 이웃 기간을 합쳐요 */
+/** Merge neighboring periods when a slot is narrower than this */
 const MIN_SLOT = 20;
-/** 합쳐서라도 이보다 많은 기간은 그리지 않아요 (숨긴 표 60행 안) */
+/** Never draw more periods than this, even after merging (keeps the hidden table within 60 rows) */
 const MAX_SHOWN = 40;
 /**
- * high 시점 깊이가 쓸 수 있는 세로 자리(범례 아래부터 바닥까지)의 비율. 낮은 차트나 기간이 적은 넓은 차트에서
- * 깊이가 이보다 많이 먹으면 깊이를 같은 비율로 줄여서 값 눈금 자리가 60% 넘게 남아요. 보통 크기는 10~19%라 그대로예요
+ * Share of the vertical space (from below the legend to the floor) the high view's depth may use. In short charts, or wide charts with few periods,
+ * a depth that would take more than this is scaled down proportionally, so over 60% stays for the value ticks. Typical sizes use 10 to 19%, so they are unchanged
  */
 const MAX_DEPTH_SHARE = 0.4;
-/** 뒷벽 눈금 글자 사이 최소 세로 간격(px). 이보다 좁으면 0부터 같은 간격으로 눈금을 건너뛰어요 */
+/** Minimum vertical spacing (px) between back wall tick labels. When tighter, ticks are skipped at an even interval starting from 0 */
 const MIN_TICK_GAP = 14;
-/** 첫 기간 앞 여백, 맨 위 눈금 위 최고 라벨 자리, 바닥 판 두께 */
+/** Margin before the first period, room above the top tick for the peak label, floor slab thickness */
 const X0 = 10;
 const LABEL_ROOM = 20;
 const SLAB = 4;
-/** 비율 띠 높이 */
+/** Ratio strip height */
 const STRIP_H = 26;
 const LEGEND_LINE = 18;
 
@@ -143,13 +143,13 @@ const BACK_ROW: readonly RowName[] = ["back"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const pts = (list: [number, number][]) => list.map(([x, y]) => `${r1(x)},${r1(y)}`).join(" ");
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
-/** 가운데 정렬 글자의 x를 폭 width 안으로 당겨요 */
+/** Pulls the x of centered text in so the text stays within width */
 const inside = (x: number, text: string, size: number, width: number, weight = 400) => {
   const half = textWidth(text, size, weight) / 2;
   return Math.max(half + 2, Math.min(width - half - 2, x));
 };
 
-/** 그림 폭 plotW에 기간 n개를 놓을 때 몇 개씩 합칠지. 칸이 MIN_SLOT 이상이고 보이는 기간이 MAX_SHOWN 이하가 되는 가장 작은 수 */
+/** How many periods to merge when placing n periods in the plot width plotW: the smallest number that makes each slot at least MIN_SLOT wide and leaves at most MAX_SHOWN visible periods */
 export function mergeFactor(plotW: number, n: number): number {
   for (let k = 1; k < n; k++) {
     const shown = Math.ceil(n / k);
@@ -159,15 +159,15 @@ export function mergeFactor(plotW: number, n: number): number {
 }
 
 /**
- * 보이는 기간 i가 덮는 원래 기간 [시작, 끝). 묶음은 끝에서부터 세서, 덜 찬 묶음이 생기면 가장 오래된 첫 묶음이에요
- * (가장 최근 블록이 덜 차면 갑자기 줄어든 것처럼 읽혀요)
+ * Original periods [start, end) covered by visible period i. Groups are counted from the end, so a partial group, if any, is the first and oldest one
+ * (a partial most recent block would read as a sudden drop)
  */
 export function groupRange(i: number, n: number, k: number): [number, number] {
   const first = n - k * (Math.ceil(n / k) - 1);
   return i === 0 ? [0, first] : [first + (i - 1) * k, first + i * k];
 }
 
-/** [계열][기간] 값을 k개씩 더해 [보이는 기간][계열]로. 음수와 빈 값은 0이에요 (스카이라인은 0부터 쌓아요) */
+/** Sums [series][period] values k at a time into [visible period][series]. Negative and missing values count as 0 (the skyline stacks from 0) */
 function sumGroups(values: readonly number[][], n: number, k: number): number[][] {
   return Array.from({ length: Math.ceil(n / k) }, (_, i) => {
     const [a, b] = groupRange(i, n, k);
@@ -178,62 +178,62 @@ function sumGroups(values: readonly number[][], n: number, k: number): number[][
 export interface SkylineInput {
   width: number;
   height: number;
-  /** [계열][기간], 합치기 전 */
+  /** [series][period], before merging */
   back: readonly number[][];
   front: readonly number[][];
-  /** 기간 수 */
+  /** Number of periods */
   n: number;
-  /** 칸 폭 대비 뒷줄 깊이. 없으면 시점의 기본값 */
+  /** Back row depth relative to the slot width. Defaults to the view's default */
   depth?: number;
   wall: boolean;
-  /** 기본 "high" */
+  /** Default "high" */
   view?: SkylineView;
-  /** 위쪽 범례 높이 */
+  /** Height of the legend on top */
   legendH: number;
-  /** 바닥 판 아래 자리 (날짜, 앞줄 최고 라벨, 비율 띠) */
+  /** Room below the floor slab (dates, front row peak label, ratio strip) */
   below: number;
-  /** 눈금 글자 포맷터. 눈금 맨 위 값을 받아요 */
+  /** Tick label formatter. Receives the top tick value */
   tickFmt: (max: number) => ValueFormatter;
 }
 
 export interface SkylineLayout {
-  /** 몇 기간씩 합쳤는지. 1이면 그대로 */
+  /** How many periods were merged into one. 1 means unmerged */
   merge: number;
   shown: number;
-  /** [보이는 기간][계열] (합친 뒤) */
+  /** [visible period][series] (after merging) */
   back: number[][];
   front: number[][];
   backTotal: number[];
   frontTotal: number[];
   ticks: number[];
   fmt: ValueFormatter;
-  /** 값 1이 몇 px인지. 두 줄이 같은 눈금이에요 */
+  /** Pixels per value unit. Both rows share the same scale */
   k: number;
-  /** 칸 폭, 앞면 폭 */
+  /** Slot width, front face width */
   s: number;
   w: number;
-  /** 앞줄 바닥(앞 모서리), 뒷벽 바닥, 눈금 맨 위의 y */
+  /** y of the front row floor (front edge), the back wall floor and the top tick */
   floor: number;
   wallBase: number;
   top: number;
-  /** 깊이 1px이 화면에서 오른쪽으로, 위로 가는 거리 (시점) */
+  /** How far 1px of depth moves right and up on screen (per view) */
   cx: number;
   cy: number;
-  /** 바닥 앞 모서리에서 뒷줄까지 깊이(px) */
+  /** Depth (px) from the floor's front edge to the back row */
   lead: number;
-  /** 뒷줄이 앞줄에서 물러난 거리 (오른쪽, 위) */
+  /** How far the back row is set back from the front row (right, up) */
   shift: [number, number];
   depthFront: number;
   depthBack: number;
-  /** 뒷벽 x 범위 */
+  /** Back wall x range */
   wallX: [number, number];
-  /** 기간 i 앞면의 왼쪽 x */
+  /** Left x of period i's front face */
   slotX: (i: number) => number;
 }
 
 /**
- * 수평 바닥 배치: 기간은 왼쪽에서 오른쪽, 깊이만 시점의 각도로 물러나요. 칸 폭 s = 그림 폭 / (보이는 기간 + 0.55).
- * high 시점은 앞줄이 없으면 앞줄 자리를 비우지 않고 두 줄 사이만큼만 띄워요
+ * Level floor layout: periods run left to right, and only the depth recedes at the view's angle. Slot width s = plot width / (visible periods + 0.55).
+ * Without a front row, the high view leaves no empty front row space, only the gap between the two rows
  */
 export function skylineLayout(o: SkylineInput): SkylineLayout {
   const v = VIEWS[o.view ?? "high"];
@@ -245,7 +245,7 @@ export function skylineLayout(o: SkylineInput): SkylineLayout {
   let back: number[][] = [];
   let front: number[][] = [];
   let dom: [number, number] = [0, 1];
-  // 눈금 글자 폭이 그림 폭을, 그림 폭이 합칠 수를, 합친 합계가 눈금을 정해요. 합칠 수가 그대로일 때까지 (많아야 세 번)
+  // The tick label width sets the plot width, the plot width sets the merge count, and the merged totals set the ticks. Repeat until the merge count holds (three passes at most)
   for (let pass = 0; pass < 3; pass++) {
     const next = mergeFactor(plotWidth(labelW), o.n);
     if (next === k) break;
@@ -261,14 +261,14 @@ export function skylineLayout(o: SkylineInput): SkylineLayout {
   const w = v.face * s;
   const floor = o.height - o.below;
   const top = o.legendH + LABEL_ROOM;
-  // high: 깊이가 세로 자리를 MAX_DEPTH_SHARE보다 많이 먹으면 앞줄, 두 줄 사이, 뒷줄 깊이를 같은 비율로 줄여요. low는 0.8 그대로
+  // high: when the depth takes more than MAX_DEPTH_SHARE of the vertical space, scale the front row depth, the gap and the back row depth down proportionally. low stays as in 0.8
   const full = (frontDepth + v.gap + depth) * s * v.cy;
   const fit = o.view === "low" ? 1 : Math.min(1, (MAX_DEPTH_SHARE * Math.max(0, floor - top)) / (full || 1));
   const lead = (frontDepth + v.gap) * s * fit;
   const deep = lead + depth * s * fit;
   const wallBase = floor - deep * v.cy;
   const perValue = Math.max(0, wallBase - top) / (dom[1] || 1);
-  // 눈금 간격이 MIN_TICK_GAP보다 좁으면(낮은 차트) 0부터 같은 간격으로 건너뛰어 글자가 겹치지 않게 해요
+  // When the tick spacing is tighter than MIN_TICK_GAP (short charts), skip ticks at an even interval from 0 so the labels do not overlap
   const all = ticksFor(dom[0], dom[1], 4);
   const gap = all.length > 1 ? (all[1] - all[0]) * perValue : Infinity;
   const every = gap >= MIN_TICK_GAP ? 1 : gap > 0 ? Math.ceil(MIN_TICK_GAP / gap) : all.length;
@@ -299,29 +299,29 @@ export function skylineLayout(o: SkylineInput): SkylineLayout {
   };
 }
 
-/** ↑/↓가 고르는 줄. ↑는 뒷줄, ↓는 앞줄이고, 앞줄이 없거나 다른 키면 null(기본 규칙대로 기간을 옮겨요) */
+/** The row picked by ↑/↓. ↑ is the back row, ↓ the front row; null without a front row or for other keys (the period then moves by the default rule) */
 export function rowAfterKey(key: string, hasFront: boolean): RowName | null {
   if (!hasFront) return null;
   return key === "ArrowUp" ? "back" : key === "ArrowDown" ? "front" : null;
 }
 
-/** 쌓은 높이(px)를 아래부터 누적. 길이는 값에 비례하고 작은 조각을 부풀리지 않아요 */
+/** Cumulative stacked heights (px) from the bottom. Lengths are proportional to the values; small segments are not inflated */
 function cumulative(values: readonly number[], k: number): number[] {
   let acc = 0;
   return values.map((v) => (acc += v * k));
 }
 
 interface BlockGeom {
-  /** 앞면 왼쪽 x, 바닥 y, 앞면 폭 */
+  /** Front face left x, floor y, front face width */
   x: number;
   base: number;
   w: number;
-  /** 깊이 모서리가 화면에서 가는 거리 (오른쪽 +, 위 -) */
+  /** Screen offset of the depth edge (right +, up -) */
   dx: number;
   dy: number;
 }
 
-/** 블록 실루엣 (앞면, 옆면, 뚜껑을 감싼 여섯 점). 고른 블록의 테두리예요 */
+/** Block silhouette (six points wrapping the front face, side face and top). The outline of the selected block */
 function outline(g: BlockGeom, h: number): [number, number][] {
   const { dx, dy } = g;
   const top = g.base - h;
@@ -336,8 +336,8 @@ function outline(g: BlockGeom, h: number): [number, number][] {
 }
 
 /**
- * high 앞줄 색: accent2(분홍), accent3(다른 테마의 강조색) 순서. 셋째 계열부터는 둘을 번갈아 ink 쪽으로 30%씩 섞어요.
- * 강조색과 같은 톤이라 바닥(neutralSoft) 위 납작한 타일도 3:1을 넘겨요
+ * high front row colors: accent2 (pink), then accent3 (the other theme's accent color). From the third series on, the two alternate, mixed toward ink in 30% steps.
+ * They share the accent color's tone, so even flat tiles on the floor (neutralSoft) stay above 3:1
  */
 function frontPair(p: Painter, n: number): Swatch[] {
   return Array.from({ length: n }, (_, j) => {
@@ -348,7 +348,7 @@ function frontPair(p: Painter, n: number): Swatch[] {
   });
 }
 
-/** 뚜껑을 계열 몫대로 왼쪽부터 나눈 면들. 몫은 그린 높이가 아니라 값으로 세서 1px이 안 되는 타일도 나눠요. 몫을 못 세면 null */
+/** The top face split from the left by each series' share. Shares come from the values, not the drawn heights, so even tiles under 1px get split. null when the shares cannot be computed */
 function lidParts(g: BlockGeom, top: number, split: { fills: readonly string[]; values: readonly number[] } | undefined): ReactNode[] | null {
   if (!split) return null;
   const pos = (v: number) => (v > 0 ? v : 0);
@@ -366,14 +366,14 @@ function lidParts(g: BlockGeom, top: number, split: { fills: readonly string[]; 
 }
 
 /**
- * 쌓은 블록: 조각마다 앞면과 옆면, 옆면 그늘(빛은 왼쪽 위), 빗금, 조각 사이 1px 바탕색 틈, 합계 면인 뚜껑.
- * tile이면 1px이 안 되는 블록도 뚜껑을 그려요 (high 시점: 납작한 앞줄이 바닥 위 타일로 보여요). lidSplit이 있으면 뚜껑을 계열 몫대로 나눠 칠해요
+ * Stacked block: front and side faces per segment, side shading (light from the top left), hatching, a 1px background-color gap between segments, and the top face that carries the total.
+ * With tile, blocks under 1px still get a top (high view: the flat front row reads as tiles on the floor). With lidSplit, the top is painted in each series' share
  */
 function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[]; hatch: string | null; lid: string; lidSplit?: { fills: readonly string[]; values: readonly number[] }; lidStroke: boolean; lidInk?: boolean; lidHatch?: boolean; shade: number; tile?: boolean }) {
   const { p, g, cum, colors, hatch } = props;
   const { dx, dy } = g;
   const right = g.x + g.w;
-  /** 앞면 오른쪽 모서리 yTop~yBottom을 깊이 방향으로 민 옆면 */
+  /** Side face: the front face's right edge from yTop to yBottom, extruded along the depth */
   const sideFace = (yTop: number, yBottom: number) => pts([[right, yTop], [right + dx, yTop + dy], [right + dx, yBottom + dy], [right, yBottom]]);
   const h = cum[cum.length - 1] ?? 0;
   const top = g.base - h;
@@ -417,7 +417,7 @@ function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[
   );
 }
 
-/** 블록 위에 놓여도 읽히게 바탕색 테두리(halo)를 두른 굵은 글자 */
+/** Bold text with a background-color outline (halo) so it stays readable over blocks */
 function Halo(props: { p: Painter; x: number; y: number; size?: number; opacity?: number; children: ReactNode }) {
   const { p } = props;
   return (
@@ -427,7 +427,7 @@ function Halo(props: { p: Painter; x: number; y: number; size?: number; opacity?
   );
 }
 
-/** 범례 항목 자리. 앞줄 첫 항목 앞에는 세로 구분선 자리를 두고, 폭을 넘으면 다음 줄로 */
+/** Legend item positions. Leaves room for a vertical divider before the first front row item, and wraps to the next line past the width */
 function legendPlaces(items: readonly { name: string; divider: boolean }[], width: number): { x: number; line: number }[] {
   const out: { x: number; line: number }[] = [];
   let x = 0;
@@ -447,7 +447,7 @@ function legendPlaces(items: readonly { name: string; divider: boolean }[], widt
   return out;
 }
 
-/** 비율 띠: 앞줄 합계 ÷ 뒷줄 합계를 앞면과 같은 x에. 자기 눈금(0과 위 끝)을 따로 적는 별도 판이라 이중 축이 아니에요 */
+/** Ratio strip: front row total ÷ back row total, at the same x as the front faces. It is a separate panel that labels its own scale (0 and the top), so it is not a dual axis */
 function RateStrip(props: { p: Painter; rates: (number | null)[]; x: (i: number) => number; w: number; from: number; to: number; top: number; right: number; title: string; pct: (v: number) => string; fade: (i: number) => number }) {
   const { p, rates } = props;
   const max = Math.max(0, ...rates.map((r) => r ?? 0));
@@ -481,7 +481,7 @@ function RateStrip(props: { p: Painter; rates: (number | null)[]; x: (i: number)
   );
 }
 
-/** 스카이라인: 기간마다 쌓은 양을 수평 바닥 위 블록으로, 같은 단위의 작은 결과를 그 앞줄에 */
+/** Skyline: each period's stacked amount as a block on a level floor, with small outcomes in the same unit in the row in front of it */
 export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const strip = props.frontRate === "strip" && props.front !== undefined;
   const c = useChart(props, { height: (w) => Math.max(300, Math.min(440, w * 0.58)) + (strip ? 40 : 0), duration: 800, stagger: 40 });
@@ -492,7 +492,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
 
   const frontFields = useMemo(() => (props.front === undefined ? [] : Array.isArray(props.front) ? props.front : [props.front]), [props.front]);
   const backModel = useMemo(() => prepSeries(props.data, props.x, props.y, props.series, { locale: c.locale, dayFirst: props.dayFirst }), [props.data, props.x, props.y, props.series, c.locale, props.dayFirst]);
-  // 앞줄은 뒷줄과 같은 x 종류로 읽어요. 기간 키는 x로만 정해져서 뒷줄과 같아요
+  // Read the front row with the same x kind as the back row. Period keys depend only on x, so they match the back row
   const frontValues = useMemo(
     () => (frontFields.length ? prepSeries(props.data, props.x, frontFields, undefined, { locale: c.locale, xType: backModel.type, dayFirst: props.dayFirst }).values : []),
     [props.data, props.x, frontFields, c.locale, backModel, props.dayFirst],
@@ -512,7 +512,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const showStrip = strip && hasFront;
   const frontLabel = hasFront && !strip && c.showLabels;
 
-  // 범례: 뒷줄 계열, 세로 구분선, 앞줄 계열. 계열이 하나뿐이면 그리지 않아요
+  // Legend: back row series, a vertical divider, front row series. Not drawn when there is only one series
   const legendItems = useMemo(() => (nB > 1 || hasFront ? all.map((name, j) => ({ name, divider: j === nB && nB > 0 })) : []), [all, nB, hasFront]);
   const legendAt = useMemo(() => legendPlaces(legendItems, W), [legendItems, W]);
   const legendH = legendAt.length ? (legendAt[legendAt.length - 1].line + 1) * LEGEND_LINE + 6 : 0;
@@ -537,7 +537,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   );
   const { shown, merge } = L;
 
-  // 보이는 기간마다 이름(합쳤으면 범위), 키, 묶기 키, 원래 행(합쳤으면 null)
+  // Per visible period: name (a range when merged), key, grouping key, original row (null when merged)
   const periods = useMemo(() => {
     const n = backModel.keys.length;
     return Array.from({ length: shown }, (_, i) => {
@@ -553,22 +553,22 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
     });
   }, [shown, merge, backModel, msg]);
 
-  // 강조: 계열이 여럿이거나 계열 이름을 주면 계열(기본 첫 계열), 계열이 하나면 기간(기본 가장 큰 기간). 색은 전체 계열로 한 번 정해요
+  // Highlight: a series when there are several series or a series name is given (default the first series); a period when there is one series (default the largest period). Colors are set once across all series
   const colors = useMemo(() => {
     const h = props.highlight;
     const byName = typeof h === "string" ? all.includes(h) : Array.isArray(h) && h.some((x) => typeof x === "string" && all.includes(x));
-    // 앞줄: high는 accent2·accent3라 납작한 타일도 바닥 위에서 보여요(앞줄 계열을 강조하면 0.9처럼 강조 단계). low는 0.8까지처럼 회색 단계
+    // Front row: high uses accent2 and accent3, so even flat tiles show on the floor (highlighting a front row series gives accent steps, as in 0.9). low uses gray steps, as up to 0.8
     const frontSw = (part: ReadonlySet<number>) => (!high ? ramp(p, nF, part) : part.size ? categoricalDots(p, nF, part) : frontPair(p, nF));
     if (nB === 1 && !byName) {
       const hi = resolveHighlight(h, periods.map((x) => x.datum as T), periods.map((x) => x.label), L.backTotal, "max");
       return { periods: emphasis(p, shown, hi), back: [swatch(p, "neutral")], front: frontSw(new Set()), split: high };
     }
     const totals = [...names.map((_, j) => sum(L.back.map((r) => r[j]))), ...frontFields.map((_, j) => sum(L.front.map((r) => r[j])))];
-    // 계열 강조에는 이름과 인덱스만 써요. 판별 함수는 행을 받는 함수라서 계열 이름에 넘기지 않아요
+    // Series highlight uses only names and indexes. A predicate takes rows, so it is not passed series names
     const hi = resolveHighlight(typeof h === "function" ? undefined : h, all, all, totals, "first");
     const part = (from: number, n: number) => new Set([...hi].filter((i) => i >= from && i < from + n).map((i) => i - from));
     const fp = part(nB, nF);
-    // 뚜껑 나눔은 accent2·accent3일 때만. 앞줄 계열을 강조하면 0.9처럼 중립 뚜껑이에요
+    // Split tops only with accent2 and accent3. Highlighting a front row series gives neutral tops, as in 0.9
     return { periods: null, back: ramp(p, nB, part(0, nB)), front: frontSw(fp), split: high && fp.size === 0 };
   }, [props.highlight, all, nB, nF, periods, L, p, shown, names, frontFields, high]);
   const swatches = (i: number, r: RowName) => (r === "front" ? colors.front : colors.periods ? [colors.periods[i]] : colors.back);
@@ -577,7 +577,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const hatchFill = `url(#${uid}h)`;
   const hatched = (r: RowName) => texture === "all" || (texture === "front" && r === "front");
   const backLid = p.mix("panel", "neutralSoft", 0.5);
-  /** high 시점 앞줄 뚜껑: 계열 몫대로 나눠 계열 색으로 칠하고(몫을 못 셀 때만 이 중립 면), 빗금(범례의 앞줄 견본과 같은 무늬)과 ink 테두리 */
+  /** high view front row tops: split by series share and painted in series colors (this neutral face only when the shares cannot be computed), with hatching (the same pattern as the front row swatch in the legend) and an ink outline */
   const frontLid = p.paint("neutral");
 
   const geom = (i: number, r: RowName): BlockGeom => {
@@ -587,14 +587,14 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   };
   const total = (i: number, r: RowName) => (r === "back" ? L.backTotal[i] : L.frontTotal[i]);
   const values = (i: number, r: RowName) => (r === "back" ? L.back[i] : L.front[i]);
-  /** 블록 뚜껑 뒤 모서리의 y */
+  /** y of the back edge of a block's top */
   const lidBackY = (i: number, r: RowName) => {
     const g = geom(i, r);
     return g.base - total(i, r) * L.k + g.dy;
   };
   const rows = hasFront ? BOTH_ROWS : BACK_ROW;
 
-  // 움직임: 바닥에서 자라요. 기간마다 stagger(기본 40ms, 전체 600ms 안), 앞줄은 그 기간 뒷줄보다 120ms 늦게
+  // Motion: blocks grow from the floor. Staggered per period (40ms by default, within 600ms overall); the front row starts 120ms after that period's back row
   const D = c.motion.duration ?? 800;
   const stg = Math.min(c.motion.stagger ?? 40, 600 / Math.max(1, shown - 1));
   const marks = useMemo<Mark<{ i: number; r: RowName }>[]>(
@@ -620,14 +620,14 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
     const rate = rateOf(i);
     return rate === null ? "" : pct(rate);
   };
-  /** 한 줄의 계열을 위에서 아래 순서로. 툴팁, 라이브 영역, 숨긴 표가 같은 순서예요 */
+  /** A row's series in top-to-bottom order. The tooltip, live region and hidden table use the same order */
   const topDown = (i: number, r: RowName) =>
     (r === "back" ? names : frontFields)
       .map((name, j) => ({ name, v: values(i, r)[j], sw: swatches(i, r)[j] }))
       .reverse();
   const listText = (i: number, r: RowName) => topDown(i, r).map((s) => `${s.name} ${fv(s.v)}`).join(", ");
   const several = (r: RowName) => (r === "back" ? nB : nF) > 1;
-  /** 라이브 영역: 고른 줄의 계열(위→아래)과 합계, 앞줄이면 뒷줄 대비 비율 */
+  /** Live region: the selected row's series (top → bottom) and total, plus the ratio to the back row for the front row */
   const rowSentence = (i: number, r: RowName) => {
     const parts = several(r) ? [listText(i, r), `${msg.sum} ${fv(total(i, r))}`] : [listText(i, r)];
     if (r === "front" && frontRate !== false && rateOf(i) !== null) parts.push(msg.ofBack(rateText(i)));
@@ -635,7 +635,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   };
 
   const empty = L.backTotal.every((v) => v === 0) && L.frontTotal.every((v) => v === 0);
-  // 이벤트는 기간마다 하나예요. 줄은 차트 안 상태이고, series와 value가 고른 줄을 따라가요. 표 글은 뒷줄 다음 앞줄
+  // One event per period. The row is state inside the chart, and series and value follow the selected row. Table text lists the back row, then the front row
   const events = useMemo<ChartEvent<T>[]>(
     () =>
       empty
@@ -649,7 +649,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
             value: total(i, curRow),
             formatted: rows.map((r) => msg.cell(hasFront ? msg.row[r] : "", fv(total(i, r)), several(r) ? listText(i, r) : "")).join(", "),
           })),
-    // empty, total, several, listText는 아래 값들로 정해져요
+    // empty, total, several and listText derive from the values below
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [L, periods, msg, curRow, fv, names, frontFields],
   );
@@ -657,24 +657,24 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   useSync(c, props.syncId, syncKeys.keys, syncKeys.labels);
   const active = c.active !== null && c.active < shown && !empty ? c.active : null;
 
-  /** 툴팁 자리: 고른 기간 블록 위 빈 곳. 자리가 없으면 블록 옆 (ChartFrame이 차트 폭 안에 가둬요) */
-  // 툴팁 폭을 글자로 재요. 값은 늘 글자예요
+  /** Tooltip position: the empty space above the selected period's block, or beside the block when there is no room (ChartFrame keeps it within the chart width) */
+  // Measure the tooltip width from its text. Values are always strings
   const tipAt = (i: number, tipRows: (TooltipRow & { value: string })[], title: string): TooltipData => {
     const b = geom(i, "back");
     const half = (b.w + b.dx) / 2;
     const cx = b.x + half;
     const topY = Math.min(lidBackY(i, "back"), lidBackY(i, "front"));
-    // ChartFrame 툴팁: 위아래 여백 8px씩, 제목 22px, 행마다 18px, 테두리 2px
+    // ChartFrame tooltip: 8px padding top and bottom, 22px title, 18px per row, 2px border
     const estH = 40 + tipRows.length * 18;
     if (topY - estH - 14 >= 2) return { x: cx, y: topY, title, rows: tipRows };
     const estW = Math.max(112, textWidth(title, 11.5, 600), ...tipRows.map((r) => (r.color ? 15 : 0) + textWidth(r.label ?? "", 12) + 16 + textWidth(r.value, 12, 700))) + 24;
     const away = half + 12 + estW / 2;
-    // 카드 위 끝을 블록 꼭대기에 맞추되 차트 높이 안에 가둬요 (ChartFrame은 y 위로 카드 높이 + 14px만큼 올려 그려요)
+    // Align the card's top edge with the block's peak, kept within the chart height (ChartFrame draws the card its height + 14px above y)
     const cardTop = Math.max(4, Math.min(topY, H - estH - 4));
     return { x: cx + away + estW / 2 <= W - 4 ? cx + away : cx - away, y: cardTop + estH + 14, title, rows: tipRows };
   };
 
-  // 툴팁: 뒷줄 계열 위→아래와 합계, 앞줄 계열 위→아래와 합계, 비율. 고른 줄의 머리(합계, 계열 하나면 그 줄)를 굵게
+  // Tooltip: back row series top → bottom and total, front row series top → bottom and total, ratio. The selected row's head (its total, or the row itself with one series) is bold
   let tip: TooltipData | null = null;
   if (active !== null) {
     const tipRows: (TooltipRow & { value: string })[] = [];
@@ -688,7 +688,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   }
   const announce = active !== null && c.via === "keyboard" ? rowSentence(active, curRow) : undefined;
 
-  // 자동 설명: 뒷줄 최고 기간, 앞줄 최고 기간과 뒷줄 대비 비율, 합쳤으면 합친 단위
+  // Automatic description: the back row's peak period, the front row's peak period and its ratio to the back row, and the merge unit when merged
   const peakB = L.backTotal.indexOf(Math.max(...L.backTotal));
   const peakF = hasFront ? L.frontTotal.indexOf(Math.max(...L.frontTotal)) : -1;
   let auto = msg.kind;
@@ -700,7 +700,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   }
   const desc = `${props.description ?? `${auto}.`}${hasFront ? ` ${msg.keys}` : ""}`;
 
-  // 날짜: 앞면 가운데 아래(양끝은 차트 안으로 당긴 자리). 좁으면 그 자리로 솎아요
+  // Dates: centered under the front faces (the two ends pulled inside the chart). When crowded, thin them out by those positions
   const dates = useMemo(() => {
     const xs = periods.map((pd, i) => inside(L.slotX(i) + L.w / 2, pd.label, AXIS_FONT, W));
     return { xs, show: thinLabels(xs, periods.map((x) => x.label), AXIS_FONT, 6) };
@@ -711,7 +711,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const pick = (px: number, py: number, touch: boolean) => {
     if (empty) return;
     const i = evenIndex(px, L.slotX(0) + L.s * 0.49, L.slotX(shown - 1) + L.s * 0.49, shown);
-    // 앞줄 블록 꼭대기(high는 뚜껑 뒤 모서리)에서 조금 위까지와 그 아래는 앞줄, 그 위는 뒷줄. 터치는 기간만 고르고 뒷줄로 시작해요
+    // From slightly above the front row block's peak (the back edge of its top in high) downward is the front row; above that is the back row. Touch picks only the period and starts on the back row
     const reach = high ? L.depthFront * L.cy + 4 : 6;
     const next = !touch && hasFront && py >= L.floor - L.frontTotal[i] * L.k - reach ? "front" : "back";
     if (next !== row) setRow(next);
@@ -732,7 +732,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const peakLabel = () => {
     const g = geom(peakB, "back");
     const text = msg.peak(fv(L.backTotal[peakB]));
-    // 오른쪽 끝 기간이면 눈금 글자 열을 침범하지 않게 뒷벽 안으로 당겨요
+    // For the rightmost period, pull the label inside the back wall so it does not run into the tick label column
     const x = Math.min(g.x + (g.w + g.dx) / 2, (wall ? L.wallX[1] : W - 2) - textWidth(text, 11.5, 700) / 2);
     return (
       <Halo p={p} x={x} y={lidBackY(peakB, "back") - 11} opacity={fade(peakB)}>
@@ -835,12 +835,12 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
                 const g = geom(i, r);
                 const target = total(i, r) * L.k;
                 if (high) {
-                  // high: 합계 0은 바닥에 점선 빈 자리, 0보다 크면 1px이 안 돼도 뚜껑 타일까지 그려요. 길이는 바꾸지 않아요
-                  // (0인지는 값으로 봐요. 차트가 아주 낮아 눈금 배율이 0이어도 값이 있는 블록은 빈 자리가 아니에요)
+                  // high: a total of 0 gets a dashed empty spot on the floor; above 0, a top tile is drawn even under 1px. Lengths are not changed
+                  // (Zero is judged by value. Even when a very short chart makes the scale factor 0, a block with a value is not an empty spot)
                   if (total(i, r) === 0) return <polygon key={r} points={pts([[g.x, g.base], [g.x + g.w, g.base], [g.x + g.w + g.dx, g.base + g.dy], [g.x + g.dx, g.base + g.dy]])} fill="none" stroke={p.paint("neutralStrong")} strokeOpacity={0.7} strokeDasharray="2 2" />;
                   return <Prism key={r} p={p} g={g} cum={it.v} colors={swatches(i, r)} hatch={hatched(r) ? hatchFill : null} lid={r === "back" ? backLid : frontLid} lidSplit={r === "front" && colors.split ? { fills: swatches(i, r).map((s) => s.fill), values: values(i, r) } : undefined} lidStroke lidInk={r === "front"} lidHatch={r === "front"} shade={shade} tile />;
                 }
-                // low: 0이 아닌데 1px이 안 되면 블록 대신 바닥에 가는 선 (맨 위 계열 색). 길이는 바꾸지 않아요
+                // low: a nonzero value under 1px becomes a thin line on the floor instead of a block (in the top series' color). Lengths are not changed
                 if (target > 0 && target < 1) {
                   const vals = values(i, r);
                   let topJ = vals.length - 1;

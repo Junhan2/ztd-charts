@@ -22,18 +22,18 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface RadarChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
-  /** 강조할 계열(이름 또는 인덱스). 함수는 계열 이름을 받아요. 기본 첫 계열 */
+  /** Series to highlight (name or index). A function receives the series name. Default: the first series */
   highlight?: Highlight<string>;
-  /** 축(지표) 필드. 기본 "axis" */
+  /** Axis (metric) field. Default "axis" */
   axis?: Accessor<T, string>;
-  /** 계열 필드. 넓은 표면 value에 배열로 */
+  /** Series field. For a wide table, pass an array to value */
   series?: Accessor<T, string>;
   value?: Accessor<T, number> | string[];
-  /** 바깥 고리 값. 없으면 데이터 최댓값을 깔끔하게 올림 */
+  /** Value of the outer ring. Defaults to the data maximum, rounded up to a clean number */
   max?: number;
-  /** 고리 수. 기본 4 */
+  /** Number of rings. Default 4 */
   levels?: number;
-  /** 다각형 대신 원 격자. 기본 false */
+  /** Circular grid instead of polygons. Default false */
   circular?: boolean;
 }
 
@@ -44,7 +44,7 @@ interface Poly {
   hi: boolean;
 }
 
-/** 레이더 차트: 여러 지표를 한 번에 비교 */
+/** Radar chart: compares several metrics at once */
 export function RadarChart<T = Row>(props: RadarChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(300, w * 0.66)), duration: 900, stagger: 160 });
   const { p, width: W, height: H } = c;
@@ -123,7 +123,7 @@ export function RadarChart<T = Row>(props: RadarChartProps<T>) {
         {Array.from({ length: levels }, (_, l) => {
           const v = (max * (l + 1)) / levels;
           const [x, y] = polar(cx, cy, (R * (l + 1)) / levels, 0);
-          // 강조 다각형 채움 위에 놓일 수 있어서 muted 대신 ink (대비 4.5:1 이상)
+          // Can sit on top of the highlighted polygon's fill, so use ink instead of muted (contrast 4.5:1 or more)
           return (
             <Txt key={l} x={x + 4} y={y + 1} size={9.5} fill={p.paint("ink")}>
               {c.fmt(v)}

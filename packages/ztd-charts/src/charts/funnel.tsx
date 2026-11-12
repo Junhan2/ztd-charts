@@ -13,7 +13,7 @@ import { plural, type ChartLang } from "../core/i18n";
 
 const en = {
   kind: "Funnel chart",
-  /** 전환율 열 제목 */
+  /** Conversion rate column title */
   header: "vs. previous",
   vsPrev: "vs. previous step",
   vsFirst: "vs. first step",
@@ -41,11 +41,11 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface FunnelChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 오른쪽 전환율 표시. 기본 true */
+  /** Show conversion rates on the right. Default true */
   showRates?: boolean;
-  /** 전환율 기준: "previous"(전 단계) | "first"(첫 단계). 기본 "previous" */
+  /** Conversion rate base: "previous" (previous stage) | "first" (first stage). Default "previous" */
   rateBase?: "previous" | "first";
-  /** 전환율 열 제목. 기본 "vs. previous" (한국어 로캘은 "전 단계 대비") */
+  /** Conversion rate column title. Default "vs. previous" ("전 단계 대비" in the Korean locale) */
   rateLabel?: string;
 }
 
@@ -59,7 +59,7 @@ interface Stage<T> {
   datum: T;
 }
 
-/** 퍼널 차트: 단계별 이탈을 보여줘요. 기본 강조는 전환율이 가장 낮은 단계 */
+/** Funnel chart: shows drop-off by stage. The default highlight is the stage with the lowest conversion rate */
 export function FunnelChart<T = Row>(props: FunnelChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(180, Math.min(260, w * 0.56)), duration: 800, stagger: 110 });
   const { p, width: W, height: H } = c;

@@ -9,13 +9,13 @@ export const SCHEMA_ID = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.
 const FORMAT_NAMES = ["number", "integer", "percent", "ratio", "compact", "currency", "decimal"];
 
 /**
- * 스키마 설명에 들어가는 고정 글. 기본은 영어(SCHEMA_TEXT_EN)이고 한글은 locales/ko.ts의 SCHEMA_TEXT_KO예요.
- * 한글 스키마는 localize.ts의 specSchemaIn, schemaForIn이 만들어요 (이 파일은 한글 표를 불러오지 않아요).
+ * Fixed text used in schema descriptions. English by default (SCHEMA_TEXT_EN); Korean is SCHEMA_TEXT_KO in locales/ko.ts.
+ * The Korean schemas are built by specSchemaIn and schemaForIn in localize.ts (this file does not load the Korean tables).
  */
 export interface SchemaText {
-  /** 전체 스키마 설명 */
+  /** Description of the whole schema */
   spec: string;
-  /** 차트 설명의 "쓸 때", "피할 때" */
+  /** The "Use when" and "Avoid when" labels of a chart description */
   useWhen: string;
   avoidWhen: string;
   data: string;
@@ -33,11 +33,11 @@ export interface SchemaText {
   level: string;
   sample: string;
   theme: string;
-  /** format 옵션의 Intl 객체 설명 */
+  /** Description of the format option's Intl object */
   formatObject: string;
-  /** annotations 항목의 필드 설명 */
+  /** Field descriptions of annotations items */
   annotation: { type: string; x: string; y: string; from: string };
-  /** spec.facet(작은 여러 개)과 그 키의 설명 */
+  /** Descriptions of spec.facet (small multiples) and its keys */
   facet: { spec: string; by: string; columns: string; scale: string };
 }
 
@@ -75,7 +75,7 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   },
 };
 
-/** spec.facet 스키마. facet을 그리는 차트(line, area, bar, scatter)의 스키마에만 넣어요 */
+/** The spec.facet schema. Added only to the schemas of charts that draw facets (line, area, bar, scatter) */
 function facetSchema(t: SchemaText): JSONSchema {
   return {
     type: "object",
@@ -90,7 +90,7 @@ function facetSchema(t: SchemaText): JSONSchema {
   };
 }
 
-/** data, card, theme, tooltip 정의. tooltip은 차트 44종이 같이 가리켜요(차트마다 적으면 전체 스키마가 약 24KB 커져요) */
+/** Definitions of data, card, theme and tooltip. All 44 charts point to the same tooltip (writing it per chart would grow the full schema by about 24KB) */
 function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" | "theme" | "tooltip", JSONSchema> {
   const tip = common.find((o) => o.type === "tooltip");
   return {
@@ -150,7 +150,7 @@ function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" 
 export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSONSchema {
   const base: JSONSchema = { description: o.description };
   if (o.default !== undefined) base.default = o.default;
-  // 숫자 옵션과 숫자 배열의 항목이 같이 써요
+  // Shared by number options and the items of number arrays
   const range = { ...(o.min !== undefined ? { minimum: o.min } : {}), ...(o.max !== undefined ? { maximum: o.max } : {}) };
   switch (o.type) {
     case "number":
@@ -198,7 +198,7 @@ export function optionSchema(o: OptionDef, t: SchemaText = SCHEMA_TEXT_EN): JSON
   }
 }
 
-/** 차트 하나의 스펙 스키마. def, 공통 옵션, 글은 같은 언어로 맞춘 것을 넘겨요. shared면 tooltip을 $defs에서 가리켜요($defs를 같이 싣는 전체·차트별 스키마) */
+/** The spec schema of one chart. Pass def, common options and text in the same language. With shared, tooltip points into $defs (for the full and per-chart schemas, which carry $defs) */
 export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS, t: SchemaText = SCHEMA_TEXT_EN, shared = false): JSONSchema {
   const enc: Record<string, JSONSchema> = {};
   for (const c of def.encoding) {
@@ -228,7 +228,7 @@ export function chartSchema(def: ChartDef, common: OptionDef[] = COMMON_OPTIONS,
   };
 }
 
-/** 차트 목록, 공통 옵션, 글로 전체 스키마를 만들어요. specSchema와 specSchemaIn이 같이 써요 */
+/** Builds the full schema from a chart list, common options and text. Shared by specSchema and specSchemaIn */
 export function buildSpecSchema(charts: ChartDef[], common: OptionDef[], t: SchemaText): JSONSchema {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -243,17 +243,17 @@ export function buildSpecSchema(charts: ChartDef[], common: OptionDef[], t: Sche
   };
 }
 
-/** 차트 하나의 독립 스키마를 만들어요. schemaFor와 schemaForIn이 같이 써요 */
+/** Builds the standalone schema of one chart. Shared by schemaFor and schemaForIn */
 export function buildSchemaFor(def: ChartDef, common: OptionDef[], t: SchemaText): JSONSchema {
   return { $schema: "https://json-schema.org/draft/2020-12/schema", $id: SCHEMA_ID.replace(/chart-spec\.schema\.json$/, `charts/${def.type}.schema.json`), ...chartSchema(def, common, t, true), $defs: sharedDefs(t, common) };
 }
 
-/** 모든 차트를 담은 스펙 JSON Schema (draft 2020-12). 설명은 영어, 한글은 specSchemaIn("ko") */
+/** Spec JSON Schema covering every chart (draft 2020-12). Descriptions are English; Korean through specSchemaIn("ko") */
 export function specSchema(): JSONSchema {
   return buildSpecSchema(CHARTS, COMMON_OPTIONS, SCHEMA_TEXT_EN);
 }
 
-/** 차트 한 종류의 독립 스키마. 설명은 영어, 한글은 schemaForIn(type, "ko") */
+/** The standalone schema of one chart type. Descriptions are English; Korean through schemaForIn(type, "ko") */
 export function schemaFor(type: string): JSONSchema | null {
   const def = getChartDef(type);
   return def ? buildSchemaFor(def, COMMON_OPTIONS, SCHEMA_TEXT_EN) : null;

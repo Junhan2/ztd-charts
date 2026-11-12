@@ -15,7 +15,7 @@ function worst(s: number, mn: number, mx: number, side: number): number {
   return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
 }
 
-/** Squarified treemap (Bruls, Huizing, van Wijk). values는 큰 순서일수록 보기 좋아요 */
+/** Squarified treemap (Bruls, Huizing, van Wijk). Looks best with values sorted largest first */
 export function squarify(values: readonly number[], box: Rect): Rect[] {
   const tot = sum(values.map((v) => Math.max(0, v)));
   const out: Rect[] = values.map(() => ({ x: box.x, y: box.y, w: 0, h: 0 }));
@@ -77,24 +77,24 @@ export interface TreeNode<T = unknown> {
   parent: TreeNode<T> | null;
   children: TreeNode<T>[];
   datum: T | null;
-  /** 형제 사이 순서 */
+  /** Order among siblings */
   index: number;
 }
 
 export interface HierarchyAccessors<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 부모 이름 필드 (평평한 표) */
+  /** Parent name field (flat table) */
   group?: Accessor<T, string>;
-  /** 여러 단계: ["대분류", "중분류"] 처럼 경로 필드 목록 */
+  /** Several levels: a list of path fields such as ["대분류", "중분류"] (category, subcategory) */
   path?: string[];
-  /** 중첩 객체의 자식 필드 */
+  /** Children field of nested objects */
   children?: string;
 }
 
 /**
- * 평평한 표(group + label + value), 경로 열(path), 중첩 객체(children) 어느 모양이든 트리로.
- * 값은 잎에서 위로 더해요.
+ * Builds a tree from any shape: a flat table (group + label + value), path columns (path) or nested objects (children).
+ * Values are summed from the leaves up.
  */
 export function buildTree<T>(data: readonly T[], acc: HierarchyAccessors<T>, rootLabel = "All"): TreeNode<T> {
   const gl = strGetter(acc.label, "label");
@@ -176,7 +176,7 @@ export interface Arc<T> {
   depth: number;
 }
 
-/** 원형 분할 (선버스트): 깊이마다 고리 하나 */
+/** Radial partition (sunburst): one ring per depth */
 export function partitionAngles<T>(root: TreeNode<T>, a0 = 0, a1 = Math.PI * 2): Arc<T>[] {
   const out: Arc<T>[] = [];
   const walk = (n: TreeNode<T>, s: number, e: number) => {

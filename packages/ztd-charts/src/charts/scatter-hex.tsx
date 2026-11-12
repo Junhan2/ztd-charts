@@ -16,15 +16,15 @@ import { DOT_PAD, HEX_TOP, PLOT_BOTTOM, hexBins, hexGap, hexGrid, hexNeighbor, h
 import { useChartTheme, type Painter } from "../theme/context";
 
 /*
- * 산점도 육각 밀도(options.bin "hex"). bubble.tsx의 PointChart가 점 대신 이 칸을 그려요.
- * SCATTER_KIT.hex와 ScatterChart.facetPlan으로만 넘겨서 버블 차트와 다른 차트의 번들에는 들어가지 않아요
+ * Hexagonal density for the scatter plot (options.bin "hex"). PointChart in bubble.tsx draws these cells instead of points.
+ * It is passed only through SCATTER_KIT.hex and ScatterChart.facetPlan, so it stays out of the bundles of the bubble chart and other charts
  */
 
 const en = {
-  /** 칸의 점 수. count는 로캘 숫자예요 */
+  /** Number of points in a cell. count is a locale-formatted number */
   points: (n: number, count: string) => `${count} ${n === 1 ? "point" : "points"}`,
   range: (lo: string, hi: string) => `${lo} to ${hi}`,
-  /** 설명 뒤에 붙는 문장: 칸 수와 가장 촘촘한 칸 */
+  /** Sentence appended to the description: the number of cells and the densest cell */
   desc: (cells: number, top: string) => ` Binned into ${cells} ${cells === 1 ? "hexagon" : "hexagons"}. Densest: ${top}.`,
 };
 const TEXT: Record<ChartLang, typeof en> = {
@@ -36,32 +36,32 @@ const TEXT: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 가장 옅은 단계의 불투명도. 타일 격자 지도와 같아서 점 하나짜리 칸도 바탕과 구분돼요 */
+/** Opacity of the lightest step. Same as the tile grid map, so even a cell with one point stands out from the background */
 const MIN_OPACITY = 0.14;
 
 type Box = { x0: number; x1: number; y0: number; y1: number };
 
-/** 칸 하나와 그 색 위치 t(0~1, scaleSwatch에 넘겨요) */
+/** One cell and its color position t (0 to 1, passed to scaleSwatch) */
 interface HexInfo extends HexCell {
   t: number;
 }
 
 interface HexModel {
   grid: HexGrid;
-  /** 점이 많은 칸부터 (Home은 가장 촘촘한 칸, End는 가장 성긴 칸) */
+  /** Cells with the most points first (Home is the densest cell, End the sparsest) */
   cells: HexInfo[];
-  /** 색 척도의 양 끝 점 수 */
+  /** Point counts at both ends of the color scale */
   lo: number;
   hi: number;
-  /** "열,줄" → cells 순번 */
+  /** "col,row" → index in cells */
   at: Map<string, number>;
-  /** 색 척도 (단계 수가 늘 있어요) */
+  /** Color scale (always has a step count) */
   scale: ColorScaleOptions & { steps: number };
-  /** 같은 색 칸 묶음 (옅은 단계부터). d는 경로 하나 */
+  /** Groups of same-color cells (lightest step first). d is a single path */
   groups: { t: number; d: string }[];
 }
 
-/** 축 범위 안의 점을 화면 좌표로. 범위 밖(확대, 고정 범위)과 로그 축의 0 이하는 NaN이라 세지 않아요 */
+/** Maps points inside the axis range to screen coordinates. Points outside the range (zoom, fixed domain) and values at or below 0 on a log axis become NaN and are not counted */
 function plotted(n: number, vx: (k: number) => number, vy: (k: number) => number, x: LinearScale, y: LinearScale): [Float64Array, Float64Array] {
   const xs = new Float64Array(n);
   const ys = new Float64Array(n);
@@ -77,7 +77,7 @@ function plotted(n: number, vx: (k: number) => number, vy: (k: number) => number
   return [xs, ys];
 }
 
-/** 칸들의 [가장 적은, 가장 많은] 점 수. 칸이 없으면 [Infinity, -Infinity]예요 */
+/** [Fewest, most] points across the cells. [Infinity, -Infinity] when there are no cells */
 function countRange(cells: readonly HexCell[], lo = Infinity, hi = -Infinity): [number, number] {
   for (const c of cells) {
     lo = Math.min(lo, c.count);
@@ -86,7 +86,7 @@ function countRange(cells: readonly HexCell[], lo = Infinity, hi = -Infinity): [
   return [lo, hi];
 }
 
-/** 점(화면 좌표)을 칸에 세고 색 단계로 묶어요. domain을 주면(작은 여러 개의 같은 색 척도) 그 점 수 범위로 칠해요 */
+/** Counts points (screen coordinates) into cells and groups the cells by color step. With domain (one shared color scale across small multiples), colors by that point-count range */
 function hexModel(xs: Float64Array, ys: Float64Array, box: Box, size: unknown, colorSteps: number | undefined, domain: readonly [number, number] | undefined): HexModel {
   const grid = hexGrid(size, box);
   const raw = hexBins(grid, xs, ys, box);
@@ -94,7 +94,7 @@ function hexModel(xs: Float64Array, ys: Float64Array, box: Box, size: unknown, c
   if (domain && Number.isFinite(domain[0]) && Number.isFinite(domain[1]) && domain[1] >= domain[0]) [lo, hi] = domain;
   const scale = colorScaleOf(undefined, undefined, colorSteps ?? 5) as HexModel["scale"];
   const tOf = (n: number) => (hi > lo ? clamp((n - lo) / (hi - lo), 0, 1) : 1);
-  // raw는 줄, 칸 순서라 색 단계 경로의 글이 같은 데이터면 늘 같아요
+  // raw is in row, then cell order, so each color step's path string is always the same for the same data
   const byStep = new Map<number, HexInfo[]>();
   const cells: HexInfo[] = raw.map((c) => {
     const cell = { ...c, t: tOf(c.count) };
@@ -110,7 +110,7 @@ function hexModel(xs: Float64Array, ys: Float64Array, box: Box, size: unknown, c
   return { grid, cells, lo: Number.isFinite(lo) ? lo : 0, hi: Number.isFinite(hi) ? hi : 0, at: new Map(cells.map((c, k) => [`${c.col},${c.row}`, k])), scale, groups };
 }
 
-/** 칸이 덮는 [작은 값, 큰 값]: 화면 구간 [a, b]를 눈금의 화면 범위(축 범위) 안으로 자르고 눈금으로 되돌려요. 가장자리 칸도 축 밖 값(0 아래 등)을 말하지 않아요 */
+/** [Low, high] values a cell covers: clamps the screen interval [a, b] to the scale's screen range (the axis range) and maps it back through the scale. Edge cells never report values outside the axis (below 0, etc.) */
 function covered(s: LinearScale, a: number, b: number): [number, number] {
   const min = Math.min(s.range[0], s.range[1]);
   const max = Math.max(s.range[0], s.range[1]);
@@ -119,7 +119,7 @@ function covered(s: LinearScale, a: number, b: number): [number, number] {
   return u <= v ? [u, v] : [v, u];
 }
 
-/** 범위 글자. 포맷을 정하지 않았으면 범위 폭에 맞는 소수 자리(유효 숫자 두세 자리)로 적고, 단위는 뒤 값에만 붙여요 */
+/** Range text. Without a set format, uses decimals that fit the range width (two or three significant digits), and puts the unit only on the second value */
 function rangeText(text: typeof en, [lo, hi]: [number, number], locale: string, fmt: ValueFormatter | null, unit = ""): string {
   const span = hi - lo;
   const dec = span > 0 ? Math.max(0, Math.min(6, 1 - Math.floor(Math.log10(span)))) : 2;
@@ -127,13 +127,13 @@ function rangeText(text: typeof en, [lo, hi]: [number, number], locale: string, 
   return text.range(f(lo), `${f(hi)}${unit}`);
 }
 
-/** y축 이름을 범례와 겹치지 않게 줄여요. 들어갈 자리가 없으면 빈 글자예요 */
+/** Shortens the y-axis title so it does not overlap the legend. Empty string when there is no room */
 function fitTitle(title: string, left: number, legendW: number, W: number): string {
   const room = W - legendW - 12 - left;
   return textWidth(title, 10.5) <= room ? title : room > 24 ? truncate(title, room, 10.5) : "";
 }
 
-/** 육각 밀도가 읽는 차트 프롭 */
+/** Chart props read by the hexagonal density */
 interface HexProps {
   binSize?: number;
   colorSteps?: number;
@@ -146,7 +146,7 @@ interface HexProps {
   yLabel?: string;
 }
 
-/** PointChart의 그림 상태: 걸러 낸 행, 눈금, 그림 영역, 값 축 글자 폭, 차트 문맥(글, 포맷), x 포맷 */
+/** PointChart's drawing state: filtered rows, scales, plot area, value-axis label width, chart context (text, formats), x format */
 interface HexFrame {
   raw: readonly { x: number; y: number }[];
   x: LinearScale;
@@ -158,8 +158,8 @@ interface HexFrame {
 }
 
 /**
- * 육각 밀도 한 그림의 모든 것: 칸 모형, 항목(점이 많은 칸부터), 툴팁, 낭독, 설명, 범례, y축 이름, 키보드와 포인터.
- * PointChart는 이것을 한 번 만들어 쓰기만 해서 버블 차트 번들이 거의 커지지 않아요
+ * Everything for one hexagonal density plot: cell model, items (cells with the most points first), tooltip, screen reader text, description, legend, y-axis title, keyboard and pointer.
+ * PointChart only builds this once and uses it, so the bubble chart bundle barely grows
  */
 function hexView<T>(props: HexProps, f: HexFrame) {
   const { raw, c } = f;
@@ -167,7 +167,7 @@ function hexView<T>(props: HexProps, f: HexFrame) {
   const m = hexModel(xs, ys, f.box, props.binSize, props.colorSteps, props.binDomain);
   const t = TEXT[c.lang];
   const { locale } = c;
-  // 포맷을 정했으면 그 포맷, 아니면 범위 폭에 맞춘 자릿수
+  // The set format if there is one, otherwise digits fitted to the range width
   const xFmt = props.xFormat !== undefined ? f.xFmt : null;
   const yFmt = props.format !== undefined ? c.fmt : null;
   const texts = (k: number) => {
@@ -179,7 +179,7 @@ function hexView<T>(props: HexProps, f: HexFrame) {
       y: rangeText(t, covered(f.y, cell.cy - r, cell.cy + r), locale, yFmt, props.unit),
     };
   };
-  /** "658 points, Request size (KB) 270 to 280, Latency (ms) 520 to 545 ms": 툴팁처럼 축 이름(없으면 x, y)을 붙여요 */
+  /** "658 points, Request size (KB) 270 to 280, Latency (ms) 520 to 545 ms": adds the axis titles (x, y when missing), like the tooltip */
   const say = (k: number | null) => {
     if (k === null || !m.cells[k]) return "";
     const tx = texts(k);
@@ -190,7 +190,7 @@ function hexView<T>(props: HexProps, f: HexFrame) {
     const cell = m.cells[k];
     return { datum: null as T, index: k, key: `${cell.col},${cell.row}`, label: `x ${tx.x}, y ${tx.y}`, value: cell.count, formatted: tx.count };
   });
-  // 색 범례: 칸이 있고 점 수가 칸마다 다를 때만. y축 이름은 범례와 겹치지 않게 줄여요
+  // Color legend: only when there are cells and their point counts differ. The y-axis title is shortened so it does not overlap the legend
   const labels: [string, string] = [formatNumber(m.lo, { locale }), formatNumber(m.hi, { locale })];
   const legend = props.binLegend !== false && m.cells.length && m.hi > m.lo ? { right: c.width, labels } : null;
   return {
@@ -205,14 +205,14 @@ function hexView<T>(props: HexProps, f: HexFrame) {
       const tx = texts(k);
       return { x: m.cells[k].cx, y: m.cells[k].cy - m.grid.r, title: tx.count, rows: [{ label: props.xLabel ?? "x", value: tx.x }, { label: props.yLabel ?? "y", value: tx.y }] };
     },
-    /** 포인터 자리의 칸 (그림 영역 밖이나 빈 칸이면 null) */
+    /** The cell under the pointer (null outside the plot area or on an empty cell) */
     at: (px: number, py: number): number | null => {
       const { box } = f;
       if (!(px >= box.x0 && px <= box.x1 && py >= box.y0 && py <= box.y1)) return null;
       const [i, j] = hexOf(m.grid, px, py);
       return m.at.get(`${i},${j}`) ?? null;
     },
-    /** 화살표 방향(arrowStep)이 갈 칸: 처음은 가장 촘촘한 칸, 그다음은 그 방향 이웃 칸(빈 칸은 건너뛰어요). 화살표가 아니면 null, 갈 곳이 없으면 -1 */
+    /** The cell an arrow direction (arrowStep) moves to: the densest cell first, then the neighbor in that direction (empty cells are skipped). null for a non-arrow key, -1 when there is nowhere to go */
     step: (dir: readonly [number, number] | null, active: number | null): number | null => {
       if (!dir || !m.cells.length) return null;
       return active === null || !m.cells[active] ? 0 : hexNeighbor(m.cells, active, dir);
@@ -223,8 +223,8 @@ function hexView<T>(props: HexProps, f: HexFrame) {
 export type HexView = ReturnType<typeof hexView>;
 
 /**
- * 칸 그림: 그림 영역으로 자른 색 단계 경로들, 고른 칸 테두리, 위쪽 색 범례. 등장은 옅은 단계부터 차례로 나타나요(CSS).
- * 동작 줄이기와 서버 그림을 이어받은 첫 그림은 끝 모습이에요
+ * Cell drawing: color step paths clipped to the plot area, the outline of the selected cell, and the color legend on top. The entrance reveals the steps in order, lightest first (CSS).
+ * With reduced motion, and on a first render that takes over a server render, it shows the final state
  */
 function HexLayer(props: { p: Painter; v: HexView; box: Box; active: number | null; c: { motion: { enabled: boolean }; hydrated: boolean }; m: { waiting: boolean; generation: number }; onPick: (k: number) => void }) {
   const { p, box, active } = props;
@@ -253,7 +253,7 @@ function HexLayer(props: { p: Painter; v: HexView; box: Box; active: number | nu
   );
 }
 
-/** 작은 여러 개 전체의 색 범례 하나 (FacetPlan.legend). 서버 SVG가 class로 찾아 옮겨요 */
+/** One color legend for all the small multiples (FacetPlan.legend). The server SVG finds it by class and moves it */
 function FacetLegend({ steps, labels }: { steps: number; labels: [string, string] }) {
   const p = useChartTheme();
   const w = Math.ceil(scaleLegendWidth(steps, labels)) + 8;
@@ -265,9 +265,9 @@ function FacetLegend({ steps, labels }: { steps: number; labels: [string, string
 }
 
 /**
- * 작은 여러 개(ChartFacets)의 같은 색 척도: 같은 값 축이면 패널마다 차트와 같은 그림 영역에서 칸을 세어 모든 패널의 [가장 적은, 가장 많은] 점 수를
- * 패널 프롭 binDomain으로 넘기고, 색 범례는 패널마다가 아니라 묶음 위에 한 번(FacetPlan.legend) 그려요. 그래서 같은 색이 어느 패널에서나 같은 점 수예요.
- * 육각 밀도가 아니거나 패널마다 축이 다르면(scale "free") 그대로 돌려줘서 패널마다 자기 범례예요
+ * Shared color scale for small multiples (ChartFacets): with a shared value axis, counts the cells of each panel over the same plot area as the chart, passes the [fewest, most] points across all panels
+ * as the panel prop binDomain, and draws the color legend once above the group (FacetPlan.legend) instead of in every panel. So a color means the same point count in every panel.
+ * When it is not a hexagonal density or each panel has its own axes (scale "free"), returns the plan unchanged, so each panel keeps its own legend
  */
 export function hexFacetPlan(plan: FacetPlan, cp: Record<string, unknown>, locale: string): FacetPlan {
   const first = plan.panels[0]?.props;
@@ -276,7 +276,7 @@ export function hexFacetPlan(plan: FacetPlan, cp: Record<string, unknown>, local
   if (cp.bin !== "hex" || !dx || !dy) return plan;
   const isLog = cp.yScale === "log";
   const { pw, ph } = plan;
-  // PointChart와 같은 자리: 범례가 패널 밖이라 위는 보통 산점도(y축 이름이 있으면 20, 없으면 10), 아래 x축 글자 줄, 축 범위 안쪽 여유, 왼쪽은 값 축 글자 폭(그 글자가 있는 패널만)
+  // Same layout as PointChart: the legend is outside the panel, so the top is that of a plain scatter plot (20 with a y-axis title, 10 without), the bottom holds the x-axis label row, plus padding inside the axis range, and the left is the value-axis label width (only in panels that show those labels)
   const top = cp.yLabel ? HEX_TOP : 10;
   const y = (isLog ? scaleLog : scaleLinear)(dy, [ph - PLOT_BOTTOM - DOT_PAD, top + DOT_PAD]);
   const axisW = yAxisWidth(y.ticks(Math.max(2, Math.round(ph / 70))), makeTickFormatter(cp.format as FormatSpec | undefined, locale, Math.max(Math.abs(dy[0]), Math.abs(dy[1]))), locale);
@@ -298,5 +298,5 @@ export function hexFacetPlan(plan: FacetPlan, cp: Record<string, unknown>, local
   return { ...plan, panels, legend };
 }
 
-/** PointChart가 받는 육각 밀도 묶음 */
+/** The hexagonal density kit PointChart receives */
 export const HEX_KIT = { view: hexView, Layer: HexLayer };

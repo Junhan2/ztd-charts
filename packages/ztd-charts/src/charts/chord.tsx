@@ -24,18 +24,18 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface ChordChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
-  /** 강조할 마디(이름 또는 인덱스). 함수는 마디 이름을 받아요. 기본은 가장 큰 마디 */
+  /** Group to highlight (name or index). A function receives the group name. Default: the largest group */
   highlight?: Highlight<string>;
-  /** 출발 필드. 기본 "source" (없으면 "from") */
+  /** Source field. Default "source" ("from" when absent) */
   source?: Accessor<T, string>;
-  /** 도착 필드. 기본 "target" (없으면 "to") */
+  /** Target field. Default "target" ("to" when absent) */
   target?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 그룹 사이 틈(라디안). 기본 0.05 */
+  /** Gap between groups (radians). Default 0.05 */
   padAngle?: number;
 }
 
-/** 코드 다이어그램: 그룹 사이 주고받는 양 */
+/** Chord diagram: flows exchanged between groups */
 export function ChordChart<T = Row>(props: ChordChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(240, Math.min(340, w * 0.7)), duration: 1000 });
   const { p, width: W, height: H } = c;

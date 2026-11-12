@@ -5,20 +5,20 @@ import { chooseMap, getMap, isGeoMap, mapMatcher, registeredMaps, type MapChoice
 import type { GeoJSONFeatureCollection, GeoMap, GeoShape } from "./types";
 
 /*
- * 지점을 놓는 지도(기호 지도, 흐름 지도)가 같이 쓰는 자리 찾기. 경계를 도법에 올리지 않고 경위도와 지역 이름표만 봐서
- * validateSpec도 차트와 같은 규칙으로 "지도 밖"을 알려요 (검사기 번들에 도법 계산이 들지 않아요)
+ * Placement shared by the maps that place points (symbol map, flow map). It looks only at longitudes, latitudes and region labels, without projecting borders,
+ * so validateSpec reports "outside the map" by the same rule as the chart (and the validator bundle carries no projection math)
  */
 
-/** 지점을 받는 경위도 상자 [서, 남, 동, 북]. 동쪽 끝은 180보다 클 수 있어요(날짜 변경선에 걸친 상자). id는 그 상자의 도법 조각(미국의 "AK", "HI") */
+/** A longitude/latitude box that accepts points [west, south, east, north]. The east edge can exceed 180 (a box crossing the date line). id is the box's projection piece ("AK", "HI" in the US) */
 export interface DomainBox {
   box: readonly [number, number, number, number];
   id?: string;
 }
 
-/** 지도에서 지점을 놓는 데 필요한 것: 받는 상자들, 그리는 지역 번호, 지역 이름 맞추기, 지역 */
+/** What placing points on a map needs: the accepting boxes, the drawn region indexes, region name matching, and the regions */
 export interface PlaceDomain {
   boxes: readonly DomainBox[];
-  /** 그리는 지역 번호 (숨긴 지역, 집중한 묶음 밖 지역, 도형 없는 지역을 뺀 것) */
+  /** Indexes of the drawn regions (excluding hidden regions, regions outside the focused group, and regions without geometry) */
   shown: ReadonlySet<number>;
   match: (name: unknown) => number;
   shapes: readonly GeoShape[];
@@ -32,7 +32,7 @@ export interface DomainOptions {
 
 const cache = /* @__PURE__ */ new WeakMap<object, Map<string, PlaceDomain>>();
 
-/** 상자를 넓혀요: 폭과 높이의 5% (적어도 0.5°). 위도는 ±90 안으로 */
+/** Pads the box by 5% of its width and height (at least 0.5°). Latitude stays within ±90 */
 function padBox(b: readonly number[]): [number, number, number, number] {
   const dx = Math.max(0.5, (b[2] - b[0]) * 0.05);
   const dy = Math.max(0.5, (b[3] - b[1]) * 0.05);
@@ -40,8 +40,8 @@ function padBox(b: readonly number[]): [number, number, number, number] {
 }
 
 /**
- * 지도가 지점을 받는 곳. 집중한 묶음은 그 상자 그대로, 세계 도법(Equal Earth) 지도는 모든 경도와 그리는 지역의 위도 범위(남극을 빼서 남위 약 60° 아래는 밖),
- * 그 밖의 지도(원뿔 도법, GeoJSON)는 그리는 지역의 경위도 상자를 조금 넓힌 곳이에요. albersUsa는 본토, 알래스카, 하와이 상자를 따로 둬요(옮겨 붙인 조각마다)
+ * Where a map accepts points. A focused group uses its box as is; a world projection (Equal Earth) map takes every longitude and the latitude range of the drawn regions (Antarctica is excluded, so below about 60° south is outside);
+ * other maps (conic projection, GeoJSON) take the drawn regions' longitude/latitude box, padded slightly. albersUsa keeps separate boxes for the mainland, Alaska and Hawaii (one per inset piece)
  */
 export function placeDomain(source: GeoMap | GeoJSONFeatureCollection, opts: DomainOptions = {}): PlaceDomain {
   const key = `${opts.focus ?? ""}\u0001${opts.featureId ?? ""}\u0001${opts.featureName ?? ""}`;
@@ -60,7 +60,7 @@ export function placeDomain(source: GeoMap | GeoJSONFeatureCollection, opts: Dom
   const boxes: DomainBox[] = [];
   if (focus) boxes.push({ box: [...focus.box] as [number, number, number, number] });
   else {
-    // albersUsa는 지역 id로 조각을 나눠요 (projection.ts의 makeProjection과 같은 id)
+    // albersUsa splits pieces by region id (the same ids as makeProjection in projection.ts)
     const groups = new Map<string, GeoShape[]>();
     for (const i of shown) {
       const id = geoMap?.projection === "albersUsa" && ALBERS_INSETS.includes(shapes[i].id) ? shapes[i].id : "";
@@ -82,12 +82,12 @@ export function placeDomain(source: GeoMap | GeoJSONFeatureCollection, opts: Dom
   return out;
 }
 
-/** 경위도가 숫자이고 범위 안인지 (경도 -180~180, 위도 -90~90) */
+/** Whether longitude and latitude are numbers within range (longitude -180 to 180, latitude -90 to 90) */
 export function validLonLat(lon: number, lat: number): boolean {
   return Number.isFinite(lon) && Number.isFinite(lat) && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90;
 }
 
-/** 이 지점을 받는 상자 (없으면 null). 경도는 한 바퀴 돌려서도 봐요 (동쪽 끝이 180을 넘는 상자) */
+/** The box that accepts this point (null if none). The longitude is also checked one full turn over (for boxes whose east edge exceeds 180) */
 function domainBox(d: PlaceDomain, lon: number, lat: number): DomainBox | null {
   for (const b of d.boxes) {
     const [w, s, e, n] = b.box;
@@ -97,13 +97,13 @@ function domainBox(d: PlaceDomain, lon: number, lat: number): DomainBox | null {
   return null;
 }
 
-/** 자리 하나: 경위도, 또는 지도의 지역 이름(그 지역 가운데) */
+/** One place: a longitude and latitude, or a region name on the map (that region's center) */
 export type PlaceInput = { lon: number; lat: number } | { name: unknown };
 
-/** 자리를 찾은 결과: 지점(받는 상자의 조각 id), 지역 번호, 또는 못 놓는 까닭 */
+/** Result of placing: a point (with the accepting box's piece id), a region index, or the reason it cannot be placed */
 export type Placed = { lon: number; lat: number; id?: string } | { region: number } | { miss: "invalid" | "outside" | "unmatched" };
 
-/** 자리 하나를 지도에 놓아요. 경위도는 범위 안이어야 하고(invalid) 지도가 받는 곳이어야 해요(outside). 이름은 그리는 지역에 맞아야 해요(unmatched, outside) */
+/** Places one place on the map. Coordinates must be in range (invalid) and inside the map's accepted area (outside). A name must match a drawn region (unmatched, outside) */
 export function placeIn(d: PlaceDomain, p: PlaceInput): Placed {
   if ("name" in p) {
     const k = d.match(p.name);
@@ -115,21 +115,21 @@ export function placeIn(d: PlaceDomain, p: PlaceInput): Placed {
   return b ? { lon: p.lon, lat: p.lat, ...(b.id && { id: b.id }) } : { miss: "outside" };
 }
 
-/** 상자들의 넓이 합 (도², 같은 수를 받는 지도 가운데 더 좁은 지도를 고를 때) */
+/** Total area of the boxes (degrees², used to pick the smaller of maps that accept the same count) */
 const areaOf = (d: PlaceDomain) => d.boxes.reduce((t, b) => t + (b.box[2] - b.box[0]) * (b.box[3] - b.box[1]), 0);
 
 /**
- * options.map을 지도로 (지점을 놓는 지도). 이름, 지도 객체, GeoJSON은 단계구분도와 같아요(chooseMap).
- * 없거나 "auto"면 등록한 지도 가운데 자리를 가장 많이 받는 지도예요: 경위도는 그 지도가 받는 곳에 들면, 이름은 그리는 지역에 맞으면 하나로 세요.
- * 같으면 받는 곳이 좁은 지도(서울만 있으면 kr-sido, 미국 도시만 있으면 us-states), 그것도 같으면 먼저 등록한 지도예요.
- * 하나도 받지 않으면(빈 데이터) "world"를 등록했으면 world, 아니면 처음 지도예요
+ * Resolves options.map to a map (for maps that place points). Names, map objects and GeoJSON work as in the choropleth (chooseMap).
+ * When missing or "auto", it is the registered map that accepts the most places: coordinates count when they fall in the map's accepted area, names when they match a drawn region.
+ * On a tie, the map with the smaller accepted area (kr-sido for Seoul alone, us-states for US cities only), then the map registered first.
+ * When no map accepts anything (empty data), world if "world" is registered, otherwise the first map
  */
 export function choosePlaceMap(option: unknown, items: () => readonly PlaceInput[]): MapChoice | null {
   if (option !== undefined && option !== "auto") return chooseMap(option, () => []);
   const names = registeredMaps();
   if (!names.length) return { missing: "auto" };
   const list = items();
-  // 같은 이름은 한 번만 세요 (1만 행이어도 이름 수만큼만 맞춰요)
+  // Count each name only once (even with 10,000 rows, matching runs once per distinct name)
   const seen = new Set<string>();
   const unique = list.filter((p) => {
     if (!("name" in p)) return true;
@@ -157,15 +157,15 @@ export function choosePlaceMap(option: unknown, items: () => readonly PlaceInput
 }
 
 /**
- * 따로 그리는 원(기호 지도)과 흐름(흐름 지도)의 상한. 남이 쓴 스펙(MCP)에 10만 행이 와도 SVG 요소 수가 이만큼에서 멈춰요.
- * 넘으면 값이 큰 것부터 이만큼만 그리고 validateSpec이 알려요 (합계, 비율, 순위는 모두로 세요)
+ * Cap on individually drawn circles (symbol map) and flows (flow map). Even if a spec written by someone else (MCP) brings 100,000 rows, the SVG element count stops here.
+ * Beyond it, only this many are drawn, largest values first, and validateSpec reports it (totals, shares and ranks still count everything)
  */
 export const MAX_POINTS = 2000;
 export const MAX_FLOWS = 1000;
 
 /**
- * 기호 지도 행 하나의 자리: 경도와 위도가 둘 다 숫자면 그 경위도, 아니면 지역 이름이 있으면 그 지역, 둘 다 없으면 못 놓는 자리(NaN)예요.
- * 범위 밖 경위도(위도 120)는 그대로 넘겨서 placeIn이 invalid로 알려요 (지역 이름으로 넘어가지 않아요)
+ * Place of one symbol map row: its coordinates when longitude and latitude are both numbers, otherwise its region when a region name is given, otherwise an unplaceable place (NaN).
+ * Out-of-range coordinates (latitude 120) are passed through so placeIn reports them as invalid (they do not fall back to the region name)
  */
 export function symbolPlace(lon: number, lat: number, region: string): PlaceInput {
   if (Number.isFinite(lon) && Number.isFinite(lat)) return { lon, lat };
@@ -173,8 +173,8 @@ export function symbolPlace(lon: number, lat: number, region: string): PlaceInpu
 }
 
 /**
- * options.places의 자리 하나 ([경도, 위도], 숫자나 숫자 글자 둘). 그 이름이 없으면 null(지역 이름으로 맞춰요).
- * 이름은 있는데 꼴이 틀리면 못 놓는 자리(NaN)라서 지역 이름으로 넘어가지 않아요 (validateSpec의 bad_place와 같아요)
+ * One entry of options.places ([longitude, latitude], two numbers or numeric strings). null when the name is not there (it is then matched as a region name).
+ * When the name is there but malformed, the place is unplaceable (NaN) and does not fall back to the region name (same as bad_place in validateSpec)
  */
 export function placeEntry(places: unknown, name: string): { lon: number; lat: number } | null {
   if (!places || typeof places !== "object" || Array.isArray(places) || !Object.hasOwn(places, name)) return null;
@@ -184,12 +184,12 @@ export function placeEntry(places: unknown, name: string): { lon: number; lat: n
   return { lon: num(v[0]), lat: num(v[1]) };
 }
 
-/** 흐름 지도가 그리는 행인지: 두 이름이 있고 서로 다르며 값이 0보다 큰 수 (차트, validateSpec, specMapName이 같은 규칙) */
+/** Whether the flow map draws a row: both names present and different, and a value above 0 (the chart, validateSpec and specMapName share this rule) */
 export function flowRowOk(s: string, t: string, v: number): boolean {
   return !!s && !!t && s !== t && v > 0 && Number.isFinite(v);
 }
 
-/** 흐름 지도의 자리 이름 하나: options.places에 있으면 그 경위도, 없으면 지도의 지역 이름이에요 */
+/** One flow map place name: its coordinates when listed in options.places, otherwise a region name on the map */
 export function flowPlace(places: unknown, name: string): PlaceInput {
   return placeEntry(places, name) ?? { name };
 }

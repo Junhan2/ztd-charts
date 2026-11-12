@@ -1,7 +1,7 @@
 import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
-/** CLI 문구. 영어가 원본이고 --locale ko면 한국어 */
+/** CLI messages. English is the source; Korean with --locale ko */
 export const VERSION = "0.11.2";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
@@ -43,7 +43,7 @@ Examples
   badOut: (file: string) => `Can't save ${file}: end the file name with .svg, .png or .html`,
   unknownFilter: (flag: string, v: string, choices: string[]) => `--${flag} takes one of: ${choices.join(", ")}. Got: ${v}`,
   error: (m: string) => `Error: ${m}`,
-  /** list 표 머리와 칸 너비 */
+  /** list table headers and column widths */
   listHead: ["type", "name", "level", "group", "summary"],
   listWidths: [12, 22, 14, 14],
   listFoot: (n: number) => `\n${n} charts. Details: ztd-charts info <type>`,
@@ -70,14 +70,14 @@ Examples
   data: (rows: number, cols: string) => `Data: ${plural(rows, "row")}, columns ${cols}\n`,
   noFit: "No chart fits this data. Check the column names and formats",
   score: "score",
-  /** 데이터 주소 가져오기 (render의 data.url, suggest의 URL) */
+  /** Fetching a data URL (render's data.url, suggest's URL) */
   fetchFailed: (url: string, m: string) => `Couldn't load data from ${url}: ${m}`,
   httpOnly: "only http:// and https:// addresses can be fetched",
   timeout: (s: number) => `no response within ${s} seconds`,
   tooLarge: (mb: number) => `the response is larger than ${mb} MB`,
   privateUrl: "the address points to a private or local network, which is blocked. To allow it, run the MCP server with ZTD_CHARTS_ALLOW_PRIVATE_URLS=1",
   tooManyRedirects: "too many redirects",
-  /** ztd-charts init이 만드는 예시 파일 */
+  /** Example files that ztd-charts init creates */
   init: (type: string) => ({
     "charts/sales.csv": "month,channel,revenue\n2025-01,Search,120\n2025-01,Social,64\n2025-02,Search,128\n2025-02,Social,75\n2025-03,Search,131\n2025-03,Social,92\n2025-04,Search,140\n2025-04,Social,104\n",
     "charts/Dashboard.tsx": dashboard(type, {
@@ -172,7 +172,7 @@ const ko: CliText = {
   }),
 };
 
-/** 예시 대시보드 컴포넌트 (언어마다 글만 달라요) */
+/** Example dashboard component (only the text differs per language) */
 function dashboard(type: string, t: { comment: string; provider: string; card: string; line: string }): string {
   return `"use client";
 

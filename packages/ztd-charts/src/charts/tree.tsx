@@ -44,39 +44,39 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface TreeProps<T = Row> extends BaseChartProps<T> {
-  /** 노드 이름 필드. 기본 "label" */
+  /** Node name field. Default "label" */
   label?: Accessor<T, string>;
-  /** 값 필드. 주면 점 크기가 값을 따라요(잎에서 위로 더해요). 없으면 점은 단계마다 같은 크기예요 */
+  /** Value field. When given, dot size follows the value (summed upward from the leaves). Without it, dots are the same size at each level */
   value?: Accessor<T, number>;
-  /** 부모 그룹 필드 (트리맵, 선버스트와 같은 평평한 표) */
+  /** Parent group field (a flat table, as in the treemap and sunburst) */
   group?: Accessor<T, string>;
-  /** 여러 단계 경로 필드 목록 (트리맵, 선버스트와 같아요) */
+  /** List of multi-level path fields (same as the treemap and sunburst) */
   path?: string[];
-  /** 중첩 데이터의 자식 필드. 기본 "children" */
+  /** Children field of nested data. Default "children" */
   children?: string;
-  /** id/parent 행의 id 필드. 기본 "id", 없으면 이름 */
+  /** id field of id/parent rows. Default "id", falling back to the name */
   id?: Accessor<T, string>;
-  /** 부모 id 필드. 주면 행마다 노드 하나인 id/parent 표로 읽어요 */
+  /** Parent id field. When given, the data is read as an id/parent table with one node per row */
   parent?: Accessor<T, string>;
-  /** "horizontal"(뿌리가 왼쪽) | "radial"(뿌리가 가운데). 기본 "horizontal" */
+  /** "horizontal" (root on the left) | "radial" (root in the center). Default "horizontal" */
   layout?: "horizontal" | "radial";
-  /** 형제를 값이 큰 순서로. 기본 false (데이터 순서) */
+  /** Sort siblings largest value first. Default false (data order) */
   sort?: boolean;
-  /** 맨 위 노드가 여럿일 때 더하는 뿌리의 이름. 기본 "All" (한국어 로캘은 "전체") */
+  /** Name of the root added when there are several top-level nodes. Default "All" ("전체" in the Korean locale) */
   rootLabel?: string;
-  /** 처음에 접어 둘 가지 (이름이나 "/"로 이은 경로). 서버도 같이 접어 그려요 */
+  /** Branches to start collapsed (names, or paths joined with "/"). The server render collapses them too */
   collapsed?: readonly string[];
 }
 
-/** 원형 기본 높이: 단계 하나의 최소 고리 폭과 잎 하나의 최소 둘레 (px) */
+/** Default radial height: minimum ring width per level and minimum arc length per leaf (px) */
 const RING_MIN = 60;
-/** 넓은 카드(차트 폭 560px 넘게)에서는 작은 트리도 자리를 쓰게 단계 하나의 고리를 100px까지 넓혀요. 좁은 카드는 그대로예요 */
+/** In wide cards (chart width over 560px), widen each level's ring up to 100px so even a small tree uses the space. Narrow cards are unchanged */
 const ringFor = (w: number) => (w > 560 ? Math.min(100, RING_MIN + (w - 560) / 2.5) : RING_MIN);
 const ARC_MIN = 18;
 /**
- * 원형에서 잎 이름이 원 밖으로 뻗는 몫(px): 위, 아래, 왼쪽, 오른쪽. 잎마다 각도와 이름 폭(+ 점과 띄움 22px)으로 재고, 한 이름은 cap(px)까지예요
- * (더 긴 이름은 줄여요. cap은 fitRadial이 고리가 너무 얇아지지 않는 만큼 골라요).
- * 이름이 짧은 쪽은 덜 비워서, 원이 상자를 채우고 가운데가 내용의 가운데에 와요
+ * How far leaf names reach outside the circle in a radial tree (px): top, bottom, left, right. Measured per leaf from its angle and name width (+ 22px for the dot and spacing), each name capped at cap (px)
+ * (longer names are shortened; fitRadial picks cap so the rings do not get too thin).
+ * Sides with shorter names reserve less, so the circle fills the box and its center sits at the center of the content
  */
 function radialExtents(leaves: readonly { a: number; w: number }[], cap: number): { top: number; bottom: number; left: number; right: number } {
   const e = { top: 12, bottom: 12, left: 12, right: 12 };
@@ -93,9 +93,9 @@ function radialExtents(leaves: readonly { a: number; w: number }[], cap: number)
   }
   return e;
 }
-/** 원의 하한: 단계 하나의 고리 폭(px). 이름 몫을 넓히다가 고리가 이보다 얇아지면 멈춰요 (더 얇으면 가운데 뿌리 이름이 첫 고리 점에 걸려 줄어요) */
+/** Lower bound of the circle: ring width per level (px). Widening the name room stops before rings get thinner than this (any thinner and the root name in the center runs into the first ring's dots and gets shortened) */
 const RING_FLOOR = 48;
-/** 한 잎 이름이 가질 수 있는 몫(차트 폭에 대한 비율). 앞이 기본이고, 이름이 잘리면 다음 몫을 봐요 */
+/** Room one leaf name may take (as a share of the chart width). The first is the default; when names get cut, the next share is tried */
 const SHARES = [0.2, 0.24, 0.28, 0.34, 0.4];
 type Leaf = { a: number; w: number };
 interface RadialFit {
@@ -106,7 +106,7 @@ interface RadialFit {
   h: number;
 }
 
-/** 이름 몫이 share일 때의 원: 높이를 정하지 않았으면 기본 높이 규칙(단계마다 ringFor 고리)으로 정해요 */
+/** The circle when the name room is share: without a set height, the height follows the default rule (a ringFor ring per level) */
 function radialAt(leaves: readonly Leaf[], levels: number, span: number, w: number, share: number, fixedH?: number): RadialFit {
   const e = radialExtents(leaves, w * share);
   const h = fixedH ?? clamp(2 * clamp(Math.max(levels * ringFor(w), (span * ARC_MIN) / TAU), 24, (w - e.left - e.right) / 2 - 4) + e.top + e.bottom + 8, 160, 680);
@@ -114,7 +114,7 @@ function radialAt(leaves: readonly Leaf[], levels: number, span: number, w: numb
   return { e, R, cx: (e.left + w - e.right) / 2, cy: (e.top + h - e.bottom) / 2, h };
 }
 
-/** 바깥 고리 잎 이름이 바퀴살 방향으로 카드 끝까지 못 들어가는 수 (이름 놓기의 자리 계산과 같아요) */
+/** Number of outer-ring leaf names that do not fit along their spoke up to the card edge (same position math as label placement) */
 function cutLeaves(leaves: readonly Leaf[], f: RadialFit, w: number): number {
   const inset = FS * 0.5 + 2;
   let n = 0;
@@ -130,8 +130,8 @@ function cutLeaves(leaves: readonly Leaf[], f: RadialFit, w: number): number {
 }
 
 /**
- * 원형 배치. 잎 이름 몫은 폭의 20%부터 시작해서, 이름이 잘리면 몫을 넓혀(원은 작아져요) 잘리는 이름이 줄어드는 가장 작은 몫을 골라요.
- * 원이 하한(단계마다 RING_FLOOR, 잎마다 ARC_MIN의 둘레)보다 작아지면 멈춰요. 이름이 다 들어가는 넓은 카드는 예전과 같아요
+ * Radial layout. The leaf name room starts at 20% of the width; when names get cut, the room widens (and the circle shrinks), picking the smallest room that reduces the cut names.
+ * It stops when the circle would fall below its lower bound (RING_FLOOR per level, ARC_MIN of arc per leaf). Wide cards where every name fits look as before
  */
 function fitRadial(leaves: readonly Leaf[], levels: number, span: number, w: number, fixedH?: number): RadialFit {
   const floor = Math.max(levels * RING_FLOOR, (span * ARC_MIN) / TAU);
@@ -145,15 +145,15 @@ function fitRadial(leaves: readonly Leaf[], levels: number, span: number, w: num
   }
   return best;
 }
-/** 바깥 이름이 붙는 잎(자식이 없거나 접힌 노드)의 각도와 이름 폭 */
+/** Angle and name width of each leaf that gets an outer name (a node with no children, or a collapsed one) */
 function leafAngles<T>(lay: { nodes: TreeNode<T>[]; slots: Map<TreeNode<T>, { slot: number }>; span: number }, root: TreeNode<T>, isShut: (nd: TreeNode<T>) => boolean) {
   return lay.nodes.filter((nd) => nd !== root && (!nd.children.length || isShut(nd))).map((nd) => ({ a: ((lay.slots.get(nd)!.slot + 0.5) / lay.span) * TAU, w: textWidth(nd.label, FS, 600) }));
 }
 
-/** 노드가 이보다 많으면 노드마다 움직이지 않고 한꺼번에 나타나요 (프레임마다 수천 개를 다시 그리지 않게) */
+/** Above this many nodes, nodes do not move one by one but appear all at once (so thousands are not redrawn every frame) */
 const MOVE_MAX = 1500;
 const FS = 11;
-/** 가로형 기본 높이의 잎 한 줄 (px). 11px 이름이 넉넉히 읽히고, 갤러리 카드가 이웃 카드와 비슷한 높이예요 */
+/** One leaf row of the default horizontal height (px). 11px names read comfortably, and the gallery card ends up about as tall as its neighbors */
 const ROW = 15;
 const ROOT_FS = 12;
 
@@ -162,10 +162,10 @@ interface NodeInfo<T> {
   key: string;
   parentKey: string | null;
   depth: number;
-  /** 화면 좌표 목표 */
+  /** Target in screen coordinates */
   x: number;
   y: number;
-  /** 원형일 때 각도와 반지름 */
+  /** Angle and radius when radial */
   a: number;
   r: number;
   dot: number;
@@ -184,11 +184,11 @@ interface Placed {
   text: string;
   size: number;
   weight: number;
-  /** posesOf가 돌려준 자리 중 몇 번째 */
+  /** Index among the positions returned by posesOf */
   k: number;
 }
 
-/** 돌린 직사각형 둘이 겹치는지 (분리축 검사) */
+/** Whether two rotated rectangles overlap (separating axis test) */
 interface OBB {
   cx: number;
   cy: number;
@@ -222,13 +222,13 @@ function boxOf(pose: LabelPose, w: number, size: number): OBB {
 const f1 = (v: number) => Math.round(v * 10) / 10;
 
 /**
- * 트리: 부모와 자식의 이어짐을 점과 곡선으로. 트리맵, 선버스트와 같은 데이터(group, path, children)를 받고, id/parent 행도 받아요.
- * 강조한 노드에서 뿌리까지의 경로만 강조색이에요. 노드를 누르거나 Enter로 가지를 접고 펴요
+ * Tree: parent-child links drawn as dots and curves. Takes the same data as the treemap and sunburst (group, path, children), as well as id/parent rows.
+ * Only the path from the highlighted node to the root gets the accent color. Click a node or press Enter to collapse or expand its branch
  */
 export function Tree<T = Row>(props: TreeProps<T>) {
   const radial = props.layout === "radial";
   const full = useMemo(() => {
-    // 트리맵, 선버스트와 같은 모양(group, path, children)이거나, parent가 있으면 id/parent 행
+    // The same shapes as the treemap and sunburst (group, path, children), or id/parent rows when parent is set
     const acc = { label: props.label, value: props.value, group: props.group, path: props.path, children: props.children, id: props.id, parent: props.parent };
     const r = props.parent !== undefined ? stratify(props.data, acc, "") : buildTree(props.data, acc, "");
     if (props.parent === undefined) dropBlankNames(r, props.data);
@@ -237,7 +237,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   }, [props.data, props.label, props.value, props.group, props.path, props.children, props.id, props.parent, props.sort]);
   const root = drawnRoot(full);
   const empty = !root.children.length && root === full;
-  // 모든 노드(접힌 가지 안까지)의 차례와 key. 강조 번호, 접기 상태, 애니메이션 key가 같이 써요
+  // Order and key of every node (including inside collapsed branches). Shared by highlight indexes, collapse state and animation keys
   const all = useMemo(() => (empty ? [] : preorder(root)), [root, empty]);
   const keyOf = useMemo(() => {
     const seen = new Map<string, number>();
@@ -250,7 +250,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     return out;
   }, [all]);
 
-  // 접기: 처음 접힌 가지(props.collapsed, 서버와 같아요)와 사용자가 뒤집은 가지(key)의 차
+  // Collapse: the symmetric difference between the initially collapsed branches (props.collapsed, same as the server) and the branches the user toggled (key)
   const collapsedSig = (props.collapsed ?? []).join("\u0001");
   const initial = useMemo(
     () => new Set((Array.isArray(props.collapsed) ? props.collapsed : []).flatMap((name) => findNodes(all, String(name)).map((i) => all[i]))),
@@ -259,8 +259,8 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   );
   const [flips, setFlips] = useState<ReadonlySet<string>>(() => new Set());
   const shut = (nd: TreeNode<T>) => nd.children.length > 0 && initial.has(nd) !== flips.has(keyOf.get(nd) ?? "");
-  // 높이는 처음 접힌 상태로 정해요. 접고 펼 때 카드 높이가 뛰지 않아요
-  // 원형은 내용이 정하는 반지름(단계마다 RING_MIN, 잎마다 ARC_MIN의 둘레)에 잎 이름 몫을 더한 지름이에요. 작은 트리가 큰 카드를 비워 두지 않아요
+  // The height is set from the initial collapse state, so the card height does not jump when collapsing or expanding
+  // The radial diameter is the content-driven radius (RING_MIN per level, ARC_MIN of arc per leaf) plus the leaf name room. A small tree does not leave a large card empty
   const first = useMemo(() => {
     const l = layoutSlots(root, (nd) => initial.has(nd));
     return { span: l.span, levels: l.levels, leaves: radial ? leafAngles(l, root, (nd) => initial.has(nd)) : [] };
@@ -286,14 +286,14 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   const rootDepth = root.depth;
   const levelsAll = useMemo(() => all.reduce((m, nd) => Math.max(m, nd.depth - rootDepth), 0), [all, rootDepth]);
 
-  // 강조: 이름과 경로는 모든 노드에서 찾고, 번호와 "max" 같은 낱말은 resolveHighlight로 (값은 잎만 견줘요)
+  // Highlight: names and paths are searched among all nodes; indexes and keywords like "max" go through resolveHighlight (values compare leaves only)
   const onPath = useMemo(() => {
     const h = props.highlight as Highlight<T> | undefined;
     const hit = new Set<TreeNode<T>>();
     if (h != null && all.length) {
       const list = typeof h === "function" ? null : Array.isArray(h) ? h : [h];
       const isName = (x: unknown): x is string => typeof x === "string" && !HIGHLIGHT_KEYWORDS.includes(x);
-      // 더한 뿌리는 그 이름표로도 찾아요 (validateSpec과 같아요)
+      // The added root can be found by its label too (same as validateSpec)
       if (list) for (const x of list) if (isName(x)) for (const i of [...(root === full && x === rootName ? [0] : []), ...findNodes(all, x)]) hit.add(all[i]);
       const rest = list?.filter((x) => !isName(x));
       if (!rest || rest.length)
@@ -304,7 +304,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     return { hit, path };
   }, [props.highlight, all, root, full, rootName]);
 
-  // 자리 (목표). 가로형은 x가 깊이, y가 잎 차례. 원형은 각도가 잎 차례, 반지름이 깊이예요
+  // Positions (targets). Horizontal: x is depth, y is leaf order. Radial: angle is leaf order, radius is depth
   const geo = useMemo(() => {
     const { nodes, slots, span, levels } = lay;
     const visibleLeaf = (nd: TreeNode<T>) => !nd.children.length || shut(nd);
@@ -319,8 +319,8 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     let ring = 0;
     let spacing: number;
     if (radial) {
-      // 잎 이름 몫을 뺀 상자에 원을 꽉 채우고 그 가운데에 둬요
-      // 이름 몫의 상한은 기본 높이를 정할 때처럼 폭으로 재요 (높이로 재면 낮은 카드에서 이름이 더 줄어요)
+      // Fill the box left after the leaf name room with the circle, centered
+      // The cap on the name room is measured from the width, as when setting the default height (measured from the height, names would shrink more in short cards)
       const fit = fitRadial(leafAngles(lay, root, shut), levels, span, W, H);
       const R = fit.R;
       cx = fit.cx;
@@ -335,7 +335,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       spacing = Math.min(rowH, colW);
     }
     const cap = clamp(spacing * 0.42, 1.2, 9);
-    // 값: 제곱근 척도로 2.5~9px (자리 간격 안으로). 뿌리는 합계라 가장 커요
+    // Values: a square-root scale from 2.5 to 9px (within the spacing). The root holds the total, so it is the largest
     const lo = Math.min(2.5, cap);
     const hi = Math.max(lo, Math.min(9, spacing * 0.48));
     let maxV = 0;
@@ -355,20 +355,20 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   }, [lay, W, H, radial, rootName, hasValue, keyOf, onPath, root]);
 
   /**
-   * 노드 이름을 놓을 수 있는 자리들 (앞이 먼저). room은 목표 자리에서 쓸 수 있는 폭이에요.
-   * 가로형: 잎은 오른쪽, 가지는 왼쪽 그다음 위. 원형: 잎은 바깥, 가지는 안쪽 그다음 아래와 위(가로 글자), 왼쪽 반은 뒤집어 바로 읽혀요
+   * Candidate positions for a node name (earlier first). room is the width available at the target position.
+   * Horizontal: leaves to the right, branches to the left, then above. Radial: leaves outside, branches inside, then below and above (horizontal text); the left half is flipped so it reads upright
    */
   const posesOf = (n: NodeInfo<T>, x: number, y: number, a: number, rr: number): { pose: LabelPose; room: number }[] => {
     const isRoot = n.nd === root;
     const flat = (dy: number, anchor: LabelPose["anchor"], dx = 0, room = Infinity) => ({ pose: { x: x + dx, y: y + dy, rot: 0, anchor }, room: Math.min(room, anchor === "middle" ? 2 * Math.min(x, W - x) - 4 : anchor === "start" ? W - x - dx - 2 : x + dx - 2) });
     const up = -n.dot - 9;
     if (!radial) {
-      // 접힌 가지는 점 둘레 고리(3px) 밖에서
+      // Collapsed branches: outside the ring around the dot (3px)
       if (!n.open) return [flat(0, "start", n.dot + (n.nd.children.length ? 8 : 5))];
-      // 위 자리는 선 위에 겹쳐도 바탕색 테두리로 읽혀요. 다른 이름과는 겹침 검사가 갈라요
+      // The upper position stays readable over lines thanks to its background-color outline. Overlaps with other names are settled by the overlap check
       return isRoot ? [flat(0, "end", -n.dot - 5), flat(up, "start", -n.dot)] : [flat(0, "end", -n.dot - 5, geo.colW - n.dot - 13), flat(up, "middle", 0, geo.colW * 2)];
     }
-    // 뿌리와 가지는 가로 글자로 점 아래, 위, 바깥쪽 옆, 안쪽 옆 차례 (가지는 마지막에 바퀴살을 따라 안쪽으로)
+    // Root and branches: horizontal text below the dot, above, beside it on the outside, then on the inside (branches finally inward along the spoke)
     const side = Math.sin(a) >= 0 ? 1 : -1;
     const level = (room: number) => [flat(n.dot + 10, "middle", 0, room), flat(up, "middle", 0, room), flat(0, side > 0 ? "start" : "end", side * (n.dot + 6), room), flat(0, side > 0 ? "end" : "start", -side * (n.dot + 6), room)];
     if (isRoot) return level(180);
@@ -376,7 +376,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     const deg = (a * 180) / Math.PI;
     const rot = right ? deg - 90 : deg + 90;
     if (!n.open) {
-      // 바깥으로 뻗는 이름: 카드 가장자리까지 (모서리 쪽이 더 길어요)
+      // Names reaching outward: up to the card edge (longer toward the corners)
       const [px, py] = polar(geo.cx, geo.cy, rr + n.dot + (n.nd.children.length ? 8 : 5), a);
       const ux = Math.sin(a);
       const uy = -Math.cos(a);
@@ -384,21 +384,21 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       const room = Math.min(ux > 1e-6 ? (W - inset - px) / ux : ux < -1e-6 ? (inset - px) / ux : Infinity, uy > 1e-6 ? (H - inset - py) / uy : uy < -1e-6 ? (inset - py) / uy : Infinity);
       return [{ pose: { x: px, y: py, rot, anchor: right ? "start" : "end" }, room }];
     }
-    // 바퀴살을 따라 안쪽으로: 부모 고리까지 (첫 단계는 뿌리 점 앞까지)
+    // Inward along the spoke: up to the parent's ring (for the first level, up to the root dot)
     const [px, py] = polar(geo.cx, geo.cy, rr - n.dot - 5, a);
     const inner = n.depth === 1 ? (geo.info.get(root)?.dot ?? 5) + 8 : 8;
     return [...level(Math.min(geo.ring * 1.6, 160)), { pose: { x: px, y: py, rot, anchor: right ? "end" : "start" }, room: geo.ring - n.dot - 5 - inner }];
   };
 
-  // 이름 고르기: 강조 경로를 먼저 (늘 남겨요), 그다음 뿌리, 얕은 단계부터. 자리마다 온전한 이름이 겹치지 않고 들어가는지 먼저 보고,
-  // 없으면 줄인 이름으로 다시 봐요. 이미 놓은 이름과 겹치거나 카드 밖으로 나가면 빼요 (강조 경로는 첫 자리에 줄여서라도 둬요)
+  // Picking names: the highlighted path first (always kept), then the root, then shallow levels first. For each position, first check whether the full name fits without overlap,
+  // and if not, try again with a shortened name. Names that overlap placed names or leave the card are dropped (the highlighted path is kept at its first position, shortened if needed)
   const labels = useMemo(() => {
     const out = new Map<TreeNode<T>, Placed>();
     if (!c.showLabels) return out;
     const list = [...geo.info.values()];
     const rank = (n: NodeInfo<T>) => (n.path ? 0 : n.nd === root ? 1 : 2);
     list.sort((A, B) => rank(A) - rank(B) || A.depth - B.depth);
-    // 놓은 상자를 40px 칸에 넣어 두고 가까운 칸만 봐요 (노드 수천 개에서도 선형)
+    // Bucket placed boxes into 40px cells and check only nearby cells (linear even with thousands of nodes)
     const CELL = 40;
     const grid = new Map<number, OBB[]>();
     const cells = (b: OBB, fn: (k: number) => boolean | void) => {
@@ -414,7 +414,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       const ey = Math.abs(b.uy) * b.hw + Math.abs(b.ux) * b.hh;
       return b.cx - ex < -1 || b.cx + ex > W + 1 || b.cy - ey < -1 || b.cy + ey > H + 1;
     };
-    // 점(접힌 가지는 고리까지)도 이름이 덮지 않게 먼저 넣어요
+    // Add the dots (with the ring for collapsed branches) first too, so names do not cover them
     for (const n of list) {
       const r = n.dot + (n.nd.children.length && !n.open ? 3 : 0) + 1;
       const box: OBB = { cx: n.x, cy: n.y, ux: 1, uy: 0, hw: r, hh: r };
@@ -431,12 +431,12 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       for (let pass = 0; pass < 2 && !pick; pass++)
         for (let k = 0; k < cands.length && !pick; k++) {
           const text = pass === 0 ? (fullW <= cands[k].room ? name.trim() : "") : truncate(name, cands[k].room, size, weight);
-          // 세 글자 남짓으로 줄인 이름("Nod…")은 읽히지 않아서 빼요 (강조 경로는 아래에서 따로 둬요)
+          // Names shortened to about three letters ("Nod…") are unreadable, so drop them (the highlighted path is handled separately below)
           if (!text || (text !== name.trim() && text.length < 5)) continue;
           const box = boxOf(cands[k].pose, textWidth(text, size, weight), size);
           if (!outside(box) && !hits(box)) pick = { k, text, box };
         }
-      // 강조 경로는 늘 남겨요: 자리마다 온전한 이름과 점점 줄인 이름을 놓아 보고, 겹치는 상자(이름, 점)가 가장 적고 그다음 가장 긴 것을 둬요
+      // The highlighted path is always kept: try the full name and progressively shorter names at each position, and keep the one with the fewest overlapping boxes (names, dots), then the longest
       if (!pick && n.path) {
         let best = Infinity;
         cands.forEach((cand, k) => {
@@ -459,8 +459,8 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo, c.showLabels, W, H, radial]);
 
-  // 움직임: 뿌리는 제자리, 나머지는 부모에서 떨어진 거리(가로형 dx, dy, 원형 각도와 반지름 차)를 움직여요.
-  // 그래서 선이 늘 부모에 붙어 있고, 등장 때 뿌리에서 자라 나오며, 접고 펼 때도 지금 자리에서 이어 가요
+  // Motion: the root stays in place; every other node animates its offset from its parent (dx, dy when horizontal; angle and radius differences when radial).
+  // So links always stay attached to their parent, grow out of the root on entrance, and continue from where they are when collapsing or expanding
   const D = c.motion.duration ?? 900;
   const big = lay.nodes.length > MOVE_MAX;
   const step = Math.min(220, 1200 / Math.max(1, geo.levels));
@@ -473,7 +473,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
         ms.push({ key: pre + n.key, to: radial ? [0, 0] : [n.x, n.y], data: n });
         continue;
       }
-      // 원형의 첫 단계는 각도를 그대로(뿌리의 각도는 0), 반지름만 0에서 자라요
+      // In a radial tree the first level keeps its angle (the root's angle is 0) and only its radius grows from 0
       const fromRoot = radial && par.nd === root;
       const to = radial ? [n.a - (fromRoot ? 0 : par.a), n.r - par.r] : [n.x - par.x, n.y - par.y];
       const zero = fromRoot ? [n.a, 0] : [0, 0];
@@ -484,17 +484,17 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   }, [geo, root, radial, pre, big, step]);
   const m = useMotion(marks, { ...c.motion, dataKey: `${c.sig}|${collapsedSig}|${[...flips].join("\u0001")}` });
   const moving = m.animating || m.waiting;
-  // 큰 트리의 등장은 노드가 움직이지 않고 한꺼번에 나타나요(__fade만 움직여요). 그동안 자리와 바탕 층을 프레임마다 다시 만들지 않아요.
-  // 접고 펼 때처럼 노드가 움직이는 동안은 다시 만들어요
+  // In a large tree's entrance, nodes do not move but appear all at once (only __fade animates). Meanwhile the positions and base layer are not rebuilt every frame.
+  // They are rebuilt while nodes move, as when collapsing or expanding
   const nodesMoving = moving && (!big || m.items.some((it) => it.data && it.progress < 1));
 
-  // 지금 자리 (화면 좌표). 움직이는 동안만 프레임마다 다시 세요
+  // Current positions (screen coordinates). Recomputed every frame only while moving
   const pos = useMemo(() => {
     const cur = new Map<string, { v: number[]; n: NodeInfo<T>; exiting: boolean; grow: number }>();
-    // 다른 배치(가로형, 원형)의 key는 빼요. 배치를 바꾸는 순간 두 벌이 함께 있을 수 있어요
+    // Skip keys from the other layout (horizontal, radial). Right after switching layouts, both sets can be present
     for (const it of m.items) if (it.data && it.key.startsWith(pre)) cur.set(it.key.slice(pre.length), { v: it.v, n: it.data, exiting: it.exiting, grow: it.progress });
-    // 가로형은 (x, y), 원형은 (각도, 반지름). 뿌리는 제자리 값, 나머지는 부모 자리 + 떨어진 거리예요.
-    // 부모가 이미 사라진 노드(데이터가 바뀌며 빠지는 중)는 뿌리 자리에 붙여요
+    // (x, y) when horizontal, (angle, radius) when radial. The root uses its own position; every other node is its parent's position + its offset.
+    // Nodes whose parent is already gone (exiting after a data change) attach to the root position
     const anchor: [number, number] = radial ? [0, 0] : [geo.info.get(root)?.x ?? 0, geo.info.get(root)?.y ?? 0];
     const at = new Map<string, [number, number]>();
     const resolve = (key: string): [number, number] => {
@@ -528,8 +528,8 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       const mx = (q.px + q.x) / 2;
       return `M${f1(q.px)},${f1(q.py)}C${f1(mx)},${f1(q.py)} ${f1(mx)},${f1(q.y)} ${f1(q.x)},${f1(q.y)}`;
     }
-    // 원형: 반지름은 고르게 늘고 각도는 부드럽게(양끝에서 0인 속도로) 바뀌는 곡선. 부모에서 바깥으로 나가 자식에 바깥으로 닿고,
-    // 반지름이 줄지 않아 안쪽으로 휘지 않아요. 뿌리에서 나가는 선은 곧은 선이에요. 각도 차가 크면 3차 곡선 조각을 늘려요
+    // Radial: a curve whose radius grows evenly while its angle changes smoothly (with zero speed at both ends). It leaves the parent heading outward and reaches the child heading outward,
+    // and since the radius never shrinks, it never bends inward. Links leaving the root are straight. Large angle differences get more cubic curve segments
     const a0 = q.pr < 0.5 ? q.a : q.pa;
     const da = q.a - a0;
     const dr = q.r - q.pr;
@@ -552,7 +552,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     return d;
   };
 
-  // 화면에 그리는 노드 차례 = 키보드, 표, 이벤트 차례 (뿌리부터 앞 순서)
+  // The order nodes are drawn in = the keyboard, table and event order (preorder from the root)
   const nodes = lay.nodes;
   const indexOf = useMemo(() => new Map(nodes.map((nd, i) => [nd, i])), [nodes]);
   const byDepth = useMemo(() => {
@@ -575,7 +575,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   };
   const events: ChartEvent<T>[] = useMemo(
     () => nodes.map((nd, i) => ({ datum: nd.datum, index: i, key: keyOf.get(nd) ?? nd.id, label: nameOf(nd), value: hasValue ? nd.value : null, formatted: say(nd) })),
-    // say는 이 값들로만 정해져요
+    // say depends only on these values
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, keyOf, hasValue, msg, c.fv, c.t, rootName, initial, flips],
   );
@@ -598,7 +598,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   const strong = p.paint("neutralStrong");
   const dotFill = (n: NodeInfo<T>) => (n.path ? accent : n.nd === root || n.nd.children.length ? ink : strong);
   const active = c.active !== null ? nodes[c.active] : undefined;
-  /** 누르기와 Enter: 가지를 접거나 펴고 onClick을 불러요. 고른 노드가 없으면 false */
+  /** Click and Enter: collapses or expands the branch and calls onClick. false when no node is selected */
   const press = () => {
     if (c.active === null || !active) return false;
     toggle(active);
@@ -632,7 +632,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
   const fade = big ? (m.get("__fade")?.[0] ?? 1) : 1;
   const labelIn = (n: NodeInfo<T>) => (big ? 1 : m.fade(Math.max(0, n.depth - 1) * step + D * 0.5, 280));
 
-  // 바탕 층(선, 점, 이름)은 자리가 바뀔 때만 다시 만들어요. 호버는 위에 경로만 덧그리고 바탕을 한꺼번에 흐려요
+  // The base layer (links, dots, names) is rebuilt only when positions change. Hover draws just the path on top and dims the whole base at once
   const textNode = (n: NodeInfo<T>, q: { x: number; y: number; a: number; r: number }, opacity: number, key: string) => {
     const lb = labels.get(n.nd);
     if (!lb) return null;
@@ -668,7 +668,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
             if (!(r > 0.05)) return null;
             const fill = dotFill(q.n);
             const o = q.exiting ? 0.5 : undefined;
-            // 접힌 가지는 점 둘레에 고리
+            // Collapsed branches get a ring around the dot
             return q.n.nd.children.length && !q.n.open ? (
               <g key={q.key} opacity={o}>
                 <circle cx={f1(q.x)} cy={f1(q.y)} r={f1(r)} fill={fill} />
@@ -684,12 +684,12 @@ export function Tree<T = Row>(props: TreeProps<T>) {
         </g>
       </>
     ),
-    // 등장 중에는 이름이 시간에 따라 나타나서 elapsed가 바뀔 때마다, 끝나면 자리와 이름이 바뀔 때만 다시 만들어요
+    // During the entrance names appear over time, so rebuild whenever elapsed changes; afterwards, only when positions or names change
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pos, labels, p, nodesMoving ? m.elapsed : Infinity],
   );
 
-  // 호버, 포커스: 그 노드에서 뿌리까지
+  // Hover and focus: from that node up to the root
   let overlay = null;
   if (activeInfo) {
     const chain: (typeof pos)[number][] = [];
@@ -724,7 +724,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       style={props.style}
       theme={props.theme}
       onPointerMove={(px, py, e) => {
-        // 가장 가까운 점 (작은 점도 잡히게 반경 안에서)
+        // The nearest dot (within a radius, so small dots can be caught too)
         let best = -1;
         let bd = hitR * hitR;
         for (let i = 0; i < nodes.length; i++) {
@@ -746,7 +746,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
           c.setActive(0, "keyboard");
           return true;
         }
-        // 가로형: 왼쪽 부모, 오른쪽 첫 자식, 위아래 같은 단계. 원형: 위 부모, 아래 첫 자식, 왼쪽 오른쪽 같은 단계(시계 방향이 오른쪽)
+        // Horizontal: left goes to the parent, right to the first child, up and down within the level. Radial: up goes to the parent, down to the first child, left and right within the level (clockwise is right)
         const toParent = radial ? "ArrowUp" : "ArrowLeft";
         const toChild = radial ? "ArrowDown" : "ArrowRight";
         const fwd = radial ? "ArrowRight" : "ArrowDown";

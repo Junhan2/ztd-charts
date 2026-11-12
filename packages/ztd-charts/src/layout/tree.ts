@@ -1,6 +1,6 @@
 import { numGetter, strGetter } from "../data/accessor";
 import type { Accessor } from "../core/types";
-// 타입만 써요. buildTree를 여기서 부르면 검사(spec 번들)가 계층 코드를 끌어와 트리맵, 선버스트 번들이 공유 조각으로 갈라져 커져요
+// Types only. Calling buildTree here would make validation (the spec bundle) pull in the hierarchy code, splitting the treemap and sunburst bundles into a shared chunk and making them larger
 import type { HierarchyAccessors, TreeNode } from "./hierarchy";
 
 export interface TreeAccessors<T> extends HierarchyAccessors<T> {
@@ -24,7 +24,7 @@ export interface TreeIssue {
  * A repeated id stays a node of its own; children of that id hang under its first row. Values add up from the leaves, as in buildTree.
  */
 export function stratify<T>(data: readonly T[], acc: TreeAccessors<T>, rootLabel = "All", onIssue?: (issue: TreeIssue) => void): TreeNode<T> {
-  // 빈칸만 있는 이름("  ")은 빈 이름과 같아요
+  // A name of only spaces ("  ") counts as an empty name
   const text = (g: (d: T, i: number) => string) => (d: T, i: number) => (g(d, i).trim() ? g(d, i) : "");
   const gl = text(strGetter(acc.label, "label"));
   const gi = text(strGetter(acc.id, "id"));
@@ -37,7 +37,7 @@ export function stratify<T>(data: readonly T[], acc: TreeAccessors<T>, rootLabel
     if (!first.has(id)) first.set(id, i);
     else onIssue?.({ code: "duplicate_id", index: i, id });
   });
-  // 부모 줄 번호. -1이면 맨 위 (빈 부모, 없는 부모, 자기 자신)
+  // Parent row index. -1 means top level (empty parent, missing parent, or itself)
   const up = data.map((d, i) => {
     const p = gp(d, i);
     if (!p) return -1;
@@ -51,14 +51,14 @@ export function stratify<T>(data: readonly T[], acc: TreeAccessors<T>, rootLabel
 
   const root: TreeNode<T> = { id: "", label: rootLabel, value: 0, depth: 0, parent: null, children: [], datum: null, index: 0 };
   const made: (TreeNode<T> | null)[] = new Array(n).fill(null);
-  // 깊이 우선으로 (재귀 없이, 사슬이 아주 길어도). 이미 만든 줄은 건너뛰어서 고리가 있어도 끝나요
+  // Depth-first (without recursion, even for very long chains). Rows already built are skipped, so it terminates even with cycles
   const grow = (top: number) => {
     const stack: [number, TreeNode<T>][] = [[top, root]];
     while (stack.length) {
       const [i, parent] = stack.pop()!;
       if (made[i]) continue;
       const label = gl(data[i], i) || ids[i];
-      // 잎이 되면 이 값을 그대로 써요. 자식이 생기면 아래에서 자식 합으로 바꿔요
+      // A leaf uses this value as is. Once it has children, it is replaced below by the sum of its children
       const value = Math.max(0, gv(data[i], i) || 0);
       const node: TreeNode<T> = { id: parent.id ? `${parent.id}/${label}` : label, label, value, depth: parent.depth + 1, parent, children: [], datum: data[i], index: parent.children.length };
       parent.children.push(node);
@@ -67,7 +67,7 @@ export function stratify<T>(data: readonly T[], acc: TreeAccessors<T>, rootLabel
     }
   };
   for (let i = 0; i < n; i++) if (up[i] < 0) grow(i);
-  // 남은 줄은 고리 위에 있거나 고리 아래에 매달려 있어요. 위로 올라가다 다시 만난 줄에서 고리를 끊어요
+  // The remaining rows lie on a cycle or hang below one. Walking up, the cycle is cut at the row met a second time
   for (let i = 0; i < n; i++) {
     if (made[i]) continue;
     const seen = new Set<number>();
@@ -80,7 +80,7 @@ export function stratify<T>(data: readonly T[], acc: TreeAccessors<T>, rootLabel
     onIssue?.({ code: "cycle", index: x, id: ids[x] });
     grow(x);
   }
-  // 값은 잎에서 위로. 부모가 먼저인 차례를 거꾸로 더하면 재귀가 없어요
+  // Values go from the leaves up. Summing in reverse of a parent-first order needs no recursion
   const order = preorder(root);
   for (let k = order.length - 1; k >= 0; k--) {
     const nd = order[k];
@@ -108,7 +108,7 @@ export function dropBlankNames<T>(root: TreeNode<T>, data: readonly T[]): void {
       nd.label = `#${(row >= 0 ? row : nd.index) + 1}`;
     }
   }
-  // 옮긴 노드의 id, 깊이, 형제 차례를 다시 매겨요
+  // Renumbers the id, depth and sibling order of moved nodes
   for (const nd of preorder(root)) nd.children.forEach((ch, i) => Object.assign(ch, { id: nd.id ? `${nd.id}/${ch.label}` : ch.label, depth: nd.depth + 1, index: i }));
 }
 
@@ -169,7 +169,7 @@ export function layoutSlots<T>(root: TreeNode<T>, hidden: (n: TreeNode<T>) => bo
   let next = 0;
   let lastParent: TreeNode<T> | null | undefined;
   let levels = 0;
-  // 잎 차례로 자리를 주고, 부모는 거꾸로 돌며 첫 자식과 끝 자식 가운데로
+  // Leaves get positions in order; parents, visited in reverse, go midway between their first and last child
   for (const nd of nodes) {
     const s = slots.get(nd)!;
     levels = Math.max(levels, s.depth);

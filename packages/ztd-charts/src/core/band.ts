@@ -3,30 +3,30 @@ import { areaPath, r2, type Curve } from "./geometry";
 import type { Accessor } from "./types";
 
 /**
- * 계열 하나의 범위 띠 모양 (픽셀). 위, 아래 y는 움직임 엔진이 선과 함께 보간하고 x는 데이터 그대로예요.
- * 경계가 빠진 x에서 끊겨 조각으로 나뉘어요
+ * Shape of one series' range band (pixels). The top and bottom y are interpolated by the motion engine along with the line; x stays as in the data.
+ * The band breaks at any x with a missing bound and splits into pieces
  */
 export interface BandShape {
-  /** 조각마다 시작 위치와 끝에 전체 길이. [0, 5, 9]면 0~4, 5~8 두 조각 */
+  /** Start position of each piece, with the total length at the end. [0, 5, 9] means two pieces, 0 to 4 and 5 to 8 */
   runs: number[];
-  /** 점의 x. 계단이면 픽셀 열의 왼쪽 끝 */
+  /** x of each point. For steps, the left edge of the pixel column */
   xl: number[];
-  /** 계단(점 줄이기)일 때 픽셀 열의 오른쪽 끝. 점 모양이면 비어요 */
+  /** For steps (point reduction), the right edge of the pixel column. Empty for the point shape */
   xr: number[];
-  /** 위 경계(upper) y */
+  /** y of the top bound (upper) */
   top: number[];
-  /** 아래 경계(lower) y */
+  /** y of the bottom bound (lower) */
   bottom: number[];
 }
 
-/** 범위 띠 경계 필드. y와 같은 꼴이에요: 넓은 표면 y 열과 같은 순서의 배열, 긴 표면 필드 하나 */
+/** Range band bound field. Same form as y: for a wide table, an array in the same order as the y columns; for a long table, a single field */
 export type BoundField<T> = Accessor<T, unknown> | readonly string[];
 
 const isFieldList = <T>(f: BoundField<T>): f is readonly string[] => Array.isArray(f);
 
 /**
- * s번째 계열의 경계 필드 (값과 이름이 같이 써요).
- * 넓은 표는 s번째 y 열에 s번째 경계 필드를 맞추고 (필드 하나나 함수면 첫 계열만), 긴 표는 행마다 필드 하나예요 (배열이면 첫 필드). 그 계열의 필드가 없으면 null
+ * Bound field of the s-th series (used for both values and names).
+ * A wide table pairs the s-th bound field with the s-th y column (a single field or a function covers only the first series); a long table uses one field for every row (the first field when given an array). null when that series has no field
  */
 export function boundField<T>(f: BoundField<T>, s: number, wide: boolean): Accessor<T, unknown> | null {
   const list = isFieldList(f) ? f : [f];
@@ -34,12 +34,12 @@ export function boundField<T>(f: BoundField<T>, s: number, wide: boolean): Acces
 }
 
 /**
- * 계열마다 띠로 그릴 [아래, 위] 값 (rows와 같은 [계열][x] 꼴). prepSeries가 칸마다 남긴 행(rows)에서 읽어서 x를 다시 읽지 않아요.
- * 같은 칸에 행이 여럿이면 y는 합치지만 띠는 마지막 행 경계예요.
- * 아래가 위보다 크면 바꿔 그리고, from보다 앞 x와 한쪽이라도 빠진 x는 NaN이에요 (띠가 끊겨요)
+ * [lower, upper] values to draw as a band for each series (the same [series][x] form as rows). Read from the rows prepSeries kept for each cell, so x is not read again.
+ * When a cell has several rows, y is summed but the band uses the last row's bounds.
+ * A lower above the upper is drawn swapped; an x before from, or with either bound missing, is NaN (the band breaks)
  */
 export function bandBounds<T>(rows: readonly (readonly (T | null)[])[], lower: BoundField<T>, upper: BoundField<T>, wide: boolean, data: readonly T[], from: number): { lo: number[]; hi: number[] }[] {
-  // 함수로 준 경계만 원래 행 번호가 필요해요
+  // Only bounds given as functions need the original row index
   const index = typeof lower === "function" || typeof upper === "function" ? new Map(data.map((d, i) => [d, i])) : null;
   return rows.map((row, s) => {
     const lo = new Array<number>(row.length).fill(NaN);
@@ -63,10 +63,10 @@ export function bandBounds<T>(rows: readonly (readonly (T | null)[])[], lower: B
   });
 }
 
-/** 값이 띠 밖인지 (띠가 없는 x는 아니에요) */
+/** Whether a value lies outside the band (an x without a band does not count) */
 export const isOutside = (v: number, lo: number, hi: number): boolean => Number.isFinite(v) && Number.isFinite(lo) && (v < lo || v > hi);
 
-/** 경계가 모두 있는 x가 이어진 구간 [시작, 끝] (양끝 포함). 점 하나짜리는 면이 없어서 빼요 */
+/** Runs [start, end] of consecutive x values that have both bounds (inclusive). Single-point runs have no area, so they are left out */
 export function bandRuns(lo: readonly number[], hi: readonly number[]): [number, number][] {
   const out: [number, number][] = [];
   let a = -1;
@@ -82,13 +82,13 @@ export function bandRuns(lo: readonly number[], hi: readonly number[]): [number,
 }
 
 /**
- * 조각 하나를 픽셀 열 계단으로. 이웃한 두 점 사이 구간이 지나는 열마다 두 점의 아래 최솟값, 위 최댓값을 모아요.
- * 그래서 열마다 그 열 점들의 lower 최솟값 이하, upper 최댓값 이상을 열 전체 폭에 칠하고, 점이 없는 열도 이어져요
+ * Turns one piece into pixel-column steps. For every column that a segment between two neighboring points passes through, it collects the two points' lowest lower and highest upper.
+ * So each column is filled across its full width from at most the lowest lower to at least the highest upper of its points, and columns without points stay connected
  */
 function stepColumns(out: BandShape, xs: (k: number) => number, lo: readonly number[], hi: readonly number[], y: (v: number) => number, a: number, b: number): void {
   const xa = xs(a);
   const xb = xs(b);
-  // 차트가 여백보다 좁으면 x가 뒤집혀요. 그릴 열이 없어요
+  // When the chart is narrower than its margins, x flips. There are no columns to draw
   if (!(xb >= xa)) return;
   const c0 = Math.floor(xa);
   const n = Math.floor(xb) - c0 + 1;
@@ -108,7 +108,7 @@ function stepColumns(out: BandShape, xs: (k: number) => number, lo: readonly num
   for (let c = 0; c < n; c++) {
     const left = Math.max(xa, c0 + c);
     const right = Math.min(xb, c0 + c + 1);
-    // 마지막 점이 열 경계에 딱 걸리면 폭 0인 열이 생겨요
+    // When the last point falls exactly on a column boundary, a zero-width column appears
     if (right <= left && c > 0) continue;
     out.xl.push(left);
     out.xr.push(right);
@@ -118,8 +118,8 @@ function stepColumns(out: BandShape, xs: (k: number) => number, lo: readonly num
 }
 
 /**
- * 띠 모양. lo, hi는 x 순서의 값(bandBounds)이고 xs는 그 픽셀 x예요.
- * 띠 점이 budget보다 많으면 구간 평균 대신 픽셀 열 계단(stepColumns)으로 줄여요. 그리지 않으면 null
+ * Band shape. lo and hi are the values in x order (bandBounds), and xs gives their pixel x.
+ * With more band points than budget, it reduces them to pixel-column steps (stepColumns) instead of range averages. null when nothing is drawn
  */
 export function bandShape(xs: (k: number) => number, lo: readonly number[], hi: readonly number[], y: (v: number) => number, budget: number): BandShape | null {
   const runs = bandRuns(lo, hi);
@@ -141,7 +141,7 @@ export function bandShape(xs: (k: number) => number, lo: readonly number[], hi: 
   return shape;
 }
 
-/** 계단 조각 하나: 위 경계를 왼쪽에서 오른쪽으로, 아래 경계를 되돌아와요. 값이 같은 이웃 열은 한 번에 그어요 */
+/** One step piece: along the top bound from left to right, then back along the bottom bound. Neighboring columns with equal values are drawn in one stroke */
 function stepPath(xl: readonly number[], xr: readonly number[], top: readonly number[], bottom: readonly number[], a: number, b: number): string {
   let cur = r2(top[a]);
   let d = `M${r2(xl[a])},${cur}`;
@@ -160,7 +160,7 @@ function stepPath(xl: readonly number[], xr: readonly number[], top: readonly nu
 
 const points = (xs: readonly number[], ys: readonly number[], a: number, b: number): [number, number][] => xs.slice(a, b).map((x, i) => [x, ys[a + i]]);
 
-/** 띠 path 하나 (조각마다 닫힌 면). top, bottom은 지금 그리는 y (움직임 엔진의 값) */
+/** One band path (a closed area per piece). top and bottom are the y values being drawn now (the motion engine's values) */
 export function bandPath(s: BandShape, top: readonly number[], bottom: readonly number[], curve: Curve): string {
   let d = "";
   for (let r = 0; r + 1 < s.runs.length; r++) {

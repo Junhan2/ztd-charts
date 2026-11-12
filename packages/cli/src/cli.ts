@@ -7,7 +7,7 @@ import { langOf } from "ztd-charts/server";
 import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, resolveType, suggest, validate, type ChartSpec } from "./api";
 import { CLI_TEXT, SCHEMA_URL, VERSION } from "./messages";
 
-/** 지금 쓰는 문구. main에서 --locale로 정해요 */
+/** The messages in use. main sets them from --locale */
 let t = CLI_TEXT.en;
 
 function fail(msg: string, code = 1): never {
@@ -27,7 +27,7 @@ function readSpec(file: string): ChartSpec {
 
 type Flags = Record<string, unknown>;
 
-/** 값을 받는 옵션(--out chart.png). 값 없이 쓰면 멈춰요 */
+/** An option that takes a value (--out chart.png). Stops when used without a value */
 function textFlag(f: Flags, name: string): string | undefined {
   const v = f[name];
   if (v === undefined) return undefined;
@@ -35,7 +35,7 @@ function textFlag(f: Flags, name: string): string | undefined {
   return v;
 }
 
-/** 숫자 옵션(--width 720). 0보다 큰 숫자가 아니면 멈춰요 (NaN 크기로 그리지 않게) */
+/** A number option (--width 720). Stops unless it is a number greater than 0 (so nothing is drawn at a NaN size) */
 function numberFlag(f: Flags, name: string): number | undefined {
   const v = textFlag(f, name);
   if (v === undefined) return undefined;
@@ -44,10 +44,10 @@ function numberFlag(f: Flags, name: string): number | undefined {
   return n;
 }
 
-/** --out 확장자별 형식. 여기 없는 확장자는 멈춰요 (x.jpg에 SVG를 쓰지 않게) */
+/** Format by --out extension. Stops on an extension not listed here (so SVG is never written to x.jpg) */
 const OUT_FORMATS: Record<string, "svg" | "png" | "html"> = { svg: "svg", png: "png", html: "html", htm: "html" };
 
-/** --locale ko 또는 --locale=ko를 뽑아내고 나머지 인자를 돌려줘요. 명령 앞뒤 어디에 와도 돼요 */
+/** Takes out --locale ko or --locale=ko and returns the remaining arguments. It may come before or after the command */
 function takeLocale(argv: string[]): { locale?: string; args: string[] } {
   const args: string[] = [];
   let locale: string | undefined;
@@ -57,11 +57,11 @@ function takeLocale(argv: string[]): { locale?: string; args: string[] } {
     else if (a.startsWith("--locale=")) locale = a.slice("--locale=".length);
     else args.push(a);
   }
-  // "ko_KR"도 받아요 (Intl은 "ko-KR"만 읽어요)
+  // Accepts "ko_KR" too (Intl reads only "ko-KR")
   return { locale: locale?.replace(/_/g, "-"), args };
 }
 
-/** info 표의 타입 칸: getChartInfo의 enum 글('"a" | "b"')을 칸에 맞게 줄여요('a|b'). enum이 아닌 타입은 그대로 */
+/** Type cell of the info table: shortens getChartInfo's enum text ('"a" | "b"') to fit the cell ('a|b'). Non-enum types stay as is */
 const compactType = (type: string) => type.replace(/"/g, "").replace(/ \| /g, "|");
 
 function pad(s: string, n: number): string {
@@ -108,7 +108,7 @@ async function main(argv0: string[]) {
     },
   });
   const out = (s: string) => process.stdout.write(s.endsWith("\n") ? s : `${s}\n`);
-  /** --out이 있으면 파일로 저장하고, 없으면 화면에 찍어요 (schema, example) */
+  /** Saves to a file when --out is given, otherwise prints to the terminal (schema, example) */
   const saveOrPrint = (text: string) => {
     const file = textFlag(f, "out");
     if (!file) return out(text);
@@ -120,7 +120,7 @@ async function main(argv0: string[]) {
     case "list": {
       const group = textFlag(f, "group");
       const level = textFlag(f, "level");
-      // 모르는 값을 0종으로 조용히 넘기지 않고 쓸 수 있는 값을 알려줘요
+      // Instead of silently listing 0 charts for an unknown value, list the values that can be used
       if (group && !findGroup(group)) fail(t.unknownFilter("group", group, GROUPS.map((g) => (lang === "ko" ? g.ko : g.id))));
       if (level && !findLevel(level)) fail(t.unknownFilter("level", level, LEVELS.map((l) => (lang === "ko" ? l.ko : l.id))));
       const list = listCharts({ group, level, locale });
@@ -141,7 +141,7 @@ async function main(argv0: string[]) {
       out("encoding");
       for (const c of info.encoding) out(`  ${pad(c.name, 10)}${pad(c.required ? t.required : t.optional, t.flagWidth)}${pad(c.type, 18)}${c.description}`);
       out(`\n${t.ownOptions}`);
-      // info.options는 차트 전용 옵션 뒤에 공통 옵션이 와요. 공통 옵션은 아래 한 줄에 이름만 적어요
+      // info.options lists the chart's own options first, then the common options. The common options get one line below, names only
       const common = COMMON_OPTIONS.map((o) => o.name);
       for (const o of info.options.filter((x) => !common.includes(x.name))) out(`  ${pad(o.name, 16)}${pad(compactType(o.type), 24)}${o.description}${o.default !== undefined ? t.defaultValue(JSON.stringify(o.default)) : ""}`);
       out(`\n${t.commonOptions}: ${common.join(", ")}`);
@@ -182,7 +182,7 @@ async function main(argv0: string[]) {
       const scale = numberFlag(f, "scale");
       const res = await render(spec, {
         format,
-        // 한 변은 MAX_CHART_SIZE(10,000px)까지. 넘으면 줄여서 그려요
+        // Each side goes up to MAX_CHART_SIZE (10,000px). Larger sizes are reduced to it
         width: capChartSize(numberFlag(f, "width")),
         height: capChartSize(numberFlag(f, "height")),
         theme,
@@ -223,7 +223,7 @@ async function main(argv0: string[]) {
     }
     case "suggest": {
       const src = pos[0] ?? fail(t.needData);
-      // 주소도, 붙여 넣은 CSV나 JSON도 아니면 파일 경로예요. 없는 파일을 빈 데이터로 읽지 않게 먼저 막아요
+      // Neither a URL nor pasted CSV or JSON means a file path. Stop here first so a missing file is not read as empty data
       const isInline = src.includes("\n") || /^\s*[[{]/.test(src);
       if (!isHttpUrl(src) && !isInline && !existsSync(src)) fail(t.noFile(src));
       const limit = numberFlag(f, "limit") ?? 5;

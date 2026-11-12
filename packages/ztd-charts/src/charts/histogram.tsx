@@ -57,47 +57,47 @@ const MSG: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 기준선. side는 나쁜 쪽이에요: "above"면 기준보다 큰 값, "below"면 작은 값 */
+/** Threshold line. side is the bad side: "above" means values above the threshold, "below" values below it */
 export interface HistogramThreshold {
   value: number;
   label?: string;
-  /** 기본 "above" */
+  /** Default "above" */
   side?: "above" | "below";
 }
 
 export interface HistogramChartProps<T = Row> extends BaseChartProps<T> {
-  /** 표본 값 필드. 기본 "value" */
+  /** Sample value field. Default "value" */
   value?: Accessor<T, number>;
-  /** 그룹 필드. 두 그룹까지 같은 경계로 겹쳐 그려요(강조 그룹은 윤곽, 나머지는 회색 채움) */
+  /** Group field. Up to two groups are overlaid with the same bin edges (the highlighted group as an outline, the other as a gray fill) */
   group?: Accessor<T, string>;
-  /** 미리 나눈 행의 구간 시작, 끝, 개수 필드. count를 주거나, value 없이 행에 x0, x1, count 필드가 있으면 이 꼴로 읽어요 */
+  /** Bin start, end and count fields of pre-binned rows. Rows are read this way when count is given, or when there is no value and rows have x0, x1 and count fields */
   x0?: Accessor<T, number>;
   x1?: Accessor<T, number>;
   count?: Accessor<T, number>;
-  /** "bars" | "dots" | "step". dots는 점 하나가 N건, step은 겹쳐 보기 좋은 윤곽이에요. 기본 "bars" */
+  /** "bars" | "dots" | "step". In dots, each dot stands for N samples; step is an outline that overlays well. Default "bars" */
   variant?: "bars" | "dots" | "step";
-  /** 분위 선. 기본 ["p50", "p95"]. p50은 실선, 나머지는 점선이에요. 미리 나눈 행이면 구간 안을 나눠 어림해요 */
+  /** Percentile lines. Default ["p50", "p95"]. p50 is solid, the rest dashed. For pre-binned rows they are estimated by interpolating within the bin */
   marks?: readonly string[];
-  /** 기준선. 나쁜 쪽 구간이 강조색이고 설명에 넘은 표본 수와 비율을 적어요 */
+  /** Threshold line. Bins on the bad side use the accent color, and the description gives the number and share of samples past it */
   threshold?: HistogramThreshold;
-  /** 구간 경계(작은 것부터). 밖의 표본은 그리지 않고 세어서 알려요. 정하는 순서는 edges → binWidth → bins → 자동이에요 */
+  /** Bin edges (smallest first). Samples outside are not drawn but counted and reported. Precedence: edges → binWidth → bins → automatic */
   edges?: readonly number[];
-  /** 구간 폭. 경계는 폭의 배수예요(log면 쓰지 않아요) */
+  /** Bin width. Edges are multiples of the width (not used with log) */
   binWidth?: number;
-  /** 대략의 구간 수. 폭은 읽기 쉬운 값으로 맞춰요 */
+  /** Approximate number of bins. The width is rounded to an easy-to-read value */
   bins?: number;
-  /** 로그 구간과 로그 축. 0 이하 값은 빼고 설명에 적어요. 기본 false */
+  /** Log bins and a log axis. Values at or below 0 are left out and noted in the description. Default false */
   log?: boolean;
-  /** 밀도 곡선(KDE)을 얹어요. 원시 행에서만 그려요. 기본 false */
+  /** Overlays a density curve (KDE). Drawn only for raw rows. Default false */
   kde?: boolean;
   /**
-   * 강조. 그룹이 없으면 구간(인덱스, "max" 등), 있으면 그룹 이름. 판별 함수는 행을 받고 그 행이 든 구간(그룹)을 강조해요.
-   * 기본은 가장 높은 구간, 그룹이 있으면 첫 그룹. threshold가 있으면 기준을 넘은 구간이 강조예요
+   * Highlight. Without groups, bins (index, "max", etc.); with groups, a group name. A predicate function receives a row and highlights the bin (group) that contains it.
+   * Default: the tallest bin, or the first group when there are groups. With threshold, the bins past the threshold are highlighted
    */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
-/** 구간 하나. counts는 그리는 그룹마다 개수예요 */
+/** One bin. counts holds the count for each drawn group */
 interface Bin {
   i: number;
   x0: number;
@@ -105,12 +105,12 @@ interface Bin {
   counts: number[];
 }
 
-/** 그리는 그룹 하나 */
+/** One drawn group */
 interface Sample {
   name: string;
-  /** 분석한 표본 수(구간 안 + 범위 밖). 0 이하라 뺀 값은 들어가지 않아요 */
+  /** Number of analyzed samples (inside bins + out of range). Values dropped for being at or below 0 are not included */
   n: number;
-  /** 원시 행의 값. 미리 나눈 행이면 비어 있어요 */
+  /** Values of the raw rows. Empty for pre-binned rows */
   values: number[];
   outside: number;
   excluded: number;
@@ -119,10 +119,10 @@ interface Sample {
 interface Model {
   bins: Bin[];
   samples: Sample[];
-  /** 데이터의 그룹 수. 그리는 건 앞의 HISTOGRAM_MAX_GROUPS개예요 */
+  /** Number of groups in the data. Only the first HISTOGRAM_MAX_GROUPS are drawn */
   groupCount: number;
   binned: boolean;
-  /** 판별 함수 highlight에 걸린 구간(그룹이 하나일 때)과 그룹(없으면 -1) */
+  /** Bins matched by a predicate highlight (with a single group) and the matched group (-1 when none) */
   fnBins: Set<number>;
   fnGroup: number;
 }
@@ -134,10 +134,10 @@ const TAG_H = 15;
 const HEAD_H = 16;
 const KDE_SAMPLES = 96;
 
-/** 분위 선 모양: p50 실선, p99 촘촘한 점선, 나머지 점선 */
+/** Percentile line style: p50 solid, p99 fine dotted, the rest dashed */
 const dashOf = (id: string) => (id === "p50" ? undefined : id === "p99" ? "1.5 2.5" : "4 3");
 
-/** 원시 행을 그룹마다 값으로 모아 한 번 정한 경계로 세요 */
+/** Collect raw rows into values per group and count them against edges set once */
 function rawModel<T>(data: readonly T[], value: Accessor<T, number> | undefined, group: Accessor<T, string> | undefined, fn: ((d: T, i: number) => boolean) | null, opts: { edges?: readonly number[]; binWidth?: number; bins?: number; log: boolean }): Model {
   const gv = numGetter(value, "value");
   const gg = group ? strGetter(group, "group") : () => "";
@@ -156,7 +156,7 @@ function rawModel<T>(data: readonly T[], value: Accessor<T, number> | undefined,
     }
   });
   const names = [...by.keys()].slice(0, HISTOGRAM_MAX_GROUPS);
-  // 두 그룹은 경계를 함께 써요 (그리는 그룹의 값 전체로 한 번 나눠요). 표본이 없으면 edges를 줘도 구간이 없어요(빈 상태)
+  // Two groups share edges (binned once over all values of the drawn groups). Without samples there are no bins even when edges is given (empty state)
   const edges = names.length ? binEdges(names.flatMap((g) => by.get(g)!.values), opts) : [];
   const counted = names.map((g) => binCounts(by.get(g)!.values, edges));
   const bins = edges.slice(1).map((x1, i) => ({ i, x0: edges[i], x1, counts: counted.map((c) => c.counts[i]) }));
@@ -171,20 +171,20 @@ function rawModel<T>(data: readonly T[], value: Accessor<T, number> | undefined,
   };
 }
 
-/** 미리 나눈 행 { x0, x1, count }. 같은 구간은 더하고, 행 사이가 비면 빈 구간으로 채워요(빈 곳도 키보드와 표가 읽어요) */
+/** Pre-binned rows { x0, x1, count }. Equal bins are summed, and gaps between rows are filled with empty bins (the keyboard and table read the gaps too) */
 function binnedModel<T>(data: readonly T[], acc: { x0?: Accessor<T, number>; x1?: Accessor<T, number>; count?: Accessor<T, number>; group?: Accessor<T, string> }, fn: ((d: T, i: number) => boolean) | null, log: boolean): Model {
   const g0 = numGetter(acc.x0, "x0");
   const g1 = numGetter(acc.x1, "x1");
   const gc = numGetter(acc.count, "count");
   const gg = acc.group ? strGetter(acc.group, "group") : () => "";
   const excluded = new Map<string, number>();
-  // picked: 판별 함수 highlight에 걸린 행의 그룹
+  // picked: groups of the rows matched by a predicate highlight
   const cells = new Map<string, { x0: number; x1: number; by: Map<string, number>; picked: Set<string> }>();
   data.forEach((d, i) => {
     const x0 = g0(d, i);
     const x1 = g1(d, i);
     const n = gc(d, i);
-    // 무한대 개수나 끝은 그릴 수 없는 행이라 빼요 (점 그림이 끝없이 늘어나지 않게)
+    // Rows with an infinite count or edge cannot be drawn, so drop them (so the dot plot does not grow without end)
     if (!(Number.isFinite(x0) && Number.isFinite(x1) && x1 > x0 && Number.isFinite(n) && n >= 0)) return;
     const g = gg(d, i);
     excluded.set(g, excluded.get(g) ?? 0);
@@ -212,7 +212,7 @@ function binnedModel<T>(data: readonly T[], acc: { x0?: Accessor<T, number>; x1?
   return { bins, samples, groupCount: excluded.size, binned: true, fnBins, fnGroup };
 }
 
-/** 분위(0~100). 원시 행은 percentile과 같은 값이고, 미리 나눈 행은 구간 안을 선형(log면 로그)으로 나눠 어림해요 */
+/** Percentile (0~100). For raw rows the same value as percentile; for pre-binned rows it is estimated by linear interpolation within the bin (logarithmic with log) */
 function quantileOf(model: Model, k: number, p: number, log: boolean): number {
   const s = model.samples[k];
   if (!model.binned) return percentile(s.values, p);
@@ -229,7 +229,7 @@ function quantileOf(model: Model, k: number, p: number, log: boolean): number {
   return NaN;
 }
 
-/** 구간 폭 가운데 기준을 넘은 몫(0~1, 축 단위) */
+/** Share of the bin width past the threshold (0~1, in axis units) */
 function pastShare(b: Bin, t: HistogramThreshold, log: boolean): number {
   const f = log ? Math.log10 : same;
   if (log && t.value <= 0) return t.side === "below" ? 0 : 1;
@@ -237,7 +237,7 @@ function pastShare(b: Bin, t: HistogramThreshold, log: boolean): number {
   return Math.max(0, Math.min(1, t.side === "below" ? k : 1 - k));
 }
 
-/** 기준을 넘은 표본 수. 원시 행은 정확히 세고, 미리 나눈 행은 기준이 걸친 구간을 비율로 나눠 어림해요(est) */
+/** Number of samples past the threshold. Counted exactly for raw rows; for pre-binned rows the bin the threshold crosses is split proportionally as an estimate (est) */
 function pastCount(model: Model, k: number, t: HistogramThreshold, log: boolean): { n: number; est: boolean } {
   const above = t.side !== "below";
   const s = model.samples[k];
@@ -253,8 +253,8 @@ function pastCount(model: Model, k: number, t: HistogramThreshold, log: boolean)
 }
 
 /**
- * 구간 윗변을 잇는 계단 윤곽(ex는 경계 픽셀, tops는 구간마다 윗변 픽셀). [a, b] 밖은 잘라요(강조 구간만 다시 그릴 때).
- * 끝에서는 이웃이 더 낮을 때만 내려가요. 그래서 다시 그린 강조 구간이 이웃 구간의 옆선을 칠하지 않아요
+ * A step outline joining the tops of the bins (ex holds the edge pixels, tops the top pixel of each bin). Clipped outside [a, b] (when redrawing only the highlighted bins).
+ * At the ends it steps down only when the neighbor is lower, so a redrawn highlighted bin does not paint over the neighboring bin's side
  */
 function stepPath(ex: readonly number[], tops: readonly number[], base: number, a = -Infinity, b = Infinity): string {
   const n = tops.length;
@@ -275,7 +275,7 @@ function stepPath(ex: readonly number[], tops: readonly number[], base: number, 
   return d;
 }
 
-/** 이어진 인덱스를 [첫, 끝] 묶음으로 */
+/** Consecutive indices as [first, last] runs */
 function runs(idx: ReadonlySet<number>, n: number): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i < n; i++) {
@@ -290,9 +290,9 @@ function runs(idx: ReadonlySet<number>, n: number): [number, number][] {
 
 interface Tag {
   key: string;
-  /** 선 자리 */
+  /** Line position */
   at: number;
-  /** 이름표 가운데 (차트 안에 가둔 자리) */
+  /** Label center (clamped inside the chart) */
   x: number;
   w: number;
   row: number;
@@ -303,8 +303,8 @@ interface Tag {
 }
 
 /**
- * 선 이름표가 겹치지 않게 놓아요. 이름표마다 자리 후보(선 가운데, 선 오른쪽, 선 왼쪽)를 순서대로 놓아 보고 안 되면 다음 줄이에요.
- * 가운데 먼저, 왼쪽 먼저 두 순서로 놓아 보고 줄이 적은 쪽을 써요(같으면 가운데 먼저). 이름표는 [lo, hi] 안에 가둬요
+ * Places line labels without overlap. Each label tries its candidate spots in order (centered on the line, right of the line, left of the line) and moves to the next row when none fits.
+ * Both orders, center first and left first, are tried, and the one with fewer rows wins (center first on a tie). Labels are clamped inside [lo, hi]
  */
 function placeTags(tags: Omit<Tag, "x" | "w" | "row">[], lo: number, hi: number): Tag[] {
   const sorted = [...tags].sort((a, b) => a.at - b.at);
@@ -328,14 +328,14 @@ function placeTags(tags: Omit<Tag, "x" | "w" | "row">[], lo: number, hi: number)
   return rowsOf(leftFirst) < rowsOf(centered) ? leftFirst : centered;
 }
 
-/** 값 축 눈금: 폭에 맞춘 개수로 시작해서 구간 안에 눈금이 셋 이상 들어갈 때까지 늘려요 */
+/** Value axis ticks: start with a count fitted to the width and increase it until at least three ticks fall inside the range */
 function linearTicks(lo: number, hi: number, count: number): number[] {
   let out: number[] = [];
   for (let k = Math.max(2, count); k <= Math.max(2, count) + 4 && out.length < 3; k++) out = ticksFor(lo, hi, k).filter((t) => t >= lo - 1e-9 && t <= hi + 1e-9);
   return out;
 }
 
-/** 로그 축 눈금: 한 자리(10배)가 110px 이상이면 1·2·5, 좁으면 10배마다. 눈금이 둘이 안 되면 1~9 */
+/** Log axis ticks: 1·2·5 when one decade (10×) is at least 110px, every power of 10 when narrower. 1~9 when that gives fewer than two ticks */
 function logTicks(lo: number, hi: number, pxPerDecade: number): number[] {
   const pick = (steps: number[]) => decadeGrid(lo, hi, steps).filter((v) => v >= lo * (1 - 1e-9) && v <= hi * (1 + 1e-9));
   const ticks = pick(pxPerDecade >= 110 ? [1, 2, 5] : [1]);
@@ -343,7 +343,7 @@ function logTicks(lo: number, hi: number, pxPerDecade: number): number[] {
 }
 
 
-/** 히스토그램: 원시 표본이 어디에 몰렸는지와 꼬리, 분위 선, 기준 초과 */
+/** Histogram: where raw samples cluster, the tails, percentile lines, and samples past a threshold */
 export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(230, Math.min(310, w * 0.55)), duration: 800 });
   const { p, width: W, height: H } = c;
@@ -355,7 +355,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   const thValue = th?.value;
   const thSide = th?.side;
   const above = thSide !== "below";
-  // 배열을 그때그때 새로 넘겨도 값이 같으면 다시 계산하지 않게 글자로 비교해요
+  // Compare as strings so that a new array with the same values on each render does not trigger a recompute
   const edgesKey = props.edges?.join(",");
   const marksKey = (props.marks ?? DEFAULT_MARKS).filter((id) => Number.isFinite(markPercentile(id))).join(",");
   const fn = typeof props.highlight === "function" ? props.highlight : null;
@@ -372,7 +372,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   const n = bins.length;
   const grouped = samples.length > 1;
 
-  // 분위는 데이터가 바뀔 때만, 기준을 넘은 수는 기준이 바뀔 때도 다시 세요 (분위마다 정렬하니 기준만 바꿀 때 다시 정렬하지 않게)
+  // Percentiles are recomputed only when the data changes; counts past the threshold also when the threshold changes (each percentile sorts, so changing only the threshold should not re-sort)
   const quantiles = useMemo(
     () =>
       model.samples.map((_, k) => {
@@ -383,9 +383,9 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   );
   const past = useMemo(() => (thValue === undefined ? [] : model.samples.map((_, k) => pastCount(model, k, { value: thValue, side: thSide }, log))), [model, thValue, thSide, log]);
 
-  // 값 축 범위: 첫 구간 시작부터 마지막 구간 끝까지 (구간이 없으면 [0, 1])
+  // Value axis range: from the start of the first bin to the end of the last ([0, 1] when there are no bins)
   const [lo, hi] = useMemo(() => extent(model.bins.flatMap((b) => [b.x0, b.x1])), [model]);
-  // 밀도 곡선을 개수 단위로: 밀도 × 표본 수 × 평균 구간 폭(축 단위). 구간 폭이 같으면 막대 높이와 맞아요
+  // Density curve in count units: density × sample count × mean bin width (axis units). With equal bin widths it matches the bar heights
   const showKde = props.kde === true && !model.binned;
   const density = useMemo(() => {
     if (!showKde || !model.bins.length) return null;
@@ -396,19 +396,19 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
     return { xs, curves: model.samples.map((s) => kde(s.values.map(tf), xs).map((d) => d * s.n * w)) };
   }, [showKde, model, log, lo, hi]);
 
-  // 강조: 그룹이 있으면 그룹 하나(기본 첫 그룹), 없으면 구간(기본 가장 높은 구간). 기준선이 있으면 기준을 넘은 쪽이 강조예요
+  // Highlight: one group with groups (default the first), otherwise bins (default the tallest). With a threshold line, the side past it is highlighted
   const names = samples.map((s) => s.name);
   const hiGroup = !grouped ? -1 : fn ? model.fnGroup : ([...resolveHighlight(hl, names, names, samples.map((s) => s.n), "first")][0] ?? -1);
   const counts0 = bins.map((b) => b.counts[0]);
   const range = (b: Bin) => msg.range(fv(b.x0), fv(b.x1));
   const hiBins = grouped || th ? new Set<number>() : fn ? model.fnBins : resolveHighlight(hl, bins, bins.map(range), counts0, "max");
-  // 회색으로 채우는 그룹과 윤곽으로 그리는 그룹 (그룹이 없으면 step만 윤곽)
+  // The group filled in gray and the group drawn as an outline (without groups, only step is an outline)
   const fillK = grouped && hiGroup === 0 ? 1 : 0;
   const lineK = grouped ? 1 - fillK : 0;
   const dots = variant === "dots" && !grouped;
   const step = variant === "step";
 
-  // 축
+  // Axes
   const T = log ? Math.log10 : same;
   const maxCount = Math.max(0, ...bins.flatMap((b) => b.counts));
   const tickCount = Math.max(2, Math.round(H / 70));
@@ -424,7 +424,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   const X = (v: number) => sx(T(v));
   const inDomain = (v: number) => Number.isFinite(v) && v >= lo && v <= hi && (!log || v > 0);
 
-  // 위쪽: 알림 줄(범위 밖, 제외, 점 범례)과 선 이름표 줄
+  // Top: the notice row (out of range, excluded, dot legend) and the line label rows
   const outside = samples.reduce((s, x) => s + x.outside, 0);
   const excluded = samples.reduce((s, x) => s + x.excluded, 0);
   const note = [outside ? msg.outside(outside) : "", excluded ? msg.excluded(excluded) : ""].filter(Boolean).join(" · ");
@@ -436,19 +436,19 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
           ...(quantiles[tagK]?.marks ?? []).filter((mk) => inDomain(mk.v)).map((mk) => ({ key: mk.id, at: X(mk.v), text: `${mk.id} ${fv(mk.v)}`, fill: p.paint(grouped ? "accentText" : "ink"), stroke: p.paint(grouped ? "accent" : "ink"), dash: dashOf(mk.id) })),
           ...(th && inDomain(th.value) ? [{ key: "threshold", at: X(th.value), text: th.label ? `${th.label} ${fv(th.value)}` : fv(th.value), fill: p.paint(grouped ? "ink" : "accentText"), stroke: p.paint(grouped ? "ink" : "accent") }] : []),
         ],
-        // 이름표 줄은 그림 위라 축 글자가 없어요. 차트 폭을 다 써요
+        // Label rows sit above the plot, where there are no axis labels, so they use the full chart width
         4,
         W - 4,
       );
   const rows = c.showLabels ? Math.max(0, ...tags.map((t) => t.row + 1)) : 0;
   const head = note || dots ? HEAD_H : 0;
   const tagY = (row: number) => 6 + head + row * (TAG_H + 3);
-  // 맨 위 눈금 글자가 마지막 이름표 줄에 닿지 않게 4px 띄워요
+  // Leave 4px so the top tick label does not touch the last label row
   const top = tagY(rows) + (rows ? 4 : 0);
   const base = H - 22;
 
-  // 점 그림: 묶음 크기 N은 읽을 수 있는 가장 작은 점(반지름 2.5)으로도 가장 높은 열이 들어가는 1, 2, 5, 10 … 가운데 가장 작은 값.
-  // 점은 그 높이를 채우도록 키우되 가장 좁은 구간 폭을 넘지 않아요
+  // Dot plot: the samples per dot, N, is the smallest of 1, 2, 5, 10 … at which the tallest column fits even with the smallest readable dot (radius 2.5).
+  // Dots grow to fill that height but never exceed the narrowest bin width
   const minPx = n ? Math.min(...bins.map((b) => X(b.x1) - X(b.x0))) : 10;
   const rMax = Math.max(1.5, Math.min(6, minPx / 2 - 1));
   const rMin = Math.min(rMax, 2.5);
@@ -460,20 +460,20 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   const stg = props.stagger ?? Math.min(28, 520 / Math.max(1, n));
   const marks = useMemo<Mark<{ k: number; i: number }>[]>(() => {
     const out: Mark<{ k: number; i: number }>[] = [];
-    // 막대(그룹이 있으면 회색으로 채우는 그룹)나 점 기둥. 점 기둥은 0에서 1로 차오르는 진행률이에요
+    // Bars (with groups, the gray-filled group) or dot columns. A dot column animates a progress value that fills from 0 to 1
     if (!step) for (const b of bins) out.push({ key: `${dots ? "d" : "b"}${b.i}`, to: [dots ? 1 : y(b.counts[fillK])], from: [dots ? 0 : base], enter: [dots ? 0 : base], delay: b.i * stg, data: { k: fillK, i: b.i } });
     const outlines = grouped ? (step ? [fillK, lineK] : [lineK]) : step ? [0] : [];
     for (const k of outlines) out.push({ key: `s${k}`, to: bins.map((b) => y(b.counts[k])), from: bins.map(() => base), enter: bins.map(() => base), delay: k === lineK ? 120 : 0, data: { k, i: -1 } });
     return out;
-    // y와 bins는 아래 값들로 정해져요
+    // y and bins are determined by the values below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, W, H, top, unit, dots, step, grouped, fillK, lineK, stg, dom[1]]);
   const m = useMotion(marks, c.motion);
 
-  // 접근성: 구간마다 이벤트 하나 (빈 구간도). 툴팁, 라이브 영역, 표가 같은 순서로 그룹을 읽어요
+  // Accessibility: one event per bin (empty bins included). The tooltip, live region and table read the groups in the same order
   const share = (v: number) => formatPercent(v, { locale: c.locale, maximumFractionDigits: 1 });
   const ofN = (k: number, v: number) => (samples[k].n ? (v / samples[k].n) * 100 : 0);
-  // 그룹마다 구간까지의 누적 개수
+  // Cumulative count up to each bin, per group
   const cums = samples.map((_, k) => {
     let acc = 0;
     return bins.map((b) => (acc += b.counts[k]));
@@ -487,7 +487,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   });
 
   const accent = p.paint("accent");
-  /** 그룹이 없을 때 구간의 칠: 강조 구간, 또는 기준을 절반 넘게 넘은 구간이 accent */
+  /** Bin fill without groups: highlighted bins, or bins more than half past the threshold, are accent */
   const isHot = (b: Bin) => hiBins.has(b.i) || (th !== undefined && pastShare(b, th, log) >= 0.5);
   const groupColor = (k: number) => (k === hiGroup ? accent : p.paint(k === fillK && !step ? "neutral" : "neutralStrong"));
   let tip: TooltipData | null = null;
@@ -503,7 +503,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
     tip = { x: (X(b.x0) + X(b.x1)) / 2, y: dots ? base - Math.ceil(tallest / unit) * pitch : y(tallest), title: range(b), rows: samples.flatMap((_, k) => rowsOf(k)) };
   }
 
-  /** 그룹 하나의 설명 조각: 표본 수, 중앙값, 분위, 기준을 넘은 수 */
+  /** Description parts for one group: sample count, median, percentiles, count past the threshold */
   const sampleText = (k: number): string[] => {
     const s = samples[k];
     const qs = quantiles[k];
@@ -516,7 +516,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
   };
   const extra = [note, dots ? msg.dot(unit) : ""].filter(Boolean);
   const hidden = model.groupCount > samples.length ? ` ${msg.hidden(samples.length, model.groupCount)}.` : "";
-  // 구간이 없으면 이벤트도 없어서 ChartFrame이 빈 상태 문장으로 바꿔 읽어요. 그래서 설명을 만들지 않아요
+  // Without bins there are no events, so ChartFrame reads the empty-state sentence instead. That is why no description is built
   const auto = !n
     ? ""
     : grouped
@@ -526,10 +526,10 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
 
   const tpx = th && inDomain(th.value) ? X(th.value) : null;
   const ex = n ? [X(bins[0].x0), ...bins.map((b) => X(b.x1))] : [];
-  /** 0이 아닌데 1px이 안 되는 막대는 가는 선으로 표시만 해요(길이를 부풀리지 않아요) */
+  /** A nonzero bar shorter than 1px is only marked with a thin line (its length is not inflated) */
   const yTop = (cnt: number, at: number) => (cnt > 0 && base - at < 1 ? base - 1 : at);
 
-  /** 막대 하나. 기준선이 걸치면 그 자리에서 두 색으로 나눠요 */
+  /** One bar. When the threshold line crosses it, it splits into two colors at that point */
   const bar = (b: Bin, at0: number, k: number): ReactNode => {
     const xa = X(b.x0) + 0.5;
     const xb = X(b.x1) - 0.5;
@@ -550,7 +550,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
     );
   };
 
-  /** 윤곽 하나. 하나뿐인 윤곽은 강조 구간(또는 기준을 넘은 쪽)만 accent로 다시 그려요 */
+  /** One outline. When it is the only outline, only the highlighted bins (or the side past the threshold) are redrawn in accent */
   const outline = (k: number, v: number[]): ReactNode => {
     const tops = v.map((at, j) => yTop(bins[j]?.counts[k] ?? 0, at));
     const strong = grouped && k === lineK && hiGroup >= 0;
@@ -565,7 +565,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
     );
   };
 
-  /** 점 기둥 하나: 채운 점 floor(개수 / N)개와, 나머지가 있으면 빈 원 하나. progress만큼 아래부터 나타나요 */
+  /** One dot column: floor(count / N) filled dots, plus one hollow circle when there is a remainder. It appears from the bottom up by progress */
   const dotColumn = (b: Bin, progress: number): ReactNode => {
     const cnt = b.counts[0];
     const full = Math.floor(cnt / unit);
@@ -591,7 +591,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
     W,
   );
   const activeBin = c.active !== null ? bins[c.active] : undefined;
-  // 고른 구간: 막대는 다른 구간을 흐리고, 점과 윤곽은 칸 전체를 옅게 칠해요. 키보드로 고르면 칸에 테두리를 둘러요
+  // Selected bin: with bars, the other bins dim; with dots and outlines, the whole bin cell gets a faint fill. Selecting by keyboard adds an outline around the cell
   const band = activeBin && (dots || step || grouped);
   const fade = m.fade(Math.min(700, n * stg) + 200, 320);
 
@@ -616,7 +616,7 @@ export function HistogramChart<T = Row>(props: HistogramChartProps<T>) {
         <path key={`k${k}`} d={linePath(cv.map((v, j) => [sx(density.xs[j]), Math.max(top, y(v))] as [number, number]))} fill="none" stroke={grouped ? groupColor(k) : p.paint("ink")} strokeWidth={1.6} opacity={fade} pointerEvents="none" />
       ))}
       <g opacity={fade} pointerEvents="none" aria-hidden="true">
-        {/* 선을 먼저 모두 그리고 이름표를 위에 얹어요 (윗줄 선이 아랫줄 이름표를 가로지르지 않게) */}
+        {/* Draw all lines first, then put the labels on top (so a line from an upper row does not cross a label in a lower row) */}
         {tags.map((t) => (
           <line key={t.key} x1={r2(t.at)} x2={r2(t.at)} y1={c.showLabels ? tagY(t.row) + TAG_H : top} y2={base} stroke={t.stroke} strokeWidth={t.key === "threshold" ? 1.5 : 1.4} strokeDasharray={t.dash} />
         ))}

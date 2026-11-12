@@ -25,17 +25,17 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface ParallelCoordinatesProps<T = Row> extends BaseChartProps<T> {
-  /** 축으로 쓸 숫자 필드들. 없으면 숫자 필드를 모두 */
+  /** Numeric fields to use as axes. Defaults to every numeric field */
   dimensions?: string[];
-  /** 축 이름 바꾸기. 예: { price: "가격(만 원)" } */
+  /** Rename axes. Example: { price: "Price (10k KRW)" } */
   dimensionLabels?: Record<string, string>;
-  /** 축마다 포맷 */
+  /** Format per axis */
   formats?: Record<string, FormatSpec>;
-  /** 값이 작을수록 좋은 축 (위아래 뒤집기) */
+  /** Axes where a lower value is better (flipped top to bottom) */
   invert?: string[];
-  /** 행 이름 필드. 기본 "label" */
+  /** Row name field. Default "label" */
   label?: Accessor<T, string>;
-  /** 이 행 수보다 많으면 캔버스로. 기본 1500 */
+  /** Draw on a canvas above this many rows. Default 1500 */
   canvasThreshold?: number;
 }
 
@@ -48,7 +48,7 @@ interface PLine<T> {
   datum: T;
 }
 
-/** 값이 없는 축(NaN)에서 선을 끊어 가며 이어요. 캔버스와 svg 경로가 같이 써요 */
+/** Traces a line, breaking it at axes with no value (NaN). Shared by the canvas and SVG paths */
 function traceGapped(ys: readonly number[], xAt: (j: number) => number, move: (x: number, y: number) => void, line: (x: number, y: number) => void): void {
   let pen = false;
   ys.forEach((yy, j) => {
@@ -61,7 +61,7 @@ function traceGapped(ys: readonly number[], xAt: (j: number) => number, move: (x
   });
 }
 
-/** 평행 좌표: 여러 숫자 지표를 축마다 세워 한 줄로 비교 */
+/** Parallel coordinates: one axis per numeric metric, each row compared as a single line */
 export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(320, w * 0.55)), duration: 1000 });
   const { p, width: W, height: H } = c;
@@ -92,7 +92,7 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
   const x0 = Math.max(24, Math.min(W * 0.15, firstW / 2 + 4));
   const x1 = W - Math.max(24, labelR, Math.min(W * 0.15, lastW / 2 + 4));
   const gapX = dims.length > 1 ? (x1 - x0) / (dims.length - 1) : 128;
-  // 축 이름이 축 사이보다 길면 두 줄로 엇갈려 놓아 이름마다 두 칸 폭을 줘요. 좁은 화면에서 "Pric…" 같은 토막이 남지 않아요
+  // When axis names are wider than the gap between axes, stagger them on two rows so each name gets two gaps of width. Narrow screens no longer leave stubs like "Pric…"
   const stagger = dims.length > 2 && nameW.some((w) => w > gapX - 8);
   const top = stagger ? 44 : 30;
   const axX = (j: number) => (dims.length > 1 ? x0 + (j * (x1 - x0)) / (dims.length - 1) : (x0 + x1) / 2);
@@ -175,7 +175,7 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
   );
 
   const desc = props.description ?? `${msg.kind}. ${msg.desc(n, dims.length, dims.map((k) => props.dimensionLabels?.[k] ?? k).join(", "))}.`;
-  // 값이 없는 축에서는 선을 끊어요 (축 최솟값 자리에 그리면 진짜 최솟값과 헷갈려요)
+  // Break the line at axes with no value (drawing it at the axis minimum would be confused with a real minimum)
   const path = (ys: number[]) => {
     let d = "";
     traceGapped(ys, axX, (x, y) => (d += `M${x.toFixed(1)},${y.toFixed(1)}`), (x, y) => (d += `L${x.toFixed(1)},${y.toFixed(1)}`));
@@ -234,7 +234,7 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
           const [lo, hiV] = doms[j];
           const inv = props.invert?.includes(k);
           const name = dimName(k);
-          // 엇갈리면 같은 줄 이웃이 두 칸 떨어져 있어요. 양끝 축은 차트 밖으로 나가지 않게
+          // When staggered, the neighbor on the same row is two gaps away. Names on the end axes stay inside the chart
           const room = stagger ? Math.min(2 * gapX, 2 * Math.min(xx, W - xx)) - 8 : gapX - 8;
           return (
             <g key={k}>
@@ -242,7 +242,7 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
               <Txt x={xx} y={stagger && j % 2 ? 23 : 9} anchor="middle" size={11} weight={700} fill={p.paint("ink")}>
                 {truncate(name, room, 11, 700)}
               </Txt>
-              {/* 위 끝 값은 그림 영역(top) 위에 둬요. 선은 top 위로 못 올라가서, 끝값을 지나는 강조 선이 글자를 덮지 않아요 */}
+              {/* Put the top-end value above the plot area (top). Lines cannot rise above top, so a highlighted line through the end value never covers the text */}
               <Txt x={xx + 4} y={top - 9} anchor="start" size={9.5} fill={p.paint("muted")}>
                 {fmts[j](inv ? lo : hiV)}
               </Txt>
@@ -255,7 +255,7 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
       </g>
       {c.showLabels && n <= 60
         ? lines
-            // 마지막 축 값이 비면(모두 빈 값 등) 이름표 자리를 모르니 그리지 않아요 (y="NaN" 방지)
+            // If the last axis value is missing (e.g. every value is missing), the label position is unknown, so skip it (avoids y="NaN")
             .filter((l) => (l.hi || c.active === l.i) && Number.isFinite(l.ys[l.ys.length - 1]))
             .map((l) => (
               <Txt key={l.i} x={x1 + 8} y={l.ys[l.ys.length - 1]} size={11} weight={800} fill={p.paint("ink")} opacity={m.fade(D * 0.8, 300)}>

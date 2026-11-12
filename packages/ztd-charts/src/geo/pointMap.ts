@@ -8,11 +8,11 @@ import type { GeoShape } from "./types";
 import type { GeoLayout } from "./view";
 
 /*
- * 지점을 놓는 지도(기호 지도, 흐름 지도)의 그리기 쪽 공통 부분: 놓은 자리를 평면에 올리기, 지점까지 들어가는 틀, 겹치지 않는 이름표.
- * 도법 코드를 써서 차트만 불러요 (검사기는 places.ts만 써요)
+ * Drawing code shared by the maps that place points (symbol map, flow map): projecting placed points onto the plane, a frame that includes every point, and non-overlapping labels.
+ * It uses the projection code, so only the charts import it (the validator uses places.ts only)
  */
 
-/** 평면에 올린 자리 하나: 평면 좌표(화면 좌표는 geoFrame의 fit으로), 경위도, 그 자리의 도법 조각 */
+/** One place projected onto the plane: plane coordinates (screen coordinates come from geoFrame's fit), longitude and latitude, and the projection piece at that spot */
 export interface MapPoint {
   x: number;
   y: number;
@@ -24,8 +24,8 @@ export interface MapPoint {
 const lonLatCenters = /* @__PURE__ */ new WeakMap<GeoShape, [number, number]>();
 
 /**
- * 지역의 대표 경위도: 가장 넓은(경위도 평면에서) 다각형 바깥 고리의 넓이 중심. 날짜 변경선을 건너는 고리는 첫 점 기준으로 이어 붙여 재요.
- * 지역 가운데 점(shapeCenter)은 화면 자리에 쓰고, 이 경위도는 흐름이 날짜 변경선을 건너는지 정할 때만 써요
+ * Representative coordinates of a region: the area centroid of the outer ring of its largest polygon (in the longitude/latitude plane). Rings crossing the date line are unwrapped from their first point before measuring.
+ * The region's center point (shapeCenter) is used for screen positions; these coordinates are used only to decide whether a flow crosses the date line
  */
 export function regionLonLat(s: GeoShape): [number, number] {
   const hit = lonLatCenters.get(s);
@@ -57,19 +57,19 @@ export function regionLonLat(s: GeoShape): [number, number] {
   return best;
 }
 
-/** 세계 지도의 가운데: "atlantic"은 중앙 경선 0(반대편 경선 180, 태평양에서 잘려요), "pacific"은 150(반대편 경선 -30, 대서양에서 잘려요) */
+/** Center of the world map: "atlantic" has central meridian 0 (antimeridian 180, split in the Pacific), "pacific" has 150 (antimeridian -30, split in the Atlantic) */
 export type MapCenter = "auto" | "atlantic" | "pacific";
 const CENTER_LON = { atlantic: 0, pacific: 150 } as const;
 
-/** 가운데를 바꿀 수 있는 지도: 세계 도법 내장 지도이고 묶음(focus)으로 자르지 않았을 때 */
+/** Maps whose center can change: built-in world-projection maps not cropped to a group (focus) */
 export function canCenter(source: unknown, focus: string | undefined): boolean {
   const m = isGeoMap(source) ? source : null;
   return !!m && m.projection === "equalEarth" && !(focus !== undefined && m.focus && Object.hasOwn(m.focus, focus));
 }
 
 /**
- * 중앙 경선 고르기. "auto"(기본)는 두 가운데 가운데 덜 잘리는 쪽이에요: 흐름은 짧은 길이 반대편 경선을 건너는 양의 합, 지점은 반대편 경선 20° 안(지도 끝)에 놓이는 수.
- * 같으면 대서양 가운데(0)예요. 흐름과 지점 수만큼 한 번씩만 봐요
+ * Picks the central meridian. "auto" (default) picks whichever of the two centers cuts less: for flows, the total amount whose shorter route crosses the antimeridian; for points, the number within 20° of the antimeridian (the map edge).
+ * On a tie, the Atlantic center (0). Each flow and point is looked at only once
  */
 export function chooseCenter(option: unknown, flows: readonly { a: number; b: number; w: number }[], lons: readonly number[]): number {
   if (option === "atlantic" || option === "pacific") return CENTER_LON[option];
@@ -82,12 +82,12 @@ export function chooseCenter(option: unknown, flows: readonly { a: number; b: nu
   return cost(CENTER_LON.pacific) < cost(CENTER_LON.atlantic) ? CENTER_LON.pacific : CENTER_LON.atlantic;
 }
 
-/** 0.1px로 반올림 (-0은 0) */
+/** Rounds to 0.1px (-0 becomes 0) */
 export const r1 = (v: number) => Math.round(v * 10) / 10 || 0;
-/** 합이 넘쳐 Infinity가 되지 않게 가장 큰 수에서 멈춰요 (1e308 두 개) */
+/** Stops at the largest number so a sum cannot overflow to Infinity (two 1e308s) */
 export const cap = (v: number) => Math.min(Number.MAX_VALUE, v);
 
-/** 놓은 자리(placeIn)를 평면에 올려요. 지역은 지역 가운데 점(shapeCenter), 경위도는 그 조각의 도법이에요. 못 놓으면 null */
+/** Projects a placed place (placeIn) onto the plane. A region uses its center point (shapeCenter); coordinates use their piece's projection. null when it cannot be placed */
 export function planePoint(g: GeoLayout, at: Placed): MapPoint | null {
   if ("miss" in at) return null;
   const albers = g.projection.name === "albersUsa";
@@ -103,7 +103,7 @@ export function planePoint(g: GeoLayout, at: Placed): MapPoint | null {
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y, lon: at.lon, lat: at.lat, sub: g.projection.pick(at.lon, at.lat, id) } : null;
 }
 
-/** 지도 상자에 지점들을 더한 평면 상자 (지도 밖 바다의 지점도 틀 안에 들어가게). 집중한 지도는 묶음 상자 그대로예요 (밖은 잘라요) */
+/** The map box extended by the points, in plane coordinates (so points at sea outside the map still fit in the frame). A focused map keeps its group box (anything outside is clipped) */
 export function pointBox(g: GeoLayout, pts: readonly { x: number; y: number }[]): [number, number, number, number] {
   const b: [number, number, number, number] = [g.box[0], g.box[1], g.box[2], g.box[3]];
   if (g.clip) return b;
@@ -116,7 +116,7 @@ export function pointBox(g: GeoLayout, pts: readonly { x: number; y: number }[])
   return b;
 }
 
-/** 이름표 후보: 점 자리(x, y), 점 반지름, 글자 */
+/** Label candidate: point position (x, y), point radius, text */
 export interface LabelCandidate {
   x: number;
   y: number;
@@ -124,14 +124,14 @@ export interface LabelCandidate {
   text: string;
   weight?: number;
 }
-/** 놓은 이름표: 글자 시작(anchor start/end) 자리 */
+/** A placed label: the text anchor position (anchor start/end) */
 export interface PlacedLabel {
   x: number;
   y: number;
   anchor: "start" | "end" | "middle";
   text: string;
   weight: number;
-  /** 후보 번호 */
+  /** Candidate index */
   k: number;
 }
 
@@ -139,9 +139,9 @@ export type Rect = [number, number, number, number];
 const hits = (a: Rect, b: Rect) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 /**
- * 겹치지 않는 이름표: 후보를 주어진 순서(중요한 것부터)로 오른쪽, 왼쪽, 위, 아래 자리를 차례로 보고, 이미 놓은 이름표나 피할 상자(avoid)와 겹치지 않고
- * 틀(w × h) 안에 들고 다른 점(obstacles)도 덮지 않는 첫 자리에 둬요. 들어갈 자리가 없으면 그 이름표는 빼요.
- * 같은 자리(1px 안)에 겹친 점은 앞 후보 하나만 적어요. 글자 크기 size
+ * Non-overlapping labels: takes the candidates in the given order (most important first) and tries the right, left, above and below positions in turn, placing each at the first spot that overlaps no placed label or avoid box,
+ * stays within the frame (w × h) and covers no other point (obstacles). A label with no room is dropped.
+ * For points stacked on the same spot (within 1px), only the first candidate is labeled. Font size is size
  */
 export function placeLabels(cands: readonly LabelCandidate[], w: number, h: number, size: number, avoid: readonly Rect[] = [], obstacles: readonly Rect[] = []): PlacedLabel[] {
   const taken: Rect[] = [...avoid];
@@ -172,12 +172,12 @@ export function placeLabels(cands: readonly LabelCandidate[], w: number, h: numb
   return out;
 }
 
-/** 비율(0~100)을 로캘에 맞춰: 10% 아래는 소수 한 자리(9.3%), 그 위는 정수(25%) */
+/** Formats a share (0 to 100) for the locale: one decimal below 10% (9.3%), whole numbers above (25%) */
 export function sharePct(v: number, locale: string): string {
   return formatPercent(v, { locale, maximumFractionDigits: Math.abs(v) < 10 ? 1 : 0 });
 }
 
-/** 지도를 등록하지 않았을 때의 안내 (단계구분도와 같은 글) */
+/** Message shown when the map is not registered (same text as the choropleth) */
 export function mapNotLoaded(name: string, lang: ChartLang): string {
   if (lang === "ko")
     return name === "auto" ? "등록한 지도가 없어요. ztd-charts/geo의 지도를 registerMap에 넘겨 주세요" : BUILTIN_MAPS.includes(name) ? `"${name}" 지도를 등록하지 않았어요. ztd-charts/geo/${name}에서 불러와 registerMap에 넘겨 주세요` : `"${name}" 지도를 등록하지 않았어요. 지도를 registerMap에 넘기거나 ${BUILTIN_MAPS.join(", ")}, GeoJSON을 써 주세요`;

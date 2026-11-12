@@ -5,9 +5,9 @@ import { cssVarName, darkTheme, mergeTheme, themes, themeToCssVars, type ChartTh
 
 export interface ThemeContextValue {
   theme: ChartTheme;
-  /** false면 var() 없이 색 값을 그대로 써요. 서버에서 PNG로 바꿀 때 필요해요 */
+  /** When false, writes color values directly without var(). Needed for server-side PNG conversion */
   cssVars: boolean;
-  /** 아래 차트, 카드의 로캘. 없으면 각 컴포넌트가 DEFAULT_LOCALE("en-US")을 써요 */
+  /** Locale of the charts and cards below. When omitted, each component uses DEFAULT_LOCALE ("en-US") */
   locale?: string;
 }
 
@@ -22,17 +22,17 @@ export function resolveThemeInput(input: ThemeInput | undefined, base: ChartThem
 }
 
 export interface ThemeProviderProps {
-  /** "dark" | "light" 또는 토큰 객체. 바꿀 토큰만 넘겨도 돼요 */
+  /** "dark" | "light" or a token object. Passing only the tokens to change is enough */
   theme?: ThemeInput;
-  /** 부모 테마 대신 이 테마에서 시작해요 */
+  /** Starts from this theme instead of the parent theme */
   base?: ThemeName;
-  /** false면 CSS 변수 없이 색 값을 그대로 그려요. 기본 true */
+  /** When false, draws color values directly without CSS variables. Default true */
   cssVars?: boolean;
-  /** 바탕색과 글자색까지 칠해요. 기본 false (display: contents) */
+  /** Also paints the background and text colors. Default false (display: contents) */
   paint?: boolean;
   /**
-   * 아래 차트와 카드의 로캘. 숫자, 날짜 형식과 차트가 만드는 글자(툴팁, 스크린리더 문장, 버튼)의 언어를 정해요.
-   * "ko"나 "ko-*"면 한국어, 그 밖은 영어. 차트의 locale 프롭이 더 우선이에요. 없으면 부모 ThemeProvider를 따르고, 기본 "en-US"
+   * Locale of the charts and cards below. Sets the number and date formats and the language of text the charts generate (tooltips, screen reader sentences, buttons).
+   * "ko" or "ko-*" gives Korean; anything else English. A chart's locale prop takes precedence. When omitted, follows the parent ThemeProvider; default "en-US"
    */
   locale?: string;
   className?: string;
@@ -40,7 +40,7 @@ export interface ThemeProviderProps {
   children?: ReactNode;
 }
 
-/** 테마를 정하고 `--ztd-*` CSS 변수를 하위 요소에 내려줘요 */
+/** Sets the theme and passes `--ztd-*` CSS variables down to descendants */
 export function ThemeProvider(props: ThemeProviderProps) {
   const parent = useContext(ThemeContext);
   const start = props.base ? themes[props.base] : parent.theme;
@@ -64,13 +64,13 @@ export function ThemeProvider(props: ThemeProviderProps) {
 export interface Painter {
   theme: ChartTheme;
   cssVars: boolean;
-  /** 토큰을 칠할 값으로. cssVars면 var(--ztd-x, 값) */
+  /** A token as a paintable value. With cssVars, var(--ztd-x, value) */
   paint: (token: ColorToken) => string;
-  /** 토큰 또는 색 문자열. "accent" 같은 이름이면 토큰으로 봐요 */
+  /** A token or a color string. A name such as "accent" is treated as a token */
   color: (c: string | undefined, fallback?: ColorToken) => string;
-  /** 두 토큰을 섞은 색. cssVars면 color-mix */
+  /** A mix of two tokens. color-mix with cssVars */
   mix: (a: ColorToken, b: ColorToken, t: number) => string;
-  /** 계산용 실제 색 값 (대비 계산 등) */
+  /** The actual color value for calculations (contrast and so on) */
   raw: (c: string | undefined, fallback?: ColorToken) => string;
 }
 
@@ -125,7 +125,7 @@ export function useThemeContext(): ThemeContextValue {
   return useContext(ThemeContext);
 }
 
-/** 현재 테마와 칠하기 도구. override는 이 컴포넌트만 바꿔요 */
+/** The current theme and painting helpers. override changes this component only */
 export function useChartTheme(override?: Partial<ChartTheme>): Painter {
   const ctx = useContext(ThemeContext);
   return useMemo(() => {
@@ -134,13 +134,13 @@ export function useChartTheme(override?: Partial<ChartTheme>): Painter {
   }, [ctx.theme, ctx.cssVars, override]);
 }
 
-/** 쓸 로캘: 컴포넌트의 locale 프롭(override), ThemeProvider의 locale, DEFAULT_LOCALE("en-US") 순서 */
+/** The locale to use: the component's locale prop (override), then the ThemeProvider's locale, then DEFAULT_LOCALE ("en-US") */
 export function useChartLocale(override?: string): string {
   const ctx = useContext(ThemeContext);
   return override ?? ctx.locale ?? DEFAULT_LOCALE;
 }
 
-/** 컴포넌트의 theme 프롭을 CSS 변수로 (해당 요소 아래에서만 적용) */
+/** A component's theme prop as CSS variables (applied only under that element) */
 export function overrideVars(override?: Partial<ChartTheme>): Record<string, string> {
   if (!override) return {};
   return themeToCssVars(override);

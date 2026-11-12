@@ -1,6 +1,6 @@
 /**
- * 길이는 정해져 있고 칸은 처음 읽을 때 만드는 배열. 1만 개 라벨, 이벤트를 다 만들지 않으려고 써요.
- * 인덱스 읽기, length, slice, map, forEach, indexOf가 돼요 (has 트랩이 없으면 배열 메서드가 빈 칸을 건너뛰어요).
+ * An array with a fixed length whose items are created on first read. Used to avoid building all of 10,000 labels and events.
+ * Supports index reads, length, slice, map, forEach and indexOf (without a has trap, array methods skip empty slots).
  */
 export function lazyArray<T>(n: number, make: (i: number) => T): T[] {
   const cache = new Array<T | undefined>(n);

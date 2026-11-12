@@ -1,29 +1,29 @@
 import { clamp, r2 } from "../core/geometry";
 
 /*
- * 산점도 육각 밀도(options.bin "hex")의 계산. 점을 화면 좌표(축 눈금을 거친 뒤)에서 꼭짓점이 위아래인 육각 칸에 세요.
- * 그래서 로그 축도 그대로 돼요. 산점도 그림과 작은 여러 개의 같은 색 척도(둘 다 charts/scatter-hex.tsx)가 같이 써요
+ * Calculations for the scatter plot hexagonal density (options.bin "hex"). Points are counted into pointy-top hexagonal cells in screen coordinates (after the axis scales).
+ * So log axes work as they are. Shared by the scatter plot drawing and the common color scale of small multiples (both in charts/scatter-hex.tsx)
  */
 
 /**
- * 크기 없는 점 그림(bubble.tsx의 PointChart)의 여백(px): 육각 밀도의 위쪽 범례 줄, 아래 x축 글자 줄, 축 범위 안쪽 여유.
- * 작은 여러 개의 같은 색 척도(hexFacetPlan)가 차트와 같은 그림 영역에서 칸을 세려고 같은 값을 써요
+ * Margins (px) of the sizeless point plot (PointChart in bubble.tsx): the legend row above the hexagonal density, the x axis label row below, and the padding inside the axis range.
+ * The common color scale of small multiples (hexFacetPlan) uses the same values so it counts cells over the same plot area as the chart
  */
 export const HEX_TOP = 20;
 export const PLOT_BOTTOM = 24;
 export const DOT_PAD = 4;
 
-/** 칸 폭(px, 마주 보는 두 변 사이)의 기본값과 범위. 4보다 작으면 칸이 수만 개라 그림이 커지기만 하고, 200보다 크면 칸 하나가 그림을 덮어요 */
+/** Default and range of the cell width (px, between two opposite sides). Below 4 there are tens of thousands of cells and the drawing only grows; above 200 one cell covers the plot */
 export const HEX_SIZE = 16;
 export const HEX_MIN = 4;
 export const HEX_MAX = 200;
 
-/** 칸 폭. 숫자가 아니거나 유한하지 않으면 기본값, 범위 밖이면 가까운 끝이에요 */
+/** Cell width. The default when not a finite number; the nearer limit when out of range */
 export function hexSize(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? clamp(v, HEX_MIN, HEX_MAX) : HEX_SIZE;
 }
 
-/** 칸 하나. col, row는 격자 자리(홀수 줄은 반 칸 오른쪽), cx, cy는 가운데(px) */
+/** One cell. col and row are its grid position (odd rows shift half a cell right); cx and cy are its center (px) */
 export interface HexCell {
   col: number;
   row: number;
@@ -32,7 +32,7 @@ export interface HexCell {
   count: number;
 }
 
-/** 격자: 칸 폭 w, 꼭짓점까지 반지름 r = w/√3, 줄 간격 1.5r. 왼쪽 위 (x0, y0)가 0번 줄 0번 칸의 가운데예요 */
+/** Grid: cell width w, radius to a vertex r = w/√3, row spacing 1.5r. The top left (x0, y0) is the center of cell 0 in row 0 */
 export interface HexGrid {
   w: number;
   r: number;
@@ -41,12 +41,12 @@ export interface HexGrid {
 }
 
 /**
- * 격자 칸 수의 상한. hexBins는 격자 칸마다 정수 하나(4바이트)를 잡아서, 서버 렌더에 아주 큰 폭이나 높이(스펙 options.height 등)가 와도
- * 메모리가 약 0.8MB를 넘지 않게 해요. 보통 크기(2400 × 1000px까지 폭 4)는 이보다 작아서 칸 폭이 그대로예요
+ * Upper limit on the number of grid cells. hexBins allocates one integer (4 bytes) per grid cell, so even when a server render gets a huge width or height (a spec's options.height and so on),
+ * memory stays under about 0.8MB. Normal sizes (up to 2400 × 1000px at width 4) stay below this, so the cell width is unchanged
  */
 export const HEX_MAX_CELLS = 200_000;
 
-/** 폭 w 칸으로 그림 영역 box를 덮는 격자 칸 수 (hexBins가 잡는 배열 길이) */
+/** Number of grid cells of width w covering the plot area box (the array length hexBins allocates) */
 function cellsFor(w: number, box: { x0: number; x1: number; y0: number; y1: number }): number {
   const cols = Math.max(1, Math.ceil((box.x1 - box.x0) / w) + 3);
   const rows = Math.max(1, Math.ceil((box.y1 - box.y0) / ((1.5 * w) / Math.sqrt(3))) + 3);
@@ -54,34 +54,34 @@ function cellsFor(w: number, box: { x0: number; x1: number; y0: number; y1: numb
 }
 
 /**
- * 그림 영역 box의 격자. 칸 폭은 hexSize(size)이고, 그 폭으로는 격자 칸이 HEX_MAX_CELLS를 넘으면 넘지 않을 때까지 넓혀요.
- * 그래서 칸 수와 메모리는 그림 크기와 상관없이 정해진 한도 안이에요. 툴팁과 낭독은 이 격자(실제로 그린 칸)로 범위를 적어요
+ * Grid for the plot area box. The cell width is hexSize(size); if that width would exceed HEX_MAX_CELLS grid cells, it is widened until it does not.
+ * So the cell count and memory stay within a fixed limit whatever the plot size. Tooltips and announcements state ranges from this grid (the cells actually drawn)
  */
 export function hexGrid(size: unknown, box: { x0: number; x1: number; y0: number; y1: number }): HexGrid {
   let w = hexSize(size);
   if (cellsFor(w, box) > HEX_MAX_CELLS) {
-    // 넓이 기준으로 한 번에 가까이 간 뒤, 가장자리 칸 몫까지 맞을 때까지 조금씩 넓혀요
+    // Jump close in one step by area, then widen bit by bit until the edge cells fit as well
     w = Math.max(w, Math.sqrt(((box.x1 - box.x0) * (box.y1 - box.y0) * Math.sqrt(3)) / 1.5 / HEX_MAX_CELLS));
     while (cellsFor(w, box) > HEX_MAX_CELLS) w *= 1.02;
   }
   return { w, r: w / Math.sqrt(3), x0: box.x0, y0: box.y0 };
 }
 
-/** 칸의 가운데 (px) */
+/** Center of a cell (px) */
 export function hexCenter(g: HexGrid, col: number, row: number): [number, number] {
   return [g.x0 + (col + (row & 1) / 2) * g.w, g.y0 + row * 1.5 * g.r];
 }
 
 /**
- * 점이 드는 칸 [col, row]. 가장 가까운 두 줄에서 각각 가장 가까운 칸을 고르고, 가운데까지 실제 거리가 짧은 쪽이에요.
- * 육각 칸은 가운데가 가장 가까운 점의 모임이라 이 둘 중 하나가 맞아요(세 줄 떨어진 칸은 늘 더 멀어요)
+ * The cell [col, row] a point falls in. Picks the nearest cell in each of the two nearest rows, then the one whose center is truly closer.
+ * A hexagonal cell is the set of points nearest to its center, so one of the two is right (a cell three rows away is always farther)
  */
 export function hexOf(g: HexGrid, x: number, y: number): [number, number] {
   hexInto(g, x, y, SPOT);
   return [SPOT[0], SPOT[1]];
 }
 
-/** hexOf의 몸통: 배열을 새로 만들지 않고 out에 [col, row]를 적어요. 점이 100만 개인 hexBins 반복에서 써요 */
+/** The body of hexOf: writes [col, row] into out without creating a new array. Used in the hexBins loop over a million points */
 const SPOT = new Int32Array(2);
 function hexInto(g: HexGrid, x: number, y: number, out: Int32Array): void {
   const dy = 1.5 * g.r;
@@ -91,7 +91,7 @@ function hexInto(g: HexGrid, x: number, y: number, out: Int32Array): void {
   const j2 = fy < j1 ? j1 - 1 : j1 + 1;
   const i1 = Math.round(fx - (j1 & 1) / 2);
   const i2 = Math.round(fx - (j2 & 1) / 2);
-  // 두 후보 칸 가운데까지 거리 (hexCenter와 같은 식)
+  // Distances to the centers of the two candidate cells (the same formula as hexCenter)
   const ax = g.x0 + (i1 + (j1 & 1) / 2) * g.w - x;
   const ay = g.y0 + j1 * dy - y;
   const bx = g.x0 + (i2 + (j2 & 1) / 2) * g.w - x;
@@ -102,12 +102,12 @@ function hexInto(g: HexGrid, x: number, y: number, out: Int32Array): void {
 }
 
 /**
- * 점을 칸에 한 번에 세요. xs, ys는 화면 좌표이고 [x0, x1] × [y0, y1] 밖의 점과 유한하지 않은 점은 빼요.
- * 칸마다 수는 촘촘한 정수 배열에 세서 점이 100만 개여도 한 번 돌고, 빈 칸은 돌려주지 않아요. 순서는 줄, 칸 순서예요
+ * Counts points into cells in a single pass. xs and ys are screen coordinates; points outside [x0, x1] × [y0, y1] and non-finite points are skipped.
+ * Per-cell counts go into a dense integer array, so even a million points take one pass, and empty cells are not returned. The order is by row, then cell
  */
 export function hexBins(g: HexGrid, xs: ArrayLike<number>, ys: ArrayLike<number>, box: { x0: number; x1: number; y0: number; y1: number }): HexCell[] {
-  // 가장자리 점은 바깥 칸(-1번, 마지막 + 1번)에도 들어서 앞뒤로 한 칸씩 더 둬요.
-  // 격자는 hexGrid가 HEX_MAX_CELLS 안으로 맞춘 것이고, 다른 영역을 넘겨도 배열은 그 한도에서 멈춰요(넘는 줄의 점은 세지 않아요)
+  // Edge points can also land in outer cells (index -1, last + 1), so one extra cell is kept on each side.
+  // The grid is the one hexGrid fitted within HEX_MAX_CELLS; even when a different area is passed, the array stops at that limit (points in rows beyond it are not counted)
   const cols = Math.max(1, Math.ceil((box.x1 - g.x0) / g.w) + 3);
   const rows = Math.min(Math.max(1, Math.ceil((box.y1 - g.y0) / (1.5 * g.r)) + 3), Math.max(1, Math.floor(HEX_MAX_CELLS / cols)));
   const counts = new Int32Array(Math.min(cols * rows, HEX_MAX_CELLS));
@@ -133,14 +133,14 @@ export function hexBins(g: HexGrid, xs: ArrayLike<number>, ys: ArrayLike<number>
   return out;
 }
 
-/** 칸 사이 틈(px). 히트맵 칸과 같은 생각으로 칸이 작을수록 좁히고, 아주 작으면 없애요 */
+/** Gap between cells (px). Following the same idea as heatmap cells, it narrows as cells shrink and disappears when they are very small */
 export function hexGap(w: number): number {
   return w > 14 ? 1.5 : w > 6 ? 1 : 0;
 }
 
 /**
- * 같은 색 칸을 모은 경로 하나. 칸마다 "M가운데 위 꼭짓점" 뒤에 같은 상대 좌표 여섯 변이라 칸이 수천 개여도 짧아요.
- * gap만큼 칸을 줄여서 이웃 칸 사이에 고른 틈이 생겨요
+ * One path gathering the cells of the same color. Each cell is "M<top vertex>" followed by the same six relative-coordinate sides, so it stays short even with thousands of cells.
+ * Cells shrink by gap, leaving an even gap between neighbors
  */
 export function hexPath(g: HexGrid, cells: readonly Pick<HexCell, "cx" | "cy">[], gap = 0): string {
   const r = Math.max(0.1, g.r - gap / Math.sqrt(3));
@@ -154,9 +154,9 @@ export function hexPath(g: HexGrid, cells: readonly Pick<HexCell, "cx" | "cy">[]
 }
 
 /**
- * 화살표 방향(d, 화면 방향이라 아래가 +y. scatter-kit의 arrowStep)의 이웃 칸. 그 방향 45도 안의 칸 중 가운데가 가장 가까운 칸이라, 빈 칸은 건너뛰고 다음 칸으로 가요.
- * 위아래는 바로 윗줄(아랫줄)의 두 칸이 같은 거리라서, 짝수 줄은 오른쪽, 홀수 줄은 왼쪽을 골라 여러 번 눌러도 옆으로 흘러가지 않아요.
- * 그 방향에 칸이 없으면 -1
+ * Neighbor cell in the arrow direction (d, in screen terms, so down is +y; arrowStep in scatter-kit). It is the cell with the nearest center within 45 degrees of that direction, so empty cells are skipped and it moves on to the next cell.
+ * Up and down, the two cells in the row directly above (below) are equally far, so even rows pick the right one and odd rows the left one, and repeated presses do not drift sideways.
+ * -1 when there is no cell in that direction
  */
 export function hexNeighbor(cells: readonly Pick<HexCell, "cx" | "cy" | "row">[], from: number, d: readonly [number, number]): number {
   const a = cells[from];

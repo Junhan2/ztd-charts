@@ -5,22 +5,22 @@ import type { ChartLang } from "./i18n";
 import { linearFit } from "./geometry";
 import { textWidth, truncate, type Box } from "./text";
 
-/** 차트 위 주석 한 칸 (options.annotations) */
+/** One annotation on a chart (options.annotations) */
 export interface Annotation {
-  /** "band" 칠한 구간 | "line" 가로 기준선 | "event" 사건 표시 | "forecast" 예측 구간 | "trend" 추세선 | "weekends" 주말 음영 */
+  /** "band" shaded range | "line" horizontal reference line | "event" event marker | "forecast" forecast range | "trend" trend line | "weekends" weekend shading */
   type: "band" | "line" | "event" | "forecast" | "trend" | "weekends";
-  /** event: x 값. band: [시작, 끝] x 구간 */
+  /** event: the x value. band: the [start, end] x range */
   x?: unknown;
-  /** line: y 값. band: [아래, 위] y 구간 */
+  /** line: the y value. band: the [bottom, top] y range */
   y?: number | readonly [number, number];
-  /** forecast: 이 x부터 예측이에요 (선이 점선이 돼요) */
+  /** forecast: the forecast starts at this x (the line turns dashed) */
   from?: unknown;
   label?: string;
 }
 
 const isPair = (v: unknown): v is readonly [unknown, unknown] => Array.isArray(v) && v.length === 2;
 
-/** y축 범위에 넣어야 하는 값 (구간과 기준선이 데이터 밖이어도 그림 안에 들어오게) */
+/** Values the y axis range must include (so ranges and reference lines outside the data still fit in the plot) */
 export function annotationYs(list: readonly Annotation[] | undefined): number[] {
   const out: number[] = [];
   for (const a of list ?? []) {
@@ -30,28 +30,28 @@ export function annotationYs(list: readonly Annotation[] | undefined): number[] 
   return out.filter(Number.isFinite);
 }
 
-/** 예측이 시작하는 x 값 (없으면 undefined) */
+/** The x value where the forecast starts (undefined when there is none) */
 export const forecastFrom = (list: readonly Annotation[] | undefined): unknown => list?.find((a) => a.type === "forecast")?.from;
 
 export interface AnnotationGeom {
   p: Painter;
   lang: ChartLang;
-  /** x 값을 픽셀로. 못 찾으면 null */
+  /** Maps an x value to pixels. null when it is not found */
   xAt: (v: unknown) => number | null;
   y: (v: number) => number;
   x0: number;
   x1: number;
   top: number;
   bottom: number;
-  /** 날짜 x일 때 시간 범위, 점 수, 시간 → 픽셀 (주말 음영). 날짜가 아니면 없어요 */
+  /** For a date x: the time range, point count and time to pixel mapping (weekend shading). Absent when x is not a date */
   time?: { t0: number; t1: number; n: number; xt: (t: number) => number };
-  /** 칸 폭의 절반. x 구간을 양 끝 칸 가장자리까지 넓혀요 (범주, 봉). 이어진 x는 0 */
+  /** Half a cell's width. Widens an x range to the outer edges of its end cells (categories, candles). 0 for a continuous x */
   half: number;
-  /** 예측 구간을 칸 왼쪽 끝부터 (막대) */
+  /** Starts the forecast range at the cell's left edge (bars) */
   edge?: boolean;
-  /** 추세선을 맞출 강조 계열의 점 (픽셀) */
+  /** Points of the highlighted series to fit the trend line to (pixels) */
   points?: () => { x: number; y: number }[];
-  /** 이름표가 피할 글자 상자 (막대 값 라벨). 기준선, 예측, 구간 이름표가 덜 겹치는 자리로 가요 */
+  /** Text boxes the labels avoid (bar value labels). Reference line, forecast and range labels move to a spot with less overlap */
   avoid?: readonly Box[];
 }
 
@@ -59,7 +59,7 @@ type TagSpot = { x: number; y: number; anchor: "start" | "end" };
 
 const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
 
-/** 후보 자리 중 피할 상자와 겹치는 넓이가 가장 작은 자리 (안 겹치는 첫 자리에서 멈춰요). 고른 상자는 다음 이름표가 피하게 taken에 넣어요 */
+/** The candidate spot with the smallest overlap area with the boxes to avoid (stops at the first spot without overlap). The chosen box goes into taken so the next label avoids it */
 function pickSpot(text: string, spots: TagSpot[], taken: Box[]): TagSpot {
   let best = spots[0];
   let least = Infinity;
@@ -78,21 +78,21 @@ function pickSpot(text: string, spots: TagSpot[], taken: Box[]): TagSpot {
 
 const clampX = (g: AnnotationGeom, x: number) => Math.max(g.x0, Math.min(g.x1, x));
 const inside = (g: AnnotationGeom, x: number | null): x is number => x !== null && x >= g.x0 - 1 && x <= g.x1 + 1;
-/** x 구간 [시작, 끝]의 픽셀 범위 (작은 쪽부터). 한쪽이라도 못 찾으면 null */
+/** Pixel range of the x range [start, end] (smaller end first). null when either end is not found */
 function xRange(g: AnnotationGeom, v: readonly unknown[]): [number, number] | null {
   const a = g.xAt(v[0]);
   const b = g.xAt(v[1]);
   return a === null || b === null ? null : [Math.min(a, b) - g.half, Math.max(a, b) + g.half];
 }
 
-/** 가로 띠(y 구간)의 위, 아래 픽셀. 그림 영역 안으로 자르고, 값을 픽셀로 못 바꾸면 null. 띠 칠하기와 이름표가 같이 써요 */
+/** Top and bottom pixels of a horizontal band (y range). Clipped to the plot area; null when a value cannot be mapped to pixels. Shared by the band fill and its label */
 function yRange(g: AnnotationGeom, v: readonly unknown[]): [number, number] | null {
   const a = g.y(Number(v[0]));
   const b = g.y(Number(v[1]));
   return Number.isFinite(a) && Number.isFinite(b) ? [Math.max(g.top, Math.min(a, b)), Math.min(g.bottom, Math.max(a, b))] : null;
 }
 
-/** 예측이 시작하는 픽셀 (그림 왼쪽 끝 안으로 당겨요). from이 없거나 그림 오른쪽 밖이면 null. 선의 점선 나누기도 이걸 써요 */
+/** Pixel where the forecast starts (pulled inside the plot's left edge). null when from is missing or right of the plot. The line's dashed split uses this too */
 export function forecastX(g: AnnotationGeom, from: unknown): number | null {
   const x = from === undefined ? null : g.xAt(from);
   return x === null || x > g.x1 ? null : Math.max(g.x0, x - (g.edge ? g.half : 0));
@@ -103,7 +103,7 @@ const TEXT = {
   ko: { forecast: "예측", trend: "추세", period: "기간", weekends: "주말 음영", lead: "주석" },
 };
 
-/** 시리즈 아래에 까는 주석: 칠한 구간, 주말, 예측 구간 */
+/** Annotations laid under the series: shaded ranges, weekends, forecast ranges */
 export function AnnotationsUnder({ list, g }: { list?: readonly Annotation[]; g: AnnotationGeom }) {
   if (!list?.length) return null;
   const { p } = g;
@@ -133,8 +133,8 @@ export function AnnotationsUnder({ list, g }: { list?: readonly Annotation[]; g:
       if (xb - xa < 0.5) return;
       nodes.push(<rect key={i} x={xa} y={g.top} width={xb - xa} height={h} fill={p.paint("ink")} opacity={0.05} />);
     } else if (a.type === "weekends" && g.time && g.time.t1 - g.time.t0 <= 86400000 * 400) {
-      // 토요일 0시부터 월요일 0시까지. 400일이 넘으면 칸이 너무 잘아서 그리지 않아요.
-      // 점 간격의 절반(최대 12시간)만큼 앞당겨서 하루치 점이 음영 가운데에 와요
+      // From Saturday 00:00 to Monday 00:00. Beyond 400 days the cells are too thin, so nothing is drawn.
+      // Shifted earlier by half the point spacing (at most 12 hours) so a day's point sits in the middle of the shading
       const pad = Math.min(43200000, (g.time.t1 - g.time.t0) / Math.max(1, g.time.n - 1) / 2);
       const d = new Date(g.time.t0);
       d.setHours(0, 0, 0, 0);
@@ -156,16 +156,16 @@ export function AnnotationsUnder({ list, g }: { list?: readonly Annotation[]; g:
   );
 }
 
-/** 이름표 폭: 글자 + 양옆 4px */
+/** Label width: text plus 4px on each side */
 const tagW = (text: string, strong?: boolean) => textWidth(text, 10.5, strong ? 700 : 500) + 8;
 
-/** 이름표(Tag) 상자: 글자 + 양옆 4px, 높이 16px. x는 anchor 쪽 끝, y는 줄 가운데예요. 겹침을 미리 재는 곳(산점도)도 이 상자를 써요 */
+/** Label (Tag) box: text plus 4px on each side, 16px tall. x is the end on the anchor side, y the middle of the line. Code that measures overlap in advance (scatter plot) uses this box too */
 export function tagBox(text: string, x: number, y: number, anchor: "start" | "end" = "start", strong?: boolean): Box {
   const w = tagW(text, strong);
   return { x: anchor === "end" ? x - w : x, y: y - 8, w, h: 16 };
 }
 
-/** 카드 바탕 받침 위에 쓰는 작은 글자 (선이 지나가도 읽히게). 산점도 사분면 이름과 추세선 이름표도 이걸 써요 */
+/** Small text on a card-background plate (readable even where a line passes). Scatter plot quadrant names and trend line labels use it too */
 export function Tag({ p, x, y, text, anchor = "start", strong }: { p: Painter; x: number; y: number; text: string; anchor?: "start" | "end"; strong?: boolean }) {
   const b = tagBox(text, x, y, anchor, strong);
   return (
@@ -178,15 +178,15 @@ export function Tag({ p, x, y, text, anchor = "start", strong }: { p: Painter; x
   );
 }
 
-/** 시리즈 위에 올리는 주석: 기준선, 사건, 추세선과 구간 이름표 */
+/** Annotations drawn over the series: reference lines, events, trend lines and range labels */
 export function AnnotationsOver({ list, g }: { list?: readonly Annotation[]; g: AnnotationGeom }) {
   if (!list?.length) return null;
   const { p } = g;
   const tx = TEXT[g.lang];
   const nodes: ReactNode[] = [];
-  // 사건 이름표가 겹치면 아랫줄로 내려요
+  // Event labels that overlap move down a row
   const rows: number[] = [];
-  // 기준선, 구간, 예측 이름표는 값 라벨과 앞서 놓은 이름표를 피해요. 피할 상자가 없으면 첫 후보(예전 자리)예요
+  // Reference line, range and forecast labels avoid value labels and labels placed earlier. With no boxes to avoid, the first candidate (the old spot) is used
   const taken: Box[] = [...(g.avoid ?? [])];
   list.forEach((a, i) => {
     if (a.type === "line" && typeof a.y === "number") {
@@ -248,7 +248,7 @@ export function AnnotationsOver({ list, g }: { list?: readonly Annotation[]; g: 
     } else if (a.type === "trend" && g.points) {
       const pts = g.points().filter((q) => Number.isFinite(q.x) && Number.isFinite(q.y));
       if (pts.length < 2) return;
-      // 최소제곱 직선. 축이 선형이라 픽셀 좌표로 맞춰도 데이터로 맞춘 선과 같아요
+      // Least-squares line. The axes are linear, so fitting in pixel coordinates gives the same line as fitting the data
       const { at } = linearFit(pts);
       const xa = pts[0].x;
       const xb = pts[pts.length - 1].x;
@@ -267,7 +267,7 @@ export function AnnotationsOver({ list, g }: { list?: readonly Annotation[]; g: 
   );
 }
 
-/** 스크린리더 설명에 붙이는 주석 문장. xText는 x 값을 차트의 x 이름표로 바꿔요 (없으면 적은 값 그대로). 주석이 없으면 빈 글자 */
+/** Annotation sentences appended to the screen reader description. xText turns an x value into the chart's x label (without it, the value as written). An empty string when there are no annotations */
 export function describeAnnotations(list: readonly Annotation[] | undefined, lang: ChartLang, fv: (v: number) => string, xText?: (v: unknown) => string): string {
   if (!list?.length) return "";
   const tx = TEXT[lang];

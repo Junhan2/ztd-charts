@@ -26,9 +26,9 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface BumpChartProps<T = Row> extends BaseChartProps<T> {
   x?: Accessor<T, unknown>;
   series?: Accessor<T, string>;
-  /** 순위 필드 (1이 1등). 없으면 value로 순위를 매겨요 */
+  /** Rank field (1 is first place). Without it, ranks are computed from value */
   rank?: Accessor<T, number>;
-  /** 값 필드. rank가 없을 때 큰 값이 1등 */
+  /** Value field. Without rank, the largest value ranks 1 */
   value?: Accessor<T, number>;
 }
 
@@ -39,7 +39,7 @@ interface BumpLine {
   hi: boolean;
 }
 
-/** 범프 차트: 시간에 따른 순위 변화 */
+/** Bump chart: rank changes over time */
 export function BumpChart<T = Row>(props: BumpChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.55)), duration: 1100, stagger: 90 });
   const { p, width: W, height: H } = c;
@@ -109,7 +109,7 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
       className={props.className}
       style={props.style}
       theme={props.theme}
-      // 열이 고르게 놓여서 가까운 열은 계산으로 찾아요 (움직일 때마다 좌표 배열을 만들지 않아요)
+      // Columns are evenly spaced, so the nearest column is computed (no coordinate array is built on every move)
       onPointerMove={(px, _py, e) => nK && c.setActive(evenIndex(px, x0, x1, nK), e.pointerType === "touch" ? "touch" : "pointer")}
     >
       <rect x={x0} y={0} width={Math.max(0, x1 - x0)} height={H - bottom} fill="transparent" />

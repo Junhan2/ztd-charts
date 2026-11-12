@@ -9,32 +9,32 @@ import type { Accessor, BaseChartProps, ChartEvent, Row } from "../core/types";
 import { useChartLocale, useChartTheme } from "../theme/context";
 
 export interface StatCardProps<T = Row> {
-  /** 지표 이름. 예: "MRR". 카드 이름과 추세선 이름에도 써요 */
+  /** Metric name. Example: "MRR". Also used for the card name and the sparkline name */
   label: string;
-  /** 추이 데이터. 마지막 값이 큰 숫자가 돼요 */
+  /** Trend data. The last value becomes the big number */
   data: readonly T[];
-  /** x 필드. 기본 "x" */
+  /** x field. Default "x" */
   x?: Accessor<T, unknown>;
-  /** 값 필드. 기본 "y" */
+  /** Value field. Default "y" */
   y?: Accessor<T, number>;
-  /** 큰 숫자를 직접 적어요(예: "$482K"). 없으면 마지막 값을 format, unit으로 */
+  /** Sets the big number directly (for example "$482K"). When omitted, the last value with format and unit */
   value?: ReactNode;
-  /** 변화 배지. 없으면 첫 값 대비 마지막 값의 변화율(예: "+6.2%"), null이면 배지를 숨겨요 */
+  /** Change badge. When omitted, the change rate from the first value to the last (for example "+6.2%"); null hides the badge */
   delta?: ReactNode;
-  /** 늘수록 좋은 지표면 "up"(기본), 줄수록 좋으면 "down"(이탈률 등). 좋은 쪽으로 움직였을 때만 배지를 강조색으로 칠해요 */
+  /** "up" (default) for a metric where higher is better, "down" where lower is better (churn rate and the like). The badge gets the accent color only when the move is in the good direction */
   better?: "up" | "down";
-  /** 숫자 아래 작은 글. 추세선을 짚는 동안에는 짚은 점의 x 이름표로 바뀌어요 */
+  /** Small text under the number. While the sparkline is hovered, it changes to the x label of the hovered point */
   note?: ReactNode;
   format?: FormatSpec;
   unit?: string;
   locale?: string;
   theme?: BaseChartProps<T>["theme"];
-  /** 추세선 모양. 기본 "area" */
+  /** Sparkline style. Default "area" */
   variant?: SparklineProps<T>["variant"];
-  /** 추세선 높이(px). 기본 40 */
+  /** Sparkline height (px). Default 40 */
   sparkHeight?: number;
   reducedMotion?: "auto" | boolean;
-  /** 바뀌면 추세선이 처음부터 다시 그려져요 */
+  /** When it changes, the sparkline redraws from the start */
   replayKey?: string | number;
   className?: string;
   style?: CSSProperties;
@@ -43,8 +43,8 @@ export interface StatCardProps<T = Row> {
 const TREND = { en: (label: string) => `${label}, trend`, ko: (label: string) => `${label} 추이` };
 
 /**
- * 지표 카드: 큰 숫자, 변화 배지, 추세선. 추세선에 마우스를 올리거나 Tab으로 들어가 화살표로 옮기면
- * 큰 숫자가 그 점의 값으로, 아래 글이 그 점의 날짜로 바뀌어요 (점 값은 추세선이 화면 낭독기에 읽어 줘요)
+ * Metric card: big number, change badge, sparkline. Hovering the sparkline, or tabbing into it and moving with the arrow keys,
+ * changes the big number to that point's value and the text below to that point's date (the sparkline reads point values to screen readers)
  */
 export function StatCard<T = Row>(props: StatCardProps<T>) {
   const p = useChartTheme(props.theme);
@@ -53,7 +53,7 @@ export function StatCard<T = Row>(props: StatCardProps<T>) {
   const reduced = useReducedMotion(props.reducedMotion);
   const [at, setAt] = useState<ChartEvent<T> | null>(null);
 
-  // 값이 있는 점만 (추세선과 같은 x 순서). 호버로 다시 그릴 때마다 거르지 않게 데이터가 바뀔 때만 만들어요
+  // Only points with a value (same x order as the sparkline). Built only when the data changes, so hover rerenders do not filter again
   const fin = useMemo(() => (prepSeries(props.data, props.x, props.y, undefined, { locale }).values[0] ?? []).filter(Number.isFinite), [props.data, props.x, props.y, locale]);
   const last = fin[fin.length - 1];
   const ratio = changeRatio(fin[0], last);
@@ -61,7 +61,7 @@ export function StatCard<T = Row>(props: StatCardProps<T>) {
   const delta = props.delta === undefined ? (ratio === null ? null : signedPercent(ratio, locale)) : props.delta;
   const shown = at && at.value !== null ? at.formatted : (props.value ?? withUnit(makeFormatter(props.format, locale), props.unit)(last));
 
-  // 숫자가 바뀌면 살짝 올라오며 나타나요. 처음 그릴 때와 빠르게 훑는 동안(120ms 안에 다시 바뀌면)은 바로 바꿔요
+  // A changed number slides up slightly as it appears. On first render and while scrubbing quickly (another change within 120ms), it swaps instantly
   const numRef = useRef<HTMLSpanElement>(null);
   const lastSwap = useRef(Infinity);
   useEffect(() => {
@@ -87,7 +87,7 @@ export function StatCard<T = Row>(props: StatCardProps<T>) {
         minWidth: 0,
         boxSizing: "border-box",
         fontFamily: p.cssVars ? `var(--ztd-font, ${p.theme.fontFamily})` : p.theme.fontFamily,
-        // 한국어 아래 글이 낱말 가운데서 줄을 바꾸지 않게 (ChartCard와 같아요)
+        // Keeps Korean text below from breaking mid-word (same as ChartCard)
         wordBreak: "keep-all",
         ...props.style,
       }}
@@ -104,7 +104,7 @@ export function StatCard<T = Row>(props: StatCardProps<T>) {
         {shown}
       </span>
       <Sparkline data={props.data} x={props.x} y={props.y} variant={props.variant} height={props.sparkHeight ?? 40} showValue={false} tooltip={false} format={props.format} unit={props.unit} locale={props.locale} theme={props.theme} reducedMotion={props.reducedMotion} replayKey={props.replayKey} ariaLabel={TREND[langOf(locale)](props.label)} onHover={setAt} />
-      {/* 아래 글 줄은 늘 자리를 잡아 둬요 (짚을 때 날짜가 들어와도 카드 높이가 그대로) */}
+      {/* The text line below always keeps its space (the card height stays the same when a date appears on hover) */}
       <span style={{ fontSize: 12.5, color: muted, lineHeight: 1.4, minHeight: 17 }}>{at ? at.label : props.note}</span>
     </section>
   );

@@ -18,7 +18,7 @@ import { canCenter, cap, chooseCenter, mapNotLoaded, placeLabels, planePoint, po
 import type { GeoJSONFeatureCollection, GeoMap } from "../geo/types";
 import { geoFrame, geoLayout, layoutAspect } from "../geo/view";
 
-/** 영어 서수 (1st, 2nd, 3rd, 4th, 11th, 21st) */
+/** English ordinals (1st, 2nd, 3rd, 4th, 11th, 21st) */
 const ORD = /* @__PURE__ */ new Intl.PluralRules("en-US", { type: "ordinal" });
 const SUFFIX: Record<string, string> = { one: "st", two: "nd", few: "rd" };
 
@@ -49,35 +49,35 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface SymbolMapProps<T = Row> extends BaseChartProps<T> {
-  /** 경도 필드(도, -180~180). 기본 "lon" */
+  /** Longitude field (degrees, -180 to 180). Default "lon" */
   lon?: Accessor<T, number>;
-  /** 위도 필드(도, -90~90). 기본 "lat" */
+  /** Latitude field (degrees, -90 to 90). Default "lat" */
   lat?: Accessor<T, number>;
-  /** 지역 이름이나 코드 필드. 경위도가 없는 행은 이 지역(나라, 주)의 가운데에 원을 놓아요. 기본 "region" (데이터에 있을 때만) */
+  /** Region name or code field. Rows without longitude and latitude get their circle at the center of this region (country, state). Default "region" (only when the data has it) */
   region?: Accessor<T, string>;
-  /** 값 필드. 원의 넓이가 값에 비례해요. 없으면(데이터에 "size" 필드도 없으면) 모든 원이 같은 크기예요 */
+  /** Value field. Circle area is proportional to the value. Without it (and without a "size" field in the data), all circles are the same size */
   size?: Accessor<T, number>;
-  /** 지점 이름 필드. 기본 "label" (없으면 "name", 그것도 없으면 지역 이름이나 경위도) */
+  /** Place name field. Default "label" (then "name", then the region name or coordinates) */
   label?: Accessor<T, string>;
-  /** 묶음 필드. 묶음마다 원 색이 달라요(카드 범례와 같은 색) */
+  /** Group field. Each group gets its own circle color (the same colors as the card legend) */
   group?: Accessor<T, string>;
-  /** 바탕 지도: "auto"(기본, 등록한 지도 가운데 지점을 가장 많이 받는 지도, 같으면 좁은 지도), 등록한 지도 이름, ztd-charts/geo/* 의 지도 객체, GeoJSON */
+  /** Base map: "auto" (default: the registered map that contains the most places, the smaller map on a tie), a registered map name, a map object from ztd-charts/geo/*, or GeoJSON */
   map?: string | GeoMap | GeoJSONFeatureCollection;
-  /** 세계 지도의 묶음만 크게: "europe", "asia", "africa", "americas", "oceania". 밖의 지점은 빼요 */
+  /** Zoom the world map to one region group: "europe", "asia", "africa", "americas", "oceania". Places outside it are left out */
   focus?: string;
-  /** GeoJSON에서 지역 id로 읽을 속성 */
+  /** GeoJSON property to read as the region id */
   featureId?: string;
-  /** GeoJSON에서 지역 이름으로 읽을 속성 */
+  /** GeoJSON property to read as the region name */
   featureName?: string;
-  /** 원 반지름 범위 [가장 작은 값, 가장 큰 값](px). 기본은 폭에 맞춰요. 가장 큰 값은 차트 짧은 변의 1/8까지예요 */
+  /** Circle radius range [smallest, largest] (px). By default fitted to the width. The largest is capped at 1/8 of the chart's shorter side */
   sizeRange?: [number, number];
-  /** 세계 지도의 가운데: "auto"(기본, 지도 끝에 걸리는 지점이 적은 쪽), "atlantic"(경도 0), "pacific"(경도 150, 대서양에서 잘려요) */
+  /** Center of the world map: "auto" (default, whichever side cuts fewer places at the map edge), "atlantic" (longitude 0), "pacific" (longitude 150, split in the Atlantic) */
   center?: MapCenter;
-  /** 크기 범례(기준 원 두세 개). 기본 true */
+  /** Size legend (two or three reference circles). Default true */
   legend?: boolean;
 }
 
-/** 등장 띠 수: 큰 원부터 이만큼 묶어 차례로 나타나요 */
+/** Number of entrance bands: circles are grouped into this many bands, largest first, and appear in turn */
 const BANDS = 8;
 
 interface Pt<T> {
@@ -87,11 +87,11 @@ interface Pt<T> {
   value: number;
   group: number;
   at: MapPoint;
-  /** 값 순위 (1이 가장 큼, 같은 값은 같은 순위) */
+  /** Value rank (1 is the largest; equal values share a rank) */
   rank: number;
 }
 
-/** 1, 2, 5 × 10^k 가운데 v 이하인 가장 큰 수 (크기 범례 값) */
+/** The largest number of the form 1, 2, 5 × 10^k that is at most v (size legend values) */
 function niceDown(v: number): number {
   if (!(v > 0) || !Number.isFinite(v)) return 0;
   const e = 10 ** Math.floor(Math.log10(v));
@@ -101,7 +101,7 @@ function niceDown(v: number): number {
 
 const okRange = (r: unknown): r is [number, number] => Array.isArray(r) && r.length === 2 && r.every((x) => typeof x === "number" && Number.isFinite(x));
 
-/** sizeRange를 쓸 수 있는 반지름으로: 작은 값부터, 0.5px 이상, 가장 큰 값은 짧은 변(side)의 1/8까지. 꼴이 틀리면 null */
+/** Turns sizeRange into usable radii: smaller first, at least 0.5px, the largest capped at 1/8 of the shorter side (side). null when malformed */
 function rangeOf(r: unknown, side: number): [number, number] | null {
   if (!okRange(r)) return null;
   const top = Math.max(1, side / 8);
@@ -110,11 +110,11 @@ function rangeOf(r: unknown, side: number): [number, number] | null {
 }
 
 /**
- * 기호 지도: 옅은 바탕 지도 위 지점마다 원 하나. 원의 넓이가 값에 비례해서(제곱근 반지름) 절대량을 바로 견줘요 (단계구분도는 넓은 지역이 무거워 보여요).
- * 작은 원을 큰 원 위에 그려 가려지지 않고, 가장 큰 곳만 강조색이에요. 지점은 경위도, 또는 지도의 지역 이름(그 가운데)이에요
+ * Symbol map: one circle per place on a faint base map. Circle area is proportional to the value (square-root radius), so absolute amounts compare directly (a choropleth makes large regions look heavy).
+ * Small circles are drawn over large ones so they are never hidden, and only the largest place gets the accent color. A place is a longitude and latitude, or a region name on the map (its center)
  */
 export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
-  // 행 읽기: 경위도가 둘 다 숫자면 지점, 아니면 지역 이름
+  // Reading rows: a point when both longitude and latitude are numbers, otherwise a region name
   const { counted, rows: read } = useMemo(() => {
     const has = (k: string) => props.data.some((d) => d !== null && typeof d === "object" && hasField(d as object, k));
     const glon = numGetter(props.lon, "lon");
@@ -130,7 +130,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   const choice = useMemo(() => choosePlaceMap(props.map, () => read.map((r) => r.place)), [props.map, read]);
   const source = choice && "map" in choice ? choice.map : null;
   const geoOpts = useMemo(() => ({ focus: props.focus, featureId: props.featureId, featureName: props.featureName }), [props.focus, props.featureId, props.featureName]);
-  // 행을 지도에 놓아요 (도법 전에: 가운데를 고르는 데 경도가 필요해요). 지역은 그 지역의 대표 경위도
+  // Place rows on the map (before projection: choosing the center needs longitudes). A region uses its representative coordinates
   const placed = useMemo(() => {
     if (!source) return [];
     const domain = placeDomain(source, geoOpts);
@@ -144,7 +144,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   }, [source, geoOpts, placed, props.focus, props.center]);
   const layout = useMemo(() => (source ? geoLayout(source, { ...geoOpts, lon0 }) : null), [source, geoOpts, lon0]);
   const aspect = layout ? layoutAspect(layout) : 2;
-  // 높이: 지도 비율에 원 여백(가장 큰 반지름)을 위아래로 더해요 (지도가 여백만큼 작아지지 않게)
+  // Height: the map's aspect ratio plus circle padding (the largest radius) above and below (so the map does not shrink by the padding)
   const rMaxFor = (w: number) => rangeOf(props.sizeRange, w)?.[1] ?? clamp(w / 26, 8, 30);
   const c = useChart(props, {
     height: (w) => {
@@ -158,7 +158,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   const msg = MSG[c.lang];
   const uid = useId().replace(/:/g, "");
 
-  // 놓을 수 있는 지점: 값이 큰 것부터 (같으면 데이터 순서). 값이 0 이하이거나 숫자가 아닌 행, 지도 밖 행은 빼요
+  // Placeable points, largest value first (data order on ties). Rows whose value is at or below 0 or not a number, and rows off the map, are left out
   const model = useMemo(() => {
     const groups = uniq(read.map((r) => r.group).filter(Boolean));
     const groupOf = new Map(groups.map((g, i) => [g, i]));
@@ -173,7 +173,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
       list.push({ row, datum: r.d, label, value: r.value, group: groupOf.get(r.group) ?? -1, at, rank: 0 });
     });
     list.sort((a, b) => b.value - a.value || a.row - b.row);
-    // 같은 값은 같은 순위
+    // Equal values share a rank
     list.forEach((pt, k) => (pt.rank = k && list[k - 1].value === pt.value ? list[k - 1].rank : k + 1));
     let total = 0;
     for (const pt of list) total = cap(total + pt.value);
@@ -184,7 +184,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   const vmax = n ? pts[0].value : 0;
   const flat = n > 0 && pts[n - 1].value === vmax;
 
-  // 반지름: 넓이가 값에 비례 (제곱근), 바닥과 천장. 같은 크기(값 필드 없음)면 작은 점
+  // Radius: area proportional to the value (square root), with a floor and a ceiling. When all are the same size (no value field), small dots
   const range = rangeOf(props.sizeRange, Math.min(W, H)) ?? [n > 500 ? 1.5 : 2.5, rMaxFor(W)];
   const [rMin, rMax] = range;
   const radius = (v: number) => (counted || flat ? clamp(Math.min(rMax, W / 90), rMin, rMax) : clamp(rMax * Math.sqrt(v / vmax), rMin, rMax));
@@ -193,7 +193,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   const frame = useMemo(() => (layout && box ? geoFrame(layout, W, H, pad, box) : null), [layout, box, W, H, pad]);
   const screen = useMemo(() => (frame ? pts.map((pt) => [pt.at.x * frame.fit.k + frame.fit.tx, pt.at.y * frame.fit.k + frame.fit.ty] as [number, number]) : []), [frame, pts]);
 
-  // 강조: 기본 가장 큰 곳 ("max"). 이름은 지점 이름, 숫자는 값 순서 (0이 가장 큼). 모두 같은 값이면 강조하지 않아요
+  // Highlight: the largest place by default ("max"). A name matches the place name, a number the value order (0 is the largest). No highlight when all values are equal
   const hiSet = useMemo(() => {
     const h = props.highlight;
     const kept = flat && (typeof h === "string" || Array.isArray(h)) ? ((Array.isArray(h) ? h : [h]) as (number | string)[]).filter((x) => x !== "max" && x !== "min") : h;
@@ -203,17 +203,17 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
   const colors = useMemo(() => (model.groups.length ? categoricalDots(p, model.groups.length, new Set()) : []), [p, model.groups.length]);
   const fillOf = (pt: Pt<T>, k: number) => (pt.group >= 0 && colors[pt.group] ? colors[pt.group].fill : hiSet.has(k) ? p.paint("accent") : p.paint("neutralStrong"));
 
-  // 비율 글 (합계는 cap으로 늘 유한해요)
+  // Share text (the total is always finite thanks to cap)
   const shares = useMemo(() => pts.map((pt) => (total > 0 ? sharePct((pt.value / total) * 100, c.locale) : "")), [pts, total, c.locale]);
   const events: ChartEvent<T>[] = useMemo(
     () => pts.map((pt, k) => ({ datum: pt.datum, index: pt.row, key: `${pt.row}`, label: pt.label, value: pt.value, ...(pt.group >= 0 && { series: model.groups[pt.group] }), formatted: [fv(pt.value), shares[k] && msg.share(shares[k]), msg.rank(pt.rank, all)].filter(Boolean).join(", ") })),
     [pts, shares, all, fv, msg, model.groups],
   );
 
-  // 크기 범례: 가장 큰 값 아래의 반올림 값 둘셋 (반지름 3px보다 작으면 빼요)
+  // Size legend: two or three rounded values below the largest value (dropped when the radius is under 3px)
   const legendVals = useMemo(() => {
     if (props.legend === false || counted || flat || !n) return [];
-    // 가장 큰 원은 가장 큰 값을 두 자리로 내린 값(4.2M), 나머지는 그 1/4, 1/20 아래의 1, 2, 5 단위
+    // The largest circle shows the largest value rounded down to two digits (4.2M); the others use the 1, 2, 5 step at or below 1/4 and 1/20 of it
     const e = 10 ** (Math.floor(Math.log10(vmax)) - 1);
     const v1 = Number.isFinite(e) && e > 0 ? Math.floor(vmax / e) * e : vmax;
     return [...new Set([v1, niceDown(v1 / 4), niceDown(v1 / 20)])].filter((v) => v > 0 && radius(v) >= 3).slice(0, 3);
@@ -226,7 +226,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
     const bw = 2 * R + 6 + tw;
     const bh = 2 * R;
     if (bw > W * 0.45 || bh > H * 0.45) return null;
-    // 원이 가장 적게 겹치는 구석 (아래 왼쪽, 아래 오른쪽, 위 왼쪽, 위 오른쪽 순서로 같으면 앞)
+    // The corner overlapping the fewest circles (on a tie, the earlier of bottom left, bottom right, top left, top right)
     const corners: [number, number][] = [
       [4, H - 4 - bh],
       [W - 4 - bw, H - 4 - bh],
@@ -248,21 +248,21 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
         best = [x0, y0];
       }
     }
-    // 값 글이 서로 겹치면(11px 안) 가운데 값을 빼요
+    // When the value texts overlap (within 11px), drop the middle value
     const items = legendVals.map((v, k) => ({ r: radius(v), text: texts[k] }));
     const kept = items.filter((it, k) => k === 0 || items[k - 1].r * 2 - it.r * 2 >= 11);
     return { x0: best[0], y0: best[1], R, bw, bh, items: kept };
   }, [legendVals, screen, pts, W, H, fv]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 이름표: 강조한 곳, 그다음 큰 곳 몇 개. 겹치면 빼요 (크기 범례 자리도 피해요)
+  // Labels: the highlighted places, then a few of the next largest. Dropped on overlap (they also avoid the size legend)
   const labels = useMemo(() => {
     if (!c.showLabels || !n) return [];
-    // 좁으면(390px 아래) 강조한 곳만 적어요
+    // When narrow (under 390px), label only the highlighted places
     const top = W >= 600 ? 6 : W >= 390 ? 4 : 0;
-    // 강조한 곳이 아주 많아도(함수, 긴 배열) 이름표 후보는 40개까지예요
+    // Even with very many highlighted places (a function, a long array), label candidates are capped at 40
     const order = [...pts.keys()].filter((k) => hiSet.has(k)).slice(0, 40).concat([...pts.keys()].filter((k) => !hiSet.has(k)).slice(0, top));
     const avoid: Rect[] = legend ? [[legend.x0, legend.y0, legend.x0 + legend.bw, legend.y0 + legend.bh]] : [];
-    // 다른 원을 덮지 않는 자리를 먼저 찾아요 (큰 원 300개까지)
+    // Look first for spots that do not cover other circles (up to 300 large circles)
     const circles = screen.slice(0, 300).map(([x, y], k): Rect => {
       const r = radius(pts[k].value);
       return [x - r, y - r, x + r, y + r];
@@ -326,7 +326,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
     />
   );
   const ring = (k: number, extra: number, w: number) => <circle key={`o${pts[k].row}`} cx={r1(screen[k][0])} cy={r1(screen[k][1])} r={r1(radius(pts[k].value) + extra)} fill="none" stroke={p.paint("ink")} strokeWidth={w} pointerEvents="none" />;
-  // 원과 강조 테두리는 호버와 상관없이 한 번 만들어요 (2,000개를 호버마다 다시 만들지 않게)
+  // Build the circles and highlight outlines once, independent of hover (so 2,000 of them are not rebuilt on every hover)
   const circleLayer = useMemo(
     () =>
       Array.from({ length: Math.ceil(n / per) }, (_, band) => (
@@ -336,7 +336,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
       )),
     [pts, screen, hiSet, colors, p, enabled, motion.waiting, per, stg, dur, rMin, rMax, counted, flat], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  // 묶음 색일 때 강조는 테두리로
+  // With group colors, the highlight is an outline
   const hiRings = useMemo(() => pts.flatMap((pt, k) => (hiSet.has(k) && pt.group >= 0 ? [ring(k, 0, 1.4)] : [])), [pts, screen, hiSet, p, rMin, rMax, counted, flat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -368,7 +368,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
       ) : null}
       {frame && layout ? (
         <g key={motion.generation}>
-          {/* 바다: 원 밖으로 나가면 고른 것을 지워요 */}
+          {/* Sea: leaving the circles clears the selection */}
           <rect width={W} height={H} fill="transparent" onPointerEnter={(e) => (c.via === "keyboard" ? undefined : setFromPointer(null, e.pointerType))} />
           <g clipPath={layout.clip ? `url(#${uid}c)` : undefined}>
             {layout.context.length ? <BaseMap p={p} frame={frame} regions={layout.context} opacity={0.6} /> : null}
@@ -388,7 +388,7 @@ export function SymbolMap<T = Row>(props: SymbolMapProps<T>) {
             ) : null}
             <g opacity={active !== null ? 0.45 : undefined}>{circleLayer}</g>
             {hiRings}
-            {/* 고른 원은 흐린 층 위에 한 번 더, 고리(포커스 링)와 함께 */}
+            {/* The selected circle is drawn once more above the dimmed layer, with a ring (focus ring) */}
             {active !== null ? (
               <g pointerEvents="none">
                 {circleOf(pts[active], active)}

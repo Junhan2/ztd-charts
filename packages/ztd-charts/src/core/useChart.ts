@@ -14,11 +14,11 @@ export interface ChartSetupDefaults {
   duration?: number;
   stagger?: number;
   format?: FormatName;
-  /** SSR이나 측정 전 폭 */
+  /** Width for SSR and before measurement */
   ssrWidth?: number;
 }
 
-/** "sync"는 같은 syncId로 묶인 다른 차트에서 짚은 자리예요 (툴팁은 짚은 차트에만 떠요) */
+/** "sync" is a position pointed at in another chart linked by the same syncId (the tooltip shows only on the chart being pointed at) */
 export type ActiveVia = "pointer" | "keyboard" | "touch" | "sync";
 
 export interface ChartCtx<T> {
@@ -26,29 +26,29 @@ export interface ChartCtx<T> {
   width: number;
   height: number;
   measured: boolean;
-  /** 폭을 컨테이너에서 재요 (width prop 없음) */
+  /** The width is measured from the container (no width prop) */
   responsive: boolean;
   /**
-   * 브라우저 첫 마운트에서 폭을 재기 전 렌더. 화면에 그려지지 않고 곧바로 잰 폭으로 다시 그려요.
-   * 무거운 배치는 이때 건너뛰어요
+   * The render before the width is measured on the first browser mount. It never reaches the screen and is redrawn right away with the measured width.
+   * Heavy layout work is skipped during it
    */
   pending: boolean;
   node: HTMLDivElement | null;
-  /** 서버 HTML을 하이드레이트한 뒤(또는 브라우저에서 바로 그릴 때) true. 캔버스 전환은 이걸 보고 해야 서버와 첫 렌더가 같아요 */
+  /** true after the server HTML is hydrated (or when drawing directly in the browser). Switch to canvas based on this so the first render matches the server */
   hydrated: boolean;
   ref: (el: HTMLDivElement | null) => void;
   motion: UseMotionOptions;
-  /** 값 + 단위 */
+  /** Value plus unit */
   fv: ValueFormatter;
-  /** 값만 */
+  /** Value only */
   fmt: ValueFormatter;
-  /** 0~100 값을 "42%"로 (로캘 맞춤) */
+  /** Formats a 0 to 100 value as "42%" (locale-aware) */
   pct: ValueFormatter;
-  /** 프롭, ThemeProvider, 기본값 순서로 정한 로캘 */
+  /** Locale resolved from the prop, then ThemeProvider, then the default */
   locale: string;
-  /** 차트 글자 언어 */
+  /** Language of chart text */
   lang: ChartLang;
-  /** 여러 차트가 함께 쓰는 문구 */
+  /** Text shared by several charts */
   t: ChartMessages;
   active: number | null;
   via: ActiveVia | null;
@@ -57,21 +57,21 @@ export interface ChartCtx<T> {
   events: { current: ChartEvent<T>[] };
   showTooltip: boolean;
   showLabels: boolean;
-  /** 호버 중인 다른 항목을 흐리게: i가 active가 아니면 낮은 불투명도 */
+  /** Dims the other items during hover: a low opacity when i is not active */
   dim: (i: number, base?: number) => number;
   sig: string;
-  /** 사용자가 준 설명. 없으면 데이터가 없을 때 ChartFrame이 "No data."로 바꿔요 */
+  /** The description the user gave. When it is absent and there is no data, ChartFrame uses "No data." */
   description?: string;
-  /** 동작 줄이기가 켜졌어요. 호버 전환도 미끄러지지 않고 바로 옮겨요 */
+  /** Reduced motion is on. Hover transitions jump instead of gliding */
   reduced: boolean;
-  /** 짚은 자리가 바뀔 때 묶인 차트에 알리는 함수. useSync(라인, 영역, 막대, 캔들스틱)가 채워요 */
+  /** Function that tells linked charts when the pointed position changes. Filled in by useSync (line, area, bar, candlestick) */
   publish: { current: ((i: number | null) => void) | null };
-  /** 묶인 다른 차트가 짚은 자리를 받아요. 키보드로 고르는 중이면 그대로 둬요 */
+  /** Receives the position pointed at in another linked chart. Leaves things as they are while selecting with the keyboard */
   applySync: (i: number | null) => void;
 }
 
-/** 모든 차트가 처음에 부르는 설정 훅 */
-// highlight는 차트마다 받는 꼴이 달라서(행, 이름, 노드) 여기서는 읽지 않아요
+/** Setup hook every chart calls first */
+// highlight takes a different form in each chart (rows, names, nodes), so it is not read here
 export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, defaults: ChartSetupDefaults): ChartCtx<T> {
   const p = useChartTheme(props.theme);
   const [node, ref, measuredW] = useMeasuredNode<HTMLDivElement>(props.width);
@@ -99,7 +99,7 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
   const viaRef = useRef<ActiveVia | null>(null);
   const publish = useRef<((i: number | null) => void) | null>(null);
 
-  // 지난 값은 ref로 비교해요. setState 갱신 함수 안에서 부르면 StrictMode가 두 번 돌려 onHover도 두 번 불려요
+  // The previous value is compared through a ref. Calling from inside a setState updater would make StrictMode run it twice and call onHover twice too
   const last = useRef<number | null>(null);
   const setActive = useCallback(
     (i: number | null, how: ActiveVia = "pointer") => {
@@ -116,7 +116,7 @@ export function useChart<T>(props: Omit<BaseChartProps<T>, "highlight">, default
     [],
   );
 
-  // 이 차트를 직접 만진 게 아니라서 onHover는 부르지 않아요
+  // This chart was not touched directly, so onHover is not called
   const applySync = useCallback((i: number | null) => {
     if (viaRef.current === "keyboard") return;
     viaRef.current = i === null ? null : "sync";

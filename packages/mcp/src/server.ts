@@ -5,7 +5,7 @@ import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type Chart
 
 export const SERVER_NAME = "ztd-charts";
 export const SERVER_VERSION = "0.11.2";
-/** 설명에 쓰는 차트 수. 차트를 더해도 손으로 고치지 않게 목록에서 세요 */
+/** Chart count used in the descriptions. Counted from the list so adding a chart needs no manual edit */
 const N = CHARTS.length;
 
 const GROUP_IDS = GROUPS.map((g) => g.id) as [ChartGroup, ...ChartGroup[]];
@@ -13,17 +13,17 @@ const LEVEL_IDS = LEVELS.map((l) => l.id) as [ChartLevel, ...ChartLevel[]];
 
 const text = (t: string) => ({ type: "text" as const, text: t });
 const json = (v: unknown) => text(JSON.stringify(v, null, 2));
-/** 이보다 긴 SVG는 글로 돌려주지 않아요 (10만 점 산점도 SVG는 15 MB라 AI의 맥락을 넘쳐요). PNG와 안내 한 줄로 대신해요 */
+/** An SVG longer than this is not returned as text (a 100,000-point scatter SVG is 15 MB and overflows the AI's context). A PNG and a one-line note are sent instead */
 const SVG_TEXT_LIMIT = 1_000_000;
 
-/** 데이터가 큰 스펙은 앞부분만 보여줘요 (응답 크기 관리) */
+/** Shows only the first part of a spec with large data (keeps responses small) */
 function trimSpec(spec: ChartSpec, rows = 20): ChartSpec {
   if (!Array.isArray(spec.data) || spec.data.length <= rows) return spec;
   return { ...spec, data: spec.data.slice(0, rows) };
 }
 
 export function createServer(): McpServer {
-  // 에이전트가 넘기는 주소로 사내망, 이 컴퓨터, 클라우드 메타데이터를 읽지 못하게 기본으로 막아요. 로컬 개발 서버의 데이터가 필요하면 이 값을 1로 켜요
+  // Blocked by default so URLs passed by an agent cannot read the internal network, this machine or cloud metadata. Set this to 1 when data from a local dev server is needed
   const allowPrivate = process.env.ZTD_CHARTS_ALLOW_PRIVATE_URLS === "1";
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, resources: {} }, instructions: `ztd-charts: ${N} animated React chart types driven by a JSON spec { type, data, encoding, options, card }. Typical flow: suggest_chart (or list_charts) -> get_chart_schema -> write a spec -> validate_spec -> render_chart to preview -> use the returned React snippet. Built-in chart text (tooltips, screen reader text, badges) and number formats are English by default. For Korean, pass locale "ko" to render_chart or set options.locale in the spec, and write card text in Korean. validate_spec and suggest_chart take locale too.` });
 
@@ -72,7 +72,7 @@ export function createServer(): McpServer {
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
     async ({ spec, locale }) => {
-      // render_chart와 같은 로캘(locale, 그다음 스펙 options.locale)로 검사해요. 둘 다 없으면 영어
+      // Validate with the same locale as render_chart (locale, then the spec's options.locale). English when neither is set
       const r = validate(spec, specLocale(spec as unknown as ChartSpec, locale));
       return { content: [json(r)] };
     },
@@ -95,7 +95,7 @@ export function createServer(): McpServer {
     },
     async ({ spec, format = "png", width, theme, scale, locale }) => {
       const s = spec as unknown as ChartSpec;
-      // 그릴 때와 같은 로캘(locale, 그다음 스펙 options.locale)로 검사해요
+      // Validate with the same locale used for rendering (locale, then the spec's options.locale)
       const loc = specLocale(s, locale);
       const v = validate(s, loc);
       if (!v.valid) return { isError: true, content: [text("Invalid spec. Fix the errors below (the same result validate_spec returns)."), json(v)] };
@@ -103,13 +103,13 @@ export function createServer(): McpServer {
         let res = await render(s, { format: format === "svg" ? "svg" : "png", width, theme, scale, locale, allowPrivate });
         const wantsSvg = format !== "png";
         const svgTooBig = wantsSvg && !!res.svg && res.svg.length > SVG_TEXT_LIMIT;
-        // SVG만 달라고 했는데 너무 크면 이미 그린 SVG를 PNG로 바꿔 보내요 (데이터를 다시 가져오거나 다시 그리지 않아요)
+        // When only SVG was requested but it is too large, convert the already rendered SVG to PNG and send that (no refetch, no rerender)
         if (svgTooBig && !res.png) res = { ...res, ...(await svgToPng(res.svg!, { scale, locale: loc })) };
         const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [];
         if ((format !== "svg" || svgTooBig) && res.png) content.push({ type: "image", data: res.png.toString("base64"), mimeType: "image/png" });
         if (wantsSvg && res.svg && !svgTooBig) content.push(text(res.svg));
         if (svgTooBig) content.push(text(`The SVG is ${(res.svg!.length / 1e6).toFixed(1)} MB, too large to return as text, so the PNG is attached instead. To get the SVG file, run: npx ztd-charts-cli render spec.json --out chart.svg`));
-        // 검사 경고와 그리면서 바꾼 것(PNG에서 뺀 이모지)을 같이 알려요
+        // Report validation warnings together with what rendering changed (emoji removed from the PNG)
         const warns = [...v.warnings.map((w) => w.message), ...(res.notes ?? [])];
         content.push(text(`Size ${res.width}×${res.height}px${warns.length ? `\nWarnings: ${warns.join(" / ")}` : ""}`));
         content.push(text(`// React (components)\n${reactSnippet(s)}\n// React (spec as is)\n${specSnippet(s)}`));
@@ -140,7 +140,7 @@ export function createServer(): McpServer {
         if (rows) data = normalizeData(rows);
         else if (csv) data = parseCSV(csv);
         else if (url) {
-          // http(s)만 받아요. loadRows는 파일 경로도 읽어서, 그대로 두면 서버가 도는 컴퓨터의 파일을 돌려줄 수 있어요
+          // Accept http(s) only. loadRows also reads file paths, so otherwise it could return files from the machine the server runs on
           if (!isHttpUrl(url)) return { isError: true, content: [text("url must start with http:// or https://. For a local file, pass its text as csv or its rows as rows.")] };
           data = await loadRows(url, locale, { allowPrivate });
         } else return { isError: true, content: [text("Pass one of csv, rows or url.")] };

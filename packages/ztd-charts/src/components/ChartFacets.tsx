@@ -1,6 +1,6 @@
 import { useContext, useId, useMemo, type ComponentType, type CSSProperties } from "react";
 import { CardTitleContext } from "../core/cardTitle";
-// 패널은 늘 ChartFrame을 쓰는 차트라서 같은 숨김 스타일을 가져다 써도 번들이 늘지 않아요
+// Panels are always charts that use ChartFrame, so reusing its hidden style adds nothing to the bundle
 import { SR_ONLY } from "../core/ChartFrame";
 import { cssEntrance, useCssEntrance } from "../core/css";
 import { isBrowser } from "../core/env";
@@ -10,50 +10,50 @@ import { langOf } from "../core/i18n";
 import type { Highlight, Row } from "../core/types";
 import { useChartLocale, useChartTheme } from "../theme/context";
 
-/** 패널이 차례로 나타나는 간격과 길이(ms) */
+/** Interval and duration (ms) of the panels appearing in turn */
 const STAGGER = 60;
 const FADE_MS = 420;
 
 export interface ChartFacetsProps<T = Row> {
   /**
-   * 패널마다 그릴 차트 컴포넌트: LineChart, AreaChart, BarChart, ScatterChart.
-   * 컴포넌트를 직접 넘겨서 쓰지 않는 차트는 번들에 들어가지 않아요
+   * Chart component to draw in each panel: LineChart, AreaChart, BarChart, ScatterChart.
+   * The component is passed directly, so charts you do not use stay out of the bundle
    */
   chart: ComponentType<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  /** chart의 종류. 같은 값 축을 차트와 같은 규칙(쌓기, 0 포함)으로 재는 데 써요 */
+  /** The kind of chart. Used to compute the shared value axis with the same rules as the chart (stacking, including 0) */
   type: FacetType;
-  /** 모든 패널의 행. by 값으로 나눠요 */
+  /** Rows for all panels. Split by the by value */
   data: readonly T[];
-  /** 패널을 나눌 필드. 값이 처음 나오는 순서로 패널 하나씩, 24개까지 */
+  /** Field that splits the panels. One panel per value in order of first appearance, up to 24 */
   by: string;
-  /** 한 줄 패널 수의 최대값. 없으면 패널 폭 140px 이상으로 들어가는 만큼. 마지막 줄이 혼자 남지 않게 고르게 나눠요 */
+  /** Maximum panels per row. When omitted, as many as fit at a panel width of 140px or more. Spread evenly so the last row is not left with a lone panel */
   columns?: number;
-  /** "shared"(기본): 모든 패널이 같은 값 축(날짜, 숫자 x도)이고 값 축 글자는 왼쪽 열, x 글자는 아래 줄에만. "free": 패널마다 자기 데이터에 맞추고 축 글자를 모두 그려요 */
+  /** "shared" (default): every panel uses the same value axis (and the same date or numeric x), with value-axis labels only in the left column and x labels only in the bottom row. "free": each panel fits its own data and draws all axis labels */
   scale?: FacetScale;
-  /** 패널마다 넘길 차트 프롭 (x, y, series, format, unit, curve …). data, width, height, highlight, syncId, ariaLabel은 패널마다 정해요 */
+  /** Chart props passed to every panel (x, y, series, format, unit, curve …). data, width, height, highlight, syncId and ariaLabel are set per panel */
   chartProps?: Record<string, unknown>;
-  /** by 값(또는 by 값 배열)이면 그 패널만 강조색, 나머지 패널은 무채색. 다른 값은 패널마다 그대로 넘겨요 */
+  /** A by value (or an array of by values) gives only those panels the accent color and the rest neutral gray. Other values are passed to every panel as is */
   highlight?: Highlight<T>;
-  /** 패널을 묶는 이름. 없으면 데이터와 채널로 정한 고정 이름 (짚은 x를 모든 패널이 함께 보여 줘요) */
+  /** Name that links the panels. When omitted, a stable name derived from the data and channels (every panel shows the hovered x together) */
   syncId?: string;
-  /** 전체 폭(px). 없으면 부모 폭에 맞춰요 */
+  /** Total width (px). Fits the parent width when omitted */
   width?: number;
-  /** 패널 하나의 높이(px). 없으면 패널 폭에 맞춰 120~180px */
+  /** Height of one panel (px). When omitted, 120~180px based on the panel width */
   height?: number;
-  /** 패널 이름의 앞부분: "<title>, <값>". 없으면 감싼 ChartCard의 제목 */
+  /** First part of each panel's name: "<title>, <value>". When omitted, the title of the enclosing ChartCard */
   title?: string;
-  /** 묶음 설명(화면 낭독기). 없으면 패널들로 한 문장을 만들어요 */
+  /** Description of the group (screen readers). When omitted, one sentence is built from the panels */
   description?: string;
-  /** 제목 줄 값과 설명의 로캘. 없으면 chartProps.locale, ThemeProvider 순서 */
+  /** Locale of the title row values and the description. When omitted, chartProps.locale, then ThemeProvider */
   locale?: string;
   className?: string;
   style?: CSSProperties;
 }
 
 /**
- * 작은 여러 개: by 값마다 같은 차트를 한 칸씩 격자로 그려요. 같은 값 축, 하나로 묶인 짚은 x, 패널 단위 강조.
- * 패널마다 키보드 탐색, 라이브 영역, 숨긴 표가 있는 온전한 차트이고 Tab은 읽는 순서(왼쪽에서 오른쪽, 위에서 아래)로 옮겨요.
- * 예: <ChartCard title="Weekly orders"><ChartFacets chart={LineChart} type="line" data={rows} by="region" chartProps={{ x: "week", y: "orders" }} highlight="West" /></ChartCard>
+ * Small multiples: draws the same chart once per by value, one cell each, in a grid. Shared value axis, one linked hovered x, highlight per panel.
+ * Each panel is a full chart with keyboard navigation, a live region and a hidden table, and Tab moves in reading order (left to right, top to bottom).
+ * Example: <ChartCard title="Weekly orders"><ChartFacets chart={LineChart} type="line" data={rows} by="region" chartProps={{ x: "week", y: "orders" }} highlight="West" /></ChartCard>
  */
 export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
   const p = useChartTheme();
@@ -64,19 +64,19 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
   const lang = langOf(locale);
   const cardTitle = useContext(CardTitleContext);
   const title = props.title ?? cardTitle;
-  // 차트가 패널 프롭을 더 정할 수 있어요 (육각 밀도 산점도의 같은 색 척도: ScatterChart.facetPlan)
+  // The chart can set more panel props (the shared color scale of the hexbin density scatter: ScatterChart.facetPlan)
   const more = (props.chart as { facetPlan?: (plan: FacetPlan, cp: Record<string, unknown>, locale: string) => FacetPlan }).facetPlan;
   const plan = useMemo(
     () => {
       const base = planFacets({ type: props.type, data: props.data as readonly Row[], by: props.by, columns: props.columns, scale: props.scale, chartProps: cp, highlight: props.highlight as Highlight<Row> | undefined, syncId: props.syncId, width, height: props.height, title, locale, lang });
       return more ? more(base, cp, locale) : base;
     },
-    // chartProps는 렌더마다 새 객체일 수 있어요. 차트가 받는 값이라 바뀌면 다시 짜요
+    // chartProps can be a new object on every render. The chart receives these values, so the plan is rebuilt when they change
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.type, props.data, props.by, props.columns, props.scale, JSON.stringify(cp, (_, v) => (typeof v === "function" ? String(v) : v)), props.highlight, props.syncId, width, props.height, title, locale, lang, more],
   );
   const descId = `${useId().replace(/:/g, "")}fd`;
-  // 패널은 공용 등장(cssEntrance)으로 차례로 나타나요. 동작 줄이기와 서버 그림을 이어받은 첫 그림에서는 끝 모습 그대로예요
+  // Panels appear in turn with the shared entrance (cssEntrance). With reduced motion, and on the first paint that hydrates the server render, they show their final state
   const reduced = useReducedMotion((cp.reducedMotion as "auto" | boolean | undefined) ?? "auto");
   const hydrated = useHydrated();
   const entrance = useCssEntrance({ motion: { enabled: cp.animate !== false && !reduced && isBrowser }, hydrated }, { waiting: false, generation: 0 });
@@ -91,7 +91,7 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
           const ink = p.paint(pn.isPicked ? "accentText" : plan.isPanelPick ? "muted" : "ink");
           return (
             <div key={pn.value} data-facet={pn.value} style={{ minWidth: 0, ...cssEntrance(entrance, false, "fade", i * STAGGER, FADE_MS) }}>
-              {/* 패널 이름은 차트의 이름("<제목>, <값>")에 들어 있어서 화면 낭독기는 건너뛰어요 */}
+              {/* The panel name is part of the chart's name ("<title>, <value>"), so screen readers skip it */}
               <div aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, height: FACET_TITLE_H, fontSize: FACET_TITLE_SIZE, fontWeight: 700, lineHeight: `${FACET_TITLE_H}px`, color: ink }}>
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pn.label}</span>
                 {pn.last !== undefined ? <span style={{ flex: "none", fontVariantNumeric: "tabular-nums" }}>{pn.last}</span> : null}
@@ -101,7 +101,7 @@ export function ChartFacets<T = Row>(props: ChartFacetsProps<T>) {
           );
         })}
       </div>
-      {/* 모든 패널이 같이 쓰는 범례: 격자 위 오른쪽. 격자 뒤에 둬서 패널 차트의 useId 값(서버 그림과 맞춰요)이 바뀌지 않아요 */}
+      {/* Legend shared by all panels: top right of the grid. Placed after the grid so the useId values of the panel charts (which match the server render) do not change */}
       {plan.legend ? (
         <div aria-hidden="true" style={{ position: "absolute", top: 0, right: 0, height: FACET_LEGEND_H }}>
           {plan.legend}

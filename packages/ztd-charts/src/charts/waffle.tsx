@@ -52,27 +52,27 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface WaffleChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 칸 수. 기본 100 */
+  /** Number of cells. Default 100 */
   cells?: number;
-  /** 한 줄 칸 수. 기본 10 */
+  /** Cells per row. Default 10 */
   columns?: number;
-  /** 전체 값. 없으면 합계 */
+  /** Total value. Defaults to the sum */
   total?: number;
-  /** 오른쪽 요약(큰 숫자). 기본 true */
+  /** Summary on the right (a large number). Default true */
   summary?: boolean;
-  /** 요약 아래 설명. 없으면 강조 항목 이름 */
+  /** Caption under the summary. Defaults to the highlighted item's name */
   summaryLabel?: string;
-  /** 요약 둘째 줄. 없으면 나머지 항목 값 */
+  /** Second line of the summary. Defaults to the values of the other items */
   summaryNote?: string;
-  /** "grid"(기본) 격자, "arc"는 점 하나가 한 단위인 반원 여러 줄(의석 차트). arc에서는 cells, columns를 쓰지 않고, 요약은 가운데에 전체, 강조 묶음, summaryNote 순이에요 */
+  /** "grid" (default) is a grid; "arc" is several half-circle rows where each dot is one unit (a parliament chart). arc ignores cells and columns, and its summary sits in the center: the total, the highlighted group, then summaryNote */
   shape?: "grid" | "arc";
-  /** shape "arc": 그 단위 수에 긋는 방사선 (과반 등). [{ value, label }] */
+  /** shape "arc": radial lines drawn at that unit count (a majority, etc.). [{ value, label }] */
   referenceLines?: { value: number; label?: string }[];
 }
 
 export { allocateCells };
 
-/** 칸, 점의 data-k(묶음 번호)를 읽는 포인터 처리. 격자와 반원이 같이 써요 (-1은 빈칸) */
+/** Pointer handling that reads data-k (the group index) from cells and dots. Shared by the grid and the half circle (-1 is an empty cell) */
 function hits(setActive: ChartCtx<unknown>["setActive"], click: (k: number) => void) {
   const at = (e: { target: EventTarget }) => Number((e.target as Element).getAttribute("data-k"));
   return {
@@ -87,7 +87,7 @@ function hits(setActive: ChartCtx<unknown>["setActive"], click: (k: number) => v
   };
 }
 
-/** 와플 차트: 100칸으로 보는 비율. shape "arc"면 점 하나가 한 단위인 반원(의석 차트)이에요 */
+/** Waffle chart: shares seen as 100 cells. With shape "arc", a half circle where each dot is one unit (a parliament chart) */
 export function WaffleChart<T = Row>(props: WaffleChartProps<T>) {
   return props.shape === "arc" ? <WaffleArc {...props} /> : <WaffleGrid {...props} />;
 }
@@ -126,7 +126,7 @@ function WaffleGrid<T = Row>(props: WaffleChartProps<T>) {
   const hiIdx = [...model.hi][0] ?? -1;
   const hiRow = model.rows[hiIdx];
   const pct = model.total > 0 && hiRow ? (hiRow.value / model.total) * 100 : 0;
-  // 격자와 요약을 한 묶음으로 가운데에 놓아요. 격자를 왼쪽에 붙이면 넓은 카드에서 오른쪽 절반이 비어요
+  // Center the grid and summary together as one unit. With the grid pinned left, the right half of a wide card would be empty
   const others = model.rows.filter((_, k) => !model.hi.has(k));
   const note = props.summaryNote ?? others.map((r) => `${r.label} ${c.fv(r.value)}`).join(" · ");
   const gapS = Math.max(14, (W - gridW) * 0.12);
@@ -136,7 +136,7 @@ function WaffleGrid<T = Row>(props: WaffleChartProps<T>) {
   const gx = summary ? Math.max(0, (W - (gridW + gapS + sumW)) / 2) : (W - gridW) / 2;
   const sx = gx + gridW + gapS;
   const sw = W - sx;
-  // 칸 등장은 CSS로, 숫자 올라가기만 엔진으로 (프레임마다 칸 100개를 다시 그리지 않아요)
+  // Cell entrance runs in CSS; only the counting-up number uses the engine (so 100 cells are not redrawn every frame)
   const numMarks = useMemo<Mark<null>[]>(() => [{ key: "__n", to: [pct], from: [0], delay: 100, data: null }], [pct]);
   const cellMs = c.motion.duration ?? 520;
   const mn = useMotion(numMarks, { ...c.motion, duration: cellMs + cells * stagger * 0.8 });
@@ -168,7 +168,7 @@ function WaffleGrid<T = Row>(props: WaffleChartProps<T>) {
           />
         );
       }),
-    // mn.waiting과 세대가 바뀔 때만 다시 만들어요
+    // Rebuilt only when mn.waiting or the generation changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cells, owner, cols, gx, gy, cell, gap, colors, p, active, via, enabled, mn.waiting, mn.generation, stagger, cellMs],
   );
@@ -217,15 +217,15 @@ function WaffleGrid<T = Row>(props: WaffleChartProps<T>) {
   );
 }
 
-/** 반원 점 반지름(px)의 하한과 상한 */
+/** Minimum and maximum dot radius (px) in the half circle */
 const DOT_MIN = 1;
 const DOT_MAX = 14;
-/** 반원 가운데 이름 줄이 두 줄일 때 줄 간격(px) */
+/** Line spacing (px) when the name in the center of the half circle takes two lines */
 const CAP_LINE = 12.5;
 
 /**
- * 낱말(대소문자 무시)로 견줘서 글에 이름과 값이 다 들어 있는지: "62 returning"은 "Returning"과 "62"를, "재구매 62명"은 "재구매"와 "62"를 다 말해요.
- * 낱말 뒤에 붙은 글(명, s)은 괜찮지만 숫자가 이어지면 다른 값이에요 ("620"은 "62"가 아니에요)
+ * Whether the text contains both the name and the value, compared word by word (case-insensitive): "62 returning" covers "Returning" and "62", and "재구매 62명" covers "재구매" and "62".
+ * Text attached after a word (명, s) is fine, but more digits make a different value ("620" is not "62")
  */
 function sameWords(text: string, name: string, value: string): boolean {
   const words = text.toLocaleLowerCase().split(/[\s,;:()]+/);
@@ -234,7 +234,7 @@ function sameWords(text: string, name: string, value: string): boolean {
 }
 
 /**
- * 이름을 낱말 사이에서 두 줄로 나눠요. 윗줄은 upRoom, 값을 붙인 아랫줄은 room 안에 들어가야 하고, 윗줄이 가장 긴 나눔을 골라요. 안 되면 null
+ * Splits a name into two lines between words. The top line must fit upRoom and the bottom line, with the value attached, must fit room; picks the split with the longest top line. null when none works
  */
 function splitName(name: string, value: string, upRoom: number, room: number, size: number): string[] | null {
   for (let i = name.lastIndexOf(" "); i > 0; i = name.lastIndexOf(" ", i - 1)) {
@@ -245,7 +245,7 @@ function splitName(name: string, value: string, upRoom: number, room: number, si
   return null;
 }
 
-/** 의석 차트: 점 하나가 한 단위인 반원. 묶음은 왼쪽부터 각도 순서로 채워 부채꼴이 되고, 전체가 합보다 크면 남는 자리는 빈 점이에요 */
+/** Parliament chart: a half circle where each dot is one unit. Groups fill in angle order from the left, forming wedges; when the total exceeds the sum, the leftover seats are empty dots */
 function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(150, Math.min(340, w * 0.5 + 30)), duration: 520, stagger: 7 });
   const { p, width: W, height: H } = c;
@@ -260,24 +260,24 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
     });
     const hi = resolveHighlight(props.highlight, rows.map((r) => r.d), rows.map((r) => r.label), rows.map((r) => r.value), "first");
     const s = sum(rows.map((r) => r.value));
-    // 전체가 합보다 작거나 0 이하, 숫자가 아니면 합을 써요 (validateSpec이 알려요)
+    // When the total is below the sum, at or below 0, or not a number, use the sum (validateSpec reports it)
     const given = typeof props.total === "number" && Number.isFinite(props.total) && props.total > 0 && props.total >= s ? props.total : undefined;
     const total = given ?? s;
     const units = total > 0 ? Math.max(1, Math.round(total)) : 0;
     const dots = Math.min(units, ARC_MAX_DOTS);
-    // 격자와 같은 칸 나누기라 같은 데이터면 단위 수가 같아요
+    // Same cell allocation as the grid, so the same data gives the same unit counts
     const counts = allocateCells(rows.map((r) => r.value), dots, given);
     const refs = total > 0 && Array.isArray(props.referenceLines) ? props.referenceLines.filter((r) => typeof r?.value === "number" && r.value >= 0 && r.value <= total) : [];
     return { rows, hi, counts, owner: ownerOf(counts), total, empty: total - s, units, dots, refs };
   }, [props.data, props.label, props.value, props.highlight, props.total, props.referenceLines]);
 
   const { dots, refs, owner, counts } = model;
-  // 배치는 점 수만 따라요 (강조나 기준선이 바뀌어도 다시 놓지 않아요)
+  // The layout depends only on the dot count (it is not redone when the highlight or reference lines change)
   const layout = useMemo(() => arcSeats(dots), [dots]);
   const colors = useMemo(() => categorical(p, model.rows.length, model.hi), [p, model]);
   const k = 0.4 * layout.gap;
   const labelRoom = refs.length ? 20 : 2;
-  // 점이 너무 커지지 않게 적은 수는 작은 반원으로 (점 사이를 띄우고 가운데 글자가 들어갈 만큼은 남겨요)
+  // Small counts get a smaller half circle so dots do not grow too large (keeping gaps between dots and enough room for the center text)
   const R = Math.max(8, Math.min((W - 4) / 2 / (1 + k), (H - labelRoom - 4) / (1 + 2 * k), Math.max(90, (1.5 * DOT_MAX) / k)));
   const dotR = Math.max(DOT_MIN, Math.min(DOT_MAX, k * R));
   const cx = W / 2;
@@ -292,7 +292,7 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
   const { active, via, setActive, click } = c;
   const enabled = useCssEntrance(c, mn);
   const ring = Math.min(1.5, dotR * 0.5);
-  // 점은 묶음마다 <g>에 담아요. 흐리게, 초점 고리는 묶음 <g>에 걸어서 올릴 때 점 3,000개를 다시 만들지 않아요. 빈자리는 속이 빈 고리예요
+  // Dots go in one <g> per group. Dimming and the focus ring are applied to the group <g>, so hovering does not rebuild 3,000 dots. Empty seats are hollow rings
   const dotNodes = useMemo(() => {
     const dot = (idx: number, g: number) => {
       const [x, y] = pos[idx];
@@ -301,7 +301,7 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
     let at = 0;
     const groups = counts.map((n, g) => Array.from({ length: n }, () => dot(at++, g)));
     return { groups, rest: pos.slice(at).map((_, j) => dot(at + j, -1)) };
-    // mn.waiting과 세대가 바뀔 때만 다시 만들어요
+    // Rebuilt only when mn.waiting or the generation changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pos, counts, dotR, ring, colors, p, enabled, mn.waiting, mn.generation, stagger, cellMs]);
   const dotLayer = useMemo(
@@ -343,27 +343,27 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
     const [tx, ty] = start >= 0 ? pos[start + Math.floor(counts[active] / 2)] : [cx, cy - R];
     tip = { x: tx, y: ty - dotR, title: ar.label, rows: [{ label: c.t.value, value: c.fv(ar.value), color: colors[active].fill }, { label: msg.share, value: c.pct(share(ar.value)) }, ...(lead ? [{ label: gapText(ar.value), value: "" }] : [])] };
   }
-  // 낭독: "Party A, 128 of 300, 43%" 뒤에 첫 기준선까지 거리
+  // Screen reader: "Party A, 128 of 300, 43%" followed by the distance to the first reference line
   const announce = via === "keyboard" && ar ? [ar.label, msg.ofTotal(c.fv(ar.value), c.fv(model.total)), c.pct(share(ar.value)), gapText(ar.value)].filter(Boolean).join(", ") : "";
   const desc =
     props.description ??
     `${msg.arcKind}. ${msg.total(c.fv(model.total))}: ${model.rows.map((r) => `${r.label} ${c.fv(r.value)}`).join(", ")}${model.empty > 0 ? `, ${msg.empty(c.fv(model.empty))}` : ""}.${refs.length ? ` ${msg.refs(refs.map(refName).join(", "))}` : ""}${model.units > dots ? ` ${msg.perDot(c.fmt(model.units / dots))}` : ""}`;
 
-  // 가운데 글자: 큰 숫자는 전체, 아래는 고른(없으면 강조한) 묶음과 그 값. 격자처럼 summaryLabel은 강조한 묶음의 이름을 바꿔요
+  // Center text: the large number is the total; below it, the selected group (or else the highlighted one) and its value. As in the grid, summaryLabel replaces the highlighted group's name
   const focus = active ?? [...model.hi][0] ?? -1;
   const fr = model.rows[focus];
   const hole = inner - dotR - 4;
   const capNum = fr ? c.fmt(fr.value) : "";
   const capName = fr ? (active === null ? (props.summaryLabel ?? fr.label) : fr.label) : "";
   let note = props.summaryNote ?? "";
-  // 고른 묶음 줄이 아래 글과 같은 말이면(아래 글에 그 이름과 값이 다 있으면) 한 번만 적어요: "Returning 62"와 "62 returning"
+  // When the selected group's line says the same as the text below (the text below has both its name and value), write it only once: "Returning 62" and "62 returning"
   if (active !== null && fr && note && sameWords(note, fr.label, capNum)) note = "";
   const totalText = c.fmt(model.total);
-  // 올라가는 동안은 정수로, 끝나면 전체 그대로
+  // Integers while counting up, the exact total once finished
   const shownTotal = mn.get("__n")?.[0] ?? model.total;
-  // 맨 아랫줄 글자가 반원 바닥(cy) 위에 오게 아래에서부터 쌓아요. 구멍에 큰 숫자가 12px도 안 들어가면 둘째 줄, 그다음 아래 글을 빼고, 그래도 안 되면 가운데 글자를 모두 빼요
+  // Stack from the bottom so the lowest line sits above the half circle's base (cy). When the hole cannot fit the large number even at 12px, drop the second line, then the text below, and if it still does not fit, all center text
   const capY = () => (note ? cy - 23 : cy - 11);
-  // 이름과 값 줄: 한 줄(12.5px), 한 단계 작은 한 줄(11.5px), 이름을 낱말에서 나눈 두 줄(값은 둘째 줄 끝) 순서로 맞추고, 그래도 안 되면 마지막에 이름을 줄여요
+  // Name and value line: try one line (12.5px), one line a step smaller (11.5px), then two lines with the name split between words (the value at the end of the second line); if none fits, finally shorten the name
   let capSize = 12.5;
   let caption: string[] = [];
   let noteBelow = "";
@@ -381,16 +381,16 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
     else {
       capSize = 11.5;
       const keptNote = note;
-      // 두 줄이면 아래 글은 반원 바닥 밑 빈칸(맨 아랫줄 두 점 사이)으로 내려요. 그 자리가 없으면 구멍에 둔 채로 맞춰 봐요
+      // With two lines, move the text below down into the gap under the half circle's base (between the two dots of the bottom row). Without that room, try fitting it in the hole
       if (note && H - cy >= 14 && textWidth(note, 11) <= 2 * (inner - dotR) - 8) [noteBelow, note] = [note, ""];
-      // 윗줄은 구멍이 좁아지는 높이라 그 높이의 현 길이까지만 써요
+      // The top line sits where the hole narrows, so it uses only the chord length at that height
       const upDy = cy - (capY() - CAP_LINE) + capSize * 0.8;
       const upRoom = Math.min(room, 2 * Math.sqrt(Math.max(0, hole * hole - upDy * upDy)));
       const split = splitName(capName, capNum, upRoom, room, capSize);
       if (split) caption = split;
       if (!split || fit()[1] < 12) {
         [note, noteBelow] = [keptNote, ""];
-        // summaryLabel이 안 들어가면 범례와 같은 묶음 이름으로 ("New customers 38" 대신 "New 38"), 그것도 안 되면 줄여요
+        // When summaryLabel does not fit, fall back to the group name used in the legend ("New 38" instead of "New customers 38"), and shorten it if that does not fit either
         const own = [fr.label, capNum].filter(Boolean).join(" ");
         caption = [capName !== fr.label && textWidth(own, capSize, 700) <= room ? own : [truncateBeside(capName, capNum, room, capSize, 700), capNum].filter(Boolean).join(" ")];
       }
@@ -401,8 +401,8 @@ function WaffleArc<T = Row>(props: WaffleChartProps<T>) {
   const [lowest, big] = fit();
   const summary = props.summary !== false && dots > 0 && big >= 12;
 
-  // 기준선: 앞에서 value 단위째 점과 다음 점 사이의 각도 (점 하나가 여러 단위면 점 수로 바꿔요). 0과 전체에 놓인 선은 맨 아랫줄 바로 밑에 가로로 그어요.
-  // 글자는 선 바깥 끝에, 옆자리가 모자라면 반원 위 띠로 옮기고, 앞 기준선 글자와 겹치면 빼요
+  // Reference lines: at the angle between the dot holding unit value (counted from the start) and the next dot (when one dot holds several units, convert to a dot count). Lines at 0 and at the total are drawn horizontally just below the bottom row.
+  // Labels go at the outer end of the line, move to the band above the half circle when there is not enough room beside it, and are dropped when they overlap the previous reference line's label
   const boxes: Box[] = [];
   const refMarks = refs.map((r) => {
     const at = Math.round((r.value * dots) / Math.max(1, model.units));

@@ -42,57 +42,57 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface NetworkChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
-  /** 출발 노드 필드. 기본 "source" (없으면 "from") */
+  /** Source node field. Default "source" ("from" when absent) */
   source?: Accessor<T, string>;
-  /** 도착 노드 필드. 기본 "target" (없으면 "to") */
+  /** Target node field. Default "target" ("to" when absent) */
   target?: Accessor<T, string>;
-  /** 링크 굵기 값. 없으면(데이터에 "value" 필드도 없으면) 행마다 1이에요 */
+  /** Link width value. Without it (and without a "value" field in the data), each row counts as 1 */
   value?: Accessor<T, number>;
-  /** 강조할 노드(이름, 인덱스, 배열, "max"는 가장 많이 이어진 노드). 함수는 노드 이름을 받아요. 기본 "max" */
+  /** Node to highlight (name, index, array, or "max" for the most connected node). A function receives the node name. Default "max" */
   highlight?: Highlight<string>;
-  /** 배치. 지금은 "arc"(노드를 한 줄에 두고 링크를 위쪽 호로)만 있어요 */
+  /** Layout. Only "arc" for now (nodes in a single row, links as arcs above) */
   layout?: "arc";
-  /** 노드 순서. "auto"는 묶음(없으면 연결된 덩어리)을 붙여 두고 긴 호를 줄이는 순서, "data"는 데이터 순서, "group"은 묶음 순서, "degree"는 이어진 노드가 많은 것부터. 기본 "auto" */
+  /** Node order. "auto" keeps groups (or connected components when there are none) together and shortens long arcs, "data" follows data order, "group" orders by group, "degree" puts the most connected nodes first. Default "auto" */
   sort?: NetworkSort;
-  /** 노드 이름 → 묶음 이름. 묶음마다 점 색이 달라지고(회색 단계), sort "group"과 "auto"가 묶음끼리 붙여 둬요 */
+  /** Node name → group name. Each group gets its own dot color (gray steps), and sort "group" and "auto" keep group members together */
   groups?: Readonly<Record<string, string>>;
-  /** 점 크기: "value"는 이어진 링크 값의 합, "degree"는 이어진 노드 수. 기본 "value" */
+  /** Dot size: "value" is the sum of connected link values, "degree" the number of connected nodes. Default "value" */
   nodeSize?: "value" | "degree";
 }
 
 const LABEL_SIZE = 11;
-/** sin 45°. 기울인 이름표 */
+/** sin 45°. For tilted labels */
 const TILT = Math.SQRT1_2;
-/** 기울인 이름표 사이 가로 간격(px). 줄 간격 12px ÷ sin 45° */
+/** Horizontal spacing between tilted labels (px). Line spacing 12px ÷ sin 45° */
 const TILT_GAP = 17;
-/** 기울인 이름표 최대 폭(px) */
+/** Maximum width of a tilted label (px) */
 const MAX_TILT = 96;
-/** 가로 이름표 사이 여백(px) */
+/** Gap between horizontal labels (px) */
 const FLAT_GAP = 6;
 /**
- * 이웃한 노드 사이 최대 간격(px). 노드가 두셋뿐인 그래프가 카드 양끝까지 벌어져 반원 하나가 카드를 채우지 않게,
- * 작은 그래프는 작게 가운데에 그려요. 가장 긴 이름표가 가로로 들어갈 만큼은 넓혀 주되 MAX_FLAT_STEP까지예요
+ * Maximum spacing between neighboring nodes (px). So that a graph of two or three nodes does not spread to both edges of the card with one semicircle filling it,
+ * small graphs are drawn small and centered. It widens enough for the longest label to fit horizontally, but only up to MAX_FLAT_STEP
  */
 const MAX_STEP = 88;
 const MAX_FLAT_STEP = 160;
-/** 링크가 이보다 많으면 호마다 넓은 투명 선(호버 자리)을 깔지 않아요. 3,000개면 SVG가 두 배가 되고, 그만큼 빽빽하면 노드로 읽어요 */
+/** Above this many links, no wide transparent line (hover target) is laid under each arc. At 3,000 links the SVG would double in size, and a graph that dense is read by node anyway */
 const HIT_LINKS = 800;
 
 type Part = { node: number; name: string } | { link: number; key: string };
 
 /**
- * 네트워크(호 배치): 노드를 한 줄에 두고 링크를 위쪽 호로 이어요. 호 높이는 두 노드 사이 거리에, 굵기는 값에 비례해요.
- * 배치가 한 번의 계산이라 서버와 브라우저 그림이 같고, 노드에 순서가 있어 좌우 키로 옮겨 다녀요
+ * Network (arc layout): nodes sit in a single row and links connect them as arcs above. Arc height is proportional to the distance between the two nodes, and width to the value.
+ * The layout is a single computation, so the server and browser renders match, and the nodes have an order, so the left and right keys move between them
  */
 export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
   const { graph, weighted } = useMemo(() => {
     const has = (k: string) => props.data.some((d) => d !== null && typeof d === "object" && hasField(d as object, k));
     const gs = strGetter(props.source ?? (has("source") ? "source" : "from"), "source");
     const gt = strGetter(props.target ?? (has("target") ? "target" : "to"), "target");
-    // 값 필드가 없으면 행마다 1 (구조만 보는 데이터)
+    // Without a value field, each row counts as 1 (data that shows structure only)
     const weighted = props.value !== undefined || has("value");
     const gv = numGetter(props.value, "value");
-    // 이름 앞뒤 빈칸은 떼고 맞춰요("Orders"와 " Orders"는 같은 노드). 대소문자는 그대로 구분해요
+    // Names are matched with surrounding spaces trimmed ("Orders" and " Orders" are the same node). Case still matters
     const rows = props.data.map((d, i) => ({ source: gs(d, i).trim(), target: gt(d, i).trim(), value: weighted ? gv(d, i) : 1 }));
     return { graph: networkGraph(rows, props.groups), weighted };
   }, [props.data, props.source, props.target, props.value, props.groups]);
@@ -101,7 +101,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
   const { nodes, links } = graph;
   const N = order.length;
 
-  // 강조 "max"는 이어진 노드가 가장 많은 노드 (같으면 값 합이 큰 노드). 링크가 없는 노드는 고르지 않아요
+  // Highlight "max" is the node with the most connections (on a tie, the larger value total). Nodes without links are never picked
   const hi = useMemo(() => {
     const total = sum(nodes.map((n) => n.strength)) + 1;
     const score = nodes.map((n) => (n.degree ? n.degree + n.strength / total : NaN));
@@ -111,7 +111,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
 
   const showLabels = props.showLabels !== false;
   const sizeByDegree = props.nodeSize === "degree";
-  // 기본 높이: 이름표 띠와 가장 긴 호(반원)가 들어가는 만큼. 호가 짧은 순서면 낮아져서 위가 비지 않아요. 폭마다 한 번만 재요
+  // Default height: enough for the label band and the longest arc (a semicircle). An order with short arcs is lower, so the top is not left empty. Measured once per width
   const fitHeight = useMemo(() => {
     const seen = new Map<number, number>();
     return (w: number) => {
@@ -126,7 +126,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
   const geo = useMemo(() => arcGeometry(graph, order, W, H, showLabels, hi, sizeByDegree), [graph, order, W, H, showLabels, hi, sizeByDegree]);
   const { x, r, baseY, label, tilt, step, x0 } = geo;
 
-  // 키보드, 표, 툴팁 순서: 노드는 배치 순서, 그다음 링크는 값이 큰 것부터
+  // Keyboard, table and tooltip order: nodes in layout order, then links from the largest value
   const linkOrder = useMemo(() => links.map((l) => l.index).sort((a, b) => links[b].value - links[a].value || a - b), [links]);
   const eventOfLink = useMemo(() => {
     const m = new Array<number>(links.length);
@@ -134,7 +134,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
     return m;
   }, [linkOrder, links.length, N]);
   const eventOfNode = useMemo(() => positions(order), [order]);
-  // 링크 이름표(표의 key, 움직임 key, 지난 프레임의 링크인지 보는 데)를 한 번만 만들어요
+  // Link keys are built only once (used for the table key, the motion key, and checking whether a link was in the previous frame)
   const linkKeys = useMemo(() => links.map((l) => `${nodes[l.a].name}\u0001${nodes[l.b].name}`), [links, nodes]);
   const nameIndex = useMemo(() => new Map(nodes.map((n) => [n.name, n.index])), [nodes]);
   const name = (n: number) => nodes[n].name;
@@ -164,9 +164,9 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
     [order, linkOrder, nodes, links, linkKeys, weighted, fv, msg, props.data, N],
   );
 
-  // 눌러서(또는 Enter) 고정한 항목. 이름으로 들고 있어서 데이터가 바뀌어도 같은 노드면 그대로예요
+  // The item pinned by a click (or Enter). Kept by name, so it stays pinned across data changes as long as it is the same node
   const [pin, setPin] = useState<string | null>(null);
-  // 위아래 키로 링크를 고를 때 기준 노드 (이름)
+  // Anchor node (by name) when picking links with the up and down keys
   const [anchor, setAnchor] = useState<string | null>(null);
   const pinIndex = useMemo(() => (pin === null ? -1 : events.findIndex((e) => e.key === pin)), [events, pin]);
   const anchorNode = anchor === null ? -1 : (nameIndex.get(anchor) ?? -1);
@@ -207,7 +207,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
   const groupIndex = useMemo(() => new Map(groups.map((g, i) => [g, i])), [groups]);
   const dotColor = (n: number) => {
     if (focusNode === n || (!focused && hi.has(n))) return accent;
-    // 묶음을 쓰면 묶음 없는 노드는 마지막 단계예요
+    // When groups are used, nodes without a group get the last step
     if (groups.length) return swatches[groupIndex.get(nodes[n].group) ?? groups.length].fill;
     return near.has(n) || (!focused && !hi.size) ? p.paint("ink") : p.paint("neutralStrong");
   };
@@ -219,7 +219,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
     const node = nodes[n];
     const top = node.links[0];
     const peer = top !== undefined ? name(otherEnd(links, top, n)) : "";
-    // 툴팁은 이 노드의 가장 높은 호 위에 띄워요. 점 위에 두면 짧은 호(가장 가까운 이웃)를 가려요
+    // The tooltip floats above this node's highest arc. Placed over the dot, it would cover the short arcs (the nearest neighbors)
     const reach = node.links.reduce((m, k) => Math.max(m, geo.h[k] + geo.w[k] / 2), r[n]);
     tip = {
       x: x[n],
@@ -267,7 +267,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
     setPin((cur) => (cur === key ? null : key));
     c.click(i);
   };
-  // 가장 가까운 노드. 작은 그래프는 가운데에 있어서, 노드에서 반 칸(최소 24px)보다 먼 빈자리는 아무것도 고르지 않아요
+  // Nearest node. Small graphs sit in the middle, so empty space farther than half a step (at least 24px) from a node picks nothing
   const nodeAt = (px: number) => {
     const i = N === 1 ? 0 : Math.round(clamp((px - x0) / (step || 1), 0, N - 1));
     return Math.abs(px - x[order[i]]) <= Math.max(step / 2, 24) ? i : null;
@@ -289,7 +289,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
       }
       case "ArrowDown":
       case "ArrowUp": {
-        // 기준 노드의 링크를 값이 큰 것부터. 위 키로 가장 굵은 링크 앞까지 오면 노드로 돌아가요
+        // The anchor node's links, largest value first. Pressing up past the thickest link returns to the node
         const base = curNode >= 0 ? curNode : act !== null && act >= N ? links[linkOrder[act - N]].a : order[0];
         const list = nodes[base].links;
         setAnchor(nodes[base].name);
@@ -339,7 +339,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
   const hot: ReactNode[] = [];
   const dots: ReactNode[] = [];
   const hitLinks = links.length <= HIT_LINKS;
-  // 링크가 많을수록 강조 아닌 호를 옅게 (80개까지 0.32, 3,000개면 0.1). 빽빽해도 강조 노드의 호가 묻히지 않아요
+  // The more links, the fainter the non-highlighted arcs (0.32 up to 80, 0.1 at 3,000), so the highlighted node's arcs are not buried even when dense
   const quietOpacity = r2(clamp(0.32 * Math.sqrt(80 / Math.max(1, links.length)), 0.1, 0.32));
   const linkBase = p.paint("neutralStrong");
   const textInk = p.paint("ink");
@@ -354,7 +354,7 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
       const isHot = live && hotLink(k);
       const ev = live ? eventOfLink[k] : -1;
       const path = arcD(xa, xb, h, baseY);
-      // 호버와 누름은 호 묶음(<g>)이 data-l(항목 번호)로 받아요. 링크마다 함수를 만들지 않아요
+      // Hover and clicks are handled by the arc group (<g>) through data-l (item index). No function is created per link
       const tag = ev >= 0 ? { "data-l": ev } : {};
       const ring = act === ev && c.via === "keyboard";
       const line = <path key={hitLinks ? undefined : it.key} className="ztd-mark" d={path} fill="none" stroke={isHot ? accent : linkBase} strokeWidth={r2(ring ? w + 1.5 : w)} strokeLinecap="round" opacity={isHot ? 0.9 : focused ? r2(quietOpacity * 0.22) : quietOpacity} {...(hitLinks ? {} : tag)} />;
@@ -429,13 +429,13 @@ export function NetworkChart<T = Row>(props: NetworkChartProps<T>) {
         {hot}
       </g>
       {N ? <rect x={0} y={r2(nodeZone)} width={r2(W)} height={r2(Math.max(0, H - nodeZone))} fill="transparent" onClick={() => c.active !== null && c.active < N && togglePin(c.active)} /> : null}
-      {/* 점과 이름표는 누름을 받지 않아요. 아래 투명한 띠가 가장 가까운 노드를 고정해요 */}
+      {/* Dots and labels take no clicks. The transparent band below pins the nearest node */}
       <g pointerEvents="none">{dots}</g>
     </ChartFrame>
   );
 }
 
-/** 위쪽 호: 왼쪽 끝에서 오른쪽 끝으로, 가로 반지름은 거리의 절반, 세로 반지름 h. 좌우 대칭이에요 */
+/** Upper arc: from the left end to the right end, horizontal radius half the distance, vertical radius h. Symmetric left to right */
 function arcD(xa: number, xb: number, h: number, y: number): string {
   const l = Math.min(xa, xb);
   const rgt = Math.max(xa, xb);
@@ -443,8 +443,8 @@ function arcD(xa: number, xb: number, h: number, y: number): string {
 }
 
 /**
- * 자리, 점 크기, 호 높이와 굵기, 이름표. 노드 간격에 이름표가 모두 가로로 들어가면 가로로, 아니면 45° 기울이고,
- * 기울여도 17px보다 촘촘하면 강조, 이어진 노드가 많은 순서로 겹치지 않는 이름표만 적어요
+ * Positions, dot sizes, arc heights and widths, and labels. Labels are horizontal when they all fit in the node spacing, otherwise tilted 45°;
+ * when even tilted they are denser than 17px, only non-overlapping labels are written, highlighted first, then by number of connections
  */
 function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: number, showLabels: boolean, hi: ReadonlySet<number>, sizeByDegree: boolean) {
   const { nodes, links } = g;
@@ -467,7 +467,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
     const st = inner(padL, padR);
     tilt = padL + padR > W * 0.6 || (N === 1 ? first > W - 8 : order.some((n) => wOf[n] > st - FLAT_GAP));
     if (tilt) {
-      // 기울인 이름표는 노드 왼쪽 아래로 늘어져요. 첫 노드들의 이름표가 들어가게 왼쪽 여백을 잡아요 (폭의 30%까지)
+      // Tilted labels hang down to the left of their node. Reserve a left margin so the first nodes' labels fit (up to 30% of the width)
       padR = edge;
       padL = edge;
       order.forEach((n, i) => (padL = Math.max(padL, Math.min(wOf[n], MAX_TILT) * TILT + 4 - i * step0)));
@@ -475,7 +475,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
     }
   }
   const step = inner(padL, padR);
-  // 간격 상한에 걸려 남는 폭은 양옆으로 나눠 줄을 가운데에 둬요 (이름표 여백 안에서)
+  // Width left over because of the spacing cap is split to both sides to center the row (within the label margins)
   const row = (N - 1) * step;
   const x0 = clamp((W - row) / 2, padL, Math.max(padL, W - padR - row));
   const x = new Array<number>(nodes.length);
@@ -490,7 +490,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
     } else {
       const deg = byDegree(nodes);
       const rank = [...order].sort((a, b) => Number(hi.has(b)) - Number(hi.has(a)) || deg(a, b));
-      // 이미 적은 이름표의 x를 정렬해 두고 양옆 이웃만 봐요 (노드 300개에서도 빨라요)
+      // Keep the x of labels already written sorted and check only the neighbors on each side (fast even with 300 nodes)
       const taken: number[] = [];
       let widest = 0;
       for (const n of rank) {
@@ -512,7 +512,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
     }
   }
 
-  // 링크 굵기: 값에 비례, 노드 간격의 45%(1.2~7px)까지. 값이 모두 같으면 2px
+  // Link width: proportional to value, up to 45% of the node spacing (1.2~7px). 2px when all values are equal
   let vmax = 0;
   let vmin = Infinity;
   for (const l of links) {
@@ -526,7 +526,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
   const baseY = Math.max(topPad + 8, H - band, H * 0.4);
   let span = 0;
   for (const l of links) span = Math.max(span, Math.abs(x[l.a] - x[l.b]));
-  // 호 높이는 거리의 절반(반원)에, 가장 긴 호가 위 여백까지 오게 한 배율을 곱해요. 모든 호가 같은 배율이라 높이가 거리를 따라요
+  // Arc height is half the distance (a semicircle) times the factor that brings the longest arc up to the top margin. Every arc uses the same factor, so height follows distance
   const k = span > 0 ? Math.min(1, (baseY - topPad) / (span / 2)) : 1;
   const h = links.map((l) => (Math.abs(x[l.a] - x[l.b]) / 2) * k);
 
@@ -534,7 +534,7 @@ function arcGeometry(g: NetworkGraph, order: readonly number[], W: number, H: nu
   const sMax = size.reduce((a, b) => Math.max(a, b), 0);
   const rMin = Math.max(1, rMax * 0.35);
   const r = size.map((s) => (s > 0 && sMax > 0 ? rMin + (rMax - rMin) * Math.sqrt(s / sMax) : rMin));
-  // 호를 반원으로 그릴 때 필요한 높이 (기본 높이)
+  // Height needed to draw the arcs as semicircles (the default height)
   const natural = band + span / 2 + topPad;
   return { x, r, h, w, baseY, label, tilt, step, x0, rMax, natural };
 }

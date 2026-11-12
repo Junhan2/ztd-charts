@@ -49,15 +49,15 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface BoxPlotProps<T = Row> extends BaseChartProps<T> {
   group?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** "box" | "violin" | "both". 기본 "box" */
+  /** "box" | "violin" | "both". Default "box" */
   variant?: "box" | "violin" | "both";
-  /** 이상값 점. 기본 true */
+  /** Outlier points. Default true */
   outliers?: boolean;
-  /** 축에 0 포함. 기본 false */
+  /** Include 0 in the axis. Default false */
   zero?: boolean;
-  /** 수염 끝 백분위 [낮은 쪽, 높은 쪽](0~100). 예: [5, 95]. 없으면 사분위 범위의 1.5배 안에서 가장 먼 값(Tukey) */
+  /** Whisker end percentiles [low, high] (0~100). Example: [5, 95]. Without it, the farthest value within 1.5 times the interquartile range (Tukey) */
   whiskers?: readonly [number, number];
-  /** 강조 그룹. 판별 함수는 행이 아니라 그룹 이름을 받아요: (name, index) => boolean. 기본 중앙값이 가장 큰 그룹 */
+  /** Highlighted group. A predicate function receives the group name, not the row: (name, index) => boolean. Default: the group with the largest median */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
@@ -71,13 +71,13 @@ interface BoxInfo {
 
 const VS = 48;
 
-/** 박스 플롯과 바이올린: 그룹별 분포 요약 (사분위, 중앙값, 이상값) */
+/** Box plot and violin: distribution summary per group (quartiles, median, outliers) */
 export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.55)), duration: 850, stagger: 90 });
   const { p, width: W, height: H } = c;
   const variant = props.variant ?? "box";
-  // 배열을 그때그때 새로 넘겨도 값이 같으면 다시 계산하지 않게 두 숫자로 풀어요.
-  // 0~100 안의 두 숫자일 때만 백분위 수염이고(거꾸로 줘도 작은 쪽이 아래), 아니면 Tukey 수염이에요. 스펙 검사를 거치지 않은 값도 NaN을 그리지 않아요
+  // Unpack into two numbers so that a new array with the same values on each render does not trigger a recompute.
+  // Percentile whiskers only for two numbers within 0~100 (given in reverse, the smaller one is still the low end); otherwise Tukey whiskers. Values that skipped spec validation never draw NaN either
   const [wa = NaN, wb = NaN] = props.whiskers ?? [];
   const isPct = wa >= 0 && wa <= 100 && wb >= 0 && wb <= 100;
   const wLo = isPct ? Math.min(wa, wb) : undefined;
@@ -92,7 +92,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
       const v = gv(d, i);
       if (Number.isFinite(v)) by.get(gg(d, i))!.push(v);
     });
-    // 값이 하나도 없는 그룹은 빼요 (사분위가 NaN이 되어 SVG에 NaN이 남아요)
+    // Drop groups with no values (their quartiles would be NaN and leave NaN in the SVG)
     const names = allNames.filter((n) => by.get(n)!.length > 0);
     const stats = names.map((n) => boxStats(by.get(n)!, wLo !== undefined && wHi !== undefined ? [wLo, wHi] : undefined));
     const all = [...by.values()].flat();

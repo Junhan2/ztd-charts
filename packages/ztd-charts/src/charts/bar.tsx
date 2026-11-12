@@ -29,43 +29,43 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { kind: "막대 차트", desc: (cats, nS, names) => `${cats}개 범주${nS > 1 ? `, 계열 ${nS}개(${names})` : ""}`, lines: (names) => `, 선: ${names.join(", ")}`, sides: (neg, pos) => `음수 쪽 ${neg}, 양수 쪽 ${pos}` },
 };
 
-/** 값 글자 한 줄의 높이(11px 글자). 양쪽 쌓기에서 줄 칸이 이보다 좁으면 값 글자를 빼요 */
+/** Height of one line of value text (11px text). In a diverging stack, value labels are dropped when a row's band is narrower than this */
 const LABEL_LINE = 12;
 
 export interface BarChartProps<T = Row> extends BaseChartProps<T> {
-  /** 범주 필드. 기본 "x" (가로 막대도 범주는 x로 넘겨요) */
+  /** Category field. Default "x" (horizontal bars also pass the category as x) */
   x?: Accessor<T, string>;
-  /** 값 필드. 배열이면 넓은 표의 여러 열 */
+  /** Value field. An array means several columns of a wide table */
   y?: Accessor<T, number> | string[];
-  /** 계열 필드 (긴 표) */
+  /** Series field (long table) */
   series?: Accessor<T, string>;
-  /** "grouped" | "stacked" | "percent" | "diverging". 기본 "grouped". "diverging"은 0선 양쪽으로 쌓아요(리커트, 인구 피라미드) */
+  /** "grouped" | "stacked" | "percent" | "diverging". Default "grouped". "diverging" stacks to both sides of the zero line (Likert, population pyramid) */
   layout?: "grouped" | "stacked" | "percent" | "diverging";
-  /** "vertical" | "horizontal". 기본 "vertical", layout "diverging"이면 "horizontal" */
+  /** "vertical" | "horizontal". Default "vertical", or "horizontal" with layout "diverging" */
   orientation?: "vertical" | "horizontal";
-  /** 값 순 정렬 (계열 하나일 때). 기본 false. layout "diverging"에서 "positive" | "negative"면 그쪽 합계가 큰 줄부터 */
+  /** Sort by value (with one series). Default false. With layout "diverging", "positive" | "negative" puts the rows with the largest total on that side first */
   sort?: boolean | "positive" | "negative";
-  /** layout "diverging": 0선 왼쪽(세로면 아래)에 놓을 계열 이름, 0선에서 바깥 순서. 넓은 표는 y 필드 이름, 긴 표는 series 값. 나머지 계열은 데이터 순서로 오른쪽에 놓고, 이미 음수인 값은 부호대로 왼쪽에 놓아요 */
+  /** layout "diverging": names of the series placed left of the zero line (below it when vertical), in order outward from the zero line. y field names for a wide table, series values for a long table. The other series go on the right in data order, and values that are already negative go left by their sign */
   negative?: readonly string[];
-  /** layout "diverging": 0선 양쪽에 반씩 놓는 계열 이름 (보통 "보통") */
+  /** layout "diverging": name of the series split in half across the zero line (usually "Neutral") */
   neutral?: string;
-  /** layout "diverging": 조각을 그 줄 절댓값 합의 몫(%)으로. 기본 false */
+  /** layout "diverging": show each segment as its share (%) of the row's absolute total. Default false */
   percent?: boolean;
-  /** 같은 범주, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  /** How to combine several rows with the same category and series. Default "sum" */
   aggregate?: Aggregate;
-  /** 강조 대상: 계열 하나면 범주, 여러 개면 계열. 기본 "max" / 첫 계열. 계열이 여러 개일 때 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean */
+  /** What to highlight: a category with one series, a series with several. Default "max" / the first series. With several series, a predicate function receives the series name, not the row: (name, index) => boolean */
   highlight?: BaseChartProps<T>["highlight"];
-  /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선. 세로 막대에서만 그려요. 예측 뒤 막대는 옅게 점선 테두리로 */
+  /** Annotations: target band, period, reference line, event, forecast, trend line. Drawn on vertical bars only. Bars after the forecast start are faint with a dashed outline */
   annotations?: Annotation[];
-  /** 세로 막대 위에 같은 축으로 그리는 선(목표, 작년 등)의 값 필드. 여럿이면 배열. highlight가 없으면 막대는 회색이고, 계열 필드가 있으면 같은 x의 값을 평균해요. 가로 막대와 100% 막대에는 그리지 않아요 */
+  /** Value field of a line drawn over vertical bars on the same axis (target, last year, etc.). An array for several. Without highlight the bars are gray, and with a series field the values at the same x are averaged. Not drawn on horizontal or 100% bars */
   line?: string | string[];
-  /** 숨길 계열 이름. 색과 강조는 모든 계열로 정해서 숨겨도 남은 계열 색이 그대로예요. 값 축은 보이는 계열에 맞춰요. 계열이 하나면 상관없어요. 모든 계열을 숨기면 빈 차트예요 */
+  /** Names of series to hide. Colors and highlight are set from all series, so the remaining series keep their colors. The value axis fits the visible series. No effect with a single series. Hiding every series gives an empty chart */
   hidden?: readonly string[];
-  /** 값 축 범위 고정 [아래, 위] (가로 막대는 가로 축). 100% 막대에서는 쓰지 않아요. 작은 여러 개(ChartFacets)가 패널의 높이를 맞출 때 써요 */
+  /** Fixed value axis range [min, max] (the horizontal axis for horizontal bars). Not used for 100% bars. Small multiples (ChartFacets) use it to match heights across panels */
   yDomain?: [number, number];
-  /** 아래 축 글자(세로 막대는 범주, 가로 막대는 값). 기본 true. false면 글자만 빼고 자리는 둬요 */
+  /** Bottom axis labels (categories for vertical bars, values for horizontal bars). Default true. false removes only the labels and keeps their space */
   showXAxis?: boolean;
-  /** 왼쪽 축 글자(세로 막대는 값, 가로 막대는 범주). 기본 true. false면 글자와 그 자리를 빼요 */
+  /** Left axis labels (values for vertical bars, categories for horizontal bars). Default true. false removes the labels and their space */
   showYAxis?: boolean;
 }
 
@@ -80,14 +80,14 @@ interface BarSeg {
   v1: number;
   sw: Swatch;
   hi: boolean;
-  /** diverging: 0선에서 몇 번째 조각인지 (가운데 계열 0). 나타나는 차례와 둥근 모서리에 써요 */
+  /** diverging: the segment's position counted from the zero line (0 for the middle series). Used for the entrance order and rounded corners */
   ring?: number;
-  /** diverging: 줄의 낮은 쪽, 높은 쪽 끝 조각인지 (둥근 모서리) */
+  /** diverging: whether this is the segment at the low or high end of the row (rounded corners) */
   endLo?: boolean;
   endHi?: boolean;
 }
 
-/** 막대 차트: 묶은, 쌓은, 100%, 양쪽(diverging) 막대와 가로 막대 */
+/** Bar chart: grouped, stacked, 100% and diverging bars, plus horizontal bars */
 export function BarChart<T = Row>(props: BarChartProps<T>) {
   const layout = props.layout ?? "grouped";
   const diverging = layout === "diverging";
@@ -96,7 +96,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const { p, width: W, height: H } = c;
 
   const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: "band", locale: c.locale, aggregate: props.aggregate }), [props.data, props.x, props.y, props.series, c.locale, props.aggregate]);
-  // 양쪽 쌓기의 계열 자리 (모든 계열 기준. 이름이 없는 계열은 빼요)
+  // Series positions in the diverging stack (based on all series; names that match no series are dropped)
   const negKey = props.negative?.join("\u0001") ?? "";
   const divOpts = useMemo(() => {
     if (!diverging) return null;
@@ -108,7 +108,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
       const idx = model0.keys.map((_, k) => k).sort((a, b) => (score[b] || 0) - (score[a] || 0));
       return { ...model0, keys: idx.map((k) => model0.keys[k]), labels: idx.map((k) => model0.labels[k]), xnum: idx.map((_, i) => i), values: model0.values.map((row) => idx.map((k) => row[k])), rows: model0.rows.map((row) => idx.map((k) => row[k])) };
     };
-    // 양쪽 쌓기는 그쪽 합계 순 (숨긴 계열과 상관없이 모든 계열로 정해서, 숨겨도 줄이 움직이지 않아요)
+    // The diverging stack sorts by that side's total (set from all series regardless of hidden ones, so rows do not move when series are hidden)
     if (divOpts && (props.sort === "positive" || props.sort === "negative")) {
       const st = divergingStack(model0.values, divOpts);
       return by(props.sort === "positive" ? st.pos : st.neg);
@@ -116,39 +116,39 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     if (!props.sort || model0.series.length !== 1) return model0;
     return by(model0.values[0]);
   }, [model0, props.sort, divOpts]);
-  // 계열이 하나면 막대마다 강조해요. 여러 개면 숨긴 계열(hidden)을 빼고 그려요. 강조와 색은 모든 계열로 정한 뒤 골라요(남은 계열 색이 그대로)
+  // With one series, highlight per bar. With several, draw without the hidden series. Highlight and colors are set from all series first, then picked (the remaining series keep their colors)
   const single = sorted.series.length === 1;
   const hiddenKey = single ? "" : (props.hidden?.join("\u0001") ?? "");
   const [model, keep] = useMemo(() => visibleSeries(sorted, hiddenKey), [sorted, hiddenKey]);
   const nS = model.series.length;
-  // 같은 축의 선(목표, 작년): 세로 막대에만. 막대 범주(정렬 뒤)에 키로 맞추고, 긴 표에서는 같은 x의 값을 평균해요(계열마다 되풀이한 목표가 두 배가 되지 않게). 빈 목록은 선이 없는 것과 같아요
+  // Lines on the same axis (target, last year): vertical bars only. Matched by key to the bar categories (after sorting); in a long table the values at the same x are averaged (so a target repeated per series does not double). An empty list is the same as no line
   const drawLines = !!props.line?.length && !horizontal && layout !== "percent" && !diverging;
   const lineModel = useMemo(
     () => (drawLines ? prepSeries(props.data, props.x, (Array.isArray(props.line) ? props.line : [props.line]) as never, undefined, { xType: "band", locale: c.locale, aggregate: props.series === undefined ? props.aggregate : "mean" }) : null),
     [drawLines, props.data, props.x, props.line, props.series, props.aggregate, c.locale],
   );
   const lineAt = useMemo(() => new Map((lineModel?.keys ?? []).map((k, i) => [k, i])), [lineModel]);
-  /** 선 li의 범주 k 값 (없으면 NaN) */
+  /** Value of line li at category k (NaN when missing) */
   const lineVal = (li: number, k: number) => {
     const j = lineAt.get(model.keys[k]);
     return lineModel && j !== undefined ? lineModel.values[li][j] : Number.NaN;
   };
 
   const hiAll = useMemo(() => {
-    // 선이 있으면 선이 강조색이라 막대는 highlight를 정할 때만 강조해요
+    // With lines, the line takes the accent color, so bars are highlighted only when highlight is set
     if (single) return resolveHighlight(props.highlight, sorted.rows[0] as T[], sorted.labels, sorted.values[0], drawLines ? "none" : "max");
-    // 양쪽 쌓기에 highlight가 없고 negative가 있으면 가장 바깥 긍정 계열을 강조해요 (왼쪽 끝 ink에서 오른쪽 끝 강조색으로)
+    // In a diverging stack with no highlight and with negative set, highlight the outermost positive series (from ink at the left end to the accent color at the right end)
     const lead = divOpts && props.highlight === undefined ? divergingLead(sorted.series.length, divOpts.negative, divOpts.neutral) : -1;
     if (lead >= 0) return new Set([lead]);
     const totals = sorted.values.map((r) => r.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
     return resolveHighlight(props.highlight as never, sorted.series as never[], sorted.series, totals, drawLines ? "none" : "first");
   }, [sorted, single, props.highlight, drawLines, divOpts]);
   const colorsAll = useMemo(() => (single ? emphasis(p, sorted.keys.length, hiAll) : categorical(p, sorted.series.length, hiAll)), [single, p, sorted.keys.length, hiAll, sorted.series.length]);
-  // 보이는 계열 자리로 옮겨요 (숨긴 게 없으면 그대로)
+  // Map to the visible series positions (unchanged when nothing is hidden)
   const hi = useMemo(() => (model === sorted ? hiAll : new Set(keep.flatMap((i, j) => (hiAll.has(i) ? [j] : [])))), [model, sorted, hiAll, keep]);
   const colors = useMemo(() => (model === sorted ? colorsAll : keep.map((i) => colorsAll[i])), [model, sorted, colorsAll, keep]);
 
-  // 양쪽 쌓기: 숨긴 계열은 자리만 비우고 percent의 분모에는 남겨요. 값 축과 끝 글자 자리는 모든 계열(divAll)로 정해서 숨긴 쪽만 다시 쌓여요
+  // Diverging stack: a hidden series only leaves its slot empty and stays in the percent denominator. The value axis and end-label space are set from all series (divAll), so only the side with the hidden series restacks
   const [div, divAll] = useMemo(() => {
     if (!divOpts) return [null, null];
     const all = divergingStack(sorted.values, divOpts);
@@ -168,7 +168,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         row.push({ key: `${cat}|${s}`, k, s: si, cat: model.labels[k], series: s, value: v, v0, v1, sw: single ? colors[k] : colors[si], hi: single ? hi.has(k) : hi.has(si) });
       });
       if (div) {
-        // 왼쪽부터 오른쪽 순서(키보드도 이 순서), 0선에서 몇 번째인지, 줄 양 끝 조각
+        // Left-to-right order (the keyboard follows it too), position from the zero line, and the segments at both ends of the row
         row.sort((a, b) => Math.min(a.v0, a.v1) - Math.min(b.v0, b.v1));
         const lo = Math.min(...row.map((g) => Math.min(g.v0, g.v1)));
         const hiEnd = Math.max(...row.map((g) => Math.max(g.v0, g.v1)));
@@ -188,24 +188,24 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   }, [model, layout, colors, single, hi, div, keep]);
 
   const vals = divAll ? [...divAll.y0.flat(), ...divAll.y1.flat()] : segs.flatMap((s) => [s.v0, s.v1]);
-  // 주석은 세로 막대에만 그려요. 0~100%로 고정된 100% 막대는 주석 값으로 범위를 넓히지 않아요. 양쪽 쌓기에는 그리지 않아요
+  // Annotations are drawn on vertical bars only. 100% bars, fixed at 0~100%, do not widen their range for annotation values. Not drawn on diverging stacks
   const notes = horizontal || diverging ? undefined : props.annotations;
   if (layout !== "percent") vals.push(...annotationYs(notes));
   if (lineModel) for (const row of lineModel.values) for (const x of row) if (Number.isFinite(x)) vals.push(x);
   const [mn, mx] = extent(vals.length ? vals : [0, 1]);
   const ticksWanted = horizontal ? Math.max(2, Math.round(W / 120)) : Math.max(2, Math.round(H / 70));
-  // 양쪽 쌓기는 양쪽을 각자 데이터 끝(그쪽 가장 긴 줄, 가운데 계열 반쪽 포함)에 맞춰요. 다음 눈금까지 넓히지 않고 눈금은 그 안에서 골라요 (0선은 가운데가 아니어도 돼요).
-  // yDomain(작은 여러 개의 같은 값 축)이 있으면 그 범위를 써요
+  // A diverging stack fits each side to its own data end (the longest row on that side, half of the middle series included). It does not widen to the next tick; ticks are picked inside that range (the zero line need not be centered).
+  // With yDomain (the shared value axis of small multiples), use that range
   const dom: [number, number] = layout === "percent" ? [0, 100] : props.yDomain ?? (diverging && mn < mx ? [mn, mx] : fitDomain(mn, mx, ticksWanted));
   const baseTick = layout === "percent" || (diverging && props.percent) ? (v: number) => `${v}%` : makeTickFormatter(props.format, c.locale, Math.max(Math.abs(dom[0]), Math.abs(dom[1])));
-  // 양쪽 쌓기의 눈금은 크기만 (왼쪽도 양수로)
+  // Diverging stack ticks show magnitude only (the left side is positive too)
   const tickFmt = diverging ? (v: number) => baseTick(Math.abs(v)) : baseTick;
   const showValues = c.showLabels && (single || layout !== "grouped" || nS <= 3);
   const valueText = (sg: BarSeg) => (layout === "percent" ? c.pct(sg.v1 - sg.v0) : diverging ? (props.percent ? c.pct(Math.abs(sg.v1 - sg.v0)) : c.fmt(Math.abs(sg.value))) : c.fmt(sg.value));
-  /** 양쪽 쌓기 한쪽 합계의 글자 */
+  /** Text for one side's total in a diverging stack */
   const sideText = (x: number) => (props.percent ? c.pct(x) : c.fmt(x));
 
-  // 축 배치. 왼쪽 글자를 빼면 그 자리도 빼요
+  // Axis layout. Removing the left labels removes their space too
   const showY = props.showYAxis !== false;
   const showX = props.showXAxis !== false;
   const catW = horizontal && showY ? Math.min(W * 0.32, Math.max(...model.labels.map((l) => textWidth(l, 11.5, 600)), 24) + 10) : 0;
@@ -213,15 +213,15 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const left = horizontal ? catW + 6 : showY ? yAxisWidth(ticks, tickFmt, c.locale) : 0;
   const top = horizontal ? 4 : showValues ? 16 : 8;
   const bottom = horizontal ? 18 : 22;
-  // 양쪽 쌓기의 값 글자: 줄 칸이 글자 한 줄보다 좁거나(가로) 합계 글자보다 좁으면(세로) 끝 합계와 조각 안 글자를 모두 빼요(촘촘한 줄에서 겹치지 않게). 값은 툴팁과 표에 남아요
+  // Diverging stack value labels: when a row's band is narrower than one line of text (horizontal) or than the total label (vertical), drop both the end totals and the in-segment labels (so dense rows do not overlap). Values remain in the tooltip and table
   const rowStep = divAll ? (horizontal ? scaleBand(model.keys, [top, H - bottom], 0.3, 0.12) : scaleBand(model.keys, [left + 4, W - 2], 0.32, 0.12)).step : 0;
   const totalW = divAll ? Math.max(0, ...[...divAll.neg, ...divAll.pos].map((x) => textWidth(sideText(x), 11, 600))) : 0;
   const divLabels = showValues && rowStep >= (horizontal ? LABEL_LINE : totalW + 4);
-  // 양쪽 끝 합계 글자: 줄마다 [왼쪽(아래), 오른쪽(위)]. 그쪽 조각이 없으면 null
+  // End total labels: per row, [left (bottom), right (top)]. null when that side has no segment
   const totals = div && divLabels ? model.keys.map((_, k) => [div.neg[k] > 0 ? sideText(div.neg[k]) : null, div.pos[k] > 0 ? sideText(div.pos[k]) : null]) : [];
   const sidePad = (j: number) => (divAll && divLabels ? Math.max(0, ...[divAll, div ?? divAll].flatMap((d) => (j ? d.pos : d.neg).map((x) => (x > 0 ? textWidth(sideText(x), 11, 600) + 10 : 0)))) : 0);
   const valPad = horizontal && showValues && layout !== "percent" ? (diverging ? sidePad(1) : Math.max(...segs.map((s) => textWidth(valueText(s), 11, 700)), 0) + 10) : 0;
-  // 세로 막대의 음수 값 글자는 막대 끝 아래에 써요. 가장 낮은 막대 아래 글자 자리를 남겨요
+  // Negative value labels on vertical bars go below the bar end. Leave room for the label under the lowest bar
   const negPad = !horizontal && (diverging ? divLabels : showValues) && mn < 0 && (single || layout === "grouped" || diverging) ? 16 : 0;
   const x0 = horizontal ? left + (diverging ? sidePad(0) : 0) : left + 4;
   const x1 = horizontal ? W - Math.max(8, valPad) : W - 2;
@@ -229,11 +229,11 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const v = horizontal ? scaleLinear(dom, [x0, x1]) : scaleLinear(dom, [H - bottom - negPad, top]);
   const inner = layout === "grouped" && nS > 1 ? scaleBand(model.series, [0, band.bandwidth], 0.12, 0) : null;
   const r = Math.min(p.theme.radiusMark, (inner ? inner.bandwidth : band.bandwidth) / 4);
-  /** 범주 k 칸의 가운데 (선의 점 자리) */
+  /** Center of category k's band (where the line's point sits) */
   const mid = (k: number) => band(model.keys[k]) + band.bandwidth / 2;
   const lineInk = (li: number) => p.paint(lineToken(li));
 
-  // 주석의 x 값: 범주 키로 칸 가운데를 찾아요. 구간과 예측은 칸 가장자리(칸 폭의 절반)까지 덮어요
+  // Annotation x values: find the band center by category key. Ranges and forecasts extend to the band edge (half the band width)
   const fFrom = forecastFrom(notes);
   const fk = fFrom === undefined ? -1 : band.index(String(fFrom));
   const ag: AnnotationGeom = {
@@ -250,7 +250,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     x1,
     top,
     bottom: H - bottom,
-    // 추세선: 계열 하나면 그 값, 묶은 막대는 강조 계열, 쌓은 막대는 범주 합계. 100% 막대는 없어요
+    // Trend line: the values with one series, the highlighted series for grouped bars, the category totals for stacked bars. None for 100% bars
     points: () => {
       if (layout === "percent") return [];
       const hs = [...hi][0] ?? 0;
@@ -269,27 +269,27 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     return { pos, th, a, b };
   };
 
-  // 계열 하나인 세로 막대의 값 글자: 칸 폭보다 넓으면 겹치지 않게 솎아요 (강조 막대 글자는 남겨요)
+  // Value labels of single-series vertical bars: thinned out so they do not overlap when wider than the band (the highlighted bar's label stays)
   const shownValues = useMemo(
     () => (single && !horizontal && showValues ? new Set(thinLabels(segs.map((sg) => band(model.keys[sg.k]) + band.bandwidth / 2), segs.map(valueText), band.bandwidth < 26 ? 10 : 11, 4, 500, new Set(segs.flatMap((sg, j) => (sg.hi ? [j] : []))))) : null),
-    // band, valueText는 아래 값들로 정해져요
+    // band and valueText are determined by the values below
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [segs, single, horizontal, showValues, layout, W, H, c.fmt],
   );
 
-  // 막대가 쌓이지 않는 배치 (묶음, 계열 하나)
+  // Layouts where bars do not stack (grouped, one series)
   const solo = layout === "grouped" || nS === 1;
-  // 세로 막대 위(음수면 아래)의 값 글자 자리. 솎였거나(계열 하나) 칸보다 넓으면(묶음) null. 그리기와 아래 상자가 같이 써요
+  // Position of the value label above a vertical bar (below when negative). null when thinned out (one series) or wider than the band (grouped). Shared by drawing and the boxes below
   const valueSpot = (sg: BarSeg, i: number, pos: number, th: number, a: number, b: number, tw: number) => {
     if (nS === 1 ? shownValues !== null && !shownValues.has(i) : th < tw * 0.8) return null;
     const spot = { x: pos + th / 2, y: sg.v1 < sg.v0 || sg.value < 0 ? Math.max(a, b) + 8 : Math.min(a, b) - 8, size: th < 26 ? 10 : 11 };
-    // 선의 점이 글자에 겹치면 글자를 빼요 (값은 툴팁에 남아요)
+    // Drop the label when a line point overlaps it (the value remains in the tooltip)
     const px = mid(sg.k);
     if (lineModel && Math.abs(px - spot.x) < tw / 2 + 5 && lineModel.series.some((_, li) => Math.abs(v(lineVal(li, sg.k)) - spot.y) < spot.size / 2 + 6)) return null;
     return spot;
   };
 
-  // 막대 위아래 값 글자의 상자. 주석 이름표(기준선, 예측)가 이걸 피해요 (390px에서 "Goal 100"이 값을 가리던 문제)
+  // Boxes of the value labels above and below bars. Annotation labels (reference line, forecast) avoid them (fixes "Goal 100" covering a value at 390px)
   const labelBoxes: Box[] = [];
   if (showValues && !horizontal && notes?.length && solo) {
     segs.forEach((sg, i) => {
@@ -306,7 +306,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
       segs.map((sg) => {
         const g = geom(sg);
         const base = v(Math.max(dom[0], Math.min(0, dom[1])));
-        // 양쪽 쌓기의 가운데 계열은 0선에서 양쪽으로 자라요. 조각은 0선에서 바깥 차례로 나타나요
+        // In a diverging stack the middle series grows both ways from the zero line. Segments appear in order outward from the zero line
         const a0 = sg.ring === 0 ? v(0) : g.a;
         return { key: sg.key, to: [g.pos, g.th, g.a, g.b], from: [g.pos, g.th, layout === "grouped" ? base : a0, layout === "grouped" ? base : a0], enter: [g.pos, g.th, a0, a0], delay: sg.k * stg + (sg.ring ?? sg.s) * (layout === "grouped" ? 30 : 70), data: sg };
       }),
@@ -315,7 +315,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   );
   const m = useMotion(marks, c.motion);
 
-  // 선의 점: 막대 다음 차례라 키보드는 막대를 모두 지난 뒤 선을 지나요
+  // Line points: ordered after the bars, so the keyboard visits all bars before the lines
   const linePts = useMemo(() => {
     const out: { li: number; k: number; name: string; value: number; datum: T | null }[] = [];
     lineModel?.series.forEach((name, li) =>
@@ -335,13 +335,13 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     return { keys: ks.map((k) => syncKeyOf(model.keys[k])), labels: ks.map((k) => model.labels[k]) };
   }, [segs, linePts, model]);
   useSync(c, props.syncId, syncKeys.keys, syncKeys.labels);
-  // 짚은 범주. 계열이 여러 개면 그 범주의 막대를 모두 밝게 두고 다른 범주를 흐려요 (툴팁도 범주의 모든 계열을 보여 줘요). 선의 점을 짚어도 그 범주예요
+  // The active category. With several series, all bars in that category stay bright and other categories dim (the tooltip shows every series in the category too). Pointing at a line point also selects its category
   const activePt = c.active !== null && c.active >= segs.length ? linePts[c.active - segs.length] ?? null : null;
   const activeCat = c.active !== null ? activePt?.k ?? segs[c.active]?.k ?? null : null;
 
   let tip: TooltipData | null = null;
   if (lineModel && activeCat !== null) {
-    // 선이 있으면 어느 층을 짚어도 그 범주의 막대 값과 모든 선 값을 보여 줘요 (짚은 줄을 굵게)
+    // With lines, pointing at any layer shows that category's bar values and all line values (the pointed row in bold)
     const k = activeCat;
     const sg: BarSeg | undefined = segs[c.active ?? -1];
     const yName = typeof props.y === "string" ? props.y : c.t.value;
@@ -359,13 +359,13 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   }
 
   const msg = MSG[c.lang];
-  /** 양쪽 쌓기 줄 문장의 앞부분: "Support: negative 46%, positive 32%" */
+  /** Start of a diverging stack row sentence: "Support: negative 46%, positive 32%" */
   const rowSides = (k: number) => (div ? `${model.labels[k]}: ${msg.sides(sideText(div.neg[k]), sideText(div.pos[k]))}` : "");
   const auto = `${msg.kind}. ${msg.desc(model.keys.length, nS, model.series.join(", "))}${lineModel ? msg.lines(lineModel.series) : ""}. ${div ? model.keys.map((_, k) => rowSides(k)).slice(0, 8).join("; ") : single ? model.labels.map((l, k) => `${l} ${c.fv(model.values[0][k])}`).slice(0, 8).join(", ") : ""}`;
-  // 키보드로 고른 조각: 그 줄의 양쪽 합계를 먼저 읽어요
+  // A segment chosen by keyboard: read the row's two side totals first
   const activeSeg = div && c.via === "keyboard" && c.active !== null ? segs[c.active] : undefined;
   const announce = activeSeg ? `${rowSides(activeSeg.k)}. ${activeSeg.series ? `${activeSeg.series}: ` : ""}${events[c.active ?? 0].formatted} (${(c.active ?? 0) + 1}/${events.length})` : undefined;
-  /** 양쪽 쌓기 줄 k의 [낮은 끝, 높은 끝] 값 */
+  /** [low end, high end] values of diverging stack row k */
   const rowEnds = (k: number) => {
     const row = segs.filter((g) => g.k === k);
     return [Math.min(0, ...row.map((g) => Math.min(g.v0, g.v1))), Math.max(0, ...row.map((g) => Math.max(g.v0, g.v1)))];
@@ -389,7 +389,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         </g>
       ) : (
         <>
-          {/* 양쪽 쌓기의 눈금 글자는 크기만이라 위아래가 같은 글자예요. GridY는 같은 글자를 부호 있는 숫자로 바꿔서 글자를 따로 써요 */}
+          {/* Diverging stack tick labels show magnitude only, so both sides read the same. GridY turns identical labels into signed numbers, so these labels are drawn separately */}
           <GridY p={p} ticks={ticks} y={v} x0={left} x1={W} fmt={tickFmt} locale={c.locale} labels={showY && !diverging} />
           {diverging && showY ? (
             <g aria-hidden="true">
@@ -409,15 +409,15 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         const i = segIndex.get(sg.key) ?? 0;
         const neg = sg.v1 < sg.v0 || sg.value < 0;
         const stackedTop = layout === "grouped" || sg.s === nS - 1;
-        // 양쪽 쌓기는 줄 양 끝 조각만 바깥 모서리를 둥글게
+        // In a diverging stack only the segments at both ends of a row get rounded outer corners
         const corners = diverging ? { ...(sg.endLo && (horizontal ? { tl: r, bl: r } : { bl: r, br: r })), ...(sg.endHi && (horizontal ? { tr: r, br: r } : { tl: r, tr: r })) } : horizontal ? (stackedTop ? (neg ? { tl: r, bl: r } : { tr: r, br: r }) : {}) : stackedTop ? (neg ? { bl: r, br: r } : { tl: r, tr: r }) : {};
         const d = horizontal ? roundRectPath(Math.min(a, b), pos, Math.abs(b - a), th, corners) : roundRectPath(pos, Math.min(a, b), th, Math.abs(b - a), corners);
         const lo = m.fade(sg.k * stg + 320, 260);
-        // 예측 구간의 막대: 옅게 칠하고 점선 테두리 (쌓은 막대는 구분선을 그대로 둬요)
+        // Bars in the forecast range: faint fill and a dashed outline (stacked bars keep their dividers)
         const projected = fk >= 0 && sg.k >= fk;
         const outline = projected && solo;
         let label: ReactNode = null;
-        // 양쪽 쌓기는 줄 끝 합계가 값 글자예요. 조각 안 글자는 계열이 여럿일 때만, 0선이 지나는 가운데 계열과 그쪽에 혼자인 조각(합계와 같은 수)은 빼요
+        // In a diverging stack the row-end totals are the value labels. In-segment labels appear only with several series, skipping the middle series (crossed by the zero line) and a segment alone on its side (same number as the total)
         const aloneOnSide = sg.ring === 1 && (sg.v1 < sg.v0 ? sg.endLo : sg.endHi);
         if (showValues && !(diverging && (!divLabels || solo || sg.ring === 0 || aloneOnSide))) {
           const text = valueText(sg);
@@ -445,7 +445,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         return (
           <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : activeCat === null || activeCat === sg.k ? 1 : 0.38} onPointerEnter={(e) => c.setActive(i, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(i)} style={{ cursor: props.onClick ? "pointer" : undefined }}>
             {solo ? (
-              // 막대가 0이거나 아주 짧아도 칸 전체를 호버 영역으로 (칠한 부분만 받으면 0 막대는 잡을 수 없어요)
+              // The whole band is the hover area even when the bar is 0 or very short (a 0 bar could not be hit if only the painted part counted)
               horizontal ? <rect x={x0} y={pos} width={Math.max(0, x1 - x0)} height={th} fill="transparent" /> : <rect x={pos} y={top} width={th} height={Math.max(0, H - bottom - top)} fill="transparent" />
             ) : null}
             <path d={d} fill={sg.sw.fill} fillOpacity={projected ? 0.42 : undefined} stroke={outline ? sg.sw.fill : solo ? "none" : p.paint("panel")} strokeWidth={outline ? 1.2 : 1} strokeDasharray={outline ? "3 2" : undefined} />
@@ -477,7 +477,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         </g>
       ) : null}
       {lineModel ? (
-        // 선은 막대가 다 자란 뒤 나타나요. 첫 선은 강조색, 나머지는 회색. 빈 값에서 끊기고 혼자 남은 점은 점만
+        // Lines appear after the bars finish growing. The first line is in the accent color, the rest gray. They break at missing values, and an isolated point is drawn as a point only
         <g opacity={m.fade((model.keys.length - 1) * stg + 320, 320)}>
           {lineModel.series.map((name, li) => (
             <path key={name} d={lineRuns(model.keys.map((_, k) => [mid(k), v(lineVal(li, k))]))} fill="none" stroke={lineInk(li)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
@@ -515,7 +515,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   );
 }
 
-/** 빈 값(NaN)에서 끊기는 꺾은선. 혼자 남은 점은 선 없이 점만 그려요 */
+/** A polyline that breaks at missing values (NaN). An isolated point is drawn as a point without a line */
 function lineRuns(pts: [number, number][]): string {
   const ys = pts.map((pt) => pt[1]);
   return bandRuns(ys, ys)
@@ -523,5 +523,5 @@ function lineRuns(pts: [number, number][]): string {
     .join("");
 }
 
-/** 막대 위 선의 색: 첫 선은 강조색, 나머지는 회색 (카드 범례도 같은 규칙) */
+/** Color of the lines over bars: the first line in the accent color, the rest gray (the card legend follows the same rule) */
 export const lineToken = (i: number) => (i ? "neutralStrong" : "accent");

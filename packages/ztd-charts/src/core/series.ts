@@ -6,26 +6,26 @@ import type { Accessor } from "./types";
 
 export type XType = "number" | "date" | "band";
 
-/** 날짜, 숫자 x 값을 숫자로 (날짜는 ms, 못 읽으면 NaN). 데이터와 주석이 같은 규칙으로 읽어요 */
+/** Turns a date or numeric x value into a number (ms for dates, NaN when unreadable). Data and annotations are read by the same rule */
 export const xNum = (type: XType, v: unknown, dayFirst?: boolean): number => (type === "date" ? toDate(v, dayFirst)?.getTime() ?? NaN : toNumber(v));
 
 export interface SeriesModel<T> {
   type: XType;
-  /** x 순서대로 정렬된 고유 키 */
+  /** Unique keys sorted in x order */
   keys: string[];
-  /** 키의 수치 위치 (band면 인덱스, date면 ms) */
+  /** Numeric position of each key (the index for band, ms for date) */
   xnum: number[];
-  /** 표시용 라벨 */
+  /** Display labels */
   labels: string[];
   series: string[];
-  /** values[s][k], 값이 없으면 NaN */
+  /** values[s][k], NaN for a missing value */
   values: number[][];
   rows: (T | null)[][];
-  /** bucketSeries로 줄였을 때만: 구간 평균(values)이 아니라 대표 행(keys, labels, rows와 같은 행)의 실제 값. 툴팁과 이벤트가 읽어요 */
+  /** Only after reduction by bucketSeries: the actual values of the representative rows (the same rows as keys, labels and rows), not the range averages (values). Read by tooltips and events */
   rowValues?: number[][];
 }
 
-/** 숨긴 계열(hidden, 이름을 \u0001로 이은 글자)을 뺀 모델과 남은 계열의 자리. 숨긴 게 없으면 그 모델 그대로예요. x 키는 모두 두어서 날짜가 움직이지 않아요 */
+/** The model without the hidden series (hidden, names joined with \u0001) and the positions of the remaining series. With nothing hidden, the model is returned as is. All x keys are kept, so dates do not shift */
 export function visibleSeries<M extends SeriesModel<unknown>>(m: M, hiddenKey: string): [M, number[]] {
   const off = new Set(hiddenKey ? hiddenKey.split("\u0001") : []);
   const keep = m.series.flatMap((s, i) => (off.has(s) ? [] : [i]));
@@ -34,7 +34,7 @@ export function visibleSeries<M extends SeriesModel<unknown>>(m: M, hiddenKey: s
   return [{ ...m, series: at(m.series), values: at(m.values), rows: at(m.rows), ...(m.rowValues && { rowValues: at(m.rowValues) }) }, keep];
 }
 
-/** 묶어 보기(syncId)용 키. 날짜처럼 생긴 글자 범주("2025-01", "2025.01.05")는 날짜 x와 같은 꼴(타임스탬프 글자)로 맞춰요 */
+/** Key for linked views (syncId). Text categories that look like dates ("2025-01", "2025.01.05") are normalized to the same form as a date x (timestamp text) */
 export function syncKeyOf(raw: string): string {
   if (!isDateText(raw.trim())) return raw;
   const t = toDate(raw)?.getTime();
@@ -52,22 +52,22 @@ export function detectXType(raw: readonly unknown[]): XType {
   return "band";
 }
 
-/** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. "sum"(더하기) | "mean"(평균) | "last"(마지막 행) | "count"(행 수) */
+/** How to combine several rows with the same x and series. "sum" (add) | "mean" (average) | "last" (last row) | "count" (row count) */
 export type Aggregate = "sum" | "mean" | "last" | "count";
 
 export interface PrepOptions {
   xType?: XType;
   locale?: string;
   dateFormat?: Intl.DateTimeFormatOptions;
-  /** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  /** How to combine several rows with the same x and series. Default "sum" */
   aggregate?: Aggregate;
-  /** "05/03/2024"처럼 일, 월이 모두 될 수 있는 날짜를 일이 앞으로 읽어요. 없으면 열의 분명한 날짜가 정하고, 그것도 없으면 월이 앞 */
+  /** Reads a date like "05/03/2024", where either part could be the day or the month, as day first. When unset, the unambiguous dates in the column decide; without those, month first */
   dayFirst?: boolean;
 }
 
 /**
- * 긴 표(x, y, series)나 넓은 표(x + 값 열 여러 개)를 계열 행렬로.
- * y에 배열을 주면 그 열들이 계열이 돼요.
+ * Turns a long table (x, y, series) or a wide table (x plus several value columns) into a series matrix.
+ * Given an array for y, those columns become the series.
  */
 export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | undefined, y: Accessor<T, unknown> | readonly string[] | undefined, series: Accessor<T, unknown> | undefined, opts: PrepOptions = {}): SeriesModel<T> {
   const getX = getter(x, "x");
@@ -78,7 +78,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
   const rawX = data.map((d, i) => getX(d, i));
   const type = opts.xType ?? detectXType(rawX);
   const locale = opts.locale ?? DEFAULT_LOCALE;
-  // x는 한 번만 읽어요 (1만 행에서 날짜 파싱이 두 번이면 눈에 띄게 느려요). 달, 분기 라벨을 고르는 아래 검사만 첫 값이 달이나 분기일 때 5,000행 아래에서 한 번 더 봐요
+  // x is read only once (parsing dates twice is noticeably slow at 10,000 rows). Only the check below, which picks month or quarter labels, looks again, when the first value is a month or quarter and there are under 5,000 rows
   let keys: string[];
   let xnum: number[];
   let rowKey: Int32Array;
@@ -98,7 +98,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
     rowKey = Int32Array.from(nums, (n) => kIndex.get(n) ?? -1);
   }
   let dfmt = opts.dateFormat;
-  // 달("2024-03", "2024년 3월", "Mar 2024")이나 분기("2024Q1")만 있는 열인지 (라벨 꼴을 정해요)
+  // Whether the column holds only months ("2024-03", "2024년 3월", "Mar 2024") or quarters ("2024Q1") (this decides the label format)
   const kindOf = (v: unknown) => (typeof v === "string" ? dateParts(v.trim())?.[3] : undefined);
   const k0 = type === "date" && rawX.length < 5000 ? kindOf(rawX[0]) : undefined;
   const same = (k0 === 2 || k0 === 3) && rawX.every((v) => kindOf(v) === k0);
@@ -119,7 +119,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
       return ko ? `${d.getFullYear()}년 ${q}분기` : `Q${q} ${d.getFullYear()}`;
     });
   } else {
-    // 숫자 x는 소수 6자리까지 (0.001과 0.002가 같은 "0"이 되지 않게), 네 자리 정수만이면 연도라 자릿점 없이 ("2,019" 아니고 "2019")
+    // A numeric x gets up to 6 decimals (so 0.001 and 0.002 do not both become "0"); all 4-digit integers mean years, written without separators ("2019", not "2,019")
     const year = xnum.every(isYear);
     const fmt = type === "date" ? new Intl.DateTimeFormat(locale, dfmt) : new Intl.NumberFormat(locale, year ? { useGrouping: false } : { maximumFractionDigits: 6 });
     labels = xnum.length > 1000 ? lazyArray(xnum.length, (i) => fmt.format(xnum[i])) : xnum.map((n) => fmt.format(n));
@@ -129,7 +129,7 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
   const values = seriesNames.map(() => new Array<number>(keys.length).fill(NaN));
   const rows = seriesNames.map(() => new Array<T | null>(keys.length).fill(null));
   const agg: Aggregate = opts.aggregate ?? "sum";
-  // 평균은 숫자인 값만 세요 (빈 값은 평균을 끌어내리지 않아요)
+  // The mean counts only numeric values (missing values do not drag the mean down)
   const counts = agg === "mean" ? seriesNames.map(() => new Uint32Array(keys.length)) : null;
   const add = (s: number, k: number, v: number, d: T) => {
     const prev = values[s][k];
@@ -159,8 +159,8 @@ export function prepSeries<T>(data: readonly T[], x: Accessor<T, unknown> | unde
 }
 
 /**
- * x를 구간 평균으로 줄여요. 모든 계열이 같은 x를 쓰니 쌓은 차트(영역, 스트림)에서 층이 어긋나지 않아요.
- * 대표 키와 라벨은 구간 가운데 것을 써요. 그 행의 실제 값은 rowValues에 남겨요 (평균은 그리기용).
+ * Reduces x to range averages. All series share the same x, so the layers of stacked charts (area, stream) stay aligned.
+ * The representative key and label are the ones in the middle of each range. That row's actual values are kept in rowValues (the averages are for drawing).
  */
 export function bucketSeries<T>(m: SeriesModel<T>, maxPoints: number): SeriesModel<T> {
   const n = m.keys.length;

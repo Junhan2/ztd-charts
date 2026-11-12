@@ -15,9 +15,9 @@ import { numGetter, strGetter } from "../data/accessor";
 export interface LollipopChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 기본 "horizontal" */
+  /** Default "horizontal" */
   orientation?: "horizontal" | "vertical";
-  /** 큰 순서 정렬. 기본 true */
+  /** Sort largest first. Default true */
   sort?: boolean;
 }
 
@@ -29,7 +29,7 @@ interface Pop<T> {
   datum: T;
 }
 
-/** 롤리팝 차트: 막대 대신 선과 점. 항목이 많아도 가벼워 보여요 */
+/** Lollipop chart: a line and a dot instead of a bar. Looks light even with many items */
 export function LollipopChart<T = Row>(props: LollipopChartProps<T>) {
   const vertical = props.orientation === "vertical";
   const n0 = props.data.length;
@@ -39,7 +39,7 @@ export function LollipopChart<T = Row>(props: LollipopChartProps<T>) {
   const rows = useMemo<Pop<T>[]>(() => {
     const gl = strGetter(props.label, "label");
     const gv = numGetter(props.value, "value");
-    // 값이 없으면 NaN 그대로 둬요. 그림은 0 자리에, 글자는 "-"로 (0이라고 읽히지 않게)
+    // A missing value stays NaN. Drawn at the 0 position and labeled "-" (so it does not read as 0)
     let out = props.data.map((d, i) => ({ i, label: gl(d, i), value: gv(d, i), hi: false, datum: d }));
     if (props.sort !== false) out = [...out].sort((a, b) => (b.value || 0) - (a.value || 0));
     out.forEach((r, k) => (r.i = k));
@@ -56,19 +56,19 @@ export function LollipopChart<T = Row>(props: LollipopChartProps<T>) {
   const fx = (v: number) => (Number.isFinite(v) ? c.fmt(v) : "-");
   const fvx = (v: number) => (Number.isFinite(v) ? c.fv(v) : "-");
   const valPad = vertical ? 0 : Math.max(...rows.map((r) => textWidth(fx(r.value), 11, 800)), 10) + 16;
-  // 음수 값 글자는 막대 끝 바깥(가로는 왼쪽, 세로는 아래)에 써요. 그 자리를 남겨요
+  // Negative value labels go outside the bar end (left when horizontal, below when vertical). Leave room for them
   const negPad = mn < 0 ? (vertical ? 16 : Math.max(...rows.map((r) => (r.value < 0 ? textWidth(fx(r.value), 11, 800) : 0))) + 16) : 0;
   const yTicks = scaleLinear(dom, [0, 1]).ticks(4);
   const left = vertical ? yAxisWidth(yTicks, tickFmt, c.locale) : labelW + 6;
   const top = vertical ? 16 : 4;
   const bottom = vertical ? 22 : 18;
-  // 칸은 순서로 나눠요. 이름이 같은 항목도 따로 칸을 받아요
+  // Bands are assigned by position, so items with the same name still get their own band
   const keys = rows.map((_, k) => `${k}`);
   const band = vertical ? scaleBand(keys, [left + 4, W - 4], 0.4, 0.1) : scaleBand(keys, [top, H - bottom], 0.4, 0.1);
   const v = vertical ? scaleLinear(dom, [H - bottom - negPad, top]) : scaleLinear(dom, [left + negPad, W - valPad]);
   const base = v(Math.max(dom[0], 0));
 
-  // 둘째 값은 점의 불투명도. 0 값은 줄기가 자라지 않아도 점이 나타나요
+  // The second value is the dot's opacity. For a 0 value the dot appears even though the stem does not grow
   const marks = useMemo<Mark<Pop<T>>[]>(() => rows.map((r, k) => ({ key: `l:${r.label}`, to: [v(r.value || 0), 1], from: [base, 0], enter: [base, 0], delay: k * stg, data: r })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, W, H, dom[0], dom[1], stg, vertical]);
@@ -105,7 +105,7 @@ export function LollipopChart<T = Row>(props: LollipopChartProps<T>) {
       )}
       {m.items.map((it) => {
         const r = it.data;
-        // 빠지는 항목은 옛 순서 칸에 남아 새 항목과 겹치니 그리지 않아요
+        // A leaving item would stay in its old band and overlap the new items, so it is not drawn
         if (it.exiting) return null;
         const [end, o] = it.v;
         const pos = band(`${r.i}`) + band.bandwidth / 2;

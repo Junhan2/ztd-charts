@@ -1,6 +1,6 @@
 import { sum } from "../core/geometry";
 
-/** 가장 큰 나머지 방식으로 칸 나누기: 합이 정확히 cells가 돼요 */
+/** Splits cells by the largest remainder method: the sum is exactly cells */
 export function allocateCells(values: readonly number[], cells: number, total?: number): number[] {
   // A total below the sum would hand out more cells than there are.
   const t = Math.max(total ?? 0, sum(values));
@@ -14,25 +14,25 @@ export function allocateCells(values: readonly number[], cells: number, total?: 
   return out;
 }
 
-/** 칸마다 묶음 번호: [2, 1] → [0, 0, 1]. 격자와 반원이 같이 써요 */
+/** Group index for each cell: [2, 1] → [0, 0, 1]. Shared by the grid and the semicircle */
 export function ownerOf(counts: readonly number[]): number[] {
   return counts.flatMap((n, k) => Array<number>(n).fill(k));
 }
 
-/** 반원 안쪽 반지름 (바깥 반지름 1 기준) */
+/** Inner radius of the semicircle (relative to an outer radius of 1) */
 export const ARC_INNER = 0.38;
-/** 반원 와플에 그리는 점의 최대 수. 넘으면 점 하나가 여러 단위예요 (validateSpec too_many_units). 점 반지름 약 1px로 280px 폭에 들어가요 */
+/** Maximum number of dots drawn in a semicircle waffle. Beyond it, one dot stands for several units (validateSpec too_many_units). At a dot radius of about 1px it fits in a 280px width */
 export const ARC_MAX_DOTS = 3000;
 
-/** 반원 위 점 하나: r은 바깥 반지름 1 기준 반지름, a는 위쪽 0, 왼쪽 -π/2, 오른쪽 π/2인 각도 */
+/** One dot on the semicircle: r is the radius relative to an outer radius of 1, a the angle with 0 at the top, -π/2 at the left and π/2 at the right */
 interface ArcSeat {
   r: number;
   a: number;
 }
 
 /**
- * 반원 좌석 배치: 점 n개를 바깥 반지름 1인 반원 여러 줄에 놓아요. 줄 수는 점이 다 들어가는 가장 적은 수(점이 가장 커요)이고,
- * 줄마다 들어가는 수에 비례해 나눠요. 왼쪽부터 각도 순서로 돌려줘서 앞에서부터 묶음을 채우면 묶음마다 부채꼴이 돼요. gap은 줄 사이 간격
+ * Semicircle seat layout: places n dots on several rows of a semicircle with outer radius 1. The row count is the smallest that fits all dots (so the dots are largest),
+ * and dots are split across rows in proportion to their capacity. They are returned in angle order from the left, so filling groups from the front gives each group a wedge. gap is the spacing between rows
  */
 export function arcSeats(n: number): { rows: number; gap: number; seats: ArcSeat[] } {
   const gapOf = (k: number) => (1 - ARC_INNER) / Math.max(1, k - 1);

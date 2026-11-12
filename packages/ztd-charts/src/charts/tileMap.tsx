@@ -40,37 +40,37 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface TileMapProps<T = Row> extends BaseChartProps<T> {
-  /** 지역 이름이나 코드 필드. 기본 "region" */
+  /** Region name or code field. Default "region" */
   region?: Accessor<T, string>;
-  /** 값 필드. 기본 "value" */
+  /** Value field. Default "value" */
   value?: Accessor<T, number>;
-  /** "auto"(지역 값이 가장 많이 맞는 내장 격자), 내장 격자 이름("us-states", "kr-sido", "kr-sido-2025")이나 타일 배열 [{ id, label, row, col, aliases }]. 기본 "auto" */
+  /** "auto" (the built-in grid that matches the most region values), a built-in grid name ("us-states", "kr-sido", "kr-sido-2025") or a tile array [{ id, label, row, col, aliases }]. Default "auto" */
   map?: string | readonly TileDef[];
-  /** 위쪽 색 범례. 기본 true */
+  /** Color legend on top. Default true */
   legend?: boolean;
-  /** 범례 양끝 이름. 기본 ["Less", "More"] (한국어 로캘은 ["적음", "많음"]) */
+  /** Names at both ends of the legend. Default ["Less", "More"] (["적음", "많음"] in the Korean locale) */
   legendLabels?: [string, string];
-  /** 가장 작은 값을 가장 진하게 칠해요. 기본 강조도 가장 작은 값으로 옮겨요. 기본 false */
+  /** Paints the smallest value darkest. The default highlight moves to the smallest value too. Default false */
   colorReverse?: boolean;
-  /** 색 단계 수 (2~12). 기본 5 */
+  /** Number of color steps (2 to 12). Default 5 */
   colorSteps?: number;
   /**
-   * 내장 한국 격자의 지역 이름 언어. "auto"는 타일에 맞은 지역 값에 한글이 하나라도 있으면 한국어("서울"), 아니면 locale 언어예요.
-   * 타일, 툴팁, 스크린리더 문장과 표가 같이 따라요. 숫자와 나머지 글자는 locale을 따르고, 사용자 격자는 자기 label을 써요. 기본 "auto"
+   * Language of region names on the built-in Korean grids. "auto" uses Korean ("서울") when any region value matched to a tile contains Hangul, otherwise the locale's language.
+   * Tiles, tooltips, screen reader sentences and the table all follow it. Numbers and other text follow locale, and custom grids use their own label. Default "auto"
    */
   labels?: "auto" | "ko" | "en";
 }
 
-/** 타일 세로 크기의 상한(px), 가로 대 세로 비율의 상한. 넓은 카드에서도 타일이 납작해지지 않아요 */
+/** Maximum tile height (px) and maximum width-to-height ratio. Keeps tiles from going flat even in wide cards */
 const MAX_TILE_H = 64;
 const MAX_RATIO = 1.6;
-/** 가장 옅은 단계의 불투명도. 빈 타일(회색)과 구분돼요 */
+/** Opacity of the lightest step. Keeps it distinct from empty (gray) tiles */
 const MIN_OPACITY = 0.14;
-/** 첫 타일과 마지막 타일 등장 사이의 상한(ms). 한국 시도 격자(16칸, 448ms)는 그대로, 미국 주 격자(2,352ms)는 이만큼으로 줄어요 */
+/** Maximum time (ms) between the first and the last tile's entrance. The Korean province grid (16 cells, 448ms) is unchanged; the US state grid (2,352ms) is compressed to this */
 const STAGGER_SPREAD = 480;
 /**
- * 값 글자의 좌우 여백(px)과 폭 여유. 크롬에서 굵은 숫자는 textWidth 추정보다 최대 6.5% 넓게 그려져서(3,400,000,000: 추정 92.2, 실제 98.2)
- * 추정 폭의 1.1배가 안쪽 폭에 들어갈 때만 적어요
+ * Side padding (px) and width safety margin for value text. Chrome renders bold digits up to 6.5% wider than the textWidth estimate (3,400,000,000: estimated 92.2, actual 98.2),
+ * so a value is written only when 1.1 times the estimated width fits the inner width
  */
 const VALUE_PAD = 4;
 const WIDTH_SAFETY = 1.1;
@@ -81,11 +81,11 @@ interface TileInfo<T> {
   label: string;
   value: number;
   datum: T | null;
-  /** 값 순위 (1이 가장 큼). 값이 없으면 0 */
+  /** Value rank (1 is the largest). 0 when there is no value */
   rank: number;
 }
 
-/** 타일 이름 글자: 한 줄로 들어가는 가장 큰 크기, 안 되면 빈칸이나 "-"에서 두 줄, 그래도 안 되면 말줄임 */
+/** Tile name text: the largest size that fits on one line, otherwise two lines split at a space or "-", otherwise truncated */
 function fitName(label: string, w: number): { lines: string[]; size: number; cut: boolean } {
   for (const size of [11.5, 11, 10, 9]) if (textWidth(label, size, 600) <= w) return { lines: [label], size, cut: false };
   const at = Math.max(label.lastIndexOf(" "), label.lastIndexOf("-"));
@@ -97,11 +97,11 @@ function fitName(label: string, w: number): { lines: string[]; size: number; cut
 }
 
 /**
- * 타일 격자 지도: 지역마다 같은 크기 타일 하나를 대략의 자리에 두고 값으로 칠해요.
- * 경계 데이터와 투영이 없어서 작은 지역(서울, 세종)도 큰 도와 같은 크기로 읽혀요
+ * Tile grid map: one equal-size tile per region at its approximate position, colored by value.
+ * With no boundary data or projection, small regions (Seoul, Sejong) read at the same size as large provinces
  */
 export function TileMap<T = Row>(props: TileMapProps<T>) {
-  // "auto"(기본)는 지역 값이 가장 많이 맞는 내장 격자예요 (한국 시도 데이터면 예전 기본값 kr-sido 그대로)
+  // "auto" (default) is the built-in grid that matches the most region values (Korean province data still gets kr-sido, the old default)
   const grid = useMemo(() => {
     const gr = strGetter(props.region, "region");
     return resolveGrid(gridName(props.map, () => props.data.map((d, i) => gr(d, i)))) ?? [];
@@ -113,14 +113,14 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
   const { p, width: W, height: H } = c;
   const msg = MSG[c.lang];
 
-  // 이름 → 타일: 행 맞추기와 강조가 같이 써요 ("서울", "Seoul", "KR-11" 모두 같은 타일)
+  // Name → tile: shared by row matching and highlighting ("서울", "Seoul" and "KR-11" are all the same tile)
   const match = useMemo(() => tileMatcher(grid), [grid]);
   const tiles = useMemo<TileInfo<T>[]>(() => {
     const gr = strGetter(props.region, "region");
     const gv = numGetter(props.value, "value");
     const out: TileInfo<T>[] = grid.map((tile, i) => ({ i, tile, label: "", value: NaN, datum: null, rank: 0 }));
     let hangul = false;
-    // 같은 타일에 맞는 행이 여럿이면 뒤 행이 이겨요 (validateSpec이 알려요). 값이 숫자가 아닌 행은 데이터 없음이에요
+    // When several rows match the same tile, the later row wins (validateSpec reports it). Rows whose value is not a number count as no data
     props.data.forEach((d, i) => {
       const name = gr(d, i);
       const k = match(name);
@@ -129,40 +129,40 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
       out[k].value = gv(d, i);
       out[k].datum = d;
     });
-    // 이름 언어: 정했으면 그대로, "auto"면 데이터가 한글일 때 한국어, 아니면 locale 언어 (한국어 이름이 없는 사용자 격자는 label)
+    // Name language: as set if given; with "auto", Korean when the data is in Hangul, otherwise the locale's language (custom grids without Korean names use label)
     const lang = props.labels === "ko" || props.labels === "en" ? props.labels : hangul ? "ko" : c.lang;
     for (const t of out) t.label = (lang === "ko" ? t.tile.labelKo : undefined) ?? t.tile.label ?? t.tile.id;
-    // 순위는 값이 있는 타일끼리 (같은 값은 같은 순위). layout/stats의 ranks와 같은 규칙인데, 그 모듈을 불러오면 TileMap 번들이 약 0.1KB 커져서 여기서 세요
+    // Ranks are among tiles with values (equal values share a rank). Same rule as ranks in layout/stats, but importing that module grows the TileMap bundle by about 0.1KB, so it is counted here
     const vals = out.filter((t) => Number.isFinite(t.value)).map((t) => t.value);
     for (const t of out) if (Number.isFinite(t.value)) t.rank = 1 + vals.filter((v) => v > t.value).length;
     return out;
   }, [grid, match, props.data, props.region, props.value, props.labels, c.lang]);
 
-  /** 키보드, 표, 라이브 영역 순서: 값이 큰 타일부터, 그다음 데이터 없는 타일(읽는 순서). 둘 다 순위가 없으면 NaN이라 읽는 순서로 넘어가요 */
+  /** Order for the keyboard, table and live region: tiles with larger values first, then tiles without data (reading order). When neither has a rank the difference is NaN, so it falls through to reading order */
   const order = useMemo(() => [...tiles].sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity) || a.i - b.i), [tiles]);
   const withData = order.filter((t) => t.rank > 0);
   const n = withData.length;
   const mn = n ? withData[n - 1].value : 0;
   const mx = n ? withData[0].value : 0;
-  /** 값이 모두 같으면 가장 큰 곳도 작은 곳도 없어요: "max", "min" 강조와 설명의 최고, 최저를 쓰지 않아요 */
+  /** When all values are equal there is no largest or smallest: the "max" and "min" highlights and the highest and lowest in the description are not used */
   const flat = n > 0 && mx === mn;
 
   const scale = useMemo(() => colorScaleOf(props.colorReverse, undefined, props.colorSteps ?? 5), [props.colorReverse, props.colorSteps]);
   const steps = scale.steps ?? 5;
 
   const hiSet = useMemo(() => {
-    // 이름은 지역 이름표로 타일 번호로 바꿔요 (맞는 타일이 없으면 -1이라 resolveHighlight가 버려요). 숫자는 타일 번호(읽는 순서)예요
+    // A name is turned into a tile index through the region labels (-1 when no tile matches, which resolveHighlight drops). A number is a tile index (reading order)
     const h = props.highlight;
     const byName = (x: number | string) => (typeof x === "string" && !HIGHLIGHT_KEYWORDS.includes(x) ? match(x) : x);
     const resolved =
       typeof h === "string" || typeof h === "number" || Array.isArray(h)
         ? ((Array.isArray(h) ? h : [h]) as (number | string)[]).filter((x) => !(flat && (x === "max" || x === "min"))).map(byName)
         : h;
-    // 데이터 없는 타일(null)은 판별 함수에 넘기지 않아요 (resolveHighlight)
+    // Tiles without data (null) are not passed to the predicate (resolveHighlight)
     return resolveHighlight(resolved as Highlight<T> | undefined, tiles.map((t) => t.datum) as T[], tiles.map((t) => t.tile.id), tiles.map((t) => t.value), flat ? "none" : props.colorReverse ? "min" : "max");
   }, [match, tiles, flat, props.highlight, props.colorReverse]);
 
-  // 칸 크기: 폭을 열로 나누고, 세로는 상한까지, 가로는 세로의 1.6배까지. 남는 폭은 양옆으로 나눠 가운데에 둬요
+  // Cell size: the width divided by the columns, height up to its limit, width up to 1.6 times the height. Leftover width is split between both sides to center the grid
   const baseW = W / Math.max(1, nCols);
   const ch = Math.max(1, Math.min(baseW, (H - legendH) / Math.max(1, nRows)));
   const cw = Math.min(baseW, ch * MAX_RATIO);
@@ -172,20 +172,20 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
   const gap = Math.min(cw, ch) > 30 ? 4 : 2;
   const rad = Math.min(p.theme.radiusMark + 2, Math.min(cw, ch) / 5);
 
-  // 타일마다 바뀌지 않는 모양(자리, 색, 글자 맞춤). 등장 중 매 프레임, 호버마다 다시 그려도 여기는 다시 재지 않아요
+  // The parts of each tile that do not change (position, color, text fitting). Even when re-rendered on every entrance frame and every hover, this is not measured again
   const { fmt, showLabels, locale } = c;
-  // 긴 값의 다음 후보: 로캘의 짧은 꼴(1.2B, 12억). format을 정했으면 그 꼴을 지켜서 줄이지 않고 빼요
+  // Next candidate for a long value: the locale's compact form (1.2B, 12억). With a set format, keep that form: drop the value rather than shorten it
   const userFormat = props.format !== undefined;
   const short = useMemo(() => (userFormat ? null : makeFormatter("compact", locale)), [userFormat, locale]);
   const looks = useMemo(() => {
     const raw = tiles.map((t) => {
       const b = { x: x0 + t.tile.col * cw + gap / 2, y: y0 + t.tile.row * ch + gap / 2, w: Math.max(0.5, cw - gap), h: Math.max(0.5, ch - gap) };
       const sw = t.rank ? scaleSwatch(p, mx > mn ? (t.value - mn) / (mx - mn) : 1, MIN_OPACITY, scale) : null;
-      // 이름이 먼저예요: 값은 이름이 다 들어가고 그 아래 자리가 있을 때만 적어요
-      // 타일 위에는 짧은 이름이 있으면 그것을 (미국 격자의 "CA"). 툴팁과 표는 전체 이름이에요
+      // The name comes first: the value is written only when the whole name fits and there is room below it
+      // Tiles show the short name when there is one ("CA" on the US grid). The tooltip and table use the full name
       const name = fitName(t.tile.abbr ?? t.label, b.w - 6);
       const lineH = name.size + 2;
-      // 값은 전체 숫자, 짧은 꼴, 없음 순서. 추정 폭의 1.1배가 안쪽 폭(좌우 4px 뺀 폭)에 들어가는 가장 큰 크기로 적어요 (툴팁과 표는 늘 전체 숫자)
+      // Values try the full number, then the compact form, then nothing. Written at the largest size where 1.1 times the estimated width fits the inner width (the width minus 4px on each side) (the tooltip and table always show the full number)
       const sizeFor = (s: string) => [13, 11.5].find((size) => textWidth(s, size, 700) * WIDTH_SAFETY <= b.w - VALUE_PAD * 2 && name.lines.length * lineH + size + 3 + 8 <= b.h);
       let valueText = sw && showLabels && !name.cut ? fmt(t.value) : "";
       let valueSize = valueText ? sizeFor(valueText) : undefined;
@@ -193,8 +193,8 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
       if (valueSize === undefined) valueText = "";
       return { b, sw, name, valueText, valueSize, lineH, fits: !name.cut && b.h >= name.lines.length * lineH + 4 };
     });
-    // 글자는 타일마다가 아니라 차트 하나로 정해요: 모든 이름이 (가장 작은 9px까지 줄여서) 들어가면 모두, 하나라도 안 들어가면 하나도 적지 않아요.
-    // 값도 같아요: 값이 있는 모든 타일에 들어갈 때만 적어요. 몇 타일만 이름이 남으면 빈 타일과 구분이 안 돼요 (툴팁, 표, 화면 낭독은 늘 이름과 값을 말해요)
+    // Text is decided for the whole chart, not per tile: if every name fits (shrunk down to 9px at the smallest), all are written; if even one does not, none are.
+    // Same for values: written only when they fit in every tile that has one. If only some tiles kept their names, they could not be told apart from empty tiles (the tooltip, table and screen reader always give the name and value)
     const names = showLabels && raw.every((l) => l.fits);
     const values = names && raw.every((l) => !l.sw || l.valueSize !== undefined);
     return raw.map(({ b, sw, name, lineH, fits: _, ...v }) => {
@@ -216,14 +216,14 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
     });
   }, [tiles, x0, y0, cw, ch, gap, rad, p, mn, mx, scale, fmt, short, showLabels]);
 
-  // 타일 사이 지연은 격자 순서대로. 전체 퍼짐은 STAGGER_SPREAD까지라 큰 격자(미국 51곳)도 1초 안팎에 끝나요 (한국 16곳은 그대로)
+  // Delays between tiles follow grid order. The total spread is capped at STAGGER_SPREAD, so even a large grid (51 US places) finishes in about a second (the 16 Korean places are unchanged)
   const lastCell = tiles.reduce((m, t) => Math.max(m, t.tile.row * nCols + t.tile.col), 0);
   const stg = Math.min(c.motion.stagger ?? 28, STAGGER_SPREAD / Math.max(1, lastCell));
   const marks = useMemo<Mark<TileInfo<T>>[]>(() => tiles.map((t) => ({ key: `t${t.tile.id}`, to: [1], from: [0], delay: (t.tile.row * nCols + t.tile.col) * stg, data: t })), [tiles, nCols, stg]);
   const m = useMotion(marks, c.motion);
 
   const fv = c.fv;
-  // 값이 있는 타일이 하나도 없으면 항목도 없어요: 빈 타일만 그리고, 설명은 ChartFrame의 "No data."예요
+  // With no tile that has a value there are no items: only empty tiles are drawn, and the description is ChartFrame's "No data."
   const listed = useMemo(() => (n ? order : []), [order, n]);
   const events: ChartEvent<T>[] = useMemo(
     () =>
@@ -259,8 +259,8 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
   const lacking = tiles.length - n;
   const summary = !n ? "" : flat ? msg.same(n, fv(mx)) : msg.desc(n, `${withData[0].label} ${fv(mx)}`, `${withData[n - 1].label} ${fv(mn)}`, fv(mean));
   const desc = props.description ?? (n ? `${msg.kind}. ${summary}${lacking ? `. ${msg.missing(lacking)}` : ""}.` : "");
-  // 데이터 없는 타일도 키보드로 닿고 "No data"로 읽혀요(표에도 있어요). 그래서 기본 문장의 "(k/N)" 대신 순위가 든 같은 글을 읽고,
-  // End도 기본(마지막 항목, 데이터 없는 타일)이 아니라 값이 가장 작은 타일로 가요
+  // Tiles without data are reachable by keyboard too and read as "No data" (they are in the table as well). So instead of the default sentence's "(k/N)", read the same text with the rank in it,
+  // and End goes to the tile with the smallest value instead of the default (the last item, a tile without data)
   const announce = c.via === "keyboard" && c.active !== null && events[c.active] ? `${events[c.active].label}: ${events[c.active].formatted}` : "";
 
   return (
@@ -282,13 +282,13 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
         if (k !== c.active) c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer");
       }}
       onKey={(e) => {
-        // End는 값이 가장 작은 타일로 (데이터 없는 타일은 그 뒤에 있어요). Home은 기본대로 가장 큰 타일이에요
+        // End goes to the tile with the smallest value (tiles without data come after it). Home goes to the largest tile, as by default
         if (e.key === "End" && n) {
           c.setActive(n - 1, "keyboard");
           return true;
         }
         if (!e.key.startsWith("Arrow") || !activeTile) return false;
-        // 화살표는 그 방향의 가장 가까운 타일로. 없으면 그 자리에 있어요
+        // Arrows move to the nearest tile in that direction, or stay put when there is none
         const next = tileNeighbor(grid, activeTile.i, e.key);
         if (next >= 0) c.setActive(eventOf.get(next) ?? null, "keyboard");
         return true;
@@ -296,7 +296,7 @@ export function TileMap<T = Row>(props: TileMapProps<T>) {
     >
       {props.legend !== false && n ? <ScaleLegend p={p} right={legendRight} steps={steps} scale={scale} labels={ll} min={MIN_OPACITY} /> : null}
       {m.items.map((it) => {
-        // 빠지는 타일은 이제 안 보이는 격자의 칸이라 새 격자에 자리가 없어요 (t.i는 옛 격자 번호예요)
+        // An exiting tile is a cell of a grid no longer shown, so it has no place in the new grid (t.i is the old grid index)
         if (it.exiting) return null;
         const t = it.data;
         const { b, d, ring, sw, ink, name, valueText, valueSize, lineH, top, showName } = looks[t.i];

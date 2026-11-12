@@ -28,13 +28,13 @@ const MSG: Record<ChartLang, typeof en> = {
 
 export interface BulletChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
-  /** 실제 값. 기본 "value" */
+  /** Actual value. Default "value" */
   value?: Accessor<T, number>;
-  /** 목표 값. 기본 "target" */
+  /** Target value. Default "target" */
   target?: Accessor<T, number>;
-  /** 구간 경계 필드들 (작은 것부터). 예: ["poor", "ok", "good"] */
+  /** Range boundary fields (smallest first). Example: ["poor", "ok", "good"] */
   ranges?: string[];
-  /** 행마다 축 범위를 따로. 기본 true */
+  /** A separate axis range for each row. Default true */
   independent?: boolean;
 }
 
@@ -49,10 +49,10 @@ interface BulletRow<T> {
   datum: T;
 }
 
-/** 불릿 차트: 목표와 구간(나쁨, 보통, 좋음) 대비 실적 */
+/** Bullet chart: actual results against a target and ranges (poor, ok, good) */
 export function BulletChart<T = Row>(props: BulletChartProps<T>) {
   const rowH = 40;
-  // 함께 쓰는 축(independent={false})이면 아래에 눈금 글자 자리를 둬요
+  // With a shared axis (independent={false}), reserve space for tick labels at the bottom
   const axisH = props.independent === false ? 16 : 0;
   const c = useChart(props, { height: () => Math.max(90, props.data.length * rowH + 8) + axisH, duration: 800, stagger: 110 });
   const { p, width: W, height: H } = c;
@@ -67,7 +67,7 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
       const t = gt(d, i);
       const ranges = rkeys.map((k) => numGetter<T>(k, k)(d, i)).filter(Number.isFinite);
       const max = niceDomain(0, Math.max(v || 0, t || 0, ...ranges), 4)[1];
-      // 값이 없으면 NaN 그대로 둬요. 그림은 0 길이로, 글자는 "-"로 (0이라고 읽히지 않게)
+      // A missing value stays NaN. Drawn with 0 length and labeled "-" (so it does not read as 0)
       return { i, label: gl(d, i), value: v, target: t, ranges, max, hi: false, datum: d };
     });
     const ratios = base.map((r) => (Number.isFinite(r.target) && r.target ? r.value / r.target : Infinity));
@@ -113,8 +113,8 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
     <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
       {m.items.map((it) => {
         const r = it.data;
-        // 줄은 지금 순서(r.i)로 정해요. m.items는 처음 생긴 순서라 데이터 순서가 바뀌면 어긋나요.
-        // 빠지는 줄은 옛 자리에 남아 새 줄과 겹치니 그리지 않아요
+        // Rows follow the current order (r.i). m.items keeps the order items first appeared in, so it drifts when the data order changes.
+        // A leaving row would stay in its old slot and overlap the new rows, so it is not drawn
         if (it.exiting) return null;
         const k = r.i;
         const sx = scaleLinear([0, props.independent === false ? globalMax : r.max], [x0, x1]);
@@ -133,7 +133,7 @@ export function BulletChart<T = Row>(props: BulletChartProps<T>) {
             <path d={roundRectPath(x0, cy - barH / 2, Math.max(0, vx - x0), barH, 2)} fill={r.hi ? accent.fill : p.paint("ink")} />
             {Number.isFinite(r.target) ? <line x1={tx} x2={tx} y1={cy - rangeH / 2 - 2} y2={cy + rangeH / 2 + 2} stroke={p.paint("ink")} strokeWidth={2.5} strokeLinecap="round" opacity={o} /> : null}
             {isA && c.via === "keyboard" ? <rect x={x0 - 3} y={cy - rangeH / 2 - 4} width={x1 - x0 + 6} height={rangeH + 8} rx={5} fill="none" stroke={p.paint("ink")} strokeWidth={1.5} /> : null}
-            {/* 줄이 넉넉하면 이름을 두 줄로 나눠요. 좁은 화면에서 "Revenue (10…"처럼 단위가 잘리지 않아요 */}
+            {/* When a row has room, split the name over two lines, so the unit is not cut off on narrow screens as in "Revenue (10…" */}
             {wrapLines(r.label, labelW - 4, 11.5, band >= 34 ? 2 : 1, 700).map((line, j, lines) => (
               <Txt key={j} x={labelW} y={cy + (j - (lines.length - 1) / 2) * 13} anchor="end" size={11.5} weight={r.hi ? 800 : 600} fill={p.paint("ink")}>
                 {line}

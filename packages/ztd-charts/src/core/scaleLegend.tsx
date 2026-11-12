@@ -3,18 +3,18 @@ import { Txt } from "./ChartFrame";
 import { scaleSwatch, type ColorScaleOptions } from "./palette";
 import { textWidth } from "./text";
 
-/** 색 척도 범례의 폭: 칸 n개와 양끝 이름 */
+/** Width of the color scale legend: n cells and the labels at both ends */
 export function scaleLegendWidth(steps: number, labels: readonly [string, string]): number {
   return textWidth(labels[0], 10) + 10 + steps * 14 + textWidth(labels[1], 10);
 }
 
 /**
- * 위쪽 색 척도 범례 (히트맵, 타일 격자 지도). 칸마다 scaleSwatch 색이고, 양끝에 이름을 달아요.
- * right는 오른쪽 이름이 끝나는 x, min은 가장 옅은 칸의 불투명도예요 (차트 칸과 같은 값)
+ * Color scale legend at the top (heatmap, tile grid map). Each cell takes its scaleSwatch color, with labels at both ends.
+ * right is the x where the right label ends; min is the opacity of the faintest cell (the same value as the chart cells)
  */
 export function ScaleLegend({ p, right, steps, scale, labels, min }: { p: Painter; right: number; steps: number; scale: ColorScaleOptions; labels: readonly [string, string]; min: number }) {
   const center = scale.center;
-  // 칸 줄의 기준 x: 첫 칸은 여기서 6 왼쪽, 왼쪽 이름은 10 왼쪽에서 끝나요 (heatmap과 같은 계산 순서라 좌표가 그대로예요)
+  // Reference x of the cell row: the first cell starts 6 left of it, and the left label ends 10 left of it (the same calculation order as heatmap, so the coordinates match exactly)
   const start = right - steps * 14 - textWidth(labels[1], 10);
   return (
     <g aria-hidden="true">

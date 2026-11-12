@@ -1,42 +1,42 @@
-/** 도법 이름. "equalEarth"는 세계, "albersUsa"는 알래스카와 하와이를 옮겨 붙인 미국, "conic"은 지역 가운데에 맞춘 원뿔 정적 도법이에요 */
+/** Projection name. "equalEarth" is for the world, "albersUsa" for the US with Alaska and Hawaii moved in as insets, and "conic" is a conic equal-area projection centered on the region */
 export type ProjectionName = "equalEarth" | "albersUsa" | "conic";
 
 /**
- * 내장 지도 하나 (ztd-charts/geo/world 같은 입구가 내보내요). registerMap으로 등록하거나 map 프롭으로 바로 넘겨요.
- * 경계는 TopoJSON처럼 선을 지역끼리 나눠 쓰고, 좌표는 눈금에 맞춘 차이를 글자로 압축했어요 (geo/codec.ts가 풀어요)
+ * One built-in map (exported by entry points such as ztd-charts/geo/world). Register it with registerMap or pass it straight to the map prop.
+ * Borders share arcs between regions as in TopoJSON, and coordinates are stored as quantized deltas compressed into text (geo/codec.ts decodes them)
  */
 export interface GeoMap {
-  /** options.map에 쓰는 이름. 예: "world" */
+  /** Name used in options.map. Example: "world" */
   name: string;
   projection: ProjectionName;
-  /** 지역마다 [id, 영어 이름, 받는 이름...]. 순서가 topo.shapes와 같아요 */
+  /** Per region: [id, English name, accepted names...]. Same order as topo.shapes */
   regions: readonly (readonly string[])[];
-  /** 지역 id → 한국어 이름 */
+  /** Region id → Korean name */
   namesKo?: Readonly<Record<string, string>>;
-  /** 크게 볼 수 있는 묶음(대륙): 이름 → [서, 남, 동, 북] 경위도 상자, 중앙 경선, 묶음에 드는 지역 id(빈칸으로 나눔) */
+  /** Groups (continents) that can be zoomed into: name → [west, south, east, north] longitude/latitude box, central meridian, and the region ids in the group (space-separated) */
   focus?: Readonly<Record<string, { box: readonly [number, number, number, number]; lon0: number; ids: string }>>;
-  /** 기본으로 그리지 않는 지역 id (세계 지도의 남극) */
+  /** Region ids not drawn by default (Antarctica on the world map) */
   hidden?: readonly string[];
-  /** 압축한 경계: t는 [눈금, x 시작, y 시작], arcs는 선, shapes는 지역마다 다각형, 고리, 선 번호 */
+  /** Compressed borders: t is [quantization step, x origin, y origin], arcs the arcs, shapes the polygons, rings and arc indexes of each region */
   topo: { t: readonly number[]; arcs: string; shapes: string };
-  /** 출처와 이용 조건 한 줄 */
+  /** One line with the source and license terms */
   source: string;
 }
 
-/** [경도, 위도] (도) */
+/** [longitude, latitude] (degrees) */
 export type LonLat = [number, number];
 
-/** 풀어 놓은 지역 하나. polygons는 다각형마다 고리 목록이고, 첫 고리가 바깥이에요 */
+/** One decoded region. polygons holds a ring list per polygon, with the outer ring first */
 export interface GeoShape {
   id: string;
   name: string;
   nameKo?: string;
-  /** 맞출 때 받는 이름 (id, 이름, 한국어 이름, 다른 이름, 코드) */
+  /** Names accepted when matching (id, name, Korean name, other names, codes) */
   keys: readonly string[];
   polygons: LonLat[][][];
 }
 
-/** GeoJSON FeatureCollection (경위도 도). Polygon, MultiPolygon만 그려요 */
+/** GeoJSON FeatureCollection (longitude and latitude in degrees). Only Polygon and MultiPolygon are drawn */
 export interface GeoJSONFeatureCollection {
   type: "FeatureCollection";
   features: readonly {

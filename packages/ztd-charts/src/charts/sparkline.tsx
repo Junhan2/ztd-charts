@@ -26,17 +26,17 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface SparklineProps<T = Row> extends BaseChartProps<T>, DayFirstProps {
   x?: Accessor<T, unknown>;
   y?: Accessor<T, number>;
-  /** "line" | "area" | "bar". 기본 "area" */
+  /** "line" | "area" | "bar". Default "area" */
   variant?: "line" | "area" | "bar";
-  /** 마지막 값을 오른쪽에 글자로. 기본 true */
+  /** Show the last value as text on the right. Default true */
   showValue?: boolean;
-  /** 최고, 최저 점 표시. 기본 false */
+  /** Mark the highest and lowest points. Default false */
   showExtremes?: boolean;
-  /** 강조 점: "last" | "max" | "min". 기본 "last" */
+  /** Highlighted point: "last" | "max" | "min". Default "last" */
   mark?: "last" | "max" | "min" | "none";
 }
 
-/** 스파크라인: 표나 KPI 옆에 넣는 작은 추세선 */
+/** Sparkline: a small trend line to place next to a table or KPI */
 export function Sparkline<T = Row>(props: SparklineProps<T>) {
   const c = useChart(props, { height: 48, duration: 900 });
   const { p, width: W, height: H } = c;
@@ -44,7 +44,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
   const model = useMemo(() => prepSeries(props.data, props.x, props.y as never, undefined, { locale: c.locale, dayFirst: props.dayFirst }), [props.data, props.x, props.y, c.locale, props.dayFirst]);
   const vals = useMemo(() => model.values[0] ?? [], [model]);
   const variant = props.variant ?? "area";
-  // 마지막 값은 끝에서부터 첫 숫자 (끝 값이 비어도 글자와 점이 사라지지 않게)
+  // The last value is the first number from the end (so the text and point do not vanish when the final value is missing)
   let li = vals.length - 1;
   while (li >= 0 && !Number.isFinite(vals[li])) li--;
   const last = li < 0 ? NaN : vals[li];
@@ -53,13 +53,13 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
   const x0 = 2;
   const x1 = W - valW - 4;
   const [mn, mx] = extent(vals);
-  // 막대는 0에서 자라요. 모두 음수면 0이 위 끝에 (모두 0이면 [0, 1])
+  // Bars grow from 0. When all values are negative, 0 is at the top ([0, 1] when all are 0)
   const y = scaleLinear(variant === "bar" ? [Math.min(0, mn), Math.max(0, mx) || (mn < 0 ? 0 : 1)] : [mn, mx === mn ? mn + 1 : mx], [H - 4, 5]);
   const n = vals.length;
   const xs = (k: number) => (n > 1 ? x0 + (k / (n - 1)) * (x1 - x0) : (x0 + x1) / 2);
 
   const kMark = props.mark === "none" ? -1 : props.mark === "max" ? argMax(vals) : props.mark === "min" ? argMin(vals) : li;
-  // 막대 하나가 차지하는 칸 수. 2px에 막대 하나보다 촘촘하면 묶어요
+  // How many slots one bar covers. Group them when denser than one bar per 2px
   const per = variant === "bar" ? Math.max(1, Math.ceil(n / Math.max(1, (x1 - x0) / 2))) : 1;
 
   const pts = useMemo(() => {
@@ -67,7 +67,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
     const limit = Math.max(40, Math.round((x1 - x0) * 1.5));
     if (idx.length > limit && variant !== "bar") idx = lttb(idx.map((k) => ({ x: k, y: vals[k], k })), limit).map((q) => q.k);
     if (per > 1) {
-      // 묶음마다 막대 하나: 강조 막대가 있으면 그것, 없으면 0에서 가장 먼 값 (1만 개 막대를 다 그리지 않아요)
+      // One bar per group: the highlighted bar if there is one, otherwise the value farthest from 0 (so 10,000 bars are not all drawn)
       const out: number[] = [];
       let b = -1;
       let g = -1;
@@ -113,7 +113,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
       className={props.className}
       style={props.style}
       theme={props.theme}
-      // 점이 고르게 놓여서 가까운 점은 계산으로 찾아요 (움직일 때마다 좌표 배열을 만들지 않아요)
+      // Points are evenly spaced, so the nearest one is computed (no coordinate array is built on every move)
       onPointerMove={(px, _py, e) => n && c.setActive(evenIndex(px, x0, x1, n), e.pointerType === "touch" ? "touch" : "pointer")}
       defs={
         <>
@@ -134,7 +134,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
             const bw = Math.max(1, ((x1 - x0) / Math.max(1, n)) * per * 0.7);
             const yy = y(vals[k]);
             const y0 = y(0);
-            // 묶은 막대는 묶음 가운데에 (이웃 묶음 막대와 겹치지 않게)
+            // A grouped bar sits in the middle of its group (so it does not overlap the neighboring group's bar)
             const bx = per > 1 ? xs(Math.min(n - 1, (Math.floor(k / per) + 0.5) * per - 0.5)) : xs(k);
             return <path key={k} d={roundRectPath(bx - bw / 2, Math.min(yy, y0), bw, Math.abs(y0 - yy), 1.5)} fill={k === kMark ? accent.fill : p.paint("neutralStrong")} />;
           })
@@ -146,7 +146,7 @@ export function Sparkline<T = Row>(props: SparklineProps<T>) {
         )}
       </g>
       {props.showExtremes && n > 2
-        ? // 값이 모두 비면 최고, 최저 점이 없어요 (cy="NaN" 방지)
+        ? // With every value missing there is no highest or lowest point (avoids cy="NaN")
           [argMax(vals), argMin(vals)].filter((k) => k >= 0 && Number.isFinite(vals[k])).map((k, j) => <circle key={j} cx={xs(k)} cy={y(vals[k])} r={2.4} fill={p.paint("panel")} stroke={p.paint("ink")} strokeWidth={1.3} opacity={t >= 0.99 ? 1 : 0} />)
         : null}
       {kMark >= 0 && variant !== "bar" && Number.isFinite(vals[kMark]) ? <circle cx={xs(kMark)} cy={y(vals[kMark])} r={3.2} fill={accent.fill} stroke={p.paint("panel")} strokeWidth={1.5} opacity={Math.max(0, (t - 0.85) / 0.15)} /> : null}

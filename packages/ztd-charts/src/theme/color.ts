@@ -6,7 +6,7 @@ const NAMED: Record<string, string> = {
   transparent: "#00000000",
 };
 
-/** #rgb, #rrggbb, #rrggbbaa, rgb(), rgba(), var(--x, #hex) 를 RGBA로. 못 읽으면 null */
+/** #rgb, #rrggbb, #rrggbbaa, rgb(), rgba(), var(--x, #hex) to RGBA. null when unreadable */
 export function parseColor(input: string | undefined | null): RGBA | null {
   if (!input) return null;
   let s = input.trim();
@@ -16,7 +16,7 @@ export function parseColor(input: string | undefined | null): RGBA | null {
   if (s.startsWith("#")) {
     let h = s.slice(1);
     if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
-    // parseInt는 "12345g"를 "12345"까지 읽어서 16진수 글자만인지 먼저 봐요
+    // parseInt reads "12345g" up to "12345", so check first that it is hex digits only
     if ((h.length !== 6 && h.length !== 8) || /[^\da-f]/i.test(h)) return null;
     const n = parseInt(h, 16);
     if (h.length === 6) return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
@@ -39,7 +39,7 @@ export function toHex(c: RGBA): string {
   return `#${h(c[0])}${h(c[1])}${h(c[2])}${c[3] < 1 ? h(c[3] * 255) : ""}`.toUpperCase();
 }
 
-/** 반투명 색을 바탕색 위에 얹은 결과 */
+/** The result of a translucent color laid over a background color */
 export function composite(top: RGBA, under: RGBA): RGBA {
   const a = top[3];
   return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
@@ -50,12 +50,12 @@ function channel(c: number): number {
   return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 }
 
-/** WCAG 상대 휘도 */
+/** WCAG relative luminance */
 export function luminance(c: RGBA): number {
   return 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2]);
 }
 
-/** WCAG 대비. 두 색 중 하나라도 못 읽으면 0 */
+/** WCAG contrast. 0 when either color is unreadable */
 export function contrastRatio(a: string | RGBA, b: string | RGBA, backdrop?: string | RGBA): number {
   const pa = typeof a === "string" ? parseColor(a) : a;
   let pb = typeof b === "string" ? parseColor(b) : b;
@@ -95,7 +95,7 @@ function oklabToRgb([L, A, B]: [number, number, number], alpha: number): RGBA {
   ];
 }
 
-/** a를 t만큼, b를 1-t만큼 섞어요 (oklab). CSS color-mix(in oklab, a t%, b)와 같은 결과 */
+/** Mixes t of a with 1-t of b (oklab). Same result as CSS color-mix(in oklab, a t%, b) */
 export function mixHex(a: string, b: string, t: number): string {
   const pa = parseColor(a);
   const pb = parseColor(b);
@@ -106,7 +106,7 @@ export function mixHex(a: string, b: string, t: number): string {
   return toHex(oklabToRgb([la[0] * k + lb[0] * (1 - k), la[1] * k + lb[1] * (1 - k), la[2] * k + lb[2] * (1 - k)], pa[3] * k + pb[3] * (1 - k)));
 }
 
-/** 두 후보 중 바탕과 대비가 더 큰 글자색 */
+/** Of two candidates, the text color with more contrast against the background */
 export function pickText(background: string, candidates: string[], backdrop?: string): string {
   let best = candidates[0];
   let bestC = -1;

@@ -1,6 +1,6 @@
 import { composite, contrastRatio, mixHex, parseColor, pickText, toHex } from "../theme/color";
 
-/** 불투명도 opacity로 칠한 top을 under 위에 얹은 실제 색 (sRGB 알파 합성, 브라우저와 같아요) */
+/** The actual color of top painted at opacity over under (sRGB alpha compositing, as browsers do) */
 function compositeHex(top: string, under: string, opacity: number): string {
   const a = parseColor(top);
   const b = parseColor(under);
@@ -15,9 +15,9 @@ export type Role = "accent" | "ink" | "strong" | "neutral" | "soft";
 export interface Swatch {
   role: Role | "mix";
   fill: string;
-  /** 이 채움 위 글자색 */
+  /** Text color on this fill */
   text: string;
-  /** 계산용 실제 색 */
+  /** Actual color for calculations */
   raw: string;
 }
 
@@ -38,8 +38,8 @@ export function swatch(p: Painter, role: Role): Swatch {
 }
 
 /**
- * 섞은 바탕 위 글자색. 테마 글자색 두 개로 4.5:1이 안 나오는 중간 밝기(휘도 약 0.13~0.19)가 있어서
- * 흰색과 검은색까지 후보에 넣어요. 흰색, 검은색 중 하나는 어떤 바탕에서도 4.58:1 이상이에요.
+ * Text color on a mixed background. At some mid brightness levels (luminance about 0.13 to 0.19) neither theme text color reaches 4.5:1,
+ * so white and black join the candidates. On any background, either white or black reaches at least 4.58:1.
  */
 export function readableOn(p: Painter, raw: string): string {
   const best = pickText(raw, [p.theme.ink, p.theme.onAccent, p.theme.onNeutralStrong]);
@@ -47,23 +47,23 @@ export function readableOn(p: Painter, raw: string): string {
   return pickText(raw, ["#FFFFFF", "#000000"]);
 }
 
-/** swatch()가 역할마다 쓰는 테마 토큰. 캔버스처럼 CSS 변수 이름이 필요한 곳이 써요. swatch를 바꾸면 같이 바꿔요 */
+/** Theme token swatch() uses for each role. Used where a CSS variable name is needed, such as canvas. Change it together with swatch */
 const ROLE_TOKEN: Record<Role, ColorToken> = { accent: "accent", ink: "ink", strong: "neutralStrong", neutral: "neutral", soft: "neutralSoft" };
 
-/** 캔버스에 칠할 실제 색. 테마 토큰이면 그 CSS 변수 값을 읽고(없으면 계산용 색), 섞은 색이면 계산용 색이에요 */
+/** The actual color to paint on canvas. For a theme token, the value of its CSS variable (the calculation color when absent); for a mixed color, the calculation color */
 export function canvasColor(sw: Swatch, read: (cssVar: string, fallback: string) => string): string {
   return sw.role === "mix" ? sw.raw : read(cssVarName(ROLE_TOKEN[sw.role]), sw.raw);
 }
 
-/** neutralStrong과 neutral 사이를 섞은 색 */
+/** A color mixed between neutralStrong and neutral */
 export function midSwatch(p: Painter, k: number): Swatch {
   const raw = mixHex(p.theme.neutralStrong, p.theme.neutral, k);
   return { role: "mix", fill: p.mix("neutralStrong", "neutral", k), text: readableOn(p, raw), raw };
 }
 
 /**
- * 항목마다 다른 색이 필요할 때 (파이, 도넛, 쌓은 막대).
- * 강조 항목은 accent, 나머지는 순서대로 ink → strong → … → neutral
+ * For when each item needs its own color (pie, donut, stacked bars).
+ * Highlighted items get accent; the rest go in order ink → strong → … → neutral
  */
 export function categorical(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   const out: Swatch[] = new Array(n);
@@ -86,32 +86,32 @@ export function categorical(p: Painter, n: number, hi: ReadonlySet<number>): Swa
   return out;
 }
 
-/** 섞은 색(midSwatch)을 범례 색 글자로: "mix:0.5". legendFill이 칠할 색으로 바꿔요 */
+/** A mixed color (midSwatch) as legend color text: "mix:0.5". legendFill turns it into a paint color */
 const MIX_PREFIX = "mix:";
 
 /**
- * 차트가 그리는 색 함수 그대로의 범례 색 글자 (토큰 이름, 섞은 색은 "mix:비율"). 카드 범례(autoLegend)가 모두 이걸 써요.
- * 칠할 색 대신 토큰 이름과 섞는 비율을 돌려주는 painter를 차트의 색 함수(categorical, ramp, emphasis …)에 넘겨서, 범례와 그림이 같은 규칙에서 나와요
+ * Legend color text taken straight from the color function the chart draws with (token names; "mix:ratio" for mixed colors). Every card legend (autoLegend) uses this.
+ * A painter that returns token names and mix ratios instead of paint colors is passed to the chart's color function (categorical, ramp, emphasis …), so the legend and the drawing come from the same rule
  */
 export function legendColors(draw: (p: Painter) => Swatch[]): string[] {
   const names: Painter = { theme: lightTheme, cssVars: false, paint: (t) => t, color: (c) => c ?? "neutral", raw: (c) => c ?? "neutral", mix: (_a, _b, t) => `${MIX_PREFIX}${t}` };
   return draw(names).map((sw) => sw.fill);
 }
 
-/** 범례 색 글자를 칠할 색으로: "mix:비율"이면 midSwatch와 같은 섞은 색, 아니면 p.color (토큰은 테마 색, 그 밖은 그대로, 없으면 neutral) */
+/** Turns legend color text into a paint color: "mix:ratio" gives the same mixed color as midSwatch, anything else goes to p.color (a token gives the theme color, other text is used as is, none gives neutral) */
 export function legendFill(p: Painter, c: string | undefined): string {
   return c?.startsWith(MIX_PREFIX) ? p.mix("neutralStrong", "neutral", Number(c.slice(MIX_PREFIX.length))) : p.color(c);
 }
 
 /**
- * 점(산점도 계열)용 categorical. 가장 옅은 neutral 단계는 반지름 4px 점에서 카드 바탕과 대비가 1.3~1.4:1이라 거의 안 보여서,
- * 한 칸 더 있는 것처럼 정하고 마지막 칸을 버려요. 계열이 둘이면 강조 아닌 계열이 neutral 대신 ink예요
+ * categorical for points (scatter series). The faintest neutral step has only 1.3 to 1.4:1 contrast with the card background on a 4px-radius point, so it is nearly invisible;
+ * the steps are set as if there were one more and the last one is dropped. With two series, the non-highlighted series uses ink instead of neutral
  */
 export function categoricalDots(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   return categorical(p, n + 1, hi).slice(0, n);
 }
 
-/** 강조만 accent, 나머지는 모두 neutral (기본 디자인 언어) */
+/** accent for the highlight only, neutral for everything else (the default design language) */
 export function emphasis(p: Painter, n: number, hi: ReadonlySet<number>, rest: Role = "neutral"): Swatch[] {
   const a = swatch(p, "accent");
   const r = swatch(p, rest);
@@ -119,8 +119,8 @@ export function emphasis(p: Painter, n: number, hi: ReadonlySet<number>, rest: R
 }
 
 /**
- * 넓은 면(쌓은 영역, 스트림)용: 강조는 accent, 나머지는 neutralStrong에서 neutral까지 단계.
- * ink처럼 밝은 면이 화면을 덮지 않게 해요.
+ * For large areas (stacked area, stream): accent for the highlight, steps from neutralStrong to neutral for the rest.
+ * Keeps bright areas such as ink from covering the screen.
  */
 export function ramp(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   const out: Swatch[] = new Array(n);
@@ -139,7 +139,7 @@ export function ramp(p: Painter, n: number, hi: ReadonlySet<number>): Swatch[] {
   return out;
 }
 
-/** 0~1 값을 강조색(token) 진하기로 (히트맵) */
+/** A 0 to 1 value as the intensity of the accent color (token), for heatmaps */
 export function sequential(p: Painter, t: number, min = 0.1, token: "accent" | "neutralStrong" = "accent"): { fill: string; opacity: number; text: string; raw: string } {
   const k = Math.max(0, Math.min(1, t));
   const opacity = min + (1 - min) * k;
@@ -147,7 +147,7 @@ export function sequential(p: Painter, t: number, min = 0.1, token: "accent" | "
   return { fill: p.paint(token), opacity, text: readableOn(p, raw), raw };
 }
 
-/** 색 척도 옵션: reverse 뒤집기, center 가운데 값(그보다 작으면 회색), steps 단계 수(2~12) */
+/** Color scale options: reverse flips it, center is the midpoint value (gray below it), steps is the number of steps (2 to 12) */
 export interface ColorScaleOptions {
   reverse?: boolean;
   center?: number;
@@ -155,9 +155,9 @@ export interface ColorScaleOptions {
 }
 
 /**
- * 색 척도 옵션으로 바꾼 위치. t는 0~1, 가운데 값이 있으면 -1~1이에요.
- * 뒤집으면 1-t(가운데 값이 있으면 -t), 단계가 있으면 그 수만큼 묶어요(가운데 값과 홀수 단계면 가운데 칸이 0, 가장 옅어요).
- * 0보다 작으면 회색(neutralStrong) 쪽, 크면 강조색 쪽이고 진하기는 절댓값이에요
+ * Position adjusted by the color scale options. t is 0 to 1, or -1 to 1 with a center value.
+ * Reversed, it is 1-t (-t with a center value); with steps, it is grouped into that many (with a center value and an odd step count, the middle step is 0, the faintest).
+ * Below 0 leans to gray (neutralStrong), above 0 to the accent color, and the intensity is the absolute value
  */
 export function scaleT(t: number, o: ColorScaleOptions): number {
   let k = o.reverse ? (o.center === undefined ? 1 - t : -t) : t;
@@ -169,13 +169,13 @@ export function scaleT(t: number, o: ColorScaleOptions): number {
   return k;
 }
 
-/** 색 척도 옵션으로 바꾼 칸 색 (scaleT의 부호로 회색이나 강조색, 절댓값으로 진하기) */
+/** Cell color adjusted by the color scale options (gray or accent by the sign of scaleT, intensity by its absolute value) */
 export function scaleSwatch(p: Painter, t: number, min: number, o: ColorScaleOptions): ReturnType<typeof sequential> {
   const k = scaleT(t, o);
   return sequential(p, Math.abs(k), min, k < 0 ? "neutralStrong" : "accent");
 }
 
-/** 색 척도 옵션 묶음 (단계는 2~12). 아무것도 안 정하면 scaleT는 t 그대로, scaleSwatch는 sequential과 같아요 */
+/** Bundles the color scale options (steps 2 to 12). With nothing set, scaleT returns t unchanged and scaleSwatch equals sequential */
 export function colorScaleOf(reverse: boolean | undefined, center: number | undefined, steps: number | undefined): ColorScaleOptions {
   return { reverse, center, steps: steps === undefined ? undefined : Math.max(2, Math.min(12, Math.round(steps))) };
 }

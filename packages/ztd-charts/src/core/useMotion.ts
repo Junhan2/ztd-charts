@@ -3,41 +3,41 @@ import { isBrowser, now, useIsoLayoutEffect } from "./env";
 import { MotionEngine, subscribeTick, type EasingName, type Mark, type MotionItem } from "./motion";
 
 export interface UseMotionOptions {
-  /** 애니메이션을 쓸지 (animate && !reducedMotion) */
+  /** Whether to animate (animate && !reducedMotion) */
   enabled: boolean;
-  /** 지금 화면에 보이는지. true가 되면 등장 시작 */
+  /** Whether the chart is on screen now. The entrance starts when it turns true */
   active: boolean;
-  /** 곧 보일지 (화면 위아래 가까이). 화면 밖에서 받은 다시 재생은 이때 준비해요. 기본 true */
+  /** Whether it will be visible soon (near the top or bottom of the screen). A replay received off screen is prepared at that point. Default true */
   near?: boolean;
-  /** 바뀌면 처음부터 다시 재생 */
+  /** Replays from the start when this changes */
   replayKey?: unknown;
-  /** 데이터 서명. 바뀌면 전환 애니메이션, 같으면(크기만 바뀜) 바로 맞춰요 */
+  /** Data signature. A change runs the transition animation; when it is unchanged (only the size changed), marks snap into place */
   dataKey?: unknown;
   easing?: EasingName;
   duration?: number;
-  /** 데이터 전환 때 항목 사이 지연(ms) */
+  /** Delay between items during data transitions (ms) */
   stagger?: number;
 }
 
 export interface MotionState<M> {
   items: MotionItem<M>[];
   get: (key: string) => number[] | undefined;
-  /** 등장 시작 후 지난 시간(ms). 끝났거나 꺼져 있으면 Infinity */
+  /** Time since the entrance started (ms). Infinity when it has finished or is off */
   elapsed: number;
-  /** 등장 중 delay(ms)부터 len(ms) 동안 0에서 1로. 끝나면 1 */
+  /** During the entrance, goes from 0 to 1 over len (ms) starting at delay (ms). 1 once finished */
   fade: (delay: number, len?: number) => number;
-  /** 아직 등장 전 (화면 밖) */
+  /** The entrance has not started yet (off screen) */
   waiting: boolean;
   animating: boolean;
-  /** 등장이 시작될 때마다 1씩 커져요. CSS 애니메이션을 다시 걸 때 key로 써요 */
+  /** Increases by 1 each time an entrance starts. Used as a key to restart CSS animations */
   generation: number;
 }
 
 type Phase = "init" | "idle" | "running" | "done";
 
 /**
- * 키가 겹치면 두 번째부터 "#2", "#3"을 붙여요. 같은 이름의 항목이 둘이어도(파이 조각, 생키 띠) 하나로 합쳐지지 않게.
- * 겹치는 키가 없으면 받은 배열을 그대로 돌려줘요 (같은 배열이면 바뀐 게 없다고 보거든요)
+ * Appends "#2", "#3" from the second occurrence of a duplicate key, so two items with the same name (pie slices, Sankey links) do not merge into one.
+ * Without duplicate keys, the given array is returned as is (the same array is taken to mean nothing changed)
  */
 function uniqueMarkKeys<M>(marks: Mark<M>[]): Mark<M>[] {
   const seen = new Map<string, number>();
@@ -57,7 +57,7 @@ function uniqueMarkKeys<M>(marks: Mark<M>[]): Mark<M>[] {
 }
 
 export function useMotion<M>(input: Mark<M>[], opts: UseMotionOptions): MotionState<M> {
-  // 같은 marks 배열이면 같은 결과 배열을 써야 아래 "바뀌었나" 비교가 맞아요
+  // The same marks array must yield the same result array, or the "did it change" check below goes wrong
   const marks = useMemo(() => uniqueMarkKeys(input), [input]);
   const { enabled, active, near = true, replayKey, dataKey, easing = "spring", duration = 900, stagger = 0 } = opts;
   const engineRef = useRef<MotionEngine<M> | null>(null);
@@ -65,7 +65,7 @@ export function useMotion<M>(input: Mark<M>[], opts: UseMotionOptions): MotionSt
   const lastMarks = useRef<Mark<M>[] | null>(null);
   const lastData = useRef<unknown>(dataKey);
   const lastReplay = useRef<unknown>(replayKey);
-  // 화면에서 먼 차트는 다시 재생을 미뤄요 (모두 다시 재생에서 보이는 차트만 일을 해요)
+  // Charts far from the screen postpone their replay (on a replay-all, only visible charts do any work)
   const pendingReplay = useRef(false);
   const generation = useRef(0);
   const [, setFrame] = useState(0);
@@ -127,7 +127,7 @@ export function useMotion<M>(input: Mark<M>[], opts: UseMotionOptions): MotionSt
       pendingReplay.current = false;
       setFrame((f) => f + 1);
     } else if (replayChanged) pendingReplay.current = true;
-    // marks는 lastMarks로 읽어요. replayKey/enabled가 바뀔 때만 다시 세워요
+    // marks is read through lastMarks. It is set up again only when replayKey/enabled changes
   }, [enabled, replayKey]);
 
   useIsoLayoutEffect(() => {
@@ -136,7 +136,7 @@ export function useMotion<M>(input: Mark<M>[], opts: UseMotionOptions): MotionSt
     engine.hold(lastMarks.current ?? marks);
     phase.current = "idle";
     setFrame((f) => f + 1);
-    // near가 true로 바뀔 때만
+    // Only when near turns true
   }, [near, enabled]);
 
   useEffect(() => {

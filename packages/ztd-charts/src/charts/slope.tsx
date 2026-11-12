@@ -23,16 +23,16 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface SlopeChartProps<T = Row> extends BaseChartProps<T> {
-  /** 항목 이름. 기본 "label" */
+  /** Item name. Default "label" */
   label?: Accessor<T, string>;
-  /** 시점 필드 (긴 표). 첫 시점과 마지막 시점을 써요. 기본 "x" */
+  /** Time point field (long table). Uses the first and last time points. Default "x" */
   x?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 넓은 표: 시작 값 필드 */
+  /** Wide table: start value field */
   start?: string;
-  /** 넓은 표: 끝 값 필드 */
+  /** Wide table: end value field */
   end?: string;
-  /** 양쪽 제목. 기본 시점 이름 */
+  /** Titles for both sides. Default: the time point names */
   periodLabels?: [string, string];
 }
 
@@ -45,7 +45,7 @@ interface SlopeItem<T> {
   datum: T | null;
 }
 
-/** 슬로프 차트: 두 시점 사이 순위와 크기 변화 */
+/** Slope chart: change in rank and size between two time points */
 export function SlopeChart<T = Row>(props: SlopeChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.6)), duration: 900, stagger: 90 });
   const { p, width: W, height: H } = c;
@@ -153,7 +153,7 @@ export function SlopeChart<T = Row>(props: SlopeChartProps<T>) {
             const wt = strong ? 800 : 500;
             const va = c.fv(it.a);
             const vb = c.fv(it.b);
-            // 값은 그대로 두고 이름만 줄여요
+            // Keep the value intact and shorten only the name
             const name = (v: string, room: number) => truncateBeside(it.label, v, room, 11.5, wt);
             return (
               <g key={it.label} opacity={o}>
