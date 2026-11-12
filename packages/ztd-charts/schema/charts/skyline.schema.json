@@ -69,9 +69,16 @@
     "options": {
       "type": "object",
       "properties": {
+        "view": {
+          "description": "Camera height: \"high\" looks down on the floor so the front row reads as tiles, \"low\" looks from the front and leaves more room for the value scale",
+          "default": "high",
+          "enum": [
+            "high",
+            "low"
+          ]
+        },
         "depth": {
-          "description": "Back row depth as a share of the period slot, from 0.1 to 0.32. Values outside are pulled into the range",
-          "default": 0.32,
+          "description": "Back row depth as a share of the period slot: 0.1 to 0.45 in the \"high\" view (default 0.42), 0.1 to 0.32 in the \"low\" view (default 0.32). Values outside are pulled into the range",
           "type": "number"
         },
         "wall": {

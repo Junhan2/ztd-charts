@@ -113,8 +113,10 @@ function skylineIssues(rows: Record<string, unknown>[] | null, enc: Record<strin
   // 데이터 필드를 모를 때(url 데이터나 빈 data)만 알려요. 필드를 알면 위 채널 검사가 missing_channel로 이미 알려요
   if (enc.front !== undefined && enc.y === undefined && !fields.length) report(true, "encoding.y", "skyline_front_without_y", ["y is required: front stands in front of the back row that y stacks", "y가 필요해요. front는 y로 쌓은 뒷줄 앞에 서요"]);
   if (frontFields.length >= 4) report(false, "encoding.front", "skyline_front_many", ["The front row reads best with 3 series or fewer", "앞줄은 3개까지 읽기 쉬워요"]);
-  const depth = options && typeof options === "object" ? (options as Record<string, unknown>).depth : undefined;
-  if (typeof depth === "number" && (depth < 0.1 || depth > 0.32)) report(false, "options.depth", "skyline_depth_range", ["depth is from 0.1 to 0.32, so it is pulled into that range", "depth는 0.1~0.32예요. 범위 안으로 묶어서 그려요"]);
+  const opts = options && typeof options === "object" ? (options as Record<string, unknown>) : {};
+  // 시점마다 뒷줄 깊이 범위가 달라요 (charts/skyline.tsx의 VIEWS와 같은 값)
+  const max = opts.view === "low" ? 0.32 : 0.45;
+  if (typeof opts.depth === "number" && (opts.depth < 0.1 || opts.depth > max)) report(false, "options.depth", "skyline_depth_range", [`depth is from 0.1 to ${max} in the ${opts.view === "low" ? "low" : "high"} view, so it is pulled into that range`, `${opts.view === "low" ? "low" : "high"} 시점의 depth는 0.1~${max}예요. 범위 안으로 묶어서 그려요`]);
   if (!rows || !rows.length) return;
   const xField = typeof enc.x === "string" ? enc.x : "x";
   const periods = new Set(rows.map((r) => String(r[xField] ?? ""))).size;

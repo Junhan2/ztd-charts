@@ -405,7 +405,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "18.7 KB"
+    "limit": "19.15 KB"
   },
   {
     "name": "HistogramChart",
@@ -603,7 +603,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "137.8 KB"
+    "limit": "137.95 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -615,7 +615,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "181.3 KB"
+    "limit": "181.6 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -627,7 +627,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "53.7 KB"
+    "limit": "53.8 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",

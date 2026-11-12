@@ -45,11 +45,13 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 
 ## What's in the package
 
-- `ztd-charts`: 44 chart components (new in 0.8.0: `Choropleth`, `SymbolMap`, `FlowMap`, `Tree`, `Timeline`, `NetworkChart` and `BarRace`), `LiveLineChart`, `ChartCard`, `ChartGrid`, `ChartFacets`, `StatCard`, `ThemeProvider`, `registerMap` and the data helpers.
+- `ztd-charts`: 44 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `ChartFacets`, `StatCard`, `ThemeProvider`, `registerMap` and the data helpers.
 - `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React. `FACET_TYPES` and `FACET_MAX` say which charts take `facet` and how many panels it draws.
 - `ztd-charts/server`: server rendering to SVG and HTML, with every built-in map already registered.
 - `ztd-charts/geo/world`, `ztd-charts/geo/us-states` and `ztd-charts/geo/kr-sido`: map boundaries, one entry point per map, so a page that draws no map loads none.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
+
+New in 0.9.0: `SkylineChart` looks down on its floor by default (`view: "high"`), so the smaller outcome in front (failures, retries) reads as a row of tiles even on days when it is only a few pixels tall. Periods stay on a level axis, so a taller block always means more. `view: "low"` keeps the 0.8 look, which leaves more room for the value scale. `depth` runs from 0.1 to 0.45 in the high view (default 0.42) and from 0.1 to 0.32 in the low view (default 0.32).
 
 Data helpers: `useChartData` loads a URL or an async function and reports loading, error and empty states. `parseCSV`, `fromRows`, `fromObjects` and `melt` reshape tables. `percentiles(rows, { by: "minute", value: "ms" })` turns raw samples into `p50`, `p95` and `p99` rows for a latency chart.
 

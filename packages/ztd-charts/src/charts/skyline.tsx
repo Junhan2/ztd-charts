@@ -6,7 +6,7 @@ import { evenIndex } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import { plural, type ChartLang } from "../core/i18n";
 import type { Mark, MotionItem } from "../core/motion";
-import { emphasis, ramp, swatch, type Swatch } from "../core/palette";
+import { categoricalDots, emphasis, ramp, swatch, type Swatch } from "../core/palette";
 import { fitDomain, niceDomain, ticksFor } from "../core/scale";
 import { prepSeries, syncKeyOf } from "../core/series";
 import { useSync } from "../core/sync";
@@ -75,8 +75,13 @@ export interface SkylineChartProps<T = Row> extends BaseChartProps<T>, DayFirstP
   series?: Accessor<T, string>;
   /** 앞줄에 쌓을 필드 (넓은 표만). 뒷줄과 같은 단위의 작은 결과(실패, 재시도) */
   front?: string | string[];
-  /** 칸 폭 대비 뒷줄 깊이. 0.1~0.32, 기본 0.32 */
+  /** 칸 폭 대비 뒷줄 깊이. high 시점은 0.1~0.45(기본 0.42), low 시점은 0.1~0.32(기본 0.32). high는 낮은 차트에서 값 눈금 자리를 남기려고 깊이를 줄여요 */
   depth?: number;
+  /**
+   * 시점. "high"(기본)는 바닥을 내려다봐서 앞줄 뚜껑이 바닥 위 타일로 보이고, "low"는 거의 정면에서 봐서 값 눈금 자리가 넓어요.
+   * 두 시점 모두 기간은 가로로 놓여서 더 높은 블록이 늘 더 많아요
+   */
+  view?: SkylineView;
   /** 뒷벽 눈금. 기본 true */
   wall?: boolean;
   /** 빗금을 그릴 줄. 기본 "front" */
@@ -87,18 +92,43 @@ export interface SkylineChartProps<T = Row> extends BaseChartProps<T>, DayFirstP
   highlight?: BaseChartProps<T>["highlight"];
 }
 
-/** 칸 폭에 대한 비율. 시안(skyline-mock.mjs)이 폭 4가지 × 기간 3가지 × 깊이 2가지로 잰 값이에요 */
-const FACE = 0.52;
-const FRONT_DEPTH = 0.14;
-const GAP = 0.05;
-export const DEPTH_RANGE: readonly [number, number] = [0.1, 0.32];
+export type SkylineView = "high" | "low";
+
+interface ViewGeom {
+  /** 깊이 1px이 화면에서 오른쪽으로, 위로 가는 거리 */
+  cx: number;
+  cy: number;
+  /** 칸 폭에 대한 비율: 앞면 폭, 앞줄 깊이, 두 줄 사이 */
+  face: number;
+  front: number;
+  gap: number;
+  /** 뒷줄 깊이(칸 폭 대비)의 최소, 최대, 기본. 최대는 뒷줄 옆면이 다음 칸에 닿기 전까지예요 */
+  depth: readonly [number, number, number];
+}
+
+/**
+ * 시점마다 기하. 2/√5, 1/√5를 숫자로 적어요 (Math.sqrt 호출은 번들러가 지우지 못해 다른 차트 묶음에도 남아요).
+ * low는 0.8까지의 모양이에요: 깊이가 오른쪽 위로 2:1(26.57°)로 누워서 앞줄 뚜껑이 1~5px뿐이에요.
+ * high는 같은 2:1을 세운 것(63.43°)이에요. 바닥을 내려다봐서 앞줄 뚜껑이 칸 폭의 0.38배 높이 타일이 되고,
+ * 기간 축은 low처럼 가로예요. 뒷줄은 0.23칸 오른쪽으로 비켜나서 앞면이 같은 기간 앞줄과 57% 겹쳐요
+ */
+const VIEWS: Record<SkylineView, ViewGeom> = {
+  low: { cx: 0.8944271909999159, cy: 0.4472135954999579, face: 0.52, front: 0.14, gap: 0.05, depth: [0.1, 0.32, 0.32] },
+  high: { cx: 0.4472135954999579, cy: 0.8944271909999159, face: 0.54, front: 0.42, gap: 0.1, depth: [0.1, 0.45, 0.42] },
+};
+/** 시점의 뒷줄 깊이 [최소, 최대, 기본] */
+export const depthRange = (view: SkylineView = "high") => VIEWS[view].depth;
 /** 칸이 이보다 좁으면 이웃 기간을 합쳐요 */
 const MIN_SLOT = 20;
 /** 합쳐서라도 이보다 많은 기간은 그리지 않아요 (숨긴 표 60행 안) */
 const MAX_SHOWN = 40;
-/** 깊이 방향: 오른쪽 위로 2:1 (26.57°). 2/√5, 1/√5를 숫자로 적어요 (Math.sqrt 호출은 번들러가 지우지 못해 다른 차트 묶음에도 남아요) */
-const COS = 0.8944271909999159;
-const SIN = 0.4472135954999579;
+/**
+ * high 시점 깊이가 쓸 수 있는 세로 자리(범례 아래부터 바닥까지)의 비율. 낮은 차트나 기간이 적은 넓은 차트에서
+ * 깊이가 이보다 많이 먹으면 깊이를 같은 비율로 줄여서 값 눈금 자리가 60% 넘게 남아요. 보통 크기는 10~19%라 그대로예요
+ */
+const MAX_DEPTH_SHARE = 0.4;
+/** 뒷벽 눈금 글자 사이 최소 세로 간격(px). 이보다 좁으면 0부터 같은 간격으로 눈금을 건너뛰어요 */
+const MIN_TICK_GAP = 14;
 /** 첫 기간 앞 여백, 맨 위 눈금 위 최고 라벨 자리, 바닥 판 두께 */
 const X0 = 10;
 const LABEL_ROOM = 20;
@@ -153,8 +183,11 @@ export interface SkylineInput {
   front: readonly number[][];
   /** 기간 수 */
   n: number;
-  depth: number;
+  /** 칸 폭 대비 뒷줄 깊이. 없으면 시점의 기본값 */
+  depth?: number;
   wall: boolean;
+  /** 기본 "high" */
+  view?: SkylineView;
   /** 위쪽 범례 높이 */
   legendH: number;
   /** 바닥 판 아래 자리 (날짜, 앞줄 최고 라벨, 비율 띠) */
@@ -183,6 +216,11 @@ export interface SkylineLayout {
   floor: number;
   wallBase: number;
   top: number;
+  /** 깊이 1px이 화면에서 오른쪽으로, 위로 가는 거리 (시점) */
+  cx: number;
+  cy: number;
+  /** 바닥 앞 모서리에서 뒷줄까지 깊이(px) */
+  lead: number;
   /** 뒷줄이 앞줄에서 물러난 거리 (오른쪽, 위) */
   shift: [number, number];
   depthFront: number;
@@ -193,9 +231,14 @@ export interface SkylineLayout {
   slotX: (i: number) => number;
 }
 
-/** 수평 바닥 배치: 기간은 왼쪽에서 오른쪽, 깊이만 2:1로 물러나요. 칸 폭 s = 그림 폭 / (보이는 기간 + 0.55) */
+/**
+ * 수평 바닥 배치: 기간은 왼쪽에서 오른쪽, 깊이만 시점의 각도로 물러나요. 칸 폭 s = 그림 폭 / (보이는 기간 + 0.55).
+ * high 시점은 앞줄이 없으면 앞줄 자리를 비우지 않고 두 줄 사이만큼만 띄워요
+ */
 export function skylineLayout(o: SkylineInput): SkylineLayout {
-  const depth = Math.min(DEPTH_RANGE[1], Math.max(DEPTH_RANGE[0], o.depth));
+  const v = VIEWS[o.view ?? "high"];
+  const frontDepth = o.view === "low" || o.front.length ? v.front : 0;
+  const depth = Math.min(v.depth[1], Math.max(v.depth[0], o.depth ?? v.depth[2]));
   const plotWidth = (labelW: number) => o.width - X0 - (o.wall ? labelW + 14 : 8);
   let k = 0;
   let labelW = 0;
@@ -215,12 +258,20 @@ export function skylineLayout(o: SkylineInput): SkylineLayout {
   }
   const shown = back.length;
   const s = Math.max(1, plotWidth(labelW) / (shown + 0.55));
-  const w = FACE * s;
-  const lead = (FRONT_DEPTH + GAP) * s;
-  const deep = lead + depth * s;
+  const w = v.face * s;
   const floor = o.height - o.below;
-  const wallBase = floor - deep * SIN;
   const top = o.legendH + LABEL_ROOM;
+  // high: 깊이가 세로 자리를 MAX_DEPTH_SHARE보다 많이 먹으면 앞줄, 두 줄 사이, 뒷줄 깊이를 같은 비율로 줄여요. low는 0.8 그대로
+  const full = (frontDepth + v.gap + depth) * s * v.cy;
+  const fit = o.view === "low" ? 1 : Math.min(1, (MAX_DEPTH_SHARE * Math.max(0, floor - top)) / (full || 1));
+  const lead = (frontDepth + v.gap) * s * fit;
+  const deep = lead + depth * s * fit;
+  const wallBase = floor - deep * v.cy;
+  const perValue = Math.max(0, wallBase - top) / (dom[1] || 1);
+  // 눈금 간격이 MIN_TICK_GAP보다 좁으면(낮은 차트) 0부터 같은 간격으로 건너뛰어 글자가 겹치지 않게 해요
+  const all = ticksFor(dom[0], dom[1], 4);
+  const gap = all.length > 1 ? (all[1] - all[0]) * perValue : Infinity;
+  const every = gap >= MIN_TICK_GAP ? 1 : gap > 0 ? Math.ceil(MIN_TICK_GAP / gap) : all.length;
   const slotX = (i: number) => X0 + i * s;
   return {
     merge: k,
@@ -229,18 +280,21 @@ export function skylineLayout(o: SkylineInput): SkylineLayout {
     front,
     backTotal: back.map(sum),
     frontTotal: front.map(sum),
-    ticks: ticksFor(dom[0], dom[1], 4),
+    ticks: all.filter((_, i) => i % every === 0),
     fmt: o.tickFmt(dom[1]),
-    k: Math.max(0, wallBase - top) / (dom[1] || 1),
+    k: perValue,
     s,
     w,
     floor,
     wallBase,
     top,
-    shift: [lead * COS, lead * SIN],
-    depthFront: FRONT_DEPTH * s,
-    depthBack: depth * s,
-    wallX: [X0 + deep * COS - 6, slotX(shown - 1) + w + deep * COS + 6],
+    cx: v.cx,
+    cy: v.cy,
+    lead,
+    shift: [lead * v.cx, lead * v.cy],
+    depthFront: frontDepth * s * fit,
+    depthBack: depth * s * fit,
+    wallX: [X0 + deep * v.cx - 6, slotX(shown - 1) + w + deep * v.cx + 6],
     slotX,
   };
 }
@@ -258,17 +312,18 @@ function cumulative(values: readonly number[], k: number): number[] {
 }
 
 interface BlockGeom {
-  /** 앞면 왼쪽 x, 바닥 y, 앞면 폭, 깊이(px) */
+  /** 앞면 왼쪽 x, 바닥 y, 앞면 폭 */
   x: number;
   base: number;
   w: number;
-  d: number;
+  /** 깊이 모서리가 화면에서 가는 거리 (오른쪽 +, 위 -) */
+  dx: number;
+  dy: number;
 }
 
 /** 블록 실루엣 (앞면, 옆면, 뚜껑을 감싼 여섯 점). 고른 블록의 테두리예요 */
 function outline(g: BlockGeom, h: number): [number, number][] {
-  const dx = g.d * COS;
-  const dy = -g.d * SIN;
+  const { dx, dy } = g;
   const top = g.base - h;
   return [
     [g.x, top],
@@ -280,11 +335,13 @@ function outline(g: BlockGeom, h: number): [number, number][] {
   ];
 }
 
-/** 쌓은 블록: 조각마다 앞면과 옆면, 옆면 그늘(빛은 왼쪽 위), 빗금, 조각 사이 1px 바탕색 틈, 합계 면인 뚜껑 */
-function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[]; hatch: string | null; lid: string; lidStroke: boolean; shade: number }) {
+/**
+ * 쌓은 블록: 조각마다 앞면과 옆면, 옆면 그늘(빛은 왼쪽 위), 빗금, 조각 사이 1px 바탕색 틈, 합계 면인 뚜껑.
+ * tile이면 1px이 안 되는 블록도 뚜껑을 그려요 (high 시점: 납작한 앞줄이 바닥 위 타일로 보여요)
+ */
+function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[]; hatch: string | null; lid: string; lidStroke: boolean; lidInk?: boolean; lidHatch?: boolean; shade: number; tile?: boolean }) {
   const { p, g, cum, colors, hatch } = props;
-  const dx = g.d * COS;
-  const dy = -g.d * SIN;
+  const { dx, dy } = g;
   const right = g.x + g.w;
   /** 앞면 오른쪽 모서리 yTop~yBottom을 깊이 방향으로 민 옆면 */
   const sideFace = (yTop: number, yBottom: number) => pts([[right, yTop], [right + dx, yTop + dy], [right + dx, yBottom + dy], [right, yBottom]]);
@@ -303,21 +360,27 @@ function Prism(props: { p: Painter; g: BlockGeom; cum: number[]; colors: Swatch[
     }
     prev = c;
   });
-  if (h < 1) return <g>{faces}</g>;
+  if (h < 1 && !props.tile) return <g>{faces}</g>;
   const side = sideFace(top, g.base);
+  const lid = pts([[g.x, top], [right, top], [right + dx, top + dy], [g.x + dx, top + dy]]);
   return (
     <g>
       {faces}
-      <polygon points={side} fill="#000" fillOpacity={props.shade} />
-      {hatch ? (
+      {h >= 1 ? (
         <>
-          <rect x={r1(g.x)} y={r1(top)} width={r1(g.w)} height={r1(h)} fill={hatch} />
-          <polygon points={side} fill={hatch} />
+          <polygon points={side} fill="#000" fillOpacity={props.shade} />
+          {hatch ? (
+            <>
+              <rect x={r1(g.x)} y={r1(top)} width={r1(g.w)} height={r1(h)} fill={hatch} />
+              <polygon points={side} fill={hatch} />
+            </>
+          ) : null}
+          {seams}
+          <line x1={r1(right)} x2={r1(right)} y1={r1(top)} y2={r1(g.base)} stroke={p.paint("panel")} strokeOpacity={0.7} />
         </>
       ) : null}
-      {seams}
-      <line x1={r1(right)} x2={r1(right)} y1={r1(top)} y2={r1(g.base)} stroke={p.paint("panel")} strokeOpacity={0.7} />
-      <polygon points={pts([[g.x, top], [right, top], [right + dx, top + dy], [g.x + dx, top + dy]])} fill={props.lid} stroke={props.lidStroke ? p.paint("neutralStrong") : undefined} strokeOpacity={props.lidStroke ? 0.55 : undefined} strokeLinejoin="round" />
+      <polygon points={lid} fill={props.lid} stroke={props.lidStroke ? p.paint(props.lidInk ? "ink" : "neutralStrong") : undefined} strokeOpacity={props.lidStroke ? (props.lidInk ? 0.4 : 0.55) : undefined} strokeLinejoin="round" />
+      {props.lidHatch && hatch ? <polygon points={lid} fill={hatch} /> : null}
     </g>
   );
 }
@@ -412,6 +475,8 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const frontRate = props.frontRate ?? "label";
   const texture = props.texture ?? "front";
   const wall = props.wall !== false;
+  const view = props.view ?? "high";
+  const high = view === "high";
   const showStrip = strip && hasFront;
   const frontLabel = hasFront && !strip && c.showLabels;
 
@@ -429,13 +494,14 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
         back: backModel.values,
         front: frontValues,
         n: backModel.keys.length,
-        depth: props.depth ?? DEPTH_RANGE[1],
+        depth: props.depth,
         wall,
+        view,
         legendH,
         below,
         tickFmt: (max) => makeTickFormatter(props.format, c.locale, max),
       }),
-    [W, H, backModel, frontValues, props.depth, wall, legendH, below, props.format, c.locale],
+    [W, H, backModel, frontValues, props.depth, wall, view, legendH, below, props.format, c.locale],
   );
   const { shown, merge } = L;
 
@@ -459,31 +525,38 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const colors = useMemo(() => {
     const h = props.highlight;
     const byName = typeof h === "string" ? all.includes(h) : Array.isArray(h) && h.some((x) => typeof x === "string" && all.includes(x));
+    // 앞줄: high는 작은 표시용 단계(ink부터)라 납작한 블록도 바닥과 대비가 커요. low는 0.8까지처럼 회색 단계
+    const frontSw = (part: ReadonlySet<number>) => (high ? categoricalDots(p, nF, part) : ramp(p, nF, part));
     if (nB === 1 && !byName) {
       const hi = resolveHighlight(h, periods.map((x) => x.datum as T), periods.map((x) => x.label), L.backTotal, "max");
-      return { periods: emphasis(p, shown, hi), back: [swatch(p, "neutral")], front: ramp(p, nF, new Set()) };
+      return { periods: emphasis(p, shown, hi), back: [swatch(p, "neutral")], front: frontSw(new Set()) };
     }
     const totals = [...names.map((_, j) => sum(L.back.map((r) => r[j]))), ...frontFields.map((_, j) => sum(L.front.map((r) => r[j])))];
     // 계열 강조에는 이름과 인덱스만 써요. 판별 함수는 행을 받는 함수라서 계열 이름에 넘기지 않아요
     const hi = resolveHighlight(typeof h === "function" ? undefined : h, all, all, totals, "first");
     const part = (from: number, n: number) => new Set([...hi].filter((i) => i >= from && i < from + n).map((i) => i - from));
-    return { periods: null, back: ramp(p, nB, part(0, nB)), front: ramp(p, nF, part(nB, nF)) };
-  }, [props.highlight, all, nB, nF, periods, L, p, shown, names, frontFields]);
+    return { periods: null, back: ramp(p, nB, part(0, nB)), front: frontSw(part(nB, nF)) };
+  }, [props.highlight, all, nB, nF, periods, L, p, shown, names, frontFields, high]);
   const swatches = (i: number, r: RowName) => (r === "front" ? colors.front : colors.periods ? [colors.periods[i]] : colors.back);
 
   const shade = luminance(parseColor(p.theme.panel) ?? [0, 0, 0, 1]) < 0.4 ? 0.3 : 0.16;
   const hatchFill = `url(#${uid}h)`;
   const hatched = (r: RowName) => texture === "all" || (texture === "front" && r === "front");
   const backLid = p.mix("panel", "neutralSoft", 0.5);
+  /** high 시점 앞줄 뚜껑: 바닥(neutralSoft)보다 진한 중립 면에 빗금(범례의 앞줄 견본과 같은 무늬)과 ink 테두리 */
+  const frontLid = p.paint("neutral");
 
-  const geom = (i: number, r: RowName): BlockGeom =>
-    r === "back" ? { x: L.slotX(i) + L.shift[0], base: L.floor - L.shift[1], w: L.w, d: L.depthBack } : { x: L.slotX(i), base: L.floor, w: L.w, d: L.depthFront };
+  const geom = (i: number, r: RowName): BlockGeom => {
+    const d = r === "back" ? L.depthBack : L.depthFront;
+    const at = r === "back" ? L.shift : [0, 0];
+    return { x: L.slotX(i) + at[0], base: L.floor - at[1], w: L.w, dx: d * L.cx, dy: -d * L.cy };
+  };
   const total = (i: number, r: RowName) => (r === "back" ? L.backTotal[i] : L.frontTotal[i]);
   const values = (i: number, r: RowName) => (r === "back" ? L.back[i] : L.front[i]);
   /** 블록 뚜껑 뒤 모서리의 y */
   const lidBackY = (i: number, r: RowName) => {
     const g = geom(i, r);
-    return g.base - total(i, r) * L.k - g.d * SIN;
+    return g.base - total(i, r) * L.k + g.dy;
   };
   const rows = hasFront ? BOTH_ROWS : BACK_ROW;
 
@@ -554,7 +627,7 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   // 툴팁 폭을 글자로 재요. 값은 늘 글자예요
   const tipAt = (i: number, tipRows: (TooltipRow & { value: string })[], title: string): TooltipData => {
     const b = geom(i, "back");
-    const half = (b.w + b.d * COS) / 2;
+    const half = (b.w + b.dx) / 2;
     const cx = b.x + half;
     const topY = Math.min(lidBackY(i, "back"), lidBackY(i, "front"));
     // ChartFrame 툴팁: 위아래 여백 8px씩, 제목 22px, 행마다 18px, 테두리 2px
@@ -604,8 +677,9 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const pick = (px: number, py: number, touch: boolean) => {
     if (empty) return;
     const i = evenIndex(px, L.slotX(0) + L.s * 0.49, L.slotX(shown - 1) + L.s * 0.49, shown);
-    // 앞줄 블록 꼭대기에서 6px 위까지와 그 아래는 앞줄, 그 위는 뒷줄. 터치는 기간만 고르고 뒷줄로 시작해요
-    const next = !touch && hasFront && py >= L.floor - L.frontTotal[i] * L.k - 6 ? "front" : "back";
+    // 앞줄 블록 꼭대기(high는 뚜껑 뒤 모서리)에서 조금 위까지와 그 아래는 앞줄, 그 위는 뒷줄. 터치는 기간만 고르고 뒷줄로 시작해요
+    const reach = high ? L.depthFront * L.cy + 4 : 6;
+    const next = !touch && hasFront && py >= L.floor - L.frontTotal[i] * L.k - reach ? "front" : "back";
     if (next !== row) setRow(next);
     if (i !== c.active) c.setActive(i, touch ? "touch" : "pointer");
   };
@@ -613,19 +687,19 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
   const wallTop = L.top - 10;
   const fx0 = L.slotX(0) - 8;
   const fx1 = L.slotX(shown - 1) + L.w + 8;
-  const deep = (FRONT_DEPTH + GAP) * L.s + L.depthBack + 8;
+  const deep = L.lead + L.depthBack + 8;
   const floorTop = pts([
     [fx0, L.floor + SLAB],
     [fx1, L.floor + SLAB],
-    [fx1 + deep * COS, L.floor + SLAB - deep * SIN],
-    [fx0 + deep * COS, L.floor + SLAB - deep * SIN],
+    [fx1 + deep * L.cx, L.floor + SLAB - deep * L.cy],
+    [fx0 + deep * L.cx, L.floor + SLAB - deep * L.cy],
   ]);
 
   const peakLabel = () => {
     const g = geom(peakB, "back");
     const text = msg.peak(fv(L.backTotal[peakB]));
     // 오른쪽 끝 기간이면 눈금 글자 열을 침범하지 않게 뒷벽 안으로 당겨요
-    const x = Math.min(g.x + (g.w + g.d * COS) / 2, (wall ? L.wallX[1] : W - 2) - textWidth(text, 11.5, 700) / 2);
+    const x = Math.min(g.x + (g.w + g.dx) / 2, (wall ? L.wallX[1] : W - 2) - textWidth(text, 11.5, 700) / 2);
     return (
       <Halo p={p} x={x} y={lidBackY(peakB, "back") - 11} opacity={fade(peakB)}>
         {text}
@@ -726,7 +800,13 @@ export function SkylineChart<T = Row>(props: SkylineChartProps<T>) {
                 if (!it) return null;
                 const g = geom(i, r);
                 const target = total(i, r) * L.k;
-                // 0이 아닌데 1px이 안 되면 블록 대신 바닥에 가는 선 (맨 위 계열 색). 길이는 바꾸지 않아요
+                if (high) {
+                  // high: 합계 0은 바닥에 점선 빈 자리, 0보다 크면 1px이 안 돼도 뚜껑 타일까지 그려요. 길이는 바꾸지 않아요
+                  // (0인지는 값으로 봐요. 차트가 아주 낮아 눈금 배율이 0이어도 값이 있는 블록은 빈 자리가 아니에요)
+                  if (total(i, r) === 0) return <polygon key={r} points={pts([[g.x, g.base], [g.x + g.w, g.base], [g.x + g.w + g.dx, g.base + g.dy], [g.x + g.dx, g.base + g.dy]])} fill="none" stroke={p.paint("neutralStrong")} strokeOpacity={0.7} strokeDasharray="2 2" />;
+                  return <Prism key={r} p={p} g={g} cum={it.v} colors={swatches(i, r)} hatch={hatched(r) ? hatchFill : null} lid={r === "back" ? backLid : frontLid} lidStroke lidInk={r === "front"} lidHatch={r === "front"} shade={shade} tile />;
+                }
+                // low: 0이 아닌데 1px이 안 되면 블록 대신 바닥에 가는 선 (맨 위 계열 색). 길이는 바꾸지 않아요
                 if (target > 0 && target < 1) {
                   const vals = values(i, r);
                   let topJ = vals.length - 1;

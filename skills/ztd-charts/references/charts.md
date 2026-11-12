@@ -434,17 +434,17 @@
 {"type":"segmented","data":[{"method":"Card","amount":412},{"method":"Mobile pay","amount":278},{"method":"Bank transfer","amount":134}],"encoding":{"label":"method","value":"amount"},"options":{"highlight":"Mobile pay"},"card":{"number":"33","title":"Segmented bar","subtitle":"Payment volume by method (100M KRW)","takeaway":"Mobile pay is one in three","level":"basic"}}
 ```
 
-## skyline · Skyline (`<SkylineChart>`, Intermediate, Trend)
+## skyline · Skyline (`<SkylineChart>`, Advanced, Trend)
 
 - What: Stacked volume per period as blocks, with a smaller outcome in the same unit standing in front
 - Use when: 7 to 40 periods of stacked volume and a smaller outcome in the same unit (failures, retries), as the lead card of a dashboard
 - Avoid when: Negative values, precise value comparison (bars are more accurate), or two values in different units (split the chart and link it with syncId)
 - encoding: x, y[], series?, front?[]
-- Chart options: depth, wall, texture: front|all|none, frontRate, dayFirst
+- Chart options: view: high|low, depth, wall, texture: front|all|none, frontRate, dayFirst
 - Default highlight: the largest value
 
 ```json
-{"type":"skyline","data":[{"day":"2026-10-23","Input":410000,"Cached":317223,"Output":186999,"Reasoning":79534,"Failed":11000,"Retried":10000},{"day":"2026-10-24","Input":446030,"Cached":337921,"Output":202044,"Reasoning":87942,"Failed":15314,"Retried":9190},{"day":"2026-10-25","Input":440886,"Cached":336150,"Output":202507,"Reasoning":87489,"Failed":15398,"Retried":6051}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 14 days","takeaway":"Nov 5 was the busiest day","level":"intermediate"}}
+{"type":"skyline","data":[{"day":"2026-10-23","Input":410000,"Cached":317223,"Output":186999,"Reasoning":79534,"Failed":11000,"Retried":10000},{"day":"2026-10-24","Input":446030,"Cached":337921,"Output":202044,"Reasoning":87942,"Failed":15314,"Retried":9190},{"day":"2026-10-25","Input":440886,"Cached":336150,"Output":202507,"Reasoning":87489,"Failed":15398,"Retried":6051}],"encoding":{"x":"day","y":["Input","Cached","Output","Reasoning"],"front":["Failed","Retried"]},"options":{"format":"compact"},"card":{"number":"34","title":"Skyline","subtitle":"Daily tokens, last 14 days","takeaway":"Nov 5 was the busiest day","level":"advanced"}}
 ```
 
 ## histogram · Histogram (`<HistogramChart>`, Intermediate, Distribution)
