@@ -81,6 +81,27 @@ describe("FlowMap", () => {
     // 같은 반구 안의 흐름은 한 조각이고 자르지 않아요
     expect(links(draw([{ from: "Paris", to: "Tokyo", v: 5 }])).map((l) => l.clip)).toEqual([false]);
   });
+  it("flows cut at the map edge stay inside the svg where the globe's edge falls outside it", () => {
+    // The map is fitted to its places, so on wide charts the globe's left edge lies past the svg (about 21px at 1200px).
+    // The outline that clips the cut flows is cut to the map area, so nothing is drawn into the card padding
+    for (const width of [540, 900, 1200]) {
+      const h = r(<FlowMap data={flowMapSample} source="from" target="to" value="teu" places={flowMapPlaces} width={width} animate={false} />);
+      const [W, H] = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(h)!.slice(1).map(Number);
+      const outlines = [...h.matchAll(/<clipPath id="[^"]*s\d+"><path d="([^"]+)"/g)].map((m) => nums(m[1]));
+      expect(outlines.length).toBeGreaterThan(0);
+      for (const n of outlines) {
+        const xs = n.filter((_, i) => i % 2 === 0);
+        const ys = n.filter((_, i) => i % 2 === 1);
+        expect(n.length >= 6 && n.every(Number.isFinite)).toBe(true);
+        expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+        expect(Math.max(...xs)).toBeLessThanOrEqual(W);
+        expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+        expect(Math.max(...ys)).toBeLessThanOrEqual(H);
+      }
+      // The three flows across the map edge are still drawn in two pieces each
+      expect(links(h).filter((l) => l.clip)).toHaveLength(6);
+    }
+  });
   it('"auto" centres the world map on the Pacific for trans-Pacific lanes and on the Atlantic for trans-Atlantic ones', () => {
     expect(chooseCenter("auto", [{ a: 121.5, b: -118.2, w: 9 }, { a: 4.5, b: -74, w: 2 }], [])).toBe(150);
     expect(chooseCenter("auto", [{ a: 4.5, b: -74, w: 9 }, { a: 121.5, b: -118.2, w: 2 }], [])).toBe(0);

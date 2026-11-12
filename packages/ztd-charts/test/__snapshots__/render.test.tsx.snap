@@ -314,7 +314,7 @@ exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀
     "lines": 0,
     "paths": 44,
     "rects": 24,
-    "sha1": "5f30eb5e2862",
+    "sha1": "bab8d5e57be5",
     "texts": [
       "Shanghai",
       "Los Angeles",

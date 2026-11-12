@@ -4,7 +4,7 @@ import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSni
 import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.11.2";
+export const SERVER_VERSION = "0.11.3";
 /** Chart count used in the descriptions. Counted from the list so adding a chart needs no manual edit */
 const N = CHARTS.length;
 

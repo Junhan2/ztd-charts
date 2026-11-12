@@ -120,9 +120,9 @@ interface Piece {
 
 /**
  * The pieces of one flow. When, within one projection piece, the short path crosses the date line (opposite the central meridian), it is drawn as two curves, one with the destination shifted a full turn (leaving past the right edge of the map) and
- * one with the origin shifted (entering from past the left edge), both clipped to the globe outline. The arrowhead goes at the end of the piece on the real destination side
+ * one with the origin shifted (entering from past the left edge), both clipped to the globe outline inside the map area. The arrowhead goes at the end of the piece on the real destination side
  */
-function flowPieces(A: MapPoint, B: MapPoint, fr: GeoFrame, rB: number, w: number): Piece[] {
+function flowPieces(A: MapPoint, B: MapPoint, fr: GeoFrame, area: XY, rB: number, w: number): Piece[] {
   const k = fr.fit.k;
   const scr = (m: { x: number; y: number }): XY => [m.x * k + fr.fit.tx, m.y * k + fr.fit.ty];
   const a = scr(A);
@@ -141,7 +141,7 @@ function flowPieces(A: MapPoint, B: MapPoint, fr: GeoFrame, rB: number, w: numbe
       const out = curve(a, shift(B, lb, -360 * s), 0, 0, A.sub);
       const into = curve(shift(A, la, 360 * s), b, rB, w, A.sub);
       // Put the same arrowhead at the exiting end and the entering end, so the two pieces cut at the map edge read as one flow
-      const ring = sphereRing(A.sub, fr);
+      const ring = sphereRing(A.sub, fr, area);
       out.arrow = edgeArrow(a, shift(B, lb, -360 * s), ring, w, false);
       into.arrow = `${edgeArrow(shift(A, la, 360 * s), b, ring, w, true)}${into.arrow}`;
       return [out, into];
@@ -226,15 +226,31 @@ function curve(p0: XY, p1: XY, rB: number, w: number, cut: SubProjection | null)
   };
 }
 
-/** The globe outline of a projection piece (two lines opposite the central meridian, every 3° of latitude) as screen points. Used to clip flows that cross the date line and to place edge arrowheads */
-function sphereRing(sub: SubProjection, fr: GeoFrame): XY[] {
+/**
+ * The globe outline of a projection piece (two lines opposite the central meridian, every 3° of latitude) as screen points, cut to the map area [0, w] × [0, h].
+ * Used to clip flows that cross the date line and to place edge arrowheads. The map is fitted to its places, so on wide charts the globe's edge lies past the svg
+ * (about 21px at 1200px); the cut keeps those flows and their arrowheads inside the map
+ */
+function sphereRing(sub: SubProjection, fr: GeoFrame, [w, h]: XY): XY[] {
   const at = ([x, y]: [number, number]): XY => [x * fr.fit.k + fr.fit.tx, y * fr.fit.k + fr.fit.ty];
-  const pts: XY[] = [];
-  for (let lat = -90; lat <= 90; lat += 3) pts.push(at(sub.raw(180, lat)));
-  for (let lat = 90; lat >= -90; lat -= 3) pts.push(at(sub.raw(-180, lat)));
-  return pts;
+  let ring: XY[] = [];
+  for (let lat = -90; lat <= 90; lat += 3) ring.push(at(sub.raw(180, lat)));
+  for (let lat = 90; lat >= -90; lat -= 3) ring.push(at(sub.raw(-180, lat)));
+  // Sutherland-Hodgman: keep the part on the inner side of each edge of the area (each edge as a distance that is 0 or more inside)
+  for (const side of [(q: XY) => q[0], (q: XY) => w - q[0], (q: XY) => q[1], (q: XY) => h - q[1]]) {
+    const src = ring;
+    ring = [];
+    src.forEach((cur, i) => {
+      const prev = src[(i + src.length - 1) % src.length];
+      const dc = side(cur);
+      const dp = side(prev);
+      if (dc >= 0 !== dp >= 0) ring.push(lerp(prev, cur, dp / (dp - dc)));
+      if (dc >= 0) ring.push(cur);
+    });
+  }
+  return ring;
 }
-const sphereOutline = (sub: SubProjection, fr: GeoFrame) => `M${sphereRing(sub, fr).map(([x, y]) => `${r1(x)} ${r1(y)}`).join("L")}Z`;
+const sphereOutline = (sub: SubProjection, fr: GeoFrame, area: XY) => `M${sphereRing(sub, fr, area).map(([x, y]) => `${r1(x)} ${r1(y)}`).join("L")}Z`;
 
 /**
  * Flow map: connects origins and destinations with curved lines whose width is the amount. An arrowhead at the destination shows the direction, and flows in opposite directions bend to opposite sides, so both stay visible.
@@ -376,7 +392,7 @@ export function FlowMap<T = Row>(props: FlowMapProps<T>) {
     return resolveHighlight(h as Highlight<T> | undefined, flows.map((f) => f.datum), flows.map((f) => arrow(places[f.a].name, places[f.b].name)), flows.map((f) => f.value), "max");
   }, [props.highlight, flows, places]);
 
-  const geom = useMemo(() => (frame ? flows.map((f) => flowPieces(places[f.a].at, places[f.b].at, frame, dotR(places[f.b]), widthOf(f.value))) : []), [frame, flows, places, tmax, wMax, vmax]); // eslint-disable-line react-hooks/exhaustive-deps
+  const geom = useMemo(() => (frame ? flows.map((f) => flowPieces(places[f.a].at, places[f.b].at, frame, [mapW, H], dotR(places[f.b]), widthOf(f.value))) : []), [frame, flows, places, tmax, wMax, vmax]); // eslint-disable-line react-hooks/exhaustive-deps
   const cuts = useMemo(() => {
     const subs: SubProjection[] = [];
     for (const pieces of geom) for (const pc of pieces) if (pc.cut && !subs.includes(pc.cut)) subs.push(pc.cut);
@@ -551,7 +567,7 @@ export function FlowMap<T = Row>(props: FlowMapProps<T>) {
             ) : null}
             {cuts.map((sub, i) => (
               <clipPath key={i} id={`${uid}s${i}`}>
-                <path d={sphereOutline(sub, frame)} />
+                <path d={sphereOutline(sub, frame, [mapW, H])} />
               </clipPath>
             ))}
           </>
