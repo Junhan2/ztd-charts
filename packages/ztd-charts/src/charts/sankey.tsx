@@ -19,7 +19,7 @@ const en = {
   out: "Out",
   flow: "Flow",
   flows: (n: number) => plural(n, "flow"),
-  /** 링크가 출발 노드에서 차지하는 비율의 이름 */
+  /** Name of a link's share of its source node */
   from: (source: string) => `Share of ${source}`,
   desc: (nodes: number, links: number) => `${plural(nodes, "node")}, ${plural(links, "flow")}. Largest flows`,
 };
@@ -41,15 +41,15 @@ export interface SankeyChartProps<T = Row> extends Omit<BaseChartProps<T>, "high
   source?: Accessor<T, string>;
   target?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 노드 폭(px). 기본 10 */
+  /** Node width (px). Default 10 */
   nodeWidth?: number;
-  /** 노드 사이 간격(px). 기본 14 */
+  /** Gap between nodes (px). Default 14 */
   nodePadding?: number;
-  /** 강조할 노드 이름(또는 인덱스). 그 노드로 들어오고 나가는 흐름이 강조돼요. 함수는 배치된 노드(name, value 등)를 받아요. 기본은 마지막 열에서 가장 큰 노드 */
+  /** Node name (or index) to highlight. Flows into and out of that node are highlighted. A function receives the laid-out node (name, value, etc.). Default: the largest node in the last column */
   highlight?: Highlight<SankeyNode>;
 }
 
-/** 생키 다이어그램: 단계 사이 흐름의 양 */
+/** Sankey diagram: the volume of flows between stages */
 export function SankeyChart<T = Row>(props: SankeyChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(340, w * 0.6)), duration: 1000, stagger: 70 });
   const { p, width: W, height: H } = c;
@@ -154,7 +154,7 @@ export function SankeyChart<T = Row>(props: SankeyChartProps<T>) {
         const room = first ? lw - 10 : last ? rw - 10 : Math.max(40, (layout.nodes.find((q) => q.layer === n.layer + 1)?.x0 ?? W) - n.x1 - 16);
         const cy = (n.y0 + n.y1) / 2;
         const two = n.y1 - n.y0 >= 26;
-        // 가운데 열 라벨은 흐름 띠 위에 놓여서 카드 바탕색 받침을 깔아요
+        // Middle-column labels sit on top of the flow bands, so they get a backing in the card background color
         const overLinks = !first && !last;
         const name = truncate(n.label, room, 11.5, 700);
         const pillW = Math.max(textWidth(name, 11.5, 800), two ? textWidth(c.fmt(n.value), 10.5) : 0) + 10;

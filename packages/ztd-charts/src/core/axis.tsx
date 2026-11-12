@@ -5,11 +5,11 @@ import { textWidth, truncate } from "./text";
 
 export const AXIS_FONT = 10.5;
 
-/** 눈금 글자. 짧게 줄인 글자가 겹치면(10만, 10만, 10.1만) 그 축만 전체 숫자로 써요. locale은 그때 쓰는 로캘(차트의 c.locale) */
+/** Tick labels. When the shortened labels collide (Korean 10만, 10만, 10.1만), that axis alone uses full numbers. locale is the locale used then (the chart's c.locale) */
 export function tickLabels(ticks: readonly number[], fmt: ValueFormatter, locale?: string): string[] {
   const out = ticks.map(fmt);
   if (new Set(out).size === out.length) return out;
-  // 글자가 겹치면 눈금 간격에 맞춘 자릿수로 (간격이 0.00001이면 소수 5자리. 아주 작은 값이 모두 "0"이 되지 않게)
+  // On a collision, use as many decimals as the tick step needs (a step of 0.00001 gets 5, so very small values do not all become "0")
   let step = Infinity;
   for (let i = 1; i < ticks.length; i++) step = Math.min(step, Math.abs(ticks[i] - ticks[i - 1]));
   const digits = step > 0 && Number.isFinite(step) ? Math.min(20, Math.max(2, Math.ceil(-Math.log10(step) - 1e-9))) : 2;
@@ -46,7 +46,7 @@ export function GridY(props: { p: Painter; ticks: number[]; y: (v: number) => nu
   );
 }
 
-/** 가운데 정렬 x 눈금 글자 중 앞 글자와 8px 안으로 붙거나 [lo, hi] 밖으로 나가는 것을 빼요 */
+/** Drops centered x tick labels that come within 8px of the previous label or extend outside [lo, hi] */
 export function fitTickLabels<T extends { x: number; label: string }>(ticks: readonly T[], lo: number, hi: number): T[] {
   const keep: T[] = [];
   let lastR = -Infinity;
@@ -61,15 +61,15 @@ export function fitTickLabels<T extends { x: number; label: string }>(ticks: rea
 }
 
 /**
- * 칸 라벨을 겹치지 않게 솎아요. 보여줄 인덱스 목록.
- * keep(폭포 차트의 합계, 강조 항목)은 늘 남기고 나머지를 그 둘레에서 솎아요
+ * Thins cell labels so they do not overlap. Returns the indexes to show.
+ * keep (a waterfall chart's totals, highlighted items) always stays, and the rest are thinned around it
  */
 export function thinLabels(centers: number[], labels: string[], size = AXIS_FONT, gap = 8, weight = 400, keep?: ReadonlySet<number>): number[] {
   const n = labels.length;
   if (n <= 1) return labels.map((_, i) => i);
   const widths = labels.map((l) => textWidth(l, size, weight));
   const near = (a: number, b: number) => Math.abs(centers[b] - centers[a]) < (widths[a] + widths[b]) / 2 + gap;
-  // keep 끼리 겹치면 앞의 것만 남겨요. 겹친 채로 두면 어떤 간격으로도 풀리지 않아 keep 까지 모두 버려졌어요
+  // When keep entries overlap each other, only the earlier one stays. Left overlapping, no spacing could resolve them, and even the keep entries were all dropped
   const must: number[] = [];
   for (const k of keep ?? []) if (!must.some((m) => near(m, k))) must.push(k);
   const free = (i: number) => !must.some((m) => near(m, i));
@@ -92,12 +92,12 @@ export function AxisXBand(props: {
   sub?: string[];
   size?: number;
   maxWidth?: number;
-  /** 차트 폭. 라벨을 가장자리까지 남은 자리만큼 말줄임해요 (강조 라벨이 카드 밖으로 잘리지 않게) */
+  /** Chart width. Labels are truncated to the room left before the edge (so a highlighted label is not clipped outside the card) */
   width: number;
 }) {
   const { p, labels, centers, y, width } = props;
   const size = props.size ?? AXIS_FONT;
-  // 가운데 정렬 라벨이 들어가는 폭: 가까운 가장자리까지의 두 배, 길어도 maxWidth(기본 160px)까지. 줄인 글자로 겹침을 셈해요
+  // Width a centered label fits in: twice the distance to the nearer edge, at most maxWidth (default 160px). Overlap is counted with the shortened text
   const fitted = labels.map((l, i) => {
     const edge = 2 * Math.max(0, Math.min(centers[i], width - centers[i])) - 2;
     return truncate(l, Math.min(props.maxWidth ?? 160, edge), size, props.strong?.has(i) ? 700 : 500);
@@ -126,7 +126,7 @@ export function AxisXBand(props: {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
-/** 짚은 x의 세로선과 계열마다 후광 점. CSS transform으로 옮겨서 다음 자리로 미끄러져요 (동작 줄이기면 바로) */
+/** Vertical line at the pointed x, with a halo dot for each series. Moved with a CSS transform, so it glides to the next spot (instantly with reduced motion) */
 export function HoverLine(props: { p: Painter; x: number; top: number; bottom: number; dots?: { k: number | string; y: number; color: string; strong?: boolean }[] }) {
   const { p } = props;
   return (
@@ -142,7 +142,7 @@ export function HoverLine(props: { p: Painter; x: number; top: number; bottom: n
   );
 }
 
-/** x축 위에 짚은 값을 알약으로. 아래 눈금 글자는 카드 바탕 테두리로 가리고, 차트 폭 안에 가둬요 */
+/** The pointed value as a pill on the x axis. It covers the tick labels below with a card-background border and stays within the chart width */
 export function AxisPill(props: { p: Painter; x: number; y: number; label: string; width: number }) {
   const { p } = props;
   const label = truncate(props.label, 160, AXIS_FONT, 700);

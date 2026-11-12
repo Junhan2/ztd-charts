@@ -10,11 +10,11 @@ import type { ChartEvent, TooltipData, TooltipRow } from "./types";
 
 export interface ChartFrameProps<T> {
   c: ChartCtx<T>;
-  /** 차트 종류 이름. 예: "Pie chart" */
+  /** Name of the chart type, e.g. "Pie chart" */
   kind: string;
   ariaLabel?: string;
   description: string;
-  /** 그릴 것이 없을 때 설명 (기본 "No data."). 데이터는 있는데 못 그리는 까닭을 알려 줘요 */
+  /** Message shown when there is nothing to draw (default "No data."). Tells why data that exists cannot be drawn */
   emptyText?: string;
   events: ChartEvent<T>[];
   tip: TooltipData | null;
@@ -22,33 +22,33 @@ export interface ChartFrameProps<T> {
   className?: string;
   style?: CSSProperties;
   theme?: Partial<ChartTheme>;
-  /** 포인터가 svg 위에서 움직일 때 (svg 좌표) */
+  /** Called when the pointer moves over the svg (svg coordinates) */
   onPointerMove?: (x: number, y: number, e: PointerEvent<SVGSVGElement>) => void;
-  /** 포인터를 누를 때, 뗄 때 (svg 좌표). 구간 선택처럼 끌기를 쓰는 차트용 */
+  /** Called when the pointer is pressed and released (svg coordinates). For charts that use dragging, such as range selection */
   onPointerDown?: (x: number, y: number, e: PointerEvent<SVGSVGElement>) => void;
   onPointerUp?: (x: number, y: number, e: PointerEvent<SVGSVGElement>) => void;
-  /** 기본 키보드 탐색보다 먼저 받아요. true를 돌려주면 기본 처리를 건너뛰어요 */
+  /** Receives key events before the default keyboard navigation. Return true to skip the default handling */
   onKey?: (e: KeyboardEvent<HTMLDivElement>) => boolean;
-  /** 스크린리더에 읽어 줄 문장. 있으면 고른 항목 대신 이걸 읽어요 */
+  /** Sentence for screen readers to announce. When set, it is read instead of the selected item */
   announce?: string;
   defs?: ReactNode;
   children?: ReactNode;
-  /** svg 위에 올리는 HTML */
+  /** HTML layered above the svg */
   overlay?: ReactNode;
-  /** svg 아래에 까는 HTML (캔버스) */
+  /** HTML laid under the svg (canvas) */
   underlay?: ReactNode;
-  /** 키보드 탐색 끄기 */
+  /** Turns off keyboard navigation */
   noNav?: boolean;
 }
 
 const MAX_TABLE_ROWS = 60;
 const MAX_TIP_ROWS = 8;
 
-/** 계열이 많은 툴팁은 앞 8줄만 보여 주고, 빠진 계열 수를 마지막 줄에 알려요. 보여 줄 순서로 정렬해서 넘겨요 */
+/** A tooltip with many series shows only the first 8 rows and gives the number of omitted series in the last row. Pass the rows sorted in display order */
 export function capTipRows(rows: TooltipRow[], more: (n: number) => string): TooltipRow[] {
   return rows.length > MAX_TIP_ROWS ? [...rows.slice(0, MAX_TIP_ROWS), { label: more(rows.length - MAX_TIP_ROWS), value: "" }] : rows;
 }
-/** 화면에서 숨기고 스크린리더만 읽게. 인라인이라 CSS가 들어오기 전(SSR, JS 없음)에도 숨어요 */
+/** Hidden on screen and read only by screen readers. Inline, so it stays hidden before the CSS arrives (SSR, no JS) */
 export const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 
 export function ChartFrame<T>(props: ChartFrameProps<T>) {
@@ -63,11 +63,11 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
 
   const count = events.length;
   const nav = !props.noNav && count > 0;
-  // 이름: ariaLabel, 그다음 감싼 카드의 제목, 그다음 차트 종류("Bar chart")
+  // Name: ariaLabel, then the title of the wrapping card, then the chart type ("Bar chart")
   const cardTitle = useContext(CardTitleContext);
   const label = props.ariaLabel ?? cardTitle ?? props.kind;
-  // 표 내용이 같으면 다시 만들지 않아요. 등장 애니메이션 중 매 프레임 렌더되고, events를 매번 새로 만드는 차트도 있어서
-  // 배열이 아니라 표에 실제로 들어가는 글자로 비교해요 (최대 60행). 글자는 배열이 바뀔 때만, 표를 보일 때만 만들어요
+  // Not rebuilt when the table content is unchanged: it renders every frame during the entrance animation, and some charts create events anew each time
+  // Compared by the text that actually goes into the table (up to 60 rows), not by the array. The text is built only when the array changes and the table is shown
   const tableSig = useMemo(
     () =>
       nav
@@ -97,7 +97,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   }, [c.width, c.height]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    // nav일 때만 달아요. 안쪽 버튼(줌 "전체 보기" 등)에서 올라온 키는 그 버튼 몫이에요
+    // Attached only with nav. Keys bubbling up from an inner button (such as the zoom's "Show all") belong to that button
     if (e.target !== e.currentTarget) return;
     if (props.onKey?.(e)) {
       e.preventDefault();
@@ -121,7 +121,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
         next = count - 1;
         break;
       case "Escape":
-        // 고른 게 없으면 Escape를 삼키지 않아요 (대화상자 닫기 같은 바깥 처리가 받게)
+        // With nothing selected, Escape is not swallowed (so an outer handler, such as closing a dialog, receives it)
         if (cur === null) return;
         next = null;
         break;
@@ -139,7 +139,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
     c.setActive(next, "keyboard");
   };
 
-  // 터치로 고른 항목은 바깥을 누를 때까지 유지. c는 렌더마다 새 객체라 쓰는 값만 의존해요
+  // An item selected by touch stays selected until a press outside. c is a new object every render, so the effect depends only on the values it uses
   const { via, node, setActive } = c;
   useEffect(() => {
     if (via !== "touch" || !node) return undefined;
@@ -151,9 +151,9 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   }, [via, node, setActive]);
 
   const activeEvent = c.active !== null ? events[c.active] : null;
-  // 묶인 다른 차트에서 짚은 자리(sync)는 세로선만 보여 주고 툴팁은 짚은 차트에만 띄워요
+  // A spot pointed at in another linked chart (sync) shows only the vertical line; the tooltip appears only on the chart being pointed at
   const tip = c.showTooltip && props.renderTip !== false && !c.pending && c.via !== "sync" ? props.tip : null;
-  // 반응형이면 viewBox 폭이 곧 잰 폭이라 배율이 1이에요. 고정 폭일 때만 재요 (재면 레이아웃을 강제해요)
+  // When responsive, the viewBox width is the measured width, so the scale is 1. Measured only for a fixed width (measuring forces a layout)
   const scale = tip && !c.responsive && c.node && c.width ? c.node.getBoundingClientRect().width / c.width || 1 : 1;
   const custom = typeof props.renderTip === "function" && activeEvent ? props.renderTip(activeEvent) : null;
   const live = props.announce ?? (c.via === "keyboard" && activeEvent ? `${activeEvent.label}${activeEvent.series ? ` ${activeEvent.series}` : ""}: ${activeEvent.formatted ?? activeEvent.value ?? ""} (${(c.active ?? 0) + 1}/${count})` : "");
@@ -162,10 +162,10 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
   if (tip) {
     const px = tip.x * scale;
     const boxW = c.width * scale;
-    // 점 가운데에 두되 차트 양끝 4px 안으로 가둬요 (translate의 %는 툴팁 자기 폭 기준이라 폭을 재지 않아도 돼요)
+    // Centered on the point but kept 4px inside both edges of the chart (a translate % is relative to the tooltip's own width, so no width measurement is needed)
     const shiftX = `clamp(${(4 - px).toFixed(1)}px, -50%, calc(${(boxW - px - 4).toFixed(1)}px - 100%))`;
     const below = tip.y < 64;
-    // 카드 바탕 위에 뜨는 작은 카드: 테두리와 그림자로 차트와 갈라요. left, top은 CSS 전환으로 다음 점까지 미끄러져요
+    // A small card floating over the card background: a border and shadow set it apart from the chart. left and top glide to the next point with a CSS transition
     tipStyle = {
       position: "absolute",
       left: px,
@@ -194,7 +194,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
     if (c.via !== "keyboard") c.setActive(null);
   };
 
-  // svg 좌표로 바꿔 넘겨요. 위치는 들어올 때 한 번 재고 스크롤, 크기 변화 때만 다시 재요 (움직일 때마다 재면 레이아웃을 강제해요)
+  // Passed on in svg coordinates. The position is measured once on enter and again only on scroll or resize (measuring on every move would force a layout)
   const inSvg = (fn: ((x: number, y: number, e: PointerEvent<SVGSVGElement>) => void) | undefined) =>
     fn
       ? (e: PointerEvent<SVGSVGElement>) => {
@@ -205,7 +205,7 @@ export function ChartFrame<T>(props: ChartFrameProps<T>) {
       : undefined;
   const onMove = inSvg(props.onPointerMove);
   const onDownProp = inSvg(props.onPointerDown);
-  // 손가락으로 톡 누르면 pointermove 없이 pointerdown만 와요. 움직임으로 값을 읽는 차트도 누른 자리를 보여 줘요
+  // A finger tap sends only pointerdown, without pointermove. This lets charts that read values on move also show the tapped spot
   const onDown =
     onMove || onDownProp
       ? (e: PointerEvent<SVGSVGElement>) => {
@@ -308,7 +308,7 @@ function DataTable<T>({ label, events, t }: { label: string; events: ChartEvent<
   );
 }
 
-/** 차트 안의 SVG 글자 */
+/** SVG text inside a chart */
 export function Txt(props: {
   x: number;
   y: number;

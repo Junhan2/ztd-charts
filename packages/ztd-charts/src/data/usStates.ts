@@ -1,6 +1,6 @@
 /**
- * 미국 주 50곳과 워싱턴 DC (타일 격자 지도의 us-states, 지도 ztd-charts/geo/us-states).
- * 줄마다 [우편 약자, 영어 이름, FIPS 코드]예요. 이름은 미국 인구조사국 표기(us-atlas)와 같아요
+ * The 50 US states and Washington DC (us-states of the tile grid map, map ztd-charts/geo/us-states).
+ * Each row is [postal abbreviation, English name, FIPS code]. Names match the US Census Bureau spelling (us-atlas)
  */
 export const US_STATES: readonly (readonly [string, string, string])[] = [
   ["AL", "Alabama", "01"],
@@ -56,17 +56,17 @@ export const US_STATES: readonly (readonly [string, string, string])[] = [
   ["WY", "Wyoming", "56"],
 ];
 
-/** 우편 약자, 이름, FIPS, "US-CA" 꼴(ISO 3166-2) 말고 더 받는 이름 */
+/** Accepted names beyond the postal abbreviation, name, FIPS and the "US-CA" form (ISO 3166-2) */
 const US_ALIASES: Readonly<Record<string, readonly string[]>> = { DC: ["Washington, D.C.", "Washington DC", "D.C."] };
 
-/** 주 한 줄의 받는 이름 (이름과 우편 약자 말고): FIPS, "US-CA", 다른 이름. 타일 격자와 지도가 같이 써요 */
+/** Accepted names for one state row (besides the name and postal abbreviation): FIPS, "US-CA", other names. Shared by the tile grid and the map */
 export function usStateKeys([postal, , fips]: readonly [string, string, string]): string[] {
   return [fips, `US-${postal}`, ...(US_ALIASES[postal] ?? [])];
 }
 
 /**
- * 타일 격자 지도의 us-states 배치 (8줄 × 11칸). 줄마다 왼쪽부터 우편 약자이고 "-"는 빈 칸이에요.
- * 이웃한 주가 위아래, 좌우로 이웃하게 직접 정한 배치예요 (알래스카는 왼쪽 위, 하와이는 왼쪽 아래)
+ * The us-states layout of the tile grid map (8 rows × 11 cells). Each row lists postal abbreviations from the left; "-" is an empty cell.
+ * A hand-made layout where neighboring states sit next to each other vertically and horizontally (Alaska top left, Hawaii bottom left)
  */
 export const US_LAYOUT: readonly string[] = [
   "AK - - - - - - - - - ME",

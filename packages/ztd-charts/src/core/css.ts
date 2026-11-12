@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { darkTheme } from "../theme/tokens";
 
-/** 인라인 스타일로 못 하는 규칙(포커스 링, 전환, 동작 줄이기)만 모은 CSS. 변수가 없으면 기본(다크) 테마 값을 써요 */
+/** CSS holding only the rules inline styles cannot express (focus ring, transitions, reduced motion). Without the variables, it uses the default (dark) theme values */
 export const baseCss = `
 .ztd-root{position:relative;-webkit-tap-highlight-color:transparent}
 .ztd-root:focus{outline:none}
@@ -26,8 +26,8 @@ export const baseCss = `
 `;
 
 /**
- * 칸이 아주 많은 차트(와플, 캘린더)는 등장을 CSS 애니메이션으로 해요. 프레임마다 React가 일하지 않아요.
- * fill-mode backwards라서 끝난 뒤에는 opacity 속성(호버 흐림)이 그대로 먹어요.
+ * Charts with very many cells (waffle, calendar) run their entrance as a CSS animation, so React does no work per frame.
+ * With fill-mode backwards, the opacity attribute (hover dimming) applies as is once it ends.
  */
 export function cssEntrance(enabled: boolean, waiting: boolean, kind: "pop" | "fade", delay: number, duration: number): Record<string, string | number> | undefined {
   if (!enabled) return undefined;
@@ -36,8 +36,8 @@ export function cssEntrance(enabled: boolean, waiting: boolean, kind: "pop" | "f
 }
 
 /**
- * cssEntrance를 켤지. 서버 HTML에 없는 등장 스타일을 하이드레이트 전에 넣지 않아요.
- * 움직임 없이 처음 그린 차트(서버 그림을 이어받은 대화형 HTML, 동작 줄이기)는 다시 재생할 때만 등장해요
+ * Whether to turn on cssEntrance. Entrance styles absent from the server HTML are not added before hydration.
+ * A chart first drawn without motion (interactive HTML taking over a server drawing, reduced motion) runs its entrance only on replay
  */
 export function useCssEntrance(c: { motion: { enabled: boolean }; hydrated: boolean }, m: { waiting: boolean; generation: number }): boolean {
   const [startedOff] = useState(!c.motion.enabled);
@@ -46,7 +46,7 @@ export function useCssEntrance(c: { motion: { enabled: boolean }; hydrated: bool
 
 let injected = false;
 
-/** 브라우저에서 한 번만 <style id="ztd-base">를 넣어요 */
+/** Inserts <style id="ztd-base"> once in the browser */
 export function ensureBaseStyles(): void {
   if (injected || typeof document === "undefined") return;
   injected = true;

@@ -11,7 +11,7 @@ import { useChartLocale, useChartTheme, type Painter } from "../theme/context";
 import type { ChartTheme } from "../theme/tokens";
 import { ReplayContext } from "./replay";
 
-/** 카드, 범례, 상태 문구 (서버 렌더도 써요) */
+/** Card, legend and state text (the server render uses it too) */
 const en = {
   legend: "Legend",
   replay: "Replay animation",
@@ -22,7 +22,7 @@ const en = {
   loading: "Loading",
   empty: "No data to show",
   source: "Source",
-  /** 켜고 끄는 범례를 누른 뒤 화면 낭독기가 읽는 문장 */
+  /** The sentence a screen reader reads after a toggleable legend is pressed */
   shown: (visible: number, total: number) => `${visible} of ${total} series shown`,
 };
 export const CARD_TEXT: Record<ChartLang, typeof en> = {
@@ -41,20 +41,20 @@ export const CARD_TEXT: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 카드 안쪽 여백: 좌우 padding 20px과 테두리 1px씩(아래 ChartCard 스타일). 서버 HTML이 이어받는 차트를 카드 안 내용 폭으로 그릴 때 빼요. padding이나 border를 바꾸면 같이 바꿔요 */
+/** Card inset: 20px left and right padding plus a 1px border on each side (ChartCard style below). Subtracted when server HTML draws a chart for hydration at the card's content width. Change it together with padding or border */
 export const CARD_INSET = 42;
 
-/** 화면에는 안 보이고 화면 낭독기만 읽는 글 (ChartFrame과 같은 값. 그 파일에서 옮기면 다른 차트 묶음 크기가 흔들려서 따로 둬요) */
+/** Text hidden on screen that only screen readers read (same values as ChartFrame. Kept separate because moving it out of that file shifts the bundle size of other charts) */
 const SR_ONLY: CSSProperties = { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 };
 
-/** 로캘에 맞는 카드 문구 */
+/** Card text for the locale */
 const useCardText = (locale?: string) => CARD_TEXT[langOf(useChartLocale(locale))];
 
 export interface LegendItem {
   label: string;
-  /** CSS 색 또는 토큰 이름("accent", "ink", "neutral", "neutralStrong", "dim" …) */
+  /** A CSS color or a token name ("accent", "ink", "neutral", "neutralStrong", "dim" …) */
   color?: string;
-  /** 기본 "square" */
+  /** Default "square" */
   shape?: "square" | "line" | "dash" | "circle";
 }
 
@@ -64,11 +64,11 @@ export interface LegendProps {
   theme?: Partial<ChartTheme>;
   size?: number;
   locale?: string;
-  /** 숨긴 계열(항목 label). onToggle과 같이 줘요 */
+  /** Hidden series (item labels). Pass together with onToggle */
   hidden?: readonly string[];
   /**
-   * 주면 항목이 켜고 끄는 단추가 돼요(aria-pressed, Space와 Enter). 마지막 남은 계열은 끌 수 없고(aria-disabled), 누른 뒤 보이는 수를 화면 낭독기에 알려요.
-   * 예: <Legend items={items} hidden={hidden} onToggle={(s) => setHidden((h) => (h.includes(s) ? h.filter((x) => x !== s) : [...h, s]))} /> 와 차트의 hidden={hidden}
+   * When given, items become toggle buttons (aria-pressed, Space and Enter). The last remaining series cannot be turned off (aria-disabled), and after a press the visible count is announced to screen readers.
+   * Example: <Legend items={items} hidden={hidden} onToggle={(s) => setHidden((h) => (h.includes(s) ? h.filter((x) => x !== s) : [...h, s]))} /> with hidden={hidden} on the chart
    */
   onToggle?: (label: string) => void;
 }
@@ -76,11 +76,11 @@ export interface LegendProps {
 export function Legend(props: LegendProps) {
   const p = useChartTheme(props.theme);
   const text = useCardText(props.locale);
-  // 한 번 누른 뒤부터 지금 보이는 수를 알려요. 처음 그릴 때는 비워 둬서 서버 그림과 같아요
+  // Announce the visible count only after the first press. Left empty on first render so it matches the server render
   const [touched, setTouched] = useState(false);
   const size = props.size ?? 11.5;
   const toggle = props.onToggle;
-  // 숨긴 계열은 켜고 끄는 범례에서만 봐요
+  // Hidden series apply only to a toggleable legend
   const off = new Set(toggle ? props.hidden : undefined);
   const shown = props.items.filter((it) => !off.has(it.label)).length;
   const list = (
@@ -100,7 +100,7 @@ export function Legend(props: LegendProps) {
         return (
           <li key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, color: p.paint("muted"), lineHeight: 1.3 }}>
             {toggle ? (
-              // 이름은 상태와 상관없이 같고 상태는 aria-pressed가 알려요. 숨긴 항목은 줄을 긋고 색 칸을 옅게 해요(색만으로 알리지 않아요). 누를 자리는 24px 이상
+              // The name is the same in every state; aria-pressed conveys the state. Hidden items are struck through with a faded swatch (not conveyed by color alone). Hit area of 24px or more
               <button
                 type="button"
                 className="ztd-btn"
@@ -135,7 +135,7 @@ export function Legend(props: LegendProps) {
 }
 
 function LegendSwatch({ p, item, off }: { p: Painter; item: LegendItem; off?: boolean }) {
-  // 토큰은 테마 색, 섞은 색("mix:비율")은 차트 조각과 같은 섞은 색, 그 밖은 그대로
+  // Tokens become theme colors, mixed colors ("mix:ratio") the same mix as the chart marks, anything else as is
   const color = legendFill(p, item.color);
   const shape = item.shape ?? "square";
   if (shape === "line" || shape === "dash")
@@ -161,10 +161,10 @@ function LegendSwatch({ p, item, off }: { p: Painter; item: LegendItem; off?: bo
   );
 }
 
-/** 수준 id. 배지 글자는 로캘에 맞춰요 (Basic, 기본 …). 예전 한글 값 "기본" | "중급" | "심화"도 받아요 */
+/** Level id. The badge text follows the locale (Basic, 기본 …). The old Korean values "기본" | "중급" | "심화" are accepted too */
 export type Level = ChartLevel;
 
-/** 수준 배지. 모르는 값은 글자 그대로 기본 모양으로 */
+/** Level badge. An unknown value is shown as its own text in the default style */
 export function Badge(props: { level: Level | string; theme?: Partial<ChartTheme>; locale?: string }) {
   const p = useChartTheme(props.theme);
   const b = levelBadge(props.level, langOf(useChartLocale(props.locale)));
@@ -174,43 +174,43 @@ export function Badge(props: { level: Level | string; theme?: Partial<ChartTheme
 }
 
 export interface ChartCardProps {
-  /** 번호. 예: "01" */
+  /** Number. Example: "01" */
   number?: string | number;
   title: ReactNode;
   subtitle?: ReactNode;
-  /** 부제목 오른쪽 범례. 배열이나 아무 노드 */
+  /** Legend to the right of the subtitle. An array or any node */
   legend?: LegendItem[] | ReactNode;
-  /** 다시 재생 버튼. true면 안쪽 차트를 다시 재생해요 */
+  /** Replay button. When true, replays the chart inside */
   replay?: boolean;
-  /** 다시 재생을 눌렀을 때 */
+  /** Called when replay is pressed */
   onReplay?: () => void;
   replayLabel?: string;
-  /** 제목 줄 오른쪽 */
+  /** Right side of the title row */
   actions?: ReactNode;
-  /** 아래 한 줄 요약 */
+  /** One-line summary below */
   takeaway?: ReactNode;
-  /** 차트 아래 출처 줄. "Source: "(한국어 "출처: ") 뒤에 붙어요 */
+  /** Source line under the chart. Follows "Source: " (Korean "출처: ") */
   source?: ReactNode;
-  /** 출처 줄의 메모(기준일 등). 출처 뒤에 " · "로 이어요 */
+  /** Note on the source line (such as the as-of date). Joined after the source with " · " */
   note?: ReactNode;
-  /** 강조색으로 칠할 제목 속 낱말(글자 제목에서 처음 나오는 곳). 범례 대신 써요 */
+  /** A word in the title to color with the accent color (its first occurrence in a text title). Use it instead of a legend */
   accent?: string;
-  /** 수준 배지: "basic" | "intermediate" | "advanced" (예전 "기본" | "중급" | "심화"도 돼요). 글자는 로캘에 맞춰요 */
+  /** Level badge: "basic" | "intermediate" | "advanced" (the old "기본" | "중급" | "심화" work too). The text follows the locale */
   level?: Level | string;
-  /** 예시 데이터 표시. 문자열이면 그 문구로 */
+  /** Sample data label. A string shows that text instead */
   sample?: boolean | string;
-  /** 카드 글자(다시 재생 버튼, 배지, 예시 데이터)의 로캘. 없으면 ThemeProvider를 따라요. 안쪽 차트는 차트의 locale이나 ThemeProvider로 정해요 */
+  /** Locale of the card text (replay button, badge, sample data). Follows ThemeProvider when omitted. The chart inside takes the chart's locale or ThemeProvider */
   locale?: string;
   className?: string;
   style?: CSSProperties;
   theme?: Partial<ChartTheme>;
-  /** 카드 제목 태그. 기본 "h3" */
+  /** Card title tag. Default "h3" */
   as?: "h2" | "h3" | "h4";
   id?: string;
   children?: ReactNode;
 }
 
-/** 글자 제목 속 첫 accent 낱말을 color로. 없거나 글자 제목이 아니면 제목 그대로 */
+/** Colors the first accent word in a text title with color. Returns the title as is when there is no accent or the title is not text */
 function accentTitle(title: ReactNode, accent: string | undefined, color: string): ReactNode {
   if (typeof title !== "string" || !accent) return title;
   const i = title.indexOf(accent);
@@ -224,7 +224,7 @@ function accentTitle(title: ReactNode, accent: string | undefined, color: string
   );
 }
 
-/** 차트 카드: 번호, 제목, 부제, 범례, 출처 줄, 한 줄 요약, 수준 배지 */
+/** Chart card: number, title, subtitle, legend, source line, one-line summary, level badge */
 export function ChartCard(props: ChartCardProps) {
   const p = useChartTheme(props.theme);
   const text = useCardText(props.locale);
@@ -273,7 +273,7 @@ export function ChartCard(props: ChartCardProps) {
         minWidth: 0,
         boxSizing: "border-box",
         fontFamily: p.cssVars ? `var(--ztd-font, ${p.theme.fontFamily})` : p.theme.fontFamily,
-        // 한국어 제목, 요약이 낱말 가운데서 줄을 바꾸지 않게 (페이지가 정하지 않아도). 두 줄이면 줄 길이를 고르게 해서 마지막 줄에 낱말 하나만 남지 않게
+        // Keeps Korean titles and summaries from breaking mid-word (even when the page sets nothing). On two lines, balances the line lengths so the last line is not left with a single word
         wordBreak: "keep-all",
         textWrap: "balance",
         ...props.style,
@@ -311,11 +311,11 @@ export function ChartCard(props: ChartCardProps) {
       </header>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0, minWidth: 0 }}>
         <ReplayContext.Provider value={replayN}>
-          {/* 글자 제목이면 안쪽 차트의 접근 가능한 이름이 돼요 (화면 낭독기가 "Bar chart" 대신 제목을 읽어요) */}
+          {/* A text title becomes the accessible name of the chart inside (screen readers read the title instead of "Bar chart") */}
           <CardTitleContext.Provider value={typeof props.title === "string" || typeof props.title === "number" ? String(props.title) : undefined}>{props.children}</CardTitleContext.Provider>
         </ReplayContext.Provider>
       </div>
-      {/* 출처 줄과 아랫줄은 한 자리에 둬요. 자리가 하나 늘면 안쪽 차트의 useId 값이 바뀌어 예전 마크업과 달라져요 */}
+      {/* The source line and the bottom row share one slot. One more slot would change the useId values of the chart inside, so the markup would differ from before */}
       {sourceLine ? (
         <>
           {sourceLine}
@@ -329,20 +329,20 @@ export function ChartCard(props: ChartCardProps) {
 }
 
 export interface ChartGridProps {
-  /** 한 줄 칸 수. 좁은 화면에서는 1칸으로 접혀요. 기본 2 */
+  /** Cells per row. Collapses to 1 cell on narrow screens. Default 2 */
   columns?: 1 | 2 | 3;
-  /** 칸 사이(px). 기본 16 */
+  /** Gap between cells (px). Default 16 */
   gap?: number;
-  /** 한 칸의 최소 폭(px). 이보다 좁아지면 칸 수가 줄어요. 기본 320 */
+  /** Minimum cell width (px). Narrower than this, the number of cells per row drops. Default 320 */
   minColumnWidth?: number;
-  /** 안의 차트들이 짚은 x를 함께 보여 줘요(같은 날짜 맞춰 보기). 문자열이면 그 이름으로 묶어요(다른 그리드의 차트와도). 기본 false */
+  /** Charts inside show the hovered x together (compare the same date). A string links them under that name (also with charts in other grids). Default false */
   sync?: boolean | string;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
 }
 
-/** 칸 수를 지키되 좁으면 줄어드는 그리드. 미디어 쿼리 없이 CSS만으로 동작해요 */
+/** A grid that keeps its cell count but reduces it when narrow. Works with CSS alone, no media queries */
 export function ChartGrid(props: ChartGridProps) {
   const n = props.columns ?? 2;
   const gap = props.gap ?? 16;
@@ -366,12 +366,12 @@ export interface ChartStateProps {
   height?: number;
   emptyText?: string;
   theme?: Partial<ChartTheme>;
-  /** 상태 글자의 로캘. 없으면 ThemeProvider를 따라요 */
+  /** Locale of the state text. Follows ThemeProvider when omitted */
   locale?: string;
   children?: ReactNode;
 }
 
-/** 로딩, 오류, 빈 데이터 상태를 같은 높이로 보여줘요. 정상이면 children */
+/** Shows loading, error and empty-data states at the same height. children when all is well */
 export function ChartState(props: ChartStateProps) {
   const p = useChartTheme(props.theme);
   const text = useCardText(props.locale);

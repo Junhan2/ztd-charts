@@ -1,57 +1,57 @@
 /**
- * 색, 글꼴, 모서리 토큰.
- * 라이트 테마는 흰 카드와 하늘 강조, 다크 테마는 먹색 카드와 라임 강조예요.
- * 보조 강조 accent2는 강조색과 같은 톤의 분홍, accent3는 다른 테마의 강조색(라이트는 라임, 다크는 하늘)이에요.
- * 랜딩 페이지도 이 두 테마를 그대로 써서 랜딩, 문서, CLI와 MCP 렌더, 사용자 코드가 같은 색으로 보여요.
- * 모서리는 랜딩의 겹친 모서리(28/18/14)를 따라 카드 18px, 코드 블록 14px이에요.
+ * Color, font and corner radius tokens.
+ * The light theme has white cards with a sky accent; the dark theme has ink-black cards with a lime accent.
+ * The secondary accent accent2 is a pink in the same tone as the accent color, and accent3 is the other theme's accent color (lime in light, sky in dark).
+ * The landing page uses these two themes as is, so the landing page, docs, CLI and MCP renders and user code all show the same colors.
+ * Corners follow the landing page's nested radii (28/18/14): 18px for cards, 14px for code blocks.
  */
 export interface ChartTheme {
   name: string;
-  /** 페이지 바탕 */
+  /** Page background */
   bg: string;
-  /** 카드 바탕 */
+  /** Card background */
   panel: string;
-  /** 본문 글자, 두 번째로 강조하는 도형 */
+  /** Body text, and shapes with secondary emphasis */
   ink: string;
-  /** 보조 글자. 카드 바탕 위에서 WCAG AA(4.5:1)를 넘겨요 */
+  /** Secondary text. Passes WCAG AA (4.5:1) on the card background */
   muted: string;
-  /** 글자가 아닌 흐린 표시(축, 보조선) */
+  /** Faint non-text marks (axes, auxiliary lines) */
   dim: string;
-  /** 강조 한 가지 */
+  /** The single accent */
   accent: string;
-  /** 글자로 쓰는 강조색. 카드 바탕 위에서 AA를 넘겨요 */
+  /** Accent color for text. Passes AA on the card background */
   accentText: string;
-  /** 강조색 위 글자 */
+  /** Text on the accent color */
   onAccent: string;
-  /** 보조 강조 1 (분홍). 강조색 옆에 두는 작은 결과(스카이라인 앞줄 첫 계열). 카드와 neutralSoft 위 도형 3:1 */
+  /** Secondary accent 1 (pink). For a small outcome placed beside the accent color (the first front-row series of the skyline). Shapes reach 3:1 on the card and neutralSoft */
   accent2: string;
-  /** 보조 강조 2 (라이트 라임, 다크 하늘). 스카이라인 앞줄 둘째 계열. 카드와 neutralSoft 위 도형 3:1 */
+  /** Secondary accent 2 (lime in light, sky in dark). The second front-row series of the skyline. Shapes reach 3:1 on the card and neutralSoft */
   accent3: string;
-  /** ink 색 도형 위 글자 */
+  /** Text on ink-colored shapes */
   onInk: string;
-  /** 테두리, 눈금선 */
+  /** Borders, gridlines */
   line: string;
-  /** 보조 선, 트랙 */
+  /** Auxiliary lines, tracks */
   line2: string;
-  /** 나머지 항목의 기본 채움 */
+  /** Default fill for the other items */
   neutral: string;
-  /** neutral보다 진한 채움 */
+  /** A fill darker than neutral */
   neutralStrong: string;
-  /** neutralStrong 위 글자 */
+  /** Text on neutralStrong */
   onNeutralStrong: string;
-  /** neutral보다 옅은 채움, 트랙 */
+  /** A fill lighter than neutral, tracks */
   neutralSoft: string;
-  /** 호버, 포커스된 바탕 */
+  /** Hovered or focused background */
   lift: string;
-  /** 강조색 옅은 바탕 (중급 배지) */
+  /** Light accent background (intermediate badge) */
   tint: string;
   fontFamily: string;
   monoFamily: string;
-  /** 카드, 버튼 모서리(px) */
+  /** Card and button corner radius (px) */
   radius: number;
-  /** 코드 블록 모서리(px) */
+  /** Code block corner radius (px) */
   radiusCode: number;
-  /** 작은 도형(칸, 막대) 모서리(px) */
+  /** Corner radius of small shapes (cells, bars) (px) */
   radiusMark: number;
 }
 
@@ -82,7 +82,7 @@ export const COLOR_TOKENS: readonly ColorToken[] = [
 export const DEFAULT_FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, -apple-system, sans-serif';
 export const DEFAULT_MONO = '"Roboto Mono", "Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 
-/** 기본 다크 테마: 먹색 카드와 라임 강조. 라임은 먹색 위 글자로도 충분히 밝아서 accentText도 같은 색이에요 */
+/** Default dark theme: ink-black cards with a lime accent. Lime is bright enough for text on ink black, so accentText is the same color */
 export const darkTheme: ChartTheme = {
   name: "dark",
   bg: "#14171B",
@@ -111,7 +111,7 @@ export const darkTheme: ChartTheme = {
   radiusMark: 4,
 };
 
-/** 라이트 테마: 흰 카드와 하늘 강조. 하늘색(#38C6F6)을 진하게 해서 흰 바탕 위 도형 3:1을 넘기고, 글자에는 더 진한 accentText를 써요 */
+/** Light theme: white cards with a sky accent. The sky blue (#38C6F6) is deepened so shapes pass 3:1 on white, and text uses an even deeper accentText */
 export const lightTheme: ChartTheme = {
   name: "light",
   bg: "#FFFFFF",
@@ -143,12 +143,12 @@ export const lightTheme: ChartTheme = {
 export const themes = { dark: darkTheme, light: lightTheme } as const;
 export type ThemeName = keyof typeof themes;
 
-/** 토큰 이름을 CSS 변수 이름으로: accentText -> --ztd-accent-text */
+/** A token name as a CSS variable name: accentText -> --ztd-accent-text */
 export function cssVarName(key: string): string {
   return `--ztd-${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
 }
 
-/** 테마를 CSS 변수 객체로 */
+/** A theme as a CSS variables object */
 export function themeToCssVars(theme: Partial<ChartTheme>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of COLOR_TOKENS) {
@@ -163,7 +163,7 @@ export function themeToCssVars(theme: Partial<ChartTheme>): Record<string, strin
   return out;
 }
 
-/** `:root { --ztd-...: ... }` 같은 CSS 문자열. `<`는 CSS 이스케이프(\3c)로 바꿔서 <style> 안에 넣어도 태그를 닫지 못해요 */
+/** A CSS string such as `:root { --ztd-...: ... }`. `<` becomes a CSS escape (\3c), so it cannot close the tag even inside <style> */
 export function themeToCss(theme: ChartTheme, selector = ":root"): string {
   const vars = themeToCssVars(theme);
   return `${selector} {\n${Object.entries(vars)

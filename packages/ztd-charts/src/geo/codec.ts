@@ -1,12 +1,12 @@
 import type { GeoJSONFeatureCollection, GeoMap, GeoShape, LonLat } from "./types";
 
-/** 압축 글자표 (scripts/build-geo.mjs의 pack과 같아요): 한 글자에 5비트, 6번째 비트는 다음 글자로 이어짐 */
+/** Encoding alphabet (same as pack in scripts/build-geo.mjs): 5 bits per character, with the 6th bit meaning the number continues in the next character */
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/** 한 정수에 쓰는 글자 수의 상한 (5비트 × 7 = 35비트). 넘으면 망가진 글자로 보고 그 수를 버려요 */
+/** Maximum characters per integer (5 bits × 7 = 35 bits). Beyond that the text is treated as corrupt and the number is dropped */
 const MAX_DIGITS = 7;
 
-/** 글자 → 정수 목록 (지그재그를 풀어 음수도 돌려줘요). 글자표 밖 글자는 건너뛰어요 */
+/** Text → list of integers (zigzag-decoded, so negatives come back too). Characters outside the alphabet are skipped */
 function unpack(s: unknown): number[] {
   if (typeof s !== "string") return [];
   const code = new Int8Array(128).fill(-1);
@@ -33,13 +33,13 @@ function unpack(s: unknown): number[] {
 
 const decoded = /* @__PURE__ */ new WeakMap<GeoMap, GeoShape[]>();
 
-/** 0 이상 정수이고 남은 입력보다 크지 않은 개수만 받아요 (꾸민 지도가 끝없이 돌게 하지 못해요). 아니면 -1 */
+/** Accepts only counts that are integers of 0 or more and no larger than the remaining input (so a crafted map cannot cause an endless loop). Otherwise -1 */
 const count = (n: unknown, left: number) => (typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= left ? n : -1);
 
 /**
- * 내장 지도의 지역과 경계. 선을 지역끼리 나눠 써서(TopoJSON처럼) 고리마다 선을 이어 붙여요.
- * 고정 데이터라 지도마다 한 번만 풀어요 (같은 배열을 돌려주니 고치지 마세요).
- * 데이터에서 읽은 개수는 남은 입력보다 클 수 없고, 만드는 점은 선의 점 수 × 4를 넘지 않아요. 어긋나면 거기서 멈추고 그때까지 읽은 것만 써요
+ * Regions and borders of a built-in map. Regions share arcs (as in TopoJSON), and each ring is stitched together from its arcs.
+ * The data is fixed, so each map is decoded only once (the same array is returned, so do not modify it).
+ * Counts read from the data can never exceed the remaining input, and the points built never exceed the arcs' point count × 4. On any mismatch, decoding stops there and uses only what was read so far
  */
 export function mapShapes(m: GeoMap): GeoShape[] {
   const hit = decoded.get(m);
@@ -82,7 +82,7 @@ export function mapShapes(m: GeoMap): GeoShape[] {
           if (budget < 0) break;
           for (let q = k ? 1 : 0; q < pts.length; q++) ring.push(pts[q]);
         }
-        // 닫는 점(첫 점과 같은 끝 점)은 빼요. 길은 Z로 닫아요
+        // Drop the closing point (an end point equal to the first). Paths are closed with Z
         if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring.pop();
         if (ring.length >= 3) rings.push(ring);
         if (budget < 0 || j > s.length) break;
@@ -98,10 +98,10 @@ export function mapShapes(m: GeoMap): GeoShape[] {
   return out;
 }
 
-/** 스펙으로 받는 GeoJSON의 상한: 지물 수와 좌표 수 (MCP 서버는 남이 쓴 스펙을 그려요). 코드에서 넘기는 GeoJSON은 막지 않아요 */
+/** Limits for GeoJSON received in a spec: feature count and coordinate count (the MCP server renders specs written by others). GeoJSON passed in from code is not limited */
 export const GEOJSON_LIMITS = { features: 20_000, points: 1_000_000 };
 
-/** GeoJSON의 지물 수와 좌표 수를 새 배열을 만들지 않고 세요 (상한을 넘으면 거기서 멈춰요) */
+/** Counts a GeoJSON's features and coordinates without building new arrays (stops once a limit is exceeded) */
 export function geojsonSize(fc: GeoJSONFeatureCollection): { features: number; points: number } {
   const features = Array.isArray(fc.features) ? fc.features : [];
   let points = 0;
@@ -114,7 +114,7 @@ export function geojsonSize(fc: GeoJSONFeatureCollection): { features: number; p
   return { features: features.length, points };
 }
 
-/** GeoJSON을 지역 목록으로 바꾼 결과: 그릴 도형이 없어 뺀 지물 번호, 범위 밖 좌표 수(위도는 ±90으로 묶고 경도는 감아요) */
+/** Result of turning GeoJSON into a region list: indexes of features dropped for having no drawable geometry, and the count of out-of-range coordinates (latitude is clamped to ±90, longitude is wrapped) */
 export interface GeoJSONShapes {
   shapes: GeoShape[];
   skipped: number[];
@@ -123,7 +123,7 @@ export interface GeoJSONShapes {
 
 const textOf = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : typeof v === "number" && Number.isFinite(v) ? String(v) : undefined);
 
-/** 고리 하나: 숫자 두 개짜리 점만, 위도는 ±90 안으로, 이어진 같은 점과 닫는 점은 빼요. 점이 3개가 안 되면 null */
+/** One ring: only points made of two numbers, latitude clamped within ±90, consecutive duplicates and the closing point removed. null with fewer than 3 points */
 function cleanRing(raw: unknown, bad: { n: number }): LonLat[] | null {
   if (!Array.isArray(raw)) return null;
   const out: LonLat[] = [];
@@ -143,11 +143,11 @@ function cleanRing(raw: unknown, bad: { n: number }): LonLat[] | null {
 }
 
 /**
- * GeoJSON FeatureCollection(경위도 도)을 지역 목록으로. Polygon, MultiPolygon만 그리고, 바깥 고리가 없는 다각형과 도형이 없는 지물은 빼요.
- * id는 idKey 속성, feature.id, 속성 id, code 순서, 이름은 nameKey 속성, 속성 name, NAME 순서예요. 없으면 몇 번째 지물인지(1부터)
+ * Turns a GeoJSON FeatureCollection (longitude and latitude in degrees) into a region list. Only Polygon and MultiPolygon are drawn; polygons without an outer ring and features without geometry are dropped.
+ * The id comes from the idKey property, feature.id, then the id and code properties; the name from the nameKey property, then the name and NAME properties. Without them, the feature's position (from 1)
  */
 export function geojsonShapes(fc: GeoJSONFeatureCollection, idKey?: string, nameKey?: string): GeoJSONShapes {
-  // 검사기와 차트가 같은 GeoJSON을 두 번 읽지 않게 객체와 속성 이름마다 한 번만 읽어요
+  // Read once per object and property names, so the validator and the chart do not read the same GeoJSON twice
   const key = `${idKey ?? ""}\u0001${nameKey ?? ""}`;
   let byKey = read.get(fc);
   const hit = byKey?.get(key);
@@ -175,7 +175,7 @@ function readGeojson(fc: GeoJSONFeatureCollection, idKey?: string, nameKey?: str
       if (!outer) continue;
       polygons.push([outer, ...poly.slice(1).map((r) => cleanRing(r, bad)).filter((r): r is LonLat[] => r !== null)]);
     }
-    // 그릴 도형이 없는 지물은 지역이 아니에요 (그 지역 행은 맞지 않는 행으로 알려요)
+    // A feature with no drawable geometry is not a region (rows for it are reported as unmatched rows)
     if (!polygons.length) return void skipped.push(i);
     const id = (idKey ? textOf(props[idKey]) : undefined) ?? textOf(f?.id) ?? textOf(props.id) ?? textOf(props.code) ?? String(i + 1);
     const name = (nameKey ? textOf(props[nameKey]) : undefined) ?? textOf(props.name) ?? textOf(props.NAME) ?? id;

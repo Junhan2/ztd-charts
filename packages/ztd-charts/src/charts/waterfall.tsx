@@ -28,15 +28,15 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface WaterfallChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** "total"이면 합계 막대. 값이 없으면 누적값을 써요. 기본: 첫 행만 total */
+  /** "total" marks a total bar. Without a value, it uses the running total. Default: only the first row is a total */
   type?: Accessor<T, string>;
-  /** 첫 행을 시작 합계로 볼지. 기본 true */
+  /** Whether the first row is the starting total. Default true */
   startTotal?: boolean;
-  /** 끝에 누적 합계 막대를 붙여요. 문자열이면 그 이름으로 (기본 이름 "Total", 한국어 로캘은 "합계") */
+  /** Adds a running total bar at the end. A string sets its name (default name "Total", "합계" in the Korean locale) */
   endTotal?: string | boolean;
-  /** 막대 사이 연결선. 기본 true */
+  /** Connector lines between bars. Default true */
   connectors?: boolean;
-  /** 범례 이름 */
+  /** Legend name */
   increaseLabel?: string;
   decreaseLabel?: string;
 }
@@ -52,7 +52,7 @@ interface Step<T> {
   datum: T | null;
 }
 
-/** 폭포 차트: 시작값에서 끝값까지 증감 요인을 나눠 보여줘요 */
+/** Waterfall chart: breaks down the increases and decreases from a start value to an end value */
 export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(190, Math.min(260, w * 0.55)), duration: 650, stagger: 130 });
   const { p, width: W, height: H } = c;
@@ -97,7 +97,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   const top = 20;
   const bottom = 22;
   const y = scaleLinear(dom, [H - bottom, top]);
-  // 칸은 순서로 나눠요. 이름이 같은 단계("Other"가 두 번)도 따로 칸을 받아요
+  // Bands are keyed by index, so steps with the same name ("Other" twice) still get their own band
   const x = scaleBand(
     steps.map((s) => `${s.i}`),
     [left + 4, W - 2],
@@ -115,7 +115,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
         const y1 = y(s.end);
         return { key: `w:${s.label}`, to: [y0, y1, 1], from: [y0, y0, 0], enter: [y0, y0, 0], delay: k * stg, data: s };
       }),
-    // y는 dom, H에서 정해져요
+    // y derives from dom and H
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [steps, dom[0], dom[1], H, stg],
   );
@@ -125,7 +125,7 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
   const accent = swatch(p, "accent");
   const inc = swatch(p, "neutral");
   const dec = swatch(p, "strong");
-  // 늘거나 준 양에 부호를 붙여요. 단위가 붙는 곳은 c.fv, 막대 위 라벨처럼 단위 없는 곳은 c.fmt
+  // Sign the increase or decrease. Use c.fv where a unit is shown, and c.fmt where none is, such as the labels above bars
   const signed = (v: number, f: (n: number) => string) => (v > 0 ? `+${f(v)}` : v < 0 ? `\u2212${f(-v)}` : f(0));
   const signFmt = (v: number) => signed(v, c.fmt);
 
@@ -149,8 +149,8 @@ export function WaterfallChart<T = Row>(props: WaterfallChartProps<T>) {
       <GridY p={p} ticks={ticks} y={y} x0={left} x1={W} fmt={tickFmt} locale={c.locale} />
       {m.items.map((it) => {
         const s = it.data;
-        // 칸은 지금 순서(s.i)로 정해요. m.items는 처음 생긴 순서라 데이터 순서가 바뀌면 어긋나요.
-        // 빠지는 막대는 옛 순서 칸에 남아 새 막대와 겹치니 그리지 않아요
+        // Bands follow the current order (s.i). m.items keeps first-seen order, so it goes out of step when the data order changes.
+        // Exiting bars stay in their old slots and would overlap the new bars, so skip them
         if (it.exiting) return null;
         const k = s.i;
         const [ya, yb, o] = it.v;

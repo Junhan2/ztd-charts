@@ -52,70 +52,70 @@ const MSG: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 시간 축 위 세로 기준선. x는 축과 같은 꼴(숫자나 날짜) */
+/** A vertical reference line on the time axis. x takes the same form as the axis (number or date) */
 export interface TimelineReferenceLine {
   x: unknown;
   label?: string;
 }
 
 export interface TimelineProps<T = Row> extends BaseChartProps<T>, BrushProps, DayFirstProps {
-  /** 줄 이름 필드. 이름이 같은 항목은 한 줄에 놓여요. 기본 "label" */
+  /** Row name field. Items with the same name share a row. Default "label" */
   label?: Accessor<T, string>;
-  /** 시작 필드 (숫자, 날짜, 날짜와 시각). 기본 "start" */
+  /** Start field (number, date, or date and time). Default "start" */
   start?: Accessor<T, unknown>;
-  /** 끝 필드. 시작과 같으면 점으로 그리는 사건이고, 비어 있으면 now(없으면 가장 늦은 시각)까지 열린 항목이에요. 기본 "end" */
+  /** End field. When equal to the start, the item is an event drawn as a point; when empty, it is an open item that runs to now (or to the latest time when now is not set). Default "end" */
   end?: Accessor<T, unknown>;
-  /** 묶음 필드. 묶음마다 색이 다르고 범례가 이걸로 만들어져요 */
+  /** Group field. Each group gets its own color, and the legend is built from it */
   group?: Accessor<T, string>;
-  /** 상태 필드. 막대 안 글자와 툴팁에 적고, group이 없으면 막대 색과 범례를 정해요 (상태 띠) */
+  /** Status field. Written inside bars and in the tooltip; without group, it sets the bar colors and the legend (status strip) */
   status?: Accessor<T, string>;
-  /** 시간 축 종류. 없으면 시작, 끝 칸 중 날짜가 많으면 "date", 아니면 "number". "date"면 숫자도 타임스탬프(10자리는 초)나 연도로 읽어요 */
+  /** Time axis kind. When omitted, "date" if most start and end cells are dates, otherwise "number". With "date", numbers are read as timestamps (10 digits means seconds) or years */
   xType?: TimeKind;
-  /** 줄 순서. "none" 데이터 순서, "start" 이른 시작부터, "duration" 걸린 시간 합이 긴 줄부터. 기본 "none" */
+  /** Row order. "none" is data order, "start" earliest start first, "duration" longest total duration first. Default "none" */
   sort?: TimelineSort;
-  /** 시간 축의 세로 기준선 [{ x, label }]. 축 범위 밖이면 그리지 않아요 */
+  /** Vertical reference lines on the time axis [{ x, label }]. Not drawn outside the axis range */
   referenceLines?: readonly TimelineReferenceLine[];
-  /** "지금" 세로선의 시각(축과 같은 꼴). 열린 항목은 여기까지 이어요. 그릴 때 시계를 읽지 않아서 서버와 브라우저 그림이 같아요 */
+  /** Time of the "Now" vertical line (same form as the axis). Open items run up to it. The clock is never read while drawing, so server and browser renders match */
   now?: unknown;
-  /** 숨길 묶음(group 값, group이 없으면 status 값). 색과 줄은 모두 보일 때 그대로예요 */
+  /** Groups to hide (group values, or status values without group). Colors and rows stay the same as when everything is shown */
   hidden?: readonly string[];
   /**
-   * 맨 아랫줄에 상태 띠를 더해요. 시간 순서로 같은 상태가 이어지면 한 칸으로 합쳐 상태 색으로 칠하고 칸 안에 상태를 적어요.
-   * 막대는 상태 대신 기본 색(가장 긴 항목이 강조색)과 걸린 시간으로 그려요. status가 있어야 해요. 기본 false
+   * Adds a status strip as the bottom row. Consecutive runs of the same status in time order merge into one cell, painted in the status color with the status written inside.
+   * Bars then use the default color (the longest item gets the accent color) and show the duration instead of the status. Requires status. Default false
    */
   statusStrip?: boolean;
 }
 
-/** 칸(겹친 항목 한 줄) 높이: 기본, 그림 높이 상한, 바닥. 칸이 아주 많으면 바닥(2px)으로 그리고 그만큼 높아져요 */
+/** Lane (one line of overlapping items) height: default, plot height cap, floor. With very many lanes, they are drawn at the floor (2px) and the chart grows taller accordingly */
 const LANE_H = 26;
 const MAX_PLOT_H = 520;
 const MIN_LANE_H = 2;
 const AXIS_H = 22;
-/** 줄 이름 글자 크기와 한 줄에 필요한 높이. 줄이 이보다 낮으면 몇 줄 건너 하나씩 적어요 */
+/** Row name font size and the height one row needs. When rows are shorter than this, only every few rows get a name */
 const ROW_FONT = 11.5;
 const ROW_TEXT_H = 13;
-/** 막대 위 글자(걸린 시간, 상태): 칸이 이만큼 높을 때만 */
+/** Text on bars (duration, status): only when a lane is at least this tall */
 const BAR_TEXT_MIN_LANE = 14;
 const BAR_FONT = 11;
-/** 시간 축 양끝 안쪽 여백(px): 끝의 점 표시가 그림 밖으로 나가지 않아요 */
+/** Inner padding (px) at both ends of the time axis, so point marks at the ends stay inside the plot */
 const EDGE = 7;
-/** 열린 항목(끝이 빈 항목) 채움의 불투명도. 점선 테두리는 진하게, 안 글자는 ink예요 */
+/** Fill opacity of open items (items with an empty end). The dashed outline is strong, and the text inside is ink */
 const OPEN_TINT = 0.28;
-/** 막대의 최소 폭(px). 긴 축의 짧은 항목도 보이고 짚을 수 있어요 (툴팁과 낭독은 실제 걸린 시간이에요) */
+/** Minimum bar width (px). Short items on a long axis stay visible and can be pointed at (the tooltip and screen reader give the actual duration) */
 const MIN_BAR_W = 3;
-/** 등장 지연의 상한(ms). 항목이 많아도 등장이 끝없이 늘어지지 않아요 */
+/** Maximum entrance delay (ms). The entrance never drags on, even with many items */
 const MAX_DELAY = 600;
-/** 상태 띠(맨 아랫줄)와 위 칸 사이 틈. 띠 줄의 높이는 LANE_H, 칸 높이는 기본 칸의 막대와 같아요 */
+/** Gap between the status strip (bottom row) and the lane above. The strip row is LANE_H tall, and its cells are as tall as the bars in a default lane */
 const STRIP_GAP = 6;
 const STRIP_BAR = LANE_H * 0.62;
 
 /**
- * 시간 눈금. 분, 초 단위가 필요한 짧은 범위(눈금 간격 30분 이하)와 해 단위 범위는 여기서 고르고, 그 사이(시, 일, 주, 월, 분기)는 라인 차트와 같은 timeTicks예요.
- * 해 단위는 1, 2, 5, 10, 20, 50년 간격의 배수 해 1월 1일에 놓아요(2000, 2005, 2010)
+ * Time ticks. Short ranges that need minute or second units (tick spacing of 30 minutes or less) and year-level ranges are picked here; everything in between (hours, days, weeks, months, quarters) uses timeTicks, as in the line chart.
+ * Year ticks sit on January 1 of years that are multiples of a 1, 2, 5, 10, 20 or 50 year step (2000, 2005, 2010)
  */
 function clockTicks(t0: number, t1: number, max: number, locale: string): TimeTick[] {
   const want = (t1 - t0) / Math.max(1, max);
-  // timeTicks가 해 단위를 고르는 범위(눈금 간격이 여섯 달 넘게)와 같아요
+  // Same threshold at which timeTicks switches to year units (tick spacing over six months)
   if (t1 > t0 && want > DAY * 30.44 * 6) {
     const y0 = new Date(t0).getFullYear();
     const years = new Date(t1).getFullYear() - y0;
@@ -131,14 +131,14 @@ function clockTicks(t0: number, t1: number, max: number, locale: string): TimeTi
   const step = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800].map((s) => s * 1000).find((s) => s >= want);
   if (!(t1 > t0) || step === undefined) return timeTicks(t0, t1, max, locale);
   const fmt: Intl.DateTimeFormatOptions = step < 60000 ? { hour: "numeric", minute: "2-digit", second: "2-digit" } : { hour: "numeric", minute: "2-digit" };
-  // 로컬 시각으로 맞춰요 (+5:30 같은 시간대도 정각, 30분에 눈금)
+  // Align to local time (so time zones like +5:30 still get ticks on the hour and half hour)
   const off = new Date(t0).getTimezoneOffset() * 60000;
   const out: TimeTick[] = [];
   for (let t = Math.ceil((t0 - off) / step) * step + off, n = 0; t <= t1 && n < 500; t += step, n++) out.push({ t, label: formatDate(t, { locale, ...fmt }) });
   return out;
 }
 
-/** 강조 목록에서 묶음 이름을 골라 그 묶음의 자리로. 색(categorical의 강조)과 카드 범례가 같이 써요 */
+/** Picks group names out of the highlight list and maps them to group indexes. Shared by the colors (the categorical highlight) and the card legend */
 export function timelineGroupHighlight(h: Highlight<never> | undefined, groups: readonly string[]): Set<number> {
   const list = typeof h === "string" ? [h] : Array.isArray(h) ? h : [];
   const out = new Set<number>();
@@ -146,7 +146,7 @@ export function timelineGroupHighlight(h: Highlight<never> | undefined, groups: 
   return out;
 }
 
-/** 정렬된 배열에서 v 이상(after면 v 초과)인 첫 자리. 없으면 길이 */
+/** First index in a sorted array whose value is at least v (greater than v with after). The length when there is none */
 function bound(sorted: readonly number[], v: number, after = false): number {
   let lo = 0;
   let hi = sorted.length;
@@ -159,8 +159,8 @@ function bound(sorted: readonly number[], v: number, after = false): number {
 }
 
 /**
- * 타임라인: 시작과 끝이 있는 일(일정, 배포와 작업 실행, 에이전트 실행 기록, 장애 경과)을 시간 축 위 막대로.
- * 이름이 같은 항목은 한 줄에 놓고, 겹치면 칸을 나눠 가리지 않아요. 시작과 끝이 같으면 점이에요
+ * Timeline: things with a start and an end (schedules, deploys and job runs, agent run logs, incident timelines) as bars on a time axis.
+ * Items with the same name share a row, and overlapping items get separate lanes so none is hidden. An item whose start equals its end is a point
  */
 export function Timeline<T = Row>(props: TimelineProps<T>) {
   const model = useMemo(
@@ -171,10 +171,10 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const sort: TimelineSort = props.sort === "start" || props.sort === "duration" ? props.sort : "none";
   const { rows, lane } = useMemo(() => timelineRows(items, sort), [items, sort]);
   const lanes = rows.reduce((s, r) => s + r.lanes, 0);
-  // 상태 띠: 켜고 상태가 있는 항목이 있을 때만. 칸들 아래에 한 줄을 더해요
+  // Status strip: only when turned on and some item has a status. Adds one row below the lanes
   const stripOn = props.statusStrip === true && props.status !== undefined && items.some((it) => it.status !== "");
   const stripH = stripOn ? STRIP_GAP + LANE_H : 0;
-  // 스펙에서 오면 배열이 아닐 수도 있어요 (검사기가 알려요)
+  // From a spec it may not be an array (the validator reports it)
   const refLines = Array.isArray(props.referenceLines) ? props.referenceLines : [];
   const top = refLines.length > 0 || props.now !== undefined ? 24 : 6;
   const c = useChart(props, { height: () => top + AXIS_H + stripH + Math.max(40, Math.min(lanes * LANE_H, MAX_PLOT_H), lanes * MIN_LANE_H), duration: 700, stagger: 40 });
@@ -182,31 +182,31 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const msg = MSG[c.lang];
   const zoom = useZoom(c.sig);
 
-  // 키보드, 표, 강조의 순서: 줄 순서, 줄 안에서는 시간 순서. order[e]는 items의 위치
+  // Order for the keyboard, table and highlight: row order, then time order within a row. order[e] is a position in items
   const order = useMemo(() => rows.flatMap((r) => r.items), [rows]);
-  // 색을 나누는 값: group, 없으면 status(상태 띠). 카드 범례와 같은 행, 같은 규칙으로 (못 읽어 뺀 행의 값도 색 자리를 지켜요)
+  // The value that splits colors: group, or status without it (status strip). Same rows and same rule as the card legend (values of rows dropped as unreadable still keep their color slot)
   const byStatus = props.group === undefined;
   const colorField = byStatus ? props.status : props.group;
   const keyOf = (it: TimelineItem) => (byStatus ? it.status : it.group);
   const groups = useMemo(() => (colorField === undefined ? [] : timelineGroups(props.data, colorField, byStatus)), [props.data, colorField, byStatus]);
   const groupOf = useMemo(() => new Map(groups.map((g, i) => [g, i])), [groups]);
   const hl = props.highlight;
-  // 묶음 이름으로 강조한 묶음은 강조색이 곧 강조예요. 그 밖의 강조 항목(가장 긴 항목, 줄 이름)은 묶음 색 위에 테두리를 둘러요
+  // For a group highlighted by name, the accent color is the highlight. Other highlighted items (the longest item, a row name) get an outline over their group color
   const namedGroups = useMemo(() => timelineGroupHighlight(hl as Highlight<never>, groups), [hl, groups]);
-  // 막대 색은 묶음, 없으면 상태. 상태 띠가 상태 색을 맡으면 막대는 기본 색이라 가장 긴 항목이 강조돼요 (범례는 그대로 상태이고 띠와 같은 색)
+  // Bar color comes from the group, or from the status without one. When the status strip takes over the status colors, bars use the default color, so the longest item is highlighted (the legend still shows statuses, in the strip's colors)
   const barColored = groups.length > 0 && !(stripOn && byStatus);
   const hiItems = useMemo(() => {
     const dur = order.map((k) => items[k].end - items[k].start);
     const at = resolveHighlight(hl, order.map((k) => items[k].datum), order.map((k) => items[k].label), dur, barColored ? "none" : "max");
     const out = new Set([...at].map((e) => order[e]));
-    // 묶음 이름으로 강조하면 그 묶음의 항목 모두
+    // Highlighting by group name highlights every item in that group
     if (namedGroups.size) items.forEach((it, k) => namedGroups.has(groupOf.get(keyOf(it)) ?? -1) && out.add(k));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hl, order, items, barColored, groupOf, namedGroups, byStatus]);
   const colors = useMemo<Swatch[] | null>(() => (groups.length ? categorical(p, groups.length, namedGroups) : null), [p, groups, namedGroups]);
   const barColors = barColored ? colors : null;
-  // 띠 색: 범례가 상태면 범례 색 그대로, 범례가 묶음이면 상태끼리 같은 규칙(드문 상태가 진해요)으로 따로
+  // Strip colors: the legend colors when the legend shows statuses; when it shows groups, computed separately for the statuses by the same rule (rarer statuses are darker)
   const stripGroups = useMemo(() => (!stripOn ? [] : byStatus ? groups : timelineGroups(props.data, props.status!, true)), [stripOn, byStatus, groups, props.data, props.status]);
   const stripColors = useMemo<Swatch[]>(
     () => (!stripOn ? [] : byStatus && colors ? colors : categorical(p, stripGroups.length, timelineGroupHighlight(hl as Highlight<never>, stripGroups))),
@@ -216,7 +216,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const hiddenKey = Array.isArray(props.hidden) ? props.hidden.join("\u0001") : "";
   const off = useMemo(() => new Set(groups.length && hiddenKey ? hiddenKey.split("\u0001") : []), [groups.length, hiddenKey]);
 
-  // 항목의 시작, 끝 시각 (끌어서 확대가 여기에 붙어요)
+  // Item start and end times (drag to zoom snaps to these)
   const bounds = useMemo(() => Array.from(new Set(items.flatMap((it) => [it.start, it.end]))).sort((a, b) => a - b), [items]);
   const lo = bounds.length ? bounds[0] : 0;
   const hi = bounds.length ? bounds[bounds.length - 1] : 1;
@@ -225,35 +225,35 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const v0 = zv ? bounds[zv[0]] : full[0];
   const v1 = zv ? bounds[zv[1]] : full[1];
 
-  // 시각 글자: 숫자는 값 + 단위, 날짜만 있으면 월 일(여러 해에 걸치면 연도까지), 하루 안이면 시각, 그 밖은 날짜와 시각
+  // Time text: value + unit for numbers; month and day for dates only (plus the year when spanning several years); the time within a single day; otherwise date and time
   const timeFmt = useMemo((): Intl.DateTimeFormatOptions => {
     if (dateOnly) return new Date(lo).getFullYear() === new Date(hi).getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" };
     const clock: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", ...(model.hasSeconds ? { second: "2-digit" } : {}) };
     return hi - lo < DAY * 1.5 ? clock : { month: "short", day: "numeric", ...clock };
   }, [dateOnly, model.hasSeconds, lo, hi]);
   const tText = (t: number) => (kind === "number" ? fv(t) : formatDate(t, { locale, ...timeFmt }));
-  // 걸린 시간: 숫자 축은 값 + 단위, 날짜만 있으면 날 수(서머타임이 낀 날도 하루), 그 밖은 "2d 4h" 꼴. 툴팁, 막대 글자, 구간 고르기가 같이 써요
+  // Duration: value + unit on a number axis, a day count for dates only (a day with a DST change still counts as one day), otherwise the "2d 4h" form. Shared by the tooltip, bar text and range selection
   const spanText = (ms: number) => (kind === "number" ? fv(ms) : formatDuration(dateOnly ? Math.round(ms / DAY) * DAY : ms, locale));
-  // 항목마다 바뀌지 않는 글자: 걸린 시간과 그 폭(보통, 강조 굵기). 등장 중 매 프레임 다시 만들지 않아요
+  // Per-item text that never changes: the duration and its width (regular and highlight weight). Not rebuilt on every entrance frame
   const durs = useMemo(() => {
     const text = items.map((it) => spanText(it.end - it.start));
     return { text, w: text.map((s) => textWidth(s, BAR_FONT, 600)), wHi: text.map((s) => textWidth(s, BAR_FONT, 800)) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, kind, dateOnly, fv, locale]);
 
-  // 줄 이름 칸, 그림 영역
+  // Row name column, plot area
   const stripName = stripOn ? msg.status : "";
   const longestLabel = useMemo(() => rows.reduce((w, r) => Math.max(w, textWidth(r.label, ROW_FONT, 700)), Math.max(24, stripName ? textWidth(stripName, ROW_FONT, 700) : 0)), [rows, stripName]);
   const labelW = Math.min(W * 0.32, longestLabel + 10);
   const x0 = labelW + 10;
   const x1 = Math.max(x0 + 10, W - 16);
   const plotBottom = H - AXIS_H;
-  // 칸들의 아래 끝. 상태 띠는 그 아래 한 줄이에요
+  // Bottom edge of the lanes. The status strip is one row below it
   const lanesBottom = plotBottom - stripH;
   const stripY = lanesBottom + STRIP_GAP + LANE_H / 2;
   const laneH = (lanesBottom - top) / Math.max(1, lanes);
   const bh = laneH >= 6 ? Math.min(18, Math.max(4, laneH * 0.62)) : Math.max(1, laneH * 0.8);
-  // 양끝 안쪽으로 점 표시 반폭만큼 (축 끝의 점이 줄 이름에 붙지 않게)
+  // Inset both ends by half a point mark's width (so a point at the axis end does not touch the row names)
   const xs = scaleLinear([v0, v1], [x0 + EDGE, x1 - EDGE]);
   const rowOf = useMemo(() => {
     const m = new Int32Array(items.length);
@@ -262,11 +262,11 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   }, [rows, items.length]);
   const yOf = (k: number) => top + (rows[rowOf[k]].lane0 + lane[k] + 0.5) * laneH;
 
-  // 보이는 항목: 숨긴 묶음이 아니고 지금 범위에 걸쳐요. events는 이 순서예요
+  // Visible items: not in a hidden group and overlapping the current range. events follow this order
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const shown = useMemo(() => order.filter((k) => !off.has(keyOf(items[k])) && items[k].end >= v0 && items[k].start <= v1), [order, off, items, v0, v1, byStatus]);
   const eventOf = useMemo(() => new Map(shown.map((k, e) => [k, e])), [shown]);
-  // 상태 띠는 보이는 항목(숨긴 묶음과 범위 밖 빼고)으로 만들어요
+  // The status strip is built from the visible items (excluding hidden groups and items out of range)
   const strip = useMemo(() => (stripOn ? statusStrip(items, shown) : null), [stripOn, items, shown]);
 
   const stg = c.motion.stagger ?? 40;
@@ -286,7 +286,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   }, [shown, items, rows, rowOf, lane, x0, x1, v0, v1, top, laneH, stg]);
   const m = useMotion(marks, c.motion);
 
-  // 막대 안 상태 글자: 도착한 폭으로 한 번만 줄여요 (등장 중 매 프레임 줄이지 않아요). 점은 줄이지 않고 폭만 재요. 상태 띠가 있으면 상태는 띠에만 적어요
+  // Status text inside bars: shortened once, for the final width (not on every entrance frame). Points are measured but not shortened. With a status strip, statuses are written only in the strip
   const statusFit = useMemo(() => {
     const out = new Map<number, { text: string; w: number }>();
     if (!textOn || stripOn) return out;
@@ -299,13 +299,13 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     return out;
   }, [marks, items, textOn, stripOn]);
 
-  // 묶음이 빈 항목은 묶음 색 없이 회색이에요 (범례에도 없어요)
+  // Items with an empty group are gray, with no group color (they are not in the legend either)
   const swOf = (k: number): Swatch => {
     const g = groupOf.get(keyOf(items[k]));
     return barColors && g !== undefined ? barColors[g] : swatch(p, !barColors && hiItems.has(k) ? "accent" : "neutral");
   };
 
-  // 같은 칸 다음 항목의 시작(px): 걸린 시간 글자를 막대 뒤에 쓸 자리
+  // Start (px) of the next item in the same lane: the room for writing the duration after the bar
   const nextX = useMemo(() => {
     const out = new Float64Array(items.length).fill(W - 2);
     for (const r of rows) {
@@ -332,7 +332,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     [shown, items, msg, durs, fv, locale, timeFmt, kind],
   );
 
-  // 끌어서 확대 (라인 차트의 brush). 구간은 지금 범위 안 항목의 시작, 끝 시각에 붙어요
+  // Drag to zoom (the line chart's brush). The range snaps to the start and end times of items in the current range
   const { b0, visB, visX } = useMemo(() => {
     const a = bound(bounds, v0);
     const vis = bounds.slice(a, Math.max(a, bound(bounds, v1, true)));
@@ -350,7 +350,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     toXRange: (r) => ({ from: b0 + r.from, to: b0 + r.to, fromKey: String(visB[r.from]), toKey: String(visB[r.to]), fromLabel: tText(visB[r.from]), toLabel: tText(visB[r.to]) }),
   });
 
-  // 포인터: 그 높이의 칸에서 x를 품은 항목, 없으면 10px 안에서 가장 가까운 항목. 상태 띠에서는 그 시각의 띠 색을 정한 항목(점은 6px 안)이에요
+  // Pointer: the item containing x in the lane at that height, or else the nearest item within 10px. On the status strip, the item that set the strip color at that time (points within 6px)
   const pick = (px: number, py: number): number | null => {
     if (strip && py >= lanesBottom + STRIP_GAP / 2 && py <= plotBottom) {
       const at = strip.points.find((k) => Math.abs(xs(items[k].start) - px) <= 6);
@@ -384,7 +384,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     return best;
   };
 
-  // 키보드: 위아래는 줄, 좌우는 같은 줄의 시간 순서. 다른 줄로 갈 때는 시작이 가장 가까운 항목으로
+  // Keyboard: up and down move between rows, left and right through time order within the row. Moving to another row lands on the item with the closest start
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (brushFrame.onKey?.(e)) return true;
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "ArrowLeft" && e.key !== "ArrowRight") return false;
@@ -433,7 +433,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     if (c.via === "keyboard") announce = `${it.label}, ${events[c.active!].formatted}`;
   }
 
-  // 끄는 중인 구간
+  // The range being dragged
   let brushLayer: ReactNode = null;
   if (brush.range && brush.range.to < visB.length) {
     const a = visB[brush.range.from];
@@ -443,9 +443,9 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     if (!brush.dragging) announce = `${msg.range(tText(a), tText(b))}, ${span}.${hint}`;
   }
 
-  // 눈금: 숫자는 값 + 단위, 날짜는 범위에 맞는 단위(초부터 연까지)
+  // Ticks: value + unit for numbers; for dates, a unit that fits the range (seconds to years)
   const maxTicks = Math.max(2, Math.floor((x1 - x0) / (kind === "number" ? 70 : 64)));
-  // 숫자 눈금은 다른 숫자 축과 같은 꼴: 큰 수는 짧게(2T), format을 정했으면 그 꼴. 툴팁과 낭독은 전체 숫자예요
+  // Number ticks match other number axes: large numbers in compact form (2T), or the set format. The tooltip and screen reader use the full number
   const userFormat = props.format;
   const unit = props.unit;
   const ticks = useMemo(
@@ -457,7 +457,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     [kind, maxTicks, v0, v1, x0, x1, W, userFormat, unit, locale],
   );
 
-  // 기준선: 범위 안의 것만. 이름표는 위 띠에 두고, 앞 이름표와 겹치면 선만 그려요
+  // Reference lines: only those in range. Labels go in the band on top; when a label would overlap the previous one, only the line is drawn
   const lines = [
     ...refLines.map((r) => ({ t: model.read(r?.x), label: typeof r?.label === "string" ? r.label : "", now: false })),
     ...(props.now !== undefined ? [{ t: model.read(props.now), label: msg.now, now: true }] : []),
@@ -478,7 +478,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
     );
   });
 
-  // 줄 이름: 줄이 낮으면 k줄마다 하나 (겹치지 않게). 등장 중에는 바뀌지 않고, 짚은 줄이 바뀔 때만 다시 만들어요
+  // Row names: when rows are short, one every k rows (so they do not overlap). They do not change during the entrance and are rebuilt only when the pointed row changes
   const activeRow = activeK === undefined ? -1 : rowOf[activeK];
   const rowNodes = useMemo(() => {
     const minLanes = rows.reduce((mn, r) => Math.min(mn, r.lanes), Infinity);
@@ -507,7 +507,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
   const rad = Math.min(p.theme.radiusMark, bh / 2);
   const longest = useMemo(() => (shown.length ? shown[argMax(shown.map((k) => items[k].end - items[k].start))] : -1), [shown, items]);
   const linesText = lines.length ? ` ${msg.lines}: ${lines.map((l) => `${l.label ? `${l.label} ` : ""}${tText(l.t)}`).join(", ")}.` : "";
-  // 상태 띠도 읽어 줘요: 시간 순서로 앞 8칸까지 (점은 그 시각)
+  // The status strip is read out too: up to the first 8 cells in time order (a point reads as its time)
   let stripText = "";
   if (strip) {
     const parts = [
@@ -582,7 +582,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
         const dur = textOn ? durs.text[k] : "";
         const dw = isHi ? durs.wHi[k] : durs.w[k];
         const durOut = dur && xa + w + 6 + dw < nextX[k] - 4;
-        // 상태가 있는 항목은 막대 안이 상태 자리예요. 상태가 안 들어가도 걸린 시간으로 바꿔 쓰지 않아요 (상태 띠에 상태와 시간이 섞이지 않게). 맨 아랫줄 상태 띠가 있으면 막대 안은 걸린 시간이에요
+        // For items with a status, the inside of the bar is reserved for the status. Even when the status does not fit, it is not replaced with the duration (so statuses and durations do not mix in the status strip). With the bottom-row status strip, the inside of the bar shows the duration
         const durIn = dur && !durOut && (stripOn || !it.status) && dw + 12 <= w;
         return (
           <g key={mi.key} opacity={op}>
@@ -614,7 +614,7 @@ export function Timeline<T = Row>(props: TimelineProps<T>) {
         );
       })}
       {strip ? (
-        // 맨 아랫줄 상태 띠: 막대가 거의 다 자란 뒤 나타나요. 짚기는 pick이 그 시각의 항목으로 바꿔요
+        // Bottom-row status strip: appears once the bars have nearly finished growing. Pointing at it is resolved by pick to the item at that time
         <g className="ztd-strip" aria-hidden="true" opacity={m.fade(Math.min(shown.length * stg, MAX_DELAY) + D * 0.4, 260)}>
           <Txt x={labelW} y={stripY} anchor="end" size={ROW_FONT} weight={600} fill={p.paint("muted")}>
             {msg.status}

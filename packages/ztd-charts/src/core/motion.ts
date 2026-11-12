@@ -1,27 +1,27 @@
 /**
- * 차트 애니메이션 엔진.
- * 도형마다 숫자 벡터(각도, 좌표, 크기 등)를 목표값으로 보간해요.
- * - spring: 임계 감쇠 스프링의 해석해. 프레임률과 무관하고, 중간에 목표가 바뀌어도 속도를 이어가요.
- * - easeOut / easeInOut / linear: 시간 기반 보간
+ * Chart animation engine.
+ * Interpolates each shape's number vector (angles, coordinates, sizes and so on) toward its target values.
+ * - spring: the analytic solution of a critically damped spring. Independent of frame rate, and it keeps its velocity when the target changes midway.
+ * - easeOut / easeInOut / linear: time-based interpolation
  */
 export type EasingName = "spring" | "easeOut" | "easeInOut" | "linear";
 
 export interface Mark<M = unknown> {
-  /** 데이터가 바뀌어도 같은 항목이면 같은 key */
+  /** The same item keeps the same key even when the data changes */
   key: string;
-  /** 목표값 */
+  /** Target values */
   to: number[];
-  /** 첫 등장(그리고 다시 재생)의 시작값. 없으면 to (움직이지 않음) */
+  /** Start values of the first entrance (and of a replay). Defaults to to (no motion) */
   from?: number[];
-  /** 데이터가 바뀌어 새로 생긴 항목의 시작값. 없으면 from */
+  /** Start values of an item newly added by a data change. Defaults to from */
   enter?: number[];
-  /** 사라질 때 값. 없으면 enter */
+  /** Values on exit. Defaults to enter */
   exit?: number[];
-  /** 등장 지연(ms) */
+  /** Entrance delay (ms) */
   delay?: number;
-  /** to가 여러 구간으로 이어져 있으면 구간 길이들. 예: [1, 점 수, 점 수]. 점 수가 바뀔 때 구간마다 따로 늘여요 */
+  /** Segment lengths when to is made of several segments, e.g. [1, point count, point count]. When the point count changes, each segment is stretched separately */
   parts?: number[];
-  /** 그릴 때 쓰는 나머지 정보 */
+  /** Other information used for drawing */
   data: M;
 }
 
@@ -30,7 +30,7 @@ export interface MotionItem<M> {
   v: number[];
   data: M;
   exiting: boolean;
-  /** 0이면 시작 전, 1이면 도착 */
+  /** 0 before the start, 1 on arrival */
   progress: number;
 }
 
@@ -71,7 +71,7 @@ function easeDeriv(name: EasingName, p: number): number {
   return 3 * Math.pow(1 - p, 2);
 }
 
-/** 길이가 다른 벡터를 목표 길이에 맞춰 선형 보간으로 다시 뽑아요 */
+/** Resamples a vector of a different length to the target length by linear interpolation */
 export function resample(src: number[], n: number): number[] {
   if (src.length === n) return src.slice();
   if (!src.length) return new Array<number>(n).fill(0);
@@ -86,19 +86,19 @@ export function resample(src: number[], n: number): number[] {
   return out;
 }
 
-/** NaN끼리는 같고 NaN과 숫자는 달라요 (값이 비었다가 생기는 변화도 그려야 해서) */
+/** NaN equals NaN, and NaN differs from a number (a value appearing where there was none must be drawn too) */
 function sameVec(a: number[], b: number[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
     const y = b[i];
-    // 둘 다 NaN이면 Math.abs(NaN)도 NaN이라 다르다고 하지 않아요
+    // When both are NaN, Math.abs(NaN) is NaN too, so they are not reported as different
     if (Number.isNaN(x) !== Number.isNaN(y) || Math.abs(x - y) > 1e-6) return false;
   }
   return true;
 }
 
-/** 비어 있던(NaN) 칸은 목표에서 바로 시작해요. 사이값이 없으니 보간하면 NaN만 나와요 */
+/** Slots that were empty (NaN) start right at the target. There is nothing in between, so interpolating would yield only NaN */
 function fillGaps(from: number[], vel: number[], to: number[]): void {
   for (let i = 0; i < to.length; i++) {
     if (!Number.isFinite(from[i]) || !Number.isFinite(to[i])) {
@@ -108,7 +108,7 @@ function fillGaps(from: number[], vel: number[], to: number[]): void {
   }
 }
 
-/** parts(구간 길이)가 있으면 구간마다 따로 늘이거나 줄여요. 진행도, y값, 바닥선이 서로 섞이지 않게 */
+/** With parts (segment lengths), each segment is stretched or shrunk separately, so progress, y values and baselines do not mix */
 function resampleParts(src: number[], fromParts: readonly number[] | undefined, toParts: readonly number[] | undefined, n: number): number[] {
   if (!fromParts || !toParts || fromParts.length !== toParts.length) return resample(src, n);
   const out: number[] = [];
@@ -128,18 +128,18 @@ export class MotionEngine<M> {
   duration = 900;
   private omega = 8.2;
   animating = false;
-  /** 등장 시작 시각(ms). 등장 중이 아니면 -1 */
+  /** Entrance start time (ms). -1 when no entrance is running */
   entranceStart = -1;
   private maxDelay = 0;
 
   configure(easing: EasingName, duration: number): void {
     this.easing = easing;
     this.duration = Math.max(1, duration);
-    // (1 + wt)e^-wt 가 duration에 0.6% 남도록
+    // So that (1 + wt)e^-wt has 0.6% left at duration
     this.omega = 7.4 / (this.duration / 1000);
   }
 
-  /** 마지막으로 받은 목표들과 같은지 */
+  /** Whether these match the last targets received */
   sameTargets(marks: Mark<M>[]): boolean {
     let live = 0;
     for (const t of this.tracks.values()) if (!t.exiting) live++;
@@ -151,7 +151,7 @@ export class MotionEngine<M> {
     return true;
   }
 
-  /** 렌더 정보만 바꿔요 (값은 그대로) */
+  /** Updates only the render information (values stay as they are) */
   refreshData(marks: Mark<M>[]): void {
     for (const m of marks) {
       const t = this.tracks.get(m.key);
@@ -183,7 +183,7 @@ export class MotionEngine<M> {
     };
   }
 
-  /** 애니메이션 없이 바로 목표로 */
+  /** Jumps straight to the targets without animation */
   snap(marks: Mark<M>[]): void {
     const next = new Map<string, Track<M>>();
     for (const m of marks) {
@@ -199,7 +199,7 @@ export class MotionEngine<M> {
     this.entranceStart = -1;
   }
 
-  /** 등장 전 상태로 세워 둬요 */
+  /** Holds the marks in their pre-entrance state */
   hold(marks: Mark<M>[]): void {
     const next = new Map<string, Track<M>>();
     let maxDelay = 0;
@@ -216,7 +216,7 @@ export class MotionEngine<M> {
     this.entranceStart = -1;
   }
 
-  /** 세워 둔 상태에서 등장 시작 */
+  /** Starts the entrance from the held state */
   start(now: number): void {
     for (const t of this.tracks.values()) {
       t.t0 = now + t.delay;
@@ -232,7 +232,7 @@ export class MotionEngine<M> {
     this.animating = true;
   }
 
-  /** 지금 값에서 새 목표로. 새 항목은 enter에서, 빠진 항목은 exit로 */
+  /** Moves from the current values to new targets. New items start from enter; removed items go to exit */
   update(marks: Mark<M>[], now: number, stagger = 0): void {
     this.step(now);
     const seen = new Set<string>();
@@ -248,7 +248,7 @@ export class MotionEngine<M> {
         old.parts = m.parts;
         old.to = m.to.slice();
         fillGaps(old.from, old.vel, old.to);
-        // 지금 값은 곧 시작값이에요. 빈 칸을 채웠거나 길이가 바뀌었으면 여기서 맞춰야 도착 판정 뒤에도 옛 값이 남지 않아요
+        // The current values are the start values. If empty slots were filled or the length changed, they must be synced here so no old values remain after arrival is detected
         old.cur = old.from.slice();
         old.curVel = old.vel.slice();
         old.appear = (m.from ?? m.to).slice();
@@ -279,7 +279,7 @@ export class MotionEngine<M> {
     this.animating = true;
   }
 
-  /** now 시각의 값을 계산. 아직 움직이는 중이면 true */
+  /** Computes the values at time now. true while still moving */
   step(now: number): boolean {
     if (!this.animating) return false;
     let moving = false;
@@ -309,8 +309,8 @@ export class MotionEngine<M> {
       let finished: boolean;
       if (this.easing === "spring") {
         const e = Math.exp(-w * dt);
-        // 남은 거리와 속도(1/w초에 갈 거리)가 0.15 아래로 줄면 멈춰요. 시간만 보면 먼 거리는 마지막 0.3%를 건너뛰었어요
-        // 8 전에는 멈추지 않아요 (0~1 값의 마지막 0.3%는 보이지 않아요). 20이면 NaN이 있어도 끝내요. 그래서 남은 거리는 그 사이에만 재요
+        // Stops once the remaining distance and the velocity (distance covered in 1/w seconds) drop below 0.15. Judged by time alone, long distances skipped their last 0.3%
+        // It never stops before 8 (the last 0.3% of a 0 to 1 value is invisible). At 20 it ends even with NaN present. So the remaining distance is measured only in between
         const check = w * dt >= 8 && w * dt < 20;
         let far = 0;
         for (let i = 0; i < n; i++) {
@@ -349,12 +349,12 @@ export class MotionEngine<M> {
     return moving;
   }
 
-  /** 등장 시작 후 지난 시간(ms). 등장 중이 아니면 Infinity */
+  /** Time elapsed since the entrance started (ms). Infinity when no entrance is running */
   elapsed(now: number): number {
     return this.entranceStart < 0 ? Infinity : now - this.entranceStart;
   }
 
-  /** 등장 전체 길이 추정(ms) */
+  /** Estimated total length of the entrance (ms) */
   get entranceLength(): number {
     return this.duration + this.maxDelay;
   }
@@ -391,7 +391,7 @@ function loop(t: number) {
   if (subscribers.size && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(loop);
 }
 
-/** 모든 차트가 같이 쓰는 requestAnimationFrame 루프 */
+/** requestAnimationFrame loop shared by all charts */
 export function subscribeTick(fn: TickFn): () => void {
   subscribers.add(fn);
   if (!rafId && typeof requestAnimationFrame !== "undefined") rafId = requestAnimationFrame(loop);

@@ -1,7 +1,7 @@
 import type { Painter } from "../theme/context";
 import type { PlacedLabel } from "./pointMap";
 
-/** 지도 위 지점 이름표: 카드 바탕색 테두리(후광)를 둘러서 경계선과 원 위에서도 읽혀요. 포인터는 받지 않아요 */
+/** Place label on a map: wrapped in a card-background outline (halo) so it reads over borders and circles. It takes no pointer events */
 export function MapLabel({ p, l, dim }: { p: Painter; l: PlacedLabel; dim?: boolean }) {
   return (
     <text

@@ -5,7 +5,7 @@ import { DEFAULT_LOCALE, formatNumber } from "./format";
 import type { ChartLang } from "./i18n";
 import { textWidth } from "./text";
 
-/** 구간 고르기 문구 (라인, 캔들스틱) */
+/** Range selection text (line, candlestick) */
 const en = {
   zoomHint: " Press Enter to zoom in.",
   pickHint: " Press Enter to select.",
@@ -13,9 +13,9 @@ const en = {
   low: "Low",
   resetLabel: "Show all (reset zoom)",
   reset: "Show all",
-  /** 읽어 줄 문장의 최고, 최저 부분 */
+  /** The high and low part of the announced sentence */
   extremes: (hi: string, lo: string) => `, high ${hi}, low ${lo}`,
-  /** 고른 구간 이름. 예: "Jan to Mar" */
+  /** Name of the selected range, e.g. "Jan to Mar" */
   range: (a: string, b: string) => `${a} to ${b}`,
 };
 const BRUSH_TEXT: Record<ChartLang, typeof en> = {
@@ -32,13 +32,13 @@ const BRUSH_TEXT: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 고른 구간. 지금 보이는 점의 인덱스이고 양끝을 포함해요 (from < to) */
+/** The selected range. Indexes of the currently visible points, both ends included (from < to) */
 export interface BrushRange {
   from: number;
   to: number;
 }
 
-/** 차트가 onBrush로 알려 주는 x 구간. 인덱스는 확대하기 전 전체 순서예요 */
+/** The x range a chart reports through onBrush. Indexes follow the full order before zooming */
 export interface XRange {
   from: number;
   to: number;
@@ -48,50 +48,50 @@ export interface XRange {
   toLabel: string;
 }
 
-/** 구간 고르기를 쓰는 차트의 옵션 */
+/** Options for charts that support range selection */
 export interface BrushProps {
   /**
-   * 끌어서 x 구간 고르기 (마우스, 펜. 키보드는 Shift+화살표, Enter).
-   * true면 구간의 등락과 최고, 최저를 보여주고, "zoom"이면 그 구간으로 확대해요. 기본 false
+   * Select an x range by dragging (mouse, pen; on the keyboard, Shift+arrow keys and Enter).
+   * true shows the range's change with its high and low; "zoom" zooms into the range. Default false
    */
   brush?: boolean | "zoom";
-  /** 구간을 고르거나 지울 때. 인덱스는 확대 전 x 순서(정렬된 고유 x, 캔들스틱은 봉 순서) 기준 */
+  /** Called when a range is selected or cleared. Indexes follow the x order before zooming (sorted unique x; candle order for candlesticks) */
   onBrush?: (range: XRange | null) => void;
 }
 
 export interface BrushOptions {
   enabled: boolean;
-  /** 보이는 점 개수 */
+  /** Number of visible points */
   count: number;
-  /** svg x 좌표에서 가장 가까운 점 인덱스 */
+  /** Index of the point nearest to an svg x coordinate */
   indexAt: (x: number) => number;
-  /** 끌기를 시작할 수 있는 곳(그림 영역)인지 */
+  /** Whether a drag can start at this spot (the plot area) */
   inPlot: (x: number, y: number) => boolean;
-  /** 구간이 정해졌을 때 (마우스를 떼거나 Enter). 지우면 null */
+  /** Called when the range is set (mouse release or Enter). null when cleared */
   onCommit: (r: BrushRange | null) => void;
-  /** 정한 뒤에도 띠를 남겨요. 확대처럼 정하자마자 화면이 바뀌면 false. 기본 true */
+  /** Keeps the band after the range is set. false when the view changes as soon as it is set, as with zoom. Default true */
   keep?: boolean;
 }
 
 export interface Brush {
   range: BrushRange | null;
   dragging: boolean;
-  /** 키보드(Shift+화살표)로 고르는 중이고 아직 Enter로 정하지 않았어요 */
+  /** Selecting with the keyboard (Shift+arrow keys) and not yet confirmed with Enter */
   keyboard: boolean;
-  /** 끌기를 시작했으면 true */
+  /** true when a drag started */
   down: (x: number, y: number, e: PointerEvent<SVGSVGElement>) => boolean;
-  /** 끄는 중이면 true (차트는 이때 호버를 따로 처리하지 않아도 돼요) */
+  /** true while dragging (the chart need not handle hover separately then) */
   move: (x: number) => boolean;
   up: (x: number, y: number, e: PointerEvent<SVGSVGElement>) => void;
-  /** Shift+화살표로 넓히기, Enter로 정하기, Escape로 지우기. 처리했으면 true */
+  /** Shift+arrow keys to extend, Enter to confirm, Escape to clear. true when handled */
   key: (e: KeyboardEvent<HTMLDivElement>, active: number | null) => boolean;
 }
 
 const MIN_DRAG_PX = 4;
 
 /**
- * 끌어서 x 구간 고르기 (마우스, 펜). 터치는 손가락으로 값을 읽는 동작과 겹쳐서 쓰지 않아요.
- * 키보드는 Shift+화살표로 고르고 Enter로 정해요.
+ * Select an x range by dragging (mouse, pen). Touch is not used, since it would conflict with reading values by finger.
+ * On the keyboard, select with Shift+arrow keys and confirm with Enter.
  */
 export function useBrush(o: BrushOptions): Brush {
   const [range, setRange] = useState<BrushRange | null>(null);
@@ -122,7 +122,7 @@ export function useBrush(o: BrushOptions): Brush {
     const from = Math.min(s.i, i);
     const to = Math.max(s.i, i);
     setDragging(true);
-    // 같은 점 위에서 움직이면 다시 그리지 않아요
+    // Moving over the same point does not re-render
     setRange((prev) => (prev?.from === from && prev.to === to ? prev : { from, to }));
     return true;
   };
@@ -133,7 +133,7 @@ export function useBrush(o: BrushOptions): Brush {
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (!s) return;
     setDragging(false);
-    // 움직이지 않은 클릭은 고른 구간을 지워요
+    // A click without movement clears the selected range
     if (!s.moved || e.type === "pointercancel") {
       if (range) {
         setRange(null);
@@ -164,7 +164,7 @@ export function useBrush(o: BrushOptions): Brush {
     if (!e.shiftKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight") || o.count < 2) return false;
     const step = e.key === "ArrowRight" ? 1 : -1;
     const a = anchor.current ?? active ?? (step > 0 ? 0 : o.count - 1);
-    // 기준점의 반대쪽 끝을 움직여요
+    // Moves the end opposite the anchor
     const end = range && anchor.current !== null ? (range.from === a ? range.to : range.from) : a;
     const next = Math.max(0, Math.min(o.count - 1, end + step));
     anchor.current = a;
@@ -176,16 +176,16 @@ export function useBrush(o: BrushOptions): Brush {
 }
 
 export interface Zoom {
-  /** 확대한 구간 [from, to] (확대하기 전 전체 순서). 확대하지 않았으면 null */
+  /** The zoomed range [from, to] (in the full order before zooming). null when not zoomed */
   view: [number, number] | null;
   zoomTo: (range: [number, number]) => void;
   reset: () => void;
 }
 
-/** 확대한 구간. 데이터(sig)가 바뀌면 풀려요 */
+/** The zoomed range. Reset when the data (sig) changes */
 export function useZoom(sig: string): Zoom {
   const [z, setZ] = useState<{ sig: string; range: [number, number] } | null>(null);
-  // 데이터가 바뀐 렌더에서 바로 풀어요. effect로 풀면 옛 구간으로 한 번 더 계산해요
+  // Reset in the very render where the data changed. Resetting in an effect would compute once more with the old range
   if (z && z.sig !== sig) setZ(null);
   return {
     view: z && z.sig === sig ? z.range : null,
@@ -195,8 +195,8 @@ export function useZoom(sig: string): Zoom {
 }
 
 /**
- * brush, onBrush 옵션을 끌기, 키보드 구간 고르기, ("zoom"이면) 확대에 이어요.
- * frame은 ChartFrame에 그대로 펼쳐 넣고, hint는 읽어 줄 문장 끝에 붙여요
+ * Connects the brush and onBrush options to dragging, keyboard range selection and (with "zoom") zooming.
+ * Spread frame into ChartFrame as is, and append hint to the end of the announced sentence
  */
 export function useChartBrush(
   props: BrushProps,
@@ -235,7 +235,7 @@ export function useChartBrush(
   return { brush, frame, hint, text };
 }
 
-/** a에서 b로 바뀐 비율. a가 0이면 비율 대신 null */
+/** Ratio of change from a to b. null instead of a ratio when a is 0 */
 export function changeRatio(a: number, b: number): number | null {
   if (!Number.isFinite(a) || !Number.isFinite(b) || a === 0) return null;
   return (b - a) / Math.abs(a);
@@ -246,7 +246,7 @@ export function signedPercent(r: number, locale = DEFAULT_LOCALE): string {
   return `${v > 0 ? "+" : ""}${formatNumber(v, { locale, maximumFractionDigits: 1 })}%`;
 }
 
-/** 고른 구간: 옅은 띠, 양끝 선, 위쪽 요약 칩 */
+/** The selected range: a faint band, lines at both ends and a summary chip on top */
 export function BrushBand(props: { p: Painter; x0: number; x1: number; top: number; bottom: number; width: number; main: string; sub: string; dragging: boolean }) {
   const { p, top, bottom } = props;
   const a = Math.min(props.x0, props.x1);
@@ -275,11 +275,11 @@ export function BrushBand(props: { p: Painter; x0: number; x1: number; top: numb
 interface TagPoint {
   x: number;
   y: number;
-  /** 값 글자 */
+  /** Value text */
   text: string;
 }
 
-/** 구간의 최고점(점 위)과 최저점(점 아래) 꼬리표. 그쪽에 자리가 없으면 반대쪽에 붙여요 */
+/** Tags for the range's high (above the point) and low (below the point). Placed on the other side when there is no room */
 export function ExtremeTags(props: { p: Painter; width: number; top: number; bottom: number; max: TagPoint; min: TagPoint; lang: ChartLang }) {
   const { p, width, top, bottom, max, min } = props;
   const text = BRUSH_TEXT[props.lang];
@@ -291,7 +291,7 @@ export function ExtremeTags(props: { p: Painter; width: number; top: number; bot
   );
 }
 
-/** 점 위(또는 아래)에 붙는 작은 값 꼬리표 */
+/** Small value tag attached above (or below) a point */
 function PointTag(props: { p: Painter; x: number; y: number; text: string; below?: boolean; width: number }) {
   const { p } = props;
   const w = textWidth(props.text, 10.5, 700) + 12;
@@ -309,7 +309,7 @@ function PointTag(props: { p: Painter; x: number; y: number; text: string; below
   );
 }
 
-/** 확대했을 때 오른쪽 위에 뜨는 "Show all" 단추 */
+/** The "Show all" button shown at the top right while zoomed */
 function ZoomReset(props: { p: Painter; onReset: () => void; text: typeof en }) {
   const { p } = props;
   return (

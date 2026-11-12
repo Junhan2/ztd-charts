@@ -39,13 +39,13 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface RidgelineChartProps<T = Row> extends BaseChartProps<T> {
   group?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 곡선이 위로 겹치는 정도. 기본 1.5 */
+  /** How far each curve overlaps upward. Default 1.5 */
   overlap?: number;
-  /** KDE 대역폭. 없으면 자동 */
+  /** KDE bandwidth. Automatic when omitted */
   bandwidth?: number;
-  /** 정렬: "none"(데이터 순) | "median". 기본 "none" */
+  /** Sort: "none" (data order) | "median". Default "none" */
   sort?: "none" | "median";
-  /** 강조 그룹. 판별 함수는 행이 아니라 그룹 이름을 받아요: (name, index) => boolean. 기본 중앙값이 가장 큰 그룹 */
+  /** Group to highlight. A predicate receives the group name, not a row: (name, index) => boolean. Default: the group with the largest median */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
@@ -61,7 +61,7 @@ interface Ridge<T> {
 
 const SAMPLES = 72;
 
-/** 릿지라인: 그룹별 분포를 겹쳐 쌓은 곡선 */
+/** Ridgeline: overlapping, stacked curves of each group's distribution */
 export function RidgelineChart<T = Row>(props: RidgelineChartProps<T>) {
   const groups0 = useMemo(() => uniq(props.data.map((d, i) => strGetter(props.group, "group")(d, i))), [props.data, props.group]);
   const c = useChart(props, { height: () => Math.max(180, Math.min(380, groups0.length * 36 + 60)), duration: 900, stagger: 90 });
@@ -98,7 +98,7 @@ export function RidgelineChart<T = Row>(props: RidgelineChartProps<T>) {
   const bottom = 20;
   const top = 8;
   const nG = Math.max(1, model.ridges.length);
-  // 0이면 그룹이 하나일 때 0으로 나눠 NaN이 돼요. 아주 작은 수로 막아요 (그룹 하나면 산 높이는 그림 높이 전체)
+  // With 0, a single group would divide by 0 and give NaN. Guard with a tiny number instead (with one group, the ridge takes the full plot height)
   const overlap = Math.max(1e-6, props.overlap ?? 1.5);
   const step = (H - top - bottom) / (nG - 1 + overlap);
   const amp = step * overlap;
@@ -133,7 +133,7 @@ export function RidgelineChart<T = Row>(props: RidgelineChartProps<T>) {
       style={props.style}
       theme={props.theme}
       onPointerMove={(px, py, e) => {
-        // 산은 겹쳐서(기본 1.5배) 아래 산의 봉우리가 위 산 기준선을 넘어요. 나중에 그린 아래 산부터 포인터가 산 안에 있는지 봐요
+        // Ridges overlap (1.5x by default), so a lower ridge's peak crosses the baseline of the ridge above. Check whether the pointer is inside a ridge starting from the lower ridges, which are drawn later
         const j = nearestIndex(model.xsv, x.invert(px));
         let k = -1;
         for (let g = model.ridges.length - 1; g >= 0; g--) {
@@ -144,7 +144,7 @@ export function RidgelineChart<T = Row>(props: RidgelineChartProps<T>) {
             break;
           }
         }
-        // 산 밖이면 포인터 바로 아래 기준선의 산
+        // Outside every ridge: the ridge whose baseline is just below the pointer
         if (k < 0) k = Math.max(0, Math.min(nG - 1, Math.ceil((py - top - amp) / step)));
         if (k !== c.active) c.setActive(k, e.pointerType === "touch" ? "touch" : "pointer");
       }}

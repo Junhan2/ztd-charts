@@ -19,7 +19,7 @@ import { ringsPath } from "../geo/projection";
 import { geoFrame, geoLayout, layoutAspect } from "../geo/view";
 import { HANGUL, tileNeighbor } from "../layout/regions";
 
-/** 영어 서수 (1st, 2nd, 3rd, 4th, 11th, 21st) */
+/** English ordinals (1st, 2nd, 3rd, 4th, 11th, 21st) */
 const ORD = /* @__PURE__ */ new Intl.PluralRules("en-US", { type: "ordinal" });
 const SUFFIX: Record<string, string> = { one: "st", two: "nd", few: "rd" };
 
@@ -58,62 +58,62 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface ChoroplethProps<T = Row> extends BaseChartProps<T> {
-  /** 지역 이름이나 코드 필드. 기본 "region" */
+  /** Region name or code field. Default "region" */
   region?: Accessor<T, string>;
-  /** 값 필드. 기본 "value" */
+  /** Value field. Default "value" */
   value?: Accessor<T, number>;
   /**
-   * 지도: "auto"(기본, 등록한 지도 가운데 지역 값이 가장 많이 맞는 지도), 등록한 지도 이름("world", "us-states", "kr-sido"),
-   * ztd-charts/geo/* 의 지도 객체, 또는 GeoJSON FeatureCollection(경위도 도, Polygon과 MultiPolygon)
+   * Map: "auto" (default, the registered map that matches the most region values), a registered map name ("world", "us-states", "kr-sido"),
+   * a map object from ztd-charts/geo/*, or a GeoJSON FeatureCollection (longitude and latitude in degrees, Polygon and MultiPolygon)
    */
   map?: string | GeoMap | GeoJSONFeatureCollection;
-  /** 지도의 묶음만 크게: 세계 지도의 "europe", "asia", "africa", "americas", "oceania" */
+  /** Zoom to one group of the map: "europe", "asia", "africa", "americas", "oceania" on the world map */
   focus?: string;
-  /** GeoJSON에서 지역 id로 읽을 속성. 없으면 feature.id, 속성 id, code 순서 */
+  /** GeoJSON property read as the region id. Without it, feature.id, then the id property, then code */
   featureId?: string;
-  /** GeoJSON에서 지역 이름으로 읽을 속성. 없으면 속성 name, NAME 순서 */
+  /** GeoJSON property read as the region name. Without it, the name property, then NAME */
   featureName?: string;
-  /** 위쪽 색 범례. 기본 true */
+  /** Color legend on top. Default true */
   legend?: boolean;
-  /** 범례 양끝 이름. 기본 ["Less", "More"] (한국어 로캘은 ["적음", "많음"]) */
+  /** Labels at both ends of the legend. Default ["Less", "More"] (["적음", "많음"] in the Korean locale) */
   legendLabels?: [string, string];
-  /** 가장 작은 값을 가장 진하게 칠해요. 기본 강조도 가장 작은 값으로 옮겨요. 기본 false */
+  /** Paints the smallest value darkest. The default highlight moves to the smallest value too. Default false */
   colorReverse?: boolean;
-  /** 이 값이 가장 옅고, 위는 강조색, 아래는 회색이에요 (늘고 준 값) */
+  /** This value is the lightest; above it the accent color, below it gray (for increases and decreases) */
   colorCenter?: number;
-  /** 색 단계 수 (2~12). 기본 5 */
+  /** Number of color steps (2~12). Default 5 */
   colorSteps?: number;
-  /** 지도 옆 순위 목록(가장 높은 곳과 낮은 곳). "auto"는 폭이 600px 이상일 때만. 기본 "auto" */
+  /** Ranking list beside the map (the highest and lowest regions). "auto" shows it only when the width is 600px or more. Default "auto" */
   ranking?: boolean | "auto";
-  /** 한국 시도 지도의 지역 이름 언어. "auto"는 맞은 지역 값에 한글이 있으면 한국어, 아니면 locale 언어. 기본 "auto" */
+  /** Language of region names on the Korean provinces map. "auto" uses Korean when the matched region values contain Hangul, otherwise the locale's language. Default "auto" */
   labels?: "auto" | "ko" | "en";
 }
 
-/** 가장 옅은 단계의 불투명도 (타일 격자 지도와 같아요). 빈 지역(회색)과 구분돼요 */
+/** Opacity of the lightest step (same as the tile grid map). Keeps it distinct from empty regions (gray) */
 const MIN_OPACITY = 0.14;
-/** 순위 목록 폭, 줄 높이, 지도와의 사이, 목록을 붙이는 최소 폭 */
+/** Ranking list width, row height, gap to the map, and the minimum width at which the list is added */
 const LIST_W = 172;
 const ROW_H = 17;
 const LIST_GAP = 16;
 const LIST_MIN_W = 600;
-/** 굵은 강조 테두리를 두르는 고리의 짧은 변 최소 길이(px) */
+/** Minimum short-side length (px) of a ring that gets the thick highlight outline */
 const OUTLINE_MIN = 8;
-/** 등장 띠 수: 지역을 서쪽에서 동쪽으로 이만큼 묶어 차례로 나타나게 해요 */
+/** Number of entrance bands: regions are grouped into this many bands from west to east and appear in turn */
 const BANDS = 10;
 
 interface RegionInfo<T> {
-  /** 지도의 지역 번호 */
+  /** Region index in the map */
   i: number;
   label: string;
   value: number;
   datum: T | null;
-  /** 값 순위 (1이 가장 큼, 같은 값은 같은 순위). 값이 없으면 0 */
+  /** Value rank (1 is the largest; equal values share a rank). 0 without a value */
   rank: number;
 }
 
 /**
- * 단계구분도: 지역을 값의 단계 색으로 칠한 지도. 지도는 registerMap으로 등록한 내장 지도(ztd-charts/geo/*)나 GeoJSON이에요.
- * 작은 지역은 지도에서 잘 안 보여서, 폭이 넉넉하면 옆에 가장 높은 곳과 낮은 곳을 적어요
+ * Choropleth: a map with regions painted in stepped colors by value. The map is a built-in map registered with registerMap (ztd-charts/geo/*) or GeoJSON.
+ * Small regions are hard to see on a map, so when there is room the highest and lowest regions are listed beside it
  */
 export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
   const gr = strGetter(props.region, "region");
@@ -145,7 +145,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
       return r;
     });
     let hangul = false;
-    // 같은 지역에 맞는 행이 여럿이면 뒤 행이 이겨요 (validateSpec이 알려요). 맞지 않는 행, 묶음 밖 행은 빼요
+    // When several rows match the same region, the later row wins (validateSpec reports it). Rows that match no region, or fall outside the focus group, are dropped
     props.data.forEach((d, k) => {
       const name = gr(d, k);
       const r = byShape.get(layout.match(name));
@@ -160,7 +160,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
       r.label = (lang === "ko" ? s.nameKo : undefined) ?? s.name;
     }
     const vals = out.filter((r) => Number.isFinite(r.value)).map((r) => r.value).sort((a, b) => b - a);
-    // 순위: 자기보다 큰 값의 수 + 1 (정렬한 값에서 이분 탐색이라 지역이 많아도 빨라요)
+    // Rank: the number of larger values + 1 (a binary search over the sorted values, so it stays fast with many regions)
     for (const r of out)
       if (Number.isFinite(r.value)) {
         let lo = 0;
@@ -175,7 +175,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
     return out;
   }, [layout, props.data, props.region, props.value, props.labels, c.lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** 키보드, 표, 라이브 영역 순서: 값이 큰 지역부터, 그다음 데이터 없는 지역(지도 순서) */
+  /** Order for the keyboard, table and live region: regions with the largest values first, then regions without data (in map order) */
   const order = useMemo(() => [...regions].sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity) || a.i - b.i), [regions]);
   const withData = order.filter((r) => r.rank > 0);
   const n = withData.length;
@@ -183,13 +183,13 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
   const mn = n ? withData[n - 1].value : 0;
   const flat = n > 0 && mx === mn;
 
-  // 숫자가 아닌 단계 수, 가운데 값은 기본값으로 (스펙은 validateSpec이 먼저 막아요)
+  // A non-numeric step count or center value falls back to the default (for specs, validateSpec catches it first)
   const stepsIn = Number.isFinite(props.colorSteps) ? props.colorSteps : 5;
   const centerIn = Number.isFinite(props.colorCenter) ? props.colorCenter : undefined;
   const scale = useMemo(() => colorScaleOf(props.colorReverse, centerIn, stepsIn), [props.colorReverse, centerIn, stepsIn]);
   const steps = scale.steps ?? 5;
   const center = scale.center;
-  /** 값 → 색 척도 위치 (히트맵과 같아요: 가운데 값이 있으면 -1~1, 없으면 0~1) */
+  /** Value → color scale position (same as the heatmap: -1~1 with a center value, otherwise 0~1) */
   const tOf = (v: number) => {
     if (center !== undefined) {
       const span = Math.max(Math.abs(mx - center), Math.abs(mn - center));
@@ -198,13 +198,13 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
     return mx > mn ? (v - mn) / (mx - mn) : 1;
   };
 
-  // 화면 크기에 맞춘 지도 (지역 길, 중심). 순위 목록이 있으면 지도는 왼쪽에 둬요
+  // The map fitted to the screen size (region paths, centers). With a ranking list, the map goes on the left
   const showList = listFor(W) && n >= 2;
   const mapW = showList ? W - LIST_W - LIST_GAP : W;
   const mapH = Math.max(1, H - legendH);
   const frame = useMemo(() => (layout ? geoFrame(layout, mapW, mapH) : null), [layout, mapW, mapH]);
 
-  // 지역마다 바뀌지 않는 칠 (호버와 등장 프레임마다 다시 재지 않아요)
+  // Per-region fills that do not change (not recomputed on hover or on each entrance frame)
   const looks = useMemo(
     () =>
       regions.map((r) => {
@@ -215,13 +215,13 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
   );
 
   const [step, setStep] = useState<number | null>(null);
-  /** 범례 칸 k의 색 단계 (지역의 step과 같은 값이면 그 단계예요) */
+  /** Color step of legend cell k (a region whose step equals this value is in that step) */
   const stepValue = (k: number) => scaleT(center === undefined ? k / (steps - 1) : (2 * k) / (steps - 1) - 1, scale);
 
   const posOf = useMemo(() => new Map(regions.map((r, k) => [r.i, k])), [regions]);
   const hiSet = useMemo(() => {
     if (!layout) return new Set<number>();
-    // 이름은 지도의 지역 이름표로 찾아요 (맞는 지역이 없으면 -1이라 버려요). 숫자는 순위 순서(0이 가장 큼)예요
+    // Names are looked up by the map's region labels (no match gives -1, which is dropped). Numbers are rank order (0 is the largest)
     const h = props.highlight;
     const byName = (x: number | string) => (typeof x === "string" && !HIGHLIGHT_KEYWORDS.includes(x) ? (posOf.get(layout.match(x)) ?? -1) : typeof x === "number" ? (order[x] ? posOf.get(order[x].i)! : -1) : x);
     const resolved =
@@ -246,10 +246,10 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
     [listed, layout, fv, msg, n],
   );
   const eventOf = useMemo(() => new Map(listed.map((r, k) => [r.i, k])), [listed]);
-  // 방향키 이웃: 화면 중심 좌표를 격자 칸처럼 (row = y, col = x)
+  // Arrow-key neighbors: screen center coordinates treated like grid cells (row = y, col = x)
   const centers = useMemo(() => listed.map((r) => ({ row: frame?.centers[r.i][1] ?? 0, col: frame?.centers[r.i][0] ?? 0 })), [listed, frame]);
 
-  // 등장 띠: 지역을 중심 x로 서쪽에서 동쪽까지 BANDS개로 묶어요 (길이 빈 지역은 그리지 않아요)
+  // Entrance bands: group regions by center x into BANDS bands from west to east (regions with an empty path are not drawn)
   const bands = useMemo(() => {
     const out: number[][] = Array.from({ length: BANDS }, () => []);
     if (frame)
@@ -262,8 +262,8 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
   }, [frame, regions, mapW]);
 
   /**
-   * 강조 테두리: 짧은 변이 OUTLINE_MIN px 이상인 고리만 굵게 둘러요. 작은 섬과 작은 나라는 굵은 선이 칠을 덮어 검은 점이 되거든요.
-   * 그런 고리만 있는 지역은 얇은 선으로 두르고, 둘레에 고리 표시를 그려 자리를 찾게 해요 (칠한 색은 그대로 보여요)
+   * Highlight outline: only rings whose short side is at least OUTLINE_MIN px get the thick outline, because on small islands and small countries a thick line covers the fill and turns into a black dot.
+   * A region with only such rings gets a thin outline plus a ring marker around it, so it can be found (its fill color stays visible)
    */
   const outlineOf = (i: number) => {
     const big = frame && layout ? ringsPath(layout.projected[i].rings, frame.fit, [mapW, mapH], OUTLINE_MIN) : "";
@@ -303,23 +303,23 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
   const announce = c.via === "keyboard" && c.active !== null && events[c.active] ? `${events[c.active].label}: ${events[c.active].formatted}` : "";
 
   const stepAt = step === null ? NaN : stepValue(step);
-  // 순위 목록: 다 들어가면 모두, 아니면 위쪽 절반을 가장 높은 곳, 아래를 가장 낮은 곳으로 (머리 줄 두 개)
+  // Ranking list: everything if it fits; otherwise the top half for the highest regions and the bottom for the lowest (two header rows)
   const listRows = Math.max(0, Math.floor((mapH - 8) / ROW_H) - 2);
-  // 범례 단계에 올리면 그 단계 지역만 순위대로 (머리 줄에 몇 곳인지)
+  // Hovering a legend step lists only that step's regions, in rank order (the header row shows how many)
   const inStep = (k: number) => Math.abs((looks[k]?.step ?? NaN) - stepAt) < 1e-9;
   const stepRows = step === null ? [] : withData.filter((r) => inStep(posOf.get(r.i) ?? -1));
   const top = step !== null ? stepRows.slice(0, listRows + 1) : n <= listRows + 1 ? withData : withData.slice(0, Math.ceil(listRows / 2));
   const bottom = step !== null || n <= listRows + 1 ? [] : withData.slice(n - Math.floor(listRows / 2));
   const listX = W - LIST_W;
-  // 머리 줄: 높은 곳과 낮은 곳으로 나눌 때와 범례 단계 목록일 때
+  // Header rows: when split into highest and lowest, and when listing a legend step
   const heads = bottom.length > 0 || step !== null;
 
   const setFromPointer = (k: number | null, type: string) => c.setActive(k, type === "touch" ? "touch" : "pointer");
 
-  /** 흐리기: 지역을 고르면 나머지를 조금(0.55, 타일 격자 지도와 같아요). 범례 단계에 올렸을 때는 아래 칠에서 단계 밖 지역을 데이터 없음 색으로 바꿔요 */
+  /** Dimming: when a region is selected, the rest dim slightly (0.55, same as the tile grid map). When a legend step is hovered, the fill below switches regions outside the step to the no-data color instead */
   const dimOf = (k: number) => (step === null && c.active !== null && listed[c.active]?.i !== regions[k].i ? 0.55 : 1);
 
-  // 데이터 없음 칸은 범례 왼쪽에 들어갈 때만 (좁으면 빼요. 빈 지역은 회색이라 지도에서도 보여요)
+  // The no-data cell only when it fits left of the legend (dropped when narrow; empty regions are gray, so they show on the map anyway)
   const noDataFull = textWidth(msg.noData, 10) + 18;
   const noDataW = lacking && n && mapW - lw - 14 - noDataFull >= 0 ? noDataFull : 0;
   const stepStart = mapW - steps * 14 - textWidth(ll[1], 10);
@@ -346,13 +346,13 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
         ) : undefined
       }
       onKey={(e) => {
-        // Home은 가장 높은 곳(기본), End는 값이 가장 낮은 곳 (데이터 없는 지역은 그 뒤에 있어요)
+        // Home goes to the highest region (default), End to the lowest value (regions without data come after it)
         if (e.key === "End" && n) {
           c.setActive(n - 1, "keyboard");
           return true;
         }
         if (!e.key.startsWith("Arrow")) return false;
-        // 처음 누른 방향키는 가장 높은 곳에서 시작해요. 그다음은 그 방향의 가장 가까운 지역(중심 기준), 없으면 그 자리
+        // The first arrow key press starts at the highest region. After that, the nearest region in that direction (by center), or stay put when there is none
         const next = c.active === null ? 0 : tileNeighbor(centers, c.active, e.key);
         if (next >= 0) c.setActive(next, "keyboard");
         return true;
@@ -366,7 +366,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
       {props.legend !== false && n ? (
         <g>
           <ScaleLegend p={p} right={mapW} steps={steps} scale={scale} labels={ll} min={MIN_OPACITY} />
-          {/* 범례 칸에 올리면 그 단계 지역만 남겨요 (칸 자리는 ScaleLegend와 같은 계산) */}
+          {/* Hovering a legend cell keeps only that step's regions (cell positions use the same math as ScaleLegend) */}
           {Array.from({ length: steps }, (_, k) => (
             <rect key={k} x={stepStart - 7 + k * 14} y={0} width={14} height={16} fill="transparent" onPointerEnter={() => setStep(k)} onPointerLeave={() => setStep(null)} />
           ))}
@@ -382,7 +382,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
       ) : null}
       {frame && layout ? (
         <g key={motion.generation} transform={legendH ? `translate(0 ${legendH})` : undefined}>
-          {/* 바다: 지역 밖으로 나가면 고른 것을 지워요 */}
+          {/* Sea: moving outside the regions clears the selection */}
           <rect width={mapW} height={mapH} fill="transparent" onPointerEnter={(e) => (c.via === "keyboard" ? undefined : setFromPointer(null, e.pointerType))} />
           <g clipPath={layout.clip ? `url(#${uid}c)` : undefined}>
             {layout.context.length ? <BaseMap p={p} frame={frame} regions={layout.context} opacity={0.6} /> : null}
@@ -391,7 +391,7 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
                 <g key={band} style={cssEntrance(enabled, motion.waiting, "fade", band * stg, dur)}>
                   {members.map((k) => {
                     const r = regions[k];
-                    // 범례 단계에 올리면 단계 밖 지역은 데이터 없음 색으로 (가장 옅은 단계도 흐린 지역과 섞이지 않게)
+                    // While a legend step is hovered, regions outside it take the no-data color (so even the lightest step does not blend with dimmed regions)
                     const sw = step !== null && !inStep(k) ? null : looks[k].sw;
                     const ev = eventOf.get(r.i);
                     return (
@@ -413,16 +413,16 @@ export function Choropleth<T = Row>(props: ChoroplethProps<T>) {
                 </g>
               ) : null,
             )}
-            {/* 범례 단계에 올린 지역은 얇은 테두리로 (옅은 단계도 바탕과 구분돼요) */}
+            {/* Regions in the hovered legend step get a thin outline (so even a light step stands out from the background) */}
             {step !== null ? (
               <g pointerEvents="none" fill="none" stroke={p.paint("ink")} strokeWidth={0.75} strokeLinejoin="round">
                 {regions.map((r, k) => (inStep(k) && frame.paths[r.i] ? <path key={`s${r.i}`} d={frame.paths[r.i]} /> : null))}
               </g>
             ) : null}
-            {/* 강조와 고른 지역의 테두리는 위에 (이웃 지역에 가려지지 않게) */}
+            {/* Outlines of highlighted and selected regions go on top (so neighboring regions do not cover them) */}
             {regions.map((r, k) => {
               const isActive = active?.i === r.i;
-              // 범례 단계에 올린 동안은 그 단계 밖 강조 테두리를 숨겨요 (단계 지역으로 읽히지 않게)
+              // While a legend step is hovered, hide highlight outlines outside that step (so they do not read as part of the step)
               if (!((hiSet.has(k) && (step === null || inStep(k))) || isActive) || !frame.paths[r.i]) return null;
               const o = outlineOf(r.i);
               const w = isActive ? 2 : 1.4;

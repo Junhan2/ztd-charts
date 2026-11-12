@@ -24,15 +24,15 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface TreemapProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 상위 그룹 필드. 있으면 그룹 머리글을 그려요 */
+  /** Parent group field. When present, group headers are drawn */
   group?: Accessor<T, string>;
-  /** 여러 단계 경로 필드 목록 */
+  /** List of multi-level path fields */
   path?: string[];
-  /** 중첩 데이터의 자식 필드. 기본 "children" */
+  /** Children field of nested data. Default "children" */
   children?: string;
-  /** 칸 라벨: "both"(이름+비율) | "name" | "value" | "none". 기본 "both" */
+  /** Cell labels: "both" (name + share) | "name" | "value" | "none". Default "both" */
   labelMode?: "both" | "name" | "value" | "none";
-  /** 큰 순서로 정렬. 기본 true */
+  /** Sort largest first. Default true */
   sort?: boolean;
 }
 
@@ -53,7 +53,7 @@ interface GroupBox<T> {
 const GAP = 3;
 const HEAD = 16;
 
-/** 트리맵: 계층의 비율을 넓이로 */
+/** Treemap: shares of a hierarchy shown as areas */
 export function Treemap<T = Row>(props: TreemapProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(180, Math.min(280, w * 0.58)), duration: 700, stagger: 45 });
   const { p, width: W, height: H } = c;

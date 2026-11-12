@@ -3,10 +3,10 @@ import { DEFAULT_LOCALE, TEMPLATE_SLOT, formatDate, makeFormatter } from "../cor
 import type { ChartEvent } from "../core/types";
 
 /**
- * 스펙의 툴팁 틀(options.tooltip.template)을 툴팁 함수로 바꿔요.
- * {label}, {value}, {series}는 짚은 항목에서, 다른 {이름}은 그 행의 열에서 읽어요. 줄바꿈마다 한 줄이고,
- * 빈 칸(없는 열, null, 빈 글자, NaN, 계산한 항목이라 행이 없음)이 든 줄은 빼요. 모든 줄이 빠지면 기본 툴팁이에요.
- * 수는 차트의 기본 수 표기, 날짜는 연월일로 써요. React로 쓸 때는 tooltip={templateTooltip("…")}
+ * Turns a spec's tooltip template (options.tooltip.template) into a tooltip function.
+ * {label}, {value} and {series} come from the pointed item; any other {name} reads the row's column of that name. Each line break starts a new line,
+ * and lines with an empty slot (a missing column, null, an empty string, NaN, or no row because the item is computed) are dropped. When every line is dropped, the default tooltip is used.
+ * Numbers use the chart's default number format, and dates are written as year, month and day. In React, use tooltip={templateTooltip("…")}
  */
 export function templateTooltip(template: string, locale: string = DEFAULT_LOCALE): (e: ChartEvent<unknown>) => ReactNode {
   const num = makeFormatter(undefined, locale);

@@ -20,31 +20,31 @@ import { krSido } from "../geo/kr-sido";
 import { usStates } from "../geo/us-states";
 import { world } from "../geo/world";
 
-// 서버에서는 내장 지도를 모두 미리 등록해요: renderSpecToSVG, CLI, MCP가 "map": "world"를 설정 없이 그려요 (브라우저 번들에는 들지 않아요)
+// On the server, every built-in map is registered up front: renderSpecToSVG, the CLI and MCP draw "map": "world" with no setup (not included in the browser bundle)
 registerMap(world, usStates, krSido);
 
 export interface RenderOptions {
-  /** 전체 폭(px). 기본 720 */
+  /** Total width (px). Default 720 */
   width?: number;
-  /** 차트 높이(px). 없으면 차트 기본값 */
+  /** Chart height (px). The chart's default when omitted */
   height?: number;
-  /** "dark"(기본) | "light" | 토큰 객체 */
+  /** "dark" (default) | "light" | a token object */
   theme?: "dark" | "light" | Partial<ChartTheme>;
-  /** 카드 틀(번호, 제목, 범례, 요약, 배지)까지 그려요. 기본: spec.card가 있으면 true */
+  /** Also draws the card frame (number, title, legend, summary, badge). Default: true when spec.card is set */
   frame?: boolean;
-  /** 바깥 여백(px). 기본 24 */
+  /** Outer margin (px). Default 24 */
   padding?: number;
-  /** 페이지 바탕색을 칠해요. 기본 true */
+  /** Paints the page background color. Default true */
   background?: boolean;
   /**
-   * 차트와 카드 글자, 숫자 형식, 오류 문구의 로캘. "ko"나 "ko-*"면 한국어, 그 밖은 영어.
-   * 없으면 스펙 options.locale, 그것도 없으면 "en-US"
+   * Locale for chart and card text, number format and error messages. "ko" or "ko-*" gives Korean; anything else English.
+   * When omitted, the spec's options.locale; failing that, "en-US"
    */
   locale?: string;
 }
 
-/** 스펙 검사. 틀리면 이유를 모아 던져요 */
-/** { csv } 데이터만 미리 읽은 행으로 (검사와 그리기가 같은 행을 써서 CSV를 한 번만 읽어요). 다른 꼴은 검사가 직접 봐요 */
+/** Spec validation. Throws with the collected reasons when invalid */
+/** Only { csv } data becomes pre-parsed rows (validation and rendering share the rows, so the CSV is parsed once). Validation reads other shapes directly */
 function csvRows(data: unknown): Record<string, unknown>[] | undefined {
   return typeof (data as { csv?: unknown } | null)?.csv === "string" ? (inlineRows(data) ?? undefined) : undefined;
 }
@@ -57,8 +57,8 @@ function assertValid(spec: ChartSpec, lang: ChartLang, rows?: Record<string, unk
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /**
- * { url } 데이터를 가져와 행 배열로 바꾼 스펙을 돌려줘요. locale은 오류 문구 언어예요.
- * fetcher를 주면 fetch 대신 그 함수로 받아요 (CLI는 시간과 크기 한도를 둔 fetch를 넘겨요)
+ * Fetches { url } data and returns the spec with it turned into an array of rows. locale is the language of error messages.
+ * When fetcher is given, it is used instead of fetch (the CLI passes a fetch with time and size limits)
  */
 export async function resolveSpecData(spec: ChartSpec, init?: RequestInit, locale?: string, fetcher?: (url: string) => Promise<Response>): Promise<ChartSpec> {
   const inline = inlineRows(spec.data);
@@ -78,7 +78,7 @@ function chartMarkup(spec: ChartSpec, width: number, height: number | undefined,
   return renderToStaticMarkup(createElement(ThemeProvider, { theme, cssVars }, createElement(Chart, { spec: s, width, height, animate: false, locale })));
 }
 
-/** 낱말 단위로 max 폭 안에 들어가게 줄을 나눠요 (한 낱말이 더 길면 그 낱말만 한 줄). wrapLines는 긴 낱말(출처 URL)을 말줄임으로 자르고 뒤를 버려서 따로 둬요 */
+/** Wraps lines word by word to fit within max width (a longer word gets a line of its own). Kept separate because wrapLines truncates a long word (a source URL) with an ellipsis and drops the rest */
 function wrapWords(s: string, max: number, size: number): string[] {
   const out: string[] = [];
   let line = "";
@@ -93,7 +93,7 @@ function wrapWords(s: string, max: number, size: number): string[] {
   return out;
 }
 
-/** 마크업 속 차트 svg(class="ztd-svg")마다 안쪽과 viewBox 크기. 작은 여러 개는 패널마다 하나예요. 닫는 태그는 안에 든 svg까지 짝을 세어 찾아요 */
+/** Inner markup and viewBox size of each chart svg (class="ztd-svg") in the markup. Small multiples have one per panel. The closing tag is found by counting pairs, nested svgs included */
 function extractPanels(markup: string): { inner: string; vw: number; vh: number }[] {
   const out: { inner: string; vw: number; vh: number }[] = [];
   const open = /<svg\b[^>]*class="ztd-svg"[^>]*>/g;
@@ -112,18 +112,18 @@ function extractPanels(markup: string): { inner: string; vw: number; vh: number 
 }
 
 /**
- * 작은 여러 개(spec.facet)를 SVG 조각으로: 브라우저의 <ChartFacets>와 같은 배치(planFacets)로 패널 제목 줄과 패널 차트를 놓아요.
- * 패널 차트는 한 번에 그린 마크업에서 꺼내서 패널마다 그라데이션, 자르기 id가 겹치지 않아요. at(x, y)는 그 자리에 그린 글이에요
+ * Small multiples (spec.facet) as an SVG fragment: places the panel title rows and panel charts with the same layout as the browser's <ChartFacets> (planFacets).
+ * Panel charts are taken from markup rendered in one pass, so gradient and clip ids do not collide across panels. at(x, y) is the markup drawn at that position
  */
 function facetBody(spec: ChartSpec, facet: SpecFacet, def: ChartMeta, rows: Record<string, unknown>[], width: number, height: number | undefined, theme: ChartTheme, locale: string | undefined, T: Record<keyof ChartTheme, string>): { height: number; at: (x: number, y: number) => string } {
   const type = def.type;
   const markup = chartMarkup({ ...spec, data: rows }, width, height, theme, false, false, locale);
   const panels = extractPanels(markup);
-  // 모든 패널이 같이 쓰는 범례(FacetPlan.legend)는 브라우저처럼 격자 위 오른쪽에 한 번
+  // The legend shared by all panels (FacetPlan.legend) appears once at the top right of the grid, as in the browser
   const legend = /<svg class="ztd-facet-legend" width="([\d.]+)" height="([\d.]+)"[^>]*>([\s\S]*?)<\/svg>/.exec(markup);
   const top = legend ? FACET_LEGEND_H : 0;
   const loc = locale ?? DEFAULT_LOCALE;
-  // <Chart>가 만드는 차트 프롭과 같은 순서: 채널, options, 행, 폭(높이) 프롭, 로캘
+  // Same order as the chart props <Chart> builds: channels, options, rows, width (height) props, locale
   const chartProps = { ...encodingToProps(def, spec.encoding), ...(spec.options ?? {}), data: rows, width, ...(height !== undefined ? { height } : {}), locale };
   const plan = planFacets({ ...facetPropsOf(type, facet, chartProps), width, locale: loc, lang: langOf(loc) } as FacetInput);
   const rowsN = Math.ceil(plan.panels.length / plan.cols);
@@ -149,7 +149,7 @@ function facetBody(spec: ChartSpec, facet: SpecFacet, def: ChartMeta, rows: Reco
   return { height: top + rowsN * (FACET_TITLE_H + plan.ph) + Math.max(0, rowsN - 1) * FACET_ROW_GAP, at };
 }
 
-/** 차트 svg 하나. 닫는 태그는 짝을 세어 찾아서 차트 밖 HTML 단추 속 아이콘 svg(막대 레이스의 재생 단추)까지 넘어가지 않아요 */
+/** One chart svg. The closing tag is found by counting pairs, so it does not run on into icon svgs inside HTML buttons outside the chart (the bar race's play button) */
 function extractSvg(markup: string): { inner: string; vw: number; vh: number } | null {
   const panel = extractPanels(markup)[0];
   if (panel) return panel;
@@ -159,48 +159,48 @@ function extractSvg(markup: string): { inner: string; vw: number; vh: number } |
   return { inner: m[2], vw: vb ? Number(vb[1]) : 0, vh: vb ? Number(vb[2]) : 0 };
 }
 
-/** 렌더 옵션 padding의 상한(px) */
+/** Upper limit of the padding render option (px) */
 const MAX_PADDING = 200;
 
 /**
- * 독립 SVG 문서 한 변의 상한(px). 차트 한 변은 MAX_CHART_SIZE(10,000)지만 문서는 그보다 클 수 있어요: 작은 여러 개 24칸 한 줄씩(최대 약 240,800px),
- * 데이터만큼 길어지는 차트(가로 막대 줄마다), 긴 범례와 메모 줄. 가장 큰 작은 여러 개가 줄지 않는 250,000px를 넘으면
- * viewBox는 그대로 두고 width, height만 비율대로 줄여서 그림 전체가 작게 들어가요. 그보다 작으면 예전과 같은 글자예요
+ * Per-side limit of a standalone SVG document (px). One side of a chart is at most MAX_CHART_SIZE (10,000), but the document can be larger: small multiples with 24 cells, one per row (up to about 240,800px),
+ * charts that grow with the data (a row per horizontal bar), long legends and note lines. Above 250,000px, which even the largest small multiples stay under,
+ * the viewBox stays as is and only width and height shrink proportionally, so the whole drawing fits at a smaller size. Below that, the output is the same text as before
  */
 export const MAX_DOCUMENT_SIZE = 250_000;
 
-/** 바깥 <svg> 여는 태그의 앞부분 (크기와 viewBox). 닫는 ">"와 나머지 속성은 부르는 쪽이 붙여요 */
+/** The start of the outer <svg> opening tag (size and viewBox). The caller appends the closing ">" and the other attributes */
 function svgOpen(W: number, H: number): string {
   const k = Math.min(1, MAX_DOCUMENT_SIZE / Math.max(W, H));
   const fit = (v: number) => (k < 1 ? Math.max(1, Math.floor(v * k)) : v);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${fit(W)}" height="${fit(H)}" viewBox="0 0 ${W} ${H}"`;
 }
 
-/** 스펙을 독립 SVG 문자열로. PNG 변환(resvg)에서도 그대로 써요 */
+/** A spec as a standalone SVG string. PNG conversion (resvg) uses it as is */
 export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): string {
   const locale = specLocale(spec, opts.locale);
   const lang = langOf(locale);
   const csv = csvRows(spec.data);
   assertValid(spec, lang, csv);
-  // { url } 데이터는 여기서 가져오지 않아요 (동기 함수라서). 그대로 그리면 로딩 화면만 남아요
+  // { url } data is not fetched here (this is a synchronous function). Drawn as is, only the loading state would remain
   const rows = csv ?? inlineRows(spec.data);
   if (!rows) throw new Error(lang === "ko" ? "data.url 데이터는 먼저 가져와야 해요. renderSpecToSVG(await resolveSpecData(spec))처럼 resolveSpecData를 먼저 불러 주세요" : "data.url must be fetched first. Call resolveSpecData, as in renderSpecToSVG(await resolveSpecData(spec))");
   const theme = resolveThemeInput((opts.theme ?? (spec.theme as never)) || "dark");
-  // 아래 문자열에 넣는 테마 값은 모두 이스케이프한 것만 써요 (검사를 거치지 않은 opts.theme도 속성을 벗어나지 못해요)
+  // Theme values inserted into the strings below are all escaped (even an unvalidated opts.theme cannot break out of an attribute)
   const T = Object.fromEntries(Object.entries(theme).map(([k, v]) => [k, esc(v)])) as Record<keyof ChartTheme, string>;
-  // 렌더 옵션 크기는 검사하지 않고 받아서 한 변 MAX_CHART_SIZE 안으로 줄여요 (스펙 options.width, height는 validateSpec이 막아요)
+  // Render option sizes are taken unvalidated and reduced to MAX_CHART_SIZE per side (validateSpec guards the spec's options.width and height)
   const W = capChartSize(Math.max(160, Math.round(opts.width ?? 720)));
   const optH = capChartSize(opts.height);
-  // 속성에 들어가는 크기는 숫자로만 (문자열이 오면 그대로 붙지 않게). 여백도 검사 없이 받아서 MAX_PADDING까지예요
+  // Sizes that go into attributes are numbers only (so a string is never pasted in as is). Padding is also taken unvalidated and capped at MAX_PADDING
   const pad = Math.min(MAX_PADDING, Number(opts.padding ?? 24) || 0);
   const frame = opts.frame ?? !!spec.card;
   const card = spec.card ?? {};
   const def = resolveDef(spec.type, spec.encoding, spec.options);
   const inner = frame ? W - pad * 2 - 40 : W - pad * 2;
-  // 작은 여러 개(spec.facet)는 패널을 격자로 놓은 조각이에요. facet이 없으면 예전과 같은 글자 그대로예요
+  // Small multiples (spec.facet) are a fragment with panels laid out in a grid. Without facet, the output is the same text as before
   const facet = def ? specFacet(spec, def.type) : undefined;
   const grid = facet && def ? facetBody(spec, facet, def, rows, inner, optH, theme, locale, T) : null;
-  // { csv }를 한 번만 읽도록 행으로 바꿔 넘겨요
+  // Pass rows so { csv } is parsed only once
   const svg = grid ? { inner: "", vw: inner, vh: grid.height } : extractSvg(chartMarkup({ ...spec, data: rows }, inner, optH, theme, false, false, locale));
   if (!svg) throw new Error(lang === "ko" ? "차트 SVG를 만들지 못했어요" : "Couldn't build the chart SVG");
   const chartH = svg.vh || Number(optH) || 240;
@@ -213,7 +213,7 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
     return `${svgOpen(W, H)} font-family="${esc(font)}" color="${T.ink}">${opts.background === false ? "" : `<rect width="${W}" height="${H}" fill="${T.panel}"/>`}${body(pad, pad)}</svg>`;
   }
 
-  // 카드 틀
+  // Card frame
   const cx0 = pad;
   const cy0 = pad;
   const cw = W - pad * 2;
@@ -224,17 +224,17 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   const num = card.number ? `${card.number}` : "";
   const numW = num ? textWidth(num, 17, 700) + 10 : 0;
   parts.push(`<text x="${cx0 + ip}" y="${y + 18}" font-family="${esc(mono)}" font-size="17" font-weight="700" fill="${T.accentText}">${esc(num)}</text>`);
-  // 제목 속 card.accent 낱말은 강조색으로. 모든 조각을 tspan에 넣어요 (PNG에서 이모지를 뺄 때 조각마다 봐요)
+  // The card.accent word in the title gets the accent color. Every piece goes in a tspan (emoji removal for PNG looks at each piece)
   const at = card.accent ? title.indexOf(card.accent) : -1;
   const titleBody = at < 0 || !card.accent ? esc(title) : `<tspan>${esc(title.slice(0, at))}</tspan><tspan fill="${T.accentText}">${esc(card.accent)}</tspan><tspan>${esc(title.slice(at + card.accent.length))}</tspan>`;
   parts.push(`<text x="${cx0 + ip + numW}" y="${y + 19}" font-size="22" font-weight="800" letter-spacing="-0.5" fill="${T.ink}">${titleBody}</text>`);
   y += 30;
-  // 켜고 끄는 범례(toggle)는 이미지에서 "auto"와 같아요 (숨긴 계열은 차트와 범례에서 빠져요)
+  // A toggleable legend (toggle) is the same as "auto" in an image (hidden series drop out of the chart and the legend)
   const legend = card.legend === "auto" || card.legend === "toggle" ? autoLegend(spec, rows, locale ?? DEFAULT_LOCALE) : card.legend ?? [];
   if (card.subtitle || legend.length) {
     parts.push(`<text x="${cx0 + ip}" y="${y + 12}" font-size="12.5" fill="${T.muted}">${esc(card.subtitle ?? "")}</text>`);
-    // 범례는 브라우저 카드처럼 줄을 바꾸고 오른쪽에 붙여요: 항목은 색 9px + 6px + 글자, 항목 사이 12px, 줄 사이 18px.
-    // 한 줄에 들어가고 부제와 나란히 들어가면 부제 줄에, 아니면 부제 아래 줄부터 써요
+    // Like the browser card, the legend wraps and aligns right: each item is a 9px swatch + 6px + text, 12px between items, 18px between lines.
+    // If it fits on one line beside the subtitle, it goes on the subtitle line; otherwise it starts on the line below the subtitle
     const lineMax = cw - ip * 2;
     const items = legend.map((it) => {
       const label = truncate(it.label, lineMax - 15, 11.5);
@@ -253,29 +253,29 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
     const paint = makePainter(theme, false);
     let ly = besideSubtitle || !card.subtitle ? y : y + 18;
     for (const line of lines) {
-      // 줄마다 오른쪽 끝에서 왼쪽으로 놓아요 (한 줄 범례는 예전과 같은 좌표, 같은 순서)
+      // Each line is laid out from the right edge leftward (a one-line legend keeps the same coordinates and order as before)
       let lx = cx0 + cw - ip;
       for (const { it, label, tw } of [...line].reverse()) {
         lx -= tw;
         parts.push(`<text x="${lx}" y="${ly + 12}" font-size="11.5" fill="${T.muted}">${esc(label)}</text>`);
         lx -= 15;
-        // 토큰 이름("accent")만 테마 색으로 바꿔요 ("constructor" 같은 이름이 객체 속성을 꺼내지 않게). 섞은 색("mix:비율")은 차트 조각과 같은 색이에요.
-        // 이 painter는 CSS 변수를 쓰지 않아서 legendFill이 raw와 같은 테마 색을 돌려줘요
+        // Only token names ("accent") become theme colors (so a name like "constructor" cannot pull out an object property). Mixed colors ("mix:ratio") match the chart marks.
+        // This painter uses no CSS variables, so legendFill returns the same theme color as raw
         const col = esc(legendFill(paint, it.color));
         if (it.shape === "line" || it.shape === "dash") parts.push(`<line x1="${lx - 2}" x2="${lx + 11}" y1="${ly + 8}" y2="${ly + 8}" stroke="${col}" stroke-width="2"${it.shape === "dash" ? ' stroke-dasharray="3 2"' : ""}/><circle cx="${lx + 4.5}" cy="${ly + 8}" r="2.2" fill="${col}"/>`);
-        // 원(circle)은 브라우저 카드 범례와 같게 둥근 모서리를 반지름까지 키워요
+        // A circle rounds its corners up to the full radius, as in the browser card legend
         else parts.push(`<rect x="${lx}" y="${ly + 3.5}" width="9" height="9" rx="${it.shape === "circle" ? 4.5 : 2.5}" fill="${col}"${it.color === "neutral" || !it.color ? ` stroke="${T.line2}"` : ""}/>`);
         lx -= 12;
       }
       ly += 18;
     }
-    // 범례 마지막 줄(범례가 없으면 부제 줄) 아래로 8px
+    // 8px below the last legend line (the subtitle line when there is no legend)
     y = ly + 8;
   }
   y += 6;
   const chartY = y;
   y += chartH + 14;
-  // 출처 줄: "Source: 출처 · 메모", 카드 폭에 맞춰 낱말 단위로 줄을 바꿔요 (줄 사이 17px)
+  // Source line: "Source: <source> · <note>", wrapped word by word to the card width (17px between lines)
   const sourceLine = [card.source ? `${CARD_TEXT[lang].source}: ${card.source}` : "", card.note ?? ""].filter(Boolean).join(" · ");
   if (sourceLine) {
     const lines = wrapWords(sourceLine, cw - ip * 2, 12);
@@ -313,19 +313,19 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
 }
 
 export interface HTMLOptions extends RenderOptions {
-  /** 문서 제목 */
+  /** Document title */
   title?: string;
   /**
-   * 브라우저에서 움직이게 해요. 없으면 정적 SSR만.
-   * `{ script }`: 서버가 그린 차트를 그대로 이어받는 코드(CLI가 React와 그 차트 하나를 넣어요). 깜빡이지 않고 글꼴 말고는 네트워크가 필요 없어요.
-   * `{ libraryUrl }`: 예전 방식. ztd-charts ESM 번들 주소(또는 data: URL)로 지우고 다시 그려요.
+   * Makes the chart interactive in the browser. Static SSR only when omitted.
+   * `{ script }`: code that hydrates the server-drawn chart in place (the CLI embeds React and that one chart). No flicker, and no network needed except for fonts.
+   * `{ libraryUrl }`: the older way. Clears and redraws from the ztd-charts ESM bundle URL (or a data: URL).
    */
   interactive?: { script: string } | { libraryUrl: string; reactVersion?: string } | false;
 }
 
 const json = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
 
-/** 서버 렌더한 카드와 차트를 담은 HTML 문서 */
+/** An HTML document holding the server-rendered card and chart */
 export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): string {
   const locale = specLocale(spec, opts.locale);
   const lang = langOf(locale);
@@ -334,13 +334,13 @@ export function renderSpecToHTML(spec: ChartSpec, opts: HTMLOptions = {}): strin
   const W = capChartSize(Math.max(240, Math.round(opts.width ?? 720)));
   const optH = capChartSize(opts.height);
   const withCard = opts.frame ?? true;
-  // 정적 HTML 에는 스크립트가 없어 다시 재생, 내려받기 버튼이 눌러도 아무 일도 안 해요. 그래서 interactive 일 때만 버튼을 그려요
-  // 켜고 끄는 범례도 스크립트가 있어야 해서 정적 HTML에서는 "auto"로 그려요
+  // Static HTML has no script, so the replay and download buttons would do nothing when pressed. So the buttons are drawn only when interactive
+  // A toggleable legend also needs the script, so static HTML draws it as "auto"
   const shown = withCard ? (opts.interactive || !spec.card ? spec : { ...spec, card: { ...spec.card, replay: false, download: undefined, ...(spec.card.legend === "toggle" ? { legend: "auto" as const } : {}) } }) : { ...spec, card: undefined };
   const hydrate = opts.interactive && "script" in opts.interactive ? opts.interactive.script : null;
   if (hydrate !== null && /<\/script|<!--/i.test(hydrate)) throw new Error(lang === "ko" ? "interactive.script에는 </script나 <!--가 들어갈 수 없어요" : "interactive.script must not contain </script or <!--");
-  // 이어받는 차트는 .wrap 의 내용 폭(W)으로 그려요. 브라우저의 첫 그림도 같은 폭이라 그림이 움직이지 않아요 (renderToStaticMarkup 결과는 이어받을 수 없어요).
-  // 작은 여러 개는 정적 HTML에서도 그 폭으로 칸 수를 정해요 (스크립트가 없으면 다시 재지 못해요)
+  // A chart to be hydrated is drawn at .wrap's content width (W). The browser's first paint uses the same width, so the drawing does not shift (renderToStaticMarkup output cannot be hydrated).
+  // Small multiples set their cell count from that width in static HTML too (without the script they cannot measure again)
   const def = resolveDef(spec.type, spec.encoding, spec.options);
   const isFacet = !!def && !!specFacet(spec, def.type);
   const width = (hydrate !== null || isFacet) && spec.options?.width === undefined ? W - (shown.card ? CARD_INSET : 0) : undefined;

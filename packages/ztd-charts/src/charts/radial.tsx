@@ -31,9 +31,9 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface RadialBarChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 한 바퀴의 값. 기본 100 */
+  /** Value of one full turn. Default 100 */
   max?: number;
-  /** 호 길이(도). 기본 270 */
+  /** Arc length (degrees). Default 270 */
   sweep?: number;
 }
 
@@ -46,7 +46,7 @@ interface RingInfo<T> {
   datum: T;
 }
 
-/** 방사형 막대: 목표 대비 달성률 같은 비율을 고리로 */
+/** Radial bar chart: ratios such as progress toward a goal, drawn as rings */
 export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(270, w * 0.6)), duration: 1000, stagger: 120, format: "percent" });
   const { p, width: W, height: H } = c;
@@ -71,7 +71,7 @@ export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
   const step = (R - inner) / n;
   const thick = Math.max(4, Math.min(18, step * 0.64));
   const radius = (k: number) => R - step * k - step / 2;
-  // 12시에서 시작해 시계 방향으로. 비어 있는 왼쪽 위 사분면에 라벨을 세워요
+  // Start at 12 o'clock and go clockwise. Labels stand in the empty top-left quadrant
   const start = 0;
 
   const stg = c.motion.stagger ?? 120;
@@ -131,32 +131,32 @@ export function RadialBarChart<T = Row>(props: RadialBarChartProps<T>) {
 }
 
 export interface GaugeChartProps<T = Row> extends Omit<BaseChartProps<T>, "data"> {
-  /** 값. data 대신 바로 넘겨도 돼요 */
+  /** Value. Can be passed directly instead of data */
   value?: number;
   data?: readonly T[];
-  /** data를 쓸 때 값 필드. 기본 "value" */
+  /** Value field when using data. Default "value" */
   valueKey?: Accessor<T, number>;
   min?: number;
   max?: number;
-  /** 목표 눈금 */
+  /** Target tick */
   target?: number;
-  /** data를 쓸 때 목표 필드. 기본 "target" */
+  /** Target field when using data. Default "target" */
   targetKey?: Accessor<T, number>;
-  /** 가운데 숫자 아래 설명 */
+  /** Caption under the center number */
   label?: string;
-  /** "arc"(240도, 기본) | "semi"(반원) | "ring"(진행률 고리) | "ticks"(눈금이 값까지 켜지는 240도) */
+  /** "arc" (240 degrees, default) | "semi" (half circle) | "ring" (progress ring) | "ticks" (240 degrees of ticks lit up to the value) */
   variant?: "arc" | "semi" | "ring" | "ticks";
-  /** 구간 경계값. 예: [50, 80] -> 0~50, 50~80, 80~max (arc, semi) */
+  /** Band boundaries. Example: [50, 80] -> 0-50, 50-80, 80-max (arc, semi) */
   bands?: number[];
-  /** variant="ticks"일 때 눈금 개수. 기본은 크기에 맞춰 24~64개 */
+  /** Number of ticks when variant="ticks". Default: 24 to 64, scaled to the size */
   ticks?: number;
 }
 
-/** 눈금으로 쪼갠 호. 진행도 lit(0~1)까지 켜요 */
+/** An arc split into ticks, lit up to the progress lit (0 to 1) */
 function TickArc(props: { cx: number; cy: number; r: number; len: number; start: number; span: number; count?: number; lit: number; on: string; off: string }) {
   const { cx, cy, r, len, start, span, lit, on, off } = props;
   const n = Math.max(2, Math.round(props.count ?? Math.max(24, Math.min(64, ((r - len / 2) * span) / 8))));
-  // 눈금마다 켜진 선과 꺼진 선을 미리 만들어 둬요. 등장 중 프레임마다는 켜진 개수만 바뀌어서 React가 나머지를 건너뛰어요
+  // Build the lit and unlit line for every tick up front. During the entrance only the lit count changes from frame to frame, so React skips the rest
   const lines = useMemo(() => {
     const gapPx = ((r - len / 2) * span) / (n - 1);
     const w = Math.max(1.6, Math.min(3.4, gapPx * 0.42));
@@ -171,7 +171,7 @@ function TickArc(props: { cx: number; cy: number; r: number; len: number; start:
   return <g aria-hidden="true">{lines.map((l, i) => (lit > 0.002 && i / (n - 1) <= lit + 1e-6 ? l.on : l.off))}</g>;
 }
 
-/** 게이지: KPI 하나의 현재값과 목표. variant="ring"이면 진행률 고리, "ticks"면 눈금 */
+/** Gauge: the current value and target of a single KPI. variant="ring" draws a progress ring, "ticks" draws ticks */
 export function GaugeChart<T = Row>(props: GaugeChartProps<T>) {
   const data = useMemo(() => props.data ?? ([{ value: props.value ?? 0, target: props.target }] as unknown as T[]), [props.data, props.value, props.target]);
   const variant = props.variant ?? "arc";

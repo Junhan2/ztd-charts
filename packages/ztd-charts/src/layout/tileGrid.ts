@@ -4,30 +4,30 @@ import { bestMatch, HANGUL, nameMatcher, normName } from "./regions";
 
 export { tileNeighbor } from "./regions";
 
-/** 타일 하나. row, col은 0부터 세는 격자 칸이에요 */
+/** One tile. row and col are grid cells counted from 0 */
 export interface TileDef {
-  /** 행을 맞출 때와 강조할 때 쓰는 이름. 같은 격자 안에서 겹치지 않아요 */
+  /** Name used to match rows and to highlight. Unique within a grid */
   id: string;
-  /** 타일에 쓰는 이름. 없으면 id */
+  /** Name written on the tile. Defaults to id */
   label?: string;
-  /** 한국어 로캘에서 쓰는 이름 (내장 격자) */
+  /** Name used in the Korean locale (built-in grids) */
   labelKo?: string;
-  /** 타일 위에만 쓰는 짧은 이름 (미국 격자의 "CA"). 툴팁과 표는 label이에요 */
+  /** Short name written only on the tile ("CA" in the US grid). Tooltips and the table use label */
   abbr?: string;
   row: number;
   col: number;
-  /** 행을 맞출 때 같이 받는 이름 */
+  /** Other names accepted when matching rows */
   aliases?: readonly string[];
 }
 
-/** 내장 격자 이름 */
+/** Names of the built-in grids */
 export const TILE_MAPS: readonly string[] = ["us-states", "kr-sido", "kr-sido-2025"];
-/** "auto"가 고르는 격자 (데이터 값이 가장 많이 맞는 격자, 같으면 앞). kr-sido-2025는 이름을 정했을 때만 써요 */
+/** Grids "auto" picks from (the grid matching the most data values; on a tie, the earlier one). kr-sido-2025 is used only when named explicitly */
 const AUTO_GRIDS = ["us-states", "kr-sido"];
 
 const builtins = new Map<string, TileDef[]>();
 
-/** 내장 격자의 배치(줄마다 빈칸으로 나눈 id, "-"는 빈 칸)와 id → 타일 내용 */
+/** A built-in grid's layout (space-separated ids per row, "-" for an empty cell) and its id → tile content mapping */
 function builtinSource(name: string): { layout: readonly string[]; tile: (id: string) => Omit<TileDef, "row" | "col"> | undefined } | null {
   if (name === "us-states") {
     const byId = new Map(US_STATES.map((s) => [s[0], s]));
@@ -51,7 +51,7 @@ function builtinSource(name: string): { layout: readonly string[]; tile: (id: st
   };
 }
 
-/** 내장 격자의 타일. 고정 데이터라 이름마다 한 번만 만들어요 (같은 배열을 돌려주니 고치지 마세요). 모르는 이름이면 null */
+/** Tiles of a built-in grid. Fixed data, so they are built once per name (the same array is returned, so do not modify it). null for an unknown name */
 function builtinGrid(name: string): TileDef[] | null {
   let out = builtins.get(name);
   if (out) return out;
@@ -69,8 +69,8 @@ function builtinGrid(name: string): TileDef[] | null {
 }
 
 /**
- * "auto"가 고른 내장 격자 이름: 지역 값이 가장 많이 맞는 격자(us-states, kr-sido 순서로 같으면 앞).
- * 하나도 맞지 않으면 us-states인데, 값에 한글이 있으면 kr-sido예요 (잘못 쓴 시도 이름도 예전처럼 한국 격자에서 가까운 이름을 권해요)
+ * Name of the built-in grid "auto" picks: the grid matching the most region values (in the order us-states, kr-sido; on a tie, the earlier one).
+ * When nothing matches it is us-states, but kr-sido when the values contain Hangul (so misspelled province names still get close-name suggestions from the Korean grid, as before)
  */
 function detectGrid(values: readonly unknown[]): string {
   const k = bestMatch(values, AUTO_GRIDS.map((g) => tileMatcher(builtinGrid(g) ?? [])));
@@ -78,14 +78,14 @@ function detectGrid(values: readonly unknown[]): string {
   return values.some((v) => HANGUL.test(String(v ?? ""))) ? "kr-sido" : "us-states";
 }
 
-/** options.map 값을 격자 이름이나 타일 배열로: 없거나 "auto"면 데이터로 고른 내장 격자 */
+/** Resolves options.map to a grid name or a tile array: when absent or "auto", the built-in grid picked from the data */
 export function gridName(map: unknown, values: () => readonly unknown[]): unknown {
   return map === undefined || map === "auto" ? detectGrid(values()) : map;
 }
 
 /**
- * 그 격자에서 합쳐져 사라진 지역 이름인지 (kr-sido의 광주, 전남). 합친 지역이 없는 격자면 null.
- * 이름이 이 격자의 타일에 맞지 않을 때만 물어봐요 (나머지 지역은 두 격자에서 이름이 같아요)
+ * Whether a name belongs to a region merged away in that grid (Gwangju and Jeonnam in kr-sido). null for a grid without merged regions.
+ * Ask only when a name matches no tile of this grid (all other regions have the same names in both grids)
  */
 export function mergedAway(map: unknown): { before: string; is: (name: unknown) => boolean } | null {
   const m = typeof map === "string" && Object.hasOwn(KR_MERGED, map) ? KR_MERGED[map] : undefined;
@@ -96,14 +96,14 @@ export function mergedAway(map: unknown): { before: string; is: (name: unknown) 
 
 const isCell = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 1000;
 
-/** 사용자 격자의 타일 하나가 쓸 수 있는 꼴인지: id 글자, row, col 0 이상 정수, label 글자, aliases 글자 배열 */
+/** Whether one tile of a user grid has a usable shape: a string id, row and col as integers of 0 or more, a string label, an aliases array of strings */
 export function isTileDef(t: unknown): t is TileDef {
   if (!t || typeof t !== "object" || Array.isArray(t)) return false;
   const o = t as Record<string, unknown>;
   return typeof o.id === "string" && o.id.trim() !== "" && isCell(o.row) && isCell(o.col) && (o.label === undefined || typeof o.label === "string") && (o.aliases === undefined || (Array.isArray(o.aliases) && o.aliases.every((a) => typeof a === "string")));
 }
 
-/** 사용자 격자에서 뺀 타일: 몇 번째인지, 왜인지(꼴이 틀림, id가 겹침, 칸이 겹침), 칸이 겹치면 먼저 그 칸에 있던 타일 id */
+/** A tile dropped from a user grid: its position, the reason (bad shape, duplicate id, duplicate cell) and, for a duplicate cell, the id of the tile already in that cell */
 export interface DroppedTile {
   index: number;
   reason: "shape" | "id" | "cell";
@@ -111,8 +111,8 @@ export interface DroppedTile {
 }
 
 /**
- * options.map을 타일 목록으로 (읽는 순서: 위 줄부터, 왼쪽부터). 내장 이름이나 타일 배열을 받아요.
- * 사용자 격자는 꼴이 틀린 타일, 앞 타일과 id나 칸이 겹치는 타일을 빼고 onDrop으로 알려요 (validateSpec이 오류로 바꿔요). 모르는 이름이나 꼴이면 null
+ * Turns options.map into a tile list (in reading order: top row first, left first). Accepts a built-in name or a tile array.
+ * For a user grid, tiles with a bad shape, or whose id or cell duplicates an earlier tile, are dropped and reported through onDrop (validateSpec turns them into errors). null for an unknown name or shape
  */
 export function resolveGrid(map: unknown, onDrop?: (d: DroppedTile) => void): TileDef[] | null {
   if (typeof map === "string") return builtinGrid(map);
@@ -133,12 +133,12 @@ export function resolveGrid(map: unknown, onDrop?: (d: DroppedTile) => void): Ti
   return out.sort((a, b) => a.row - b.row || a.col - b.col);
 }
 
-/** 타일이 받는 모든 이름 (id, 이름, 한국어 이름, 짧은 이름, aliases) */
+/** Every name a tile accepts (id, name, Korean name, short name, aliases) */
 export function tileNames(t: TileDef): string[] {
   return [t.id, t.label, t.labelKo, t.abbr, ...(t.aliases ?? [])].filter((n): n is string => typeof n === "string" && n !== "");
 }
 
-/** 이름 → 타일 번호. 맞는 타일이 없으면 -1이에요. 이름이 둘 이상의 타일에 있으면 앞 타일이에요 */
+/** Name → tile index. -1 when no tile matches. When a name belongs to two or more tiles, the earlier tile wins */
 export function tileMatcher(tiles: readonly TileDef[]): (name: unknown) => number {
   return nameMatcher(tiles.map(tileNames));
 }

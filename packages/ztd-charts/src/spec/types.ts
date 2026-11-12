@@ -1,31 +1,31 @@
 import type { ChartLang } from "../core/i18n";
 
-/** JSON으로 쓰는 차트 스펙. 함수 없이 직렬화할 수 있어요 */
+/** A chart spec written in JSON. Serializable, with no functions */
 export interface ChartSpec {
   $schema?: string;
-  /** 차트 종류. `ztd-charts list`로 확인 */
+  /** Chart type. See `ztd-charts list` */
   type: string;
-  /** 객체 배열, 또는 { url }, { csv }, { values } */
+  /** An array of objects, or { url }, { csv }, { values } */
   data: SpecData;
-  /** 채널 -> 필드 이름. 예: { "label": "device", "value": "sales" } */
+  /** Channel -> field name. Example: { "label": "device", "value": "sales" } */
   encoding?: Record<string, string | string[]>;
-  /** 차트 옵션 (highlight, format, height …) */
+  /** Chart options (highlight, format, height …) */
   options?: Record<string, unknown>;
-  /** 카드로 감싸기 */
+  /** Wrap in a card */
   card?: SpecCard;
-  /** "dark" | "light" 또는 토큰 객체 */
+  /** "dark" | "light" or a token object */
   theme?: string | Record<string, unknown>;
-  /** 작은 여러 개: by 값마다 같은 차트를 한 칸씩 그려요 (line, area, bar, scatter) */
+  /** Small multiples: draws the same chart once per by value, one cell each (line, area, bar, scatter) */
   facet?: SpecFacet;
 }
 
-/** spec.facet: 한 필드의 값마다 패널 하나 */
+/** spec.facet: one panel per value of a field */
 export interface SpecFacet {
-  /** 패널을 나눌 필드. 값이 처음 나오는 순서로, 24개까지 */
+  /** Field that splits the panels. In order of first appearance, up to 24 */
   by: string;
-  /** 한 줄 패널 수의 최대값. 없으면 패널이 140px 이상으로 들어가는 만큼 */
+  /** Maximum panels per row. When omitted, as many as fit at 140px or more each */
   columns?: number;
-  /** "shared"(기본)면 모든 패널이 같은 값 축(날짜, 숫자 x도)을 써서 높이를 견줄 수 있어요. "free"면 패널마다 자기 데이터에 맞추고 값 축을 모두 그려요 */
+  /** "shared" (default): every panel uses the same value axis (and the same date or numeric x), so heights are comparable. "free": each panel fits its own data and draws every value axis */
   scale?: "shared" | "free";
 }
 
@@ -40,34 +40,34 @@ export interface SpecCard {
   title?: string;
   subtitle?: string;
   takeaway?: string;
-  /** 수준 배지. "basic" | "intermediate" | "advanced". 예전 한글 값("기본" …)도 받아요 */
+  /** Level badge. "basic" | "intermediate" | "advanced". The old Korean values ("기본" …) are accepted too */
   level?: ChartLevel | "기본" | "중급" | "심화" | string;
-  /** "auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter, timeline의 묶음). 이미지와 정적 HTML에서는 "auto"와 같아요 */
+  /** "auto" builds the legend from the data. "toggle" lets users press the legend in the browser to turn series on and off (the groups in line, area, bar, scatter, timeline). Same as "auto" in images and static HTML */
   legend?: "auto" | "toggle" | { label: string; color?: string; shape?: "square" | "line" | "dash" | "circle" }[];
-  /** 예시 데이터 표시 */
+  /** Sample data label */
   sample?: boolean | string;
-  /** 다시 재생 버튼. 기본 true */
+  /** Replay button. Default true */
   replay?: boolean;
-  /** 차트 아래 출처 줄. "Source: "(한국어 "출처: ") 뒤에 붙어요 */
+  /** Source line under the chart. Follows "Source: " (Korean "출처: ") */
   source?: string;
-  /** 출처 줄의 메모(기준일 등) */
+  /** Note on the source line (such as the as-of date) */
   note?: string;
-  /** 강조색으로 칠할 제목 속 낱말 */
+  /** A word in the title to color with the accent color */
   accent?: string;
-  /** 브라우저의 내려받기 단추. true면 CSV, SVG, PNG, 배열이면 고른 것만. SVG, PNG, 정적 HTML에는 그리지 않아요 */
+  /** Download buttons in the browser. true for CSV, SVG and PNG; an array for only the chosen ones. Not drawn in SVG, PNG or static HTML */
   download?: boolean | ("csv" | "svg" | "png")[];
 }
 
 export type FieldType = "string" | "number" | "date" | "any";
 
 export interface ChannelDef {
-  /** 스펙의 encoding 키 */
+  /** The encoding key in the spec */
   name: string;
-  /** 컴포넌트 프롭 이름 (다르면) */
+  /** Component prop name (when different) */
   prop?: string;
   required: boolean;
   type: FieldType;
-  /** 여러 필드(넓은 표) 허용 */
+  /** Allows several fields (wide table) */
   multi?: boolean;
   description: string;
 }
@@ -81,42 +81,42 @@ export interface OptionDef {
   items?: "number" | "string";
   default?: unknown;
   description: string;
-  /** 숫자 옵션의 범위. items가 "number"인 배열이면 항목마다의 범위예요 */
+  /** Range of a number option. For an array whose items are "number", the range of each item */
   min?: number;
   max?: number;
-  /** 배열 항목 수가 정해진 경우(예: whiskers의 [낮은 쪽, 높은 쪽]). 숫자 배열이면 min, max와 함께 써요 */
+  /** Fixed number of array items (for example whiskers' [low, high]). For number arrays, used together with min and max */
   length?: number;
 }
 
-/** 레지스트리 글의 언어. 기본은 "en". 차트 글자의 언어(ChartLang)와 같아요 */
+/** Language of the registry text. Default "en". Same as the language of chart text (ChartLang) */
 export type Lang = ChartLang;
 
-/** 차트 묶음 id. 표시 이름은 GROUPS (labels.ts) */
+/** Chart group id. Display names are in GROUPS (labels.ts) */
 export type ChartGroup = "proportion" | "trend" | "comparison" | "distribution" | "relationship" | "flow" | "hierarchy" | "map" | "kpi";
 
-/** 수준 id. 표시 이름은 LEVELS (labels.ts) */
+/** Level id. Display names are in LEVELS (labels.ts) */
 export type ChartLevel = "basic" | "intermediate" | "advanced";
 
 export interface ChartDef {
   type: string;
   component: string;
-  /** 표시 이름. 기본은 영어, localizeDef(def, "ko")면 한글 */
+  /** Display name. English by default; Korean with localizeDef(def, "ko") */
   name: string;
-  /** 영어 이름 (언어와 상관없이 늘 영어) */
+  /** English name (always English, whatever the language) */
   nameEn: string;
   level: ChartLevel;
   group: ChartGroup;
   summary: string;
   useWhen: string;
   avoidWhen: string;
-  /** 이 차트를 고른 이유 (docs/catalog.md) */
+  /** Why this chart was chosen (docs/catalog.md) */
   why: string;
   encoding: ChannelDef[];
   options: OptionDef[];
   example: ChartSpec;
-  /** 이 개수가 넘으면 캔버스로 그려요 */
+  /** Draws with canvas above this count */
   canvasAbove?: number;
-  /** 10k 이상 점에서도 버티는지 */
+  /** Whether it holds up with 10k or more points */
   scalable?: boolean;
 }
 

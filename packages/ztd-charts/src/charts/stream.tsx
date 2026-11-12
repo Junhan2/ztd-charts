@@ -31,14 +31,14 @@ export interface StreamGraphProps<T = Row> extends BaseChartProps<T>, DayFirstPr
   y?: Accessor<T, number> | string[];
   series?: Accessor<T, string>;
   xType?: XType;
-  /** 같은 x, 같은 계열이 여러 행일 때 합치는 방법. 기본 "sum" */
+  /** How to combine several rows with the same x and series. Default "sum" */
   aggregate?: Aggregate;
   curve?: Curve;
-  /** "wiggle"(기본, 흐름을 부드럽게) | "silhouette"(가운데 대칭) */
+  /** "wiggle" (default, smooths the flow) | "silhouette" (symmetric around the center) */
   offset?: "wiggle" | "silhouette";
-  /** 계열 순서를 보기 좋게 다시 정렬. 기본 true */
+  /** Reorder the series for a cleaner look. Default true */
   reorder?: boolean;
-  /** 강조 계열. 판별 함수는 행이 아니라 계열 이름을 받아요: (name, index) => boolean. 기본 합이 가장 큰 계열 */
+  /** Series to highlight. A predicate receives the series name, not a row: (name, index) => boolean. Default: the series with the largest sum */
   highlight?: BaseChartProps<T>["highlight"];
 }
 
@@ -52,18 +52,18 @@ interface Layer {
   label: { x: number; y: number; thick: number } | null;
 }
 
-/** 스트림의 층 순서(계열 자리, 아래 층부터): 기본 inside-out, reorder가 false면 데이터 순서. 차트와 카드 범례(autoLegend)가 같이 써요 */
+/** Stream layer order (series indexes, bottom layer first): inside-out by default, data order when reorder is false. Shared by the chart and the card legend (autoLegend) */
 export function streamOrder(values: readonly (readonly number[])[], reorder?: boolean): number[] {
   return reorder === false ? values.map((_, i) => i) : insideOut(values);
 }
 
-/** 스트림의 강조 계열: 기본은 합이 가장 큰 계열 */
+/** Stream highlight series: by default the series with the largest sum */
 export function streamHighlight(highlight: unknown, series: string[], values: readonly (readonly number[])[]): ReadonlySet<number> {
   const totals = values.map((r) => r.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0));
   return resolveHighlight(highlight as never, series as never[], series, totals, "max");
 }
 
-/** 계열 자리마다 층 색: 강조는 accent, 나머지는 층 순서대로 neutralStrong에서 neutral까지 섞은 단계 */
+/** Layer color per series index: accent for the highlight; the rest get steps mixed from neutralStrong to neutral in layer order */
 export function streamSwatches(p: Painter, order: readonly number[], hi: ReadonlySet<number>): Swatch[] {
   const out: Swatch[] = new Array(order.length);
   const rest = order.filter((s) => !hi.has(s));
@@ -72,15 +72,15 @@ export function streamSwatches(p: Painter, order: readonly number[], hi: Readonl
   return out;
 }
 
-/** 스트림그래프: 여러 계열의 흐름과 크기 변화 */
+/** Streamgraph: the flow and changing size of several series */
 export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(290, w * 0.48)), duration: 1100, stagger: 60 });
   const { p, width: W, height: H } = c;
   const model0 = useMemo(() => prepSeries(props.data, props.x, props.y as never, props.series, { xType: props.xType, locale: c.locale, aggregate: props.aggregate, dayFirst: props.dayFirst }), [props.data, props.x, props.y, props.series, props.xType, c.locale, props.aggregate, props.dayFirst]);
-  // 폭의 절반보다 점이 많으면 구간 평균으로 줄여요 (층마다 같은 x, 2px에 한 점)
+  // With more points than half the width, reduce them to bin averages (same x for every layer, one point per 2px)
   const budget = Math.max(40, Math.round(W / 2));
   const model = useMemo(() => bucketSeries(model0, budget), [model0, budget]);
-  // 툴팁, 이벤트의 값: 줄였으면 구간 평균이 아니라 대표 행(이름표와 같은 행)의 실제 값
+  // Tooltip and event values: when reduced, the actual value of the representative row (the same row as the label), not the bin average
   const rowVals = model.rowValues ?? model.values;
   const nS = model.series.length;
 
@@ -99,7 +99,7 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
   const y = scaleLinear([lo, hiV], [H - bottom, top]);
   const xs = xScaleFor(model as SeriesModel<unknown>, x0, x1);
   const mid = y((lo + hiV) / 2);
-  // 포인터가 움직일 때마다 만들지 않아요
+  // Not rebuilt on every pointer move
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const centers = useMemo(() => model.keys.map((_, k) => xs(k)), [model, x0, x1]);
 
@@ -145,7 +145,7 @@ export function StreamGraph<T = Row>(props: StreamGraphProps<T>) {
         key: model.keys[k],
         label: model.labels[k],
         value: rowVals.reduce((a, r) => a + (Number.isFinite(r[k]) ? r[k] : 0), 0),
-        // 값이 없는 계열은 0이라고 읽지 않게 빼요 (라인 차트와 같아요)
+        // Leave out series with no value so they are not read as 0 (same as the line chart)
         formatted: model.series
           .map((s, si) => (Number.isFinite(rowVals[si][k]) ? `${s} ${fv(rowVals[si][k])}` : null))
           .filter(Boolean)

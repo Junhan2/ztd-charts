@@ -3,7 +3,7 @@ import type { ChartDef, ChartSpec, OptionDef, SpecCard } from "./types";
 import { CHANNELS, MAX_CHART_SIZE, META } from "./meta";
 import * as S from "./samples";
 
-/** 모든 차트가 받는 공통 옵션. 글은 영어, 한글은 commonOptionsIn("ko") */
+/** Common options every chart accepts. Text is English; Korean through commonOptionsIn("ko") */
 export const COMMON_OPTIONS: OptionDef[] = [
   { name: "height", type: "number", min: 40, max: MAX_CHART_SIZE, description: "Height in px. Without it, each chart picks a default that fits its width" },
   { name: "width", type: "number", min: 40, max: MAX_CHART_SIZE, description: "Fixed width in px. Without it, the chart fits its parent" },
@@ -33,34 +33,34 @@ const DAY_FIRST = op("dayFirst", "boolean", 'Reads dates such as "05/03/2024", w
 const OTHER = op("other", "number", 'Keep the n largest slices and group the rest into one "Other" slice. The Other slice is never highlighted', { min: 1 });
 const AGGREGATE = op("aggregate", "enum", 'How rows with the same x (and series) combine: "sum" adds them, "mean" averages, "last" keeps the last row, "count" counts rows', { enum: ["sum", "mean", "last", "count"], default: "sum" });
 const BRUSH = op("brush", "any", 'Drag to select a range. true shows the change and the high and low, "zoom" zooms into the range (keyboard: Shift+arrows, Enter)', { default: false });
-/** 숨길 계열 (라인, 영역, 막대, 산점도) */
+/** Series to hide (line, area, bar, scatter) */
 const HIDDEN = op("hidden", "array", 'Series to hide. Colors stay as if every series were shown. With card.legend "toggle", viewers can show them again', { items: "string" });
-/** 로그 y축 (라인, 산점도, 버블). 영역과 막대는 0부터의 길이가 값이라 없어요 */
+/** Log y axis (line, scatter, bubble). Area and bar have none, because their length from 0 is the value */
 const Y_SCALE = op("yScale", "enum", 'y axis scale. "log" spaces 1, 10, 100 and 1,000 evenly, so values spread over 1,000 times or more stay readable. Values at or below 0 are left out', { enum: ["linear", "log"], default: "linear" });
 
-/** options.annotations 항목의 종류. 차트 쪽 Annotation 타입(core/annotations.tsx)과 맞는지 컴파일러가 봐요 */
+/** Kinds of options.annotations items. The compiler checks that they match the chart-side Annotation type (core/annotations.tsx) */
 export const ANNOTATION_TYPES = ["band", "line", "event", "forecast", "trend", "weekends"] as const satisfies readonly Annotation["type"][];
 const ANNOTATIONS = op("annotations", "annotations", "Notes drawn on the chart: target band, period, reference line, event, forecast, trend line, weekend shading. [{ type, x, y, from, label }]");
-/** 범위 띠 옵션 (라인, 영역). 띠는 encoding.lower, encoding.upper로 켜요. 배열로 펼치면 번들에서 빠지지 않아서 하나씩 둬요 */
+/** Range band options (line, area). The band is turned on with encoding.lower and encoding.upper. Kept one by one, because spreading them from an array would keep them in the bundle */
 const BAND_FROM = op("bandFrom", "enum", 'Where the range band starts. "forecast" starts it at the forecast annotation', { enum: ["start", "forecast"], default: "start" });
 const OUTSIDE = op("outside", "boolean", "Mark points outside the range band and count them in the description", { default: false });
-/** 빠진 값에서 선을 끊을지 (라인, 영역) */
+/** Whether the line breaks at missing values (line, area) */
 const CONNECT_NULLS = op("connectNulls", "boolean", "Join the line across missing values (null, NaN or no row at that x). By default the line and its area break there, and a point left alone shows as a dot. Stacked areas ignore it", { default: false });
-/** 색 척도 옵션 (히트맵, 캘린더). 배열로 펼치면 번들에서 빠지지 않아서 하나씩 둬요 */
+/** Color scale options (heatmap, calendar). Kept one by one, because spreading them from an array would keep them in the bundle */
 const COLOR_REVERSE = op("colorReverse", "boolean", "Darkest color for the smallest value, for rankings where 1st should stand out. The default highlight moves to the smallest value too", { default: false });
 const COLOR_CENTER = op("colorCenter", "number", "Value that gets the lightest color. Values above take the accent color and values below take gray, so gains and losses split there (for example 0)");
 const COLOR_STEPS = op("colorSteps", "number", "Color in this many steps instead of a smooth scale. The heatmap legend shows each step", { min: 2, max: 12 });
-/** 강조 계열을 기준값 위아래 색으로 (라인, 영역) */
+/** Colors the highlighted series above and below a baseline value (line, area) */
 const SIGN = [
   op("signColors", "boolean", "Colors the highlighted series differently above and below baseline (profit and loss)", { default: false }),
   op("baseline", "number", "Value that splits signColors", { default: 0 }),
   op("downColor", "string", "Color below the baseline (token name or CSS color)", { default: "neutralStrong" }),
 ];
 
-/** 레지스트리와 한글 글(locales/ko.ts)에 적는 예시 꼴. type, 카드 번호(목록 순서), 제목(이름), 수준은 채워 넣어요 (같은 값을 두 번 적지 않게) */
+/** Shape of the example written in the registry and the Korean text (locales/ko.ts). type, card number (list order), title (name) and level are filled in (so the same value is not written twice) */
 export type EntryExample = Omit<ChartSpec, "type" | "card"> & { card: Omit<SpecCard, "number" | "title" | "level"> };
 
-/** 레지스트리에 적는 꼴. 이름과 컴포넌트는 META, 채널은 CHANNELS에서 채워요 */
+/** Shape written in the registry. Names and components are filled from META, channels from CHANNELS */
 type ChartEntry = Omit<ChartDef, "component" | "name" | "nameEn" | "encoding" | "example"> & { example: EntryExample };
 
 const ENTRIES: ChartEntry[] = [
@@ -682,7 +682,7 @@ const ENTRIES: ChartEntry[] = [
   },
 ];
 
-/** 키 순서는 ChartDef 그대로예요 (CLI, MCP, 스키마 파일이 이 순서로 써요) */
+/** Key order follows ChartDef (the CLI, MCP and schema files write in this order) */
 function fill({ type, level, group, summary, useWhen, avoidWhen, why, options, example, ...extra }: ChartEntry, i: number): ChartDef {
   const { name, component } = META[type];
   const { card, ...spec } = example;
@@ -705,7 +705,7 @@ function fill({ type, level, group, summary, useWhen, avoidWhen, why, options, e
   };
 }
 
-/** 차트 44종. 글과 예시는 영어, 한글은 localizeDef(def, "ko") 또는 chartsIn("ko") */
+/** The 44 charts. Text and examples are English; Korean through localizeDef(def, "ko") or chartsIn("ko") */
 export const CHARTS: ChartDef[] = /* @__PURE__ */ ENTRIES.map(fill);
 
 export const CHART_TYPES = /* @__PURE__ */ CHARTS.map((c) => c.type);

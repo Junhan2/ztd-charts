@@ -27,17 +27,17 @@ const en = {
   volume: "Volume",
   empty: "No data.",
   ohlc: (o: string, h: string, l: string, c: string) => `open ${o}, high ${h}, low ${l}, close ${c}`,
-  /** 고른 구간을 읽어 줄 때 앞부분 */
+  /** Opening part when announcing the selected range */
   span: (from: string, to: string, change: string) => `${from} to ${to}: ${change}`,
   desc: (from: string, to: string, n: number, open: string, close: string) => `${from} to ${to}, ${plural(n, "candle")}. First open ${open}, last close ${close}`,
-  /** 이동평균선 이름표 */
+  /** Moving average line label */
   ma: (d: number) => `MA${d}`,
-  /** 카드 범례(card.legend: "auto")의 상승, 하락, 이동평균선 */
+  /** Up, down and moving average entries of the card legend (card.legend: "auto") */
   up: "Up",
   down: "Down",
   maLegend: (d: number) => `${d}-day MA`,
 };
-/** 캔들스틱 문구. 스펙 카드의 자동 범례(Chart.tsx)도 써요 */
+/** Candlestick text. The spec card's automatic legend (Chart.tsx) uses it too */
 export const CANDLE_TEXT: Record<ChartLang, typeof en> = {
   en,
   ko: {
@@ -60,33 +60,33 @@ export const CANDLE_TEXT: Record<ChartLang, typeof en> = {
 };
 
 export interface CandlestickChartProps<T = Row> extends BaseChartProps<T>, BrushProps, DayFirstProps {
-  /** 날짜(시점) 필드. 기본 "date" */
+  /** Date (time point) field. Default "date" */
   x?: Accessor<T, unknown>;
-  /** 시가, 고가, 저가, 종가 필드. 기본 "open", "high", "low", "close" */
+  /** Open, high, low and close fields. Default "open", "high", "low", "close" */
   open?: Accessor<T, number>;
   high?: Accessor<T, number>;
   low?: Accessor<T, number>;
   close?: Accessor<T, number>;
-  /** 거래량 필드. 있으면 아래에 작은 막대로 */
+  /** Volume field. When present, drawn as small bars at the bottom */
   volume?: Accessor<T, number>;
-  /** 종가 이동평균선 기간. 예: [5, 20] */
+  /** Periods of the closing-price moving average lines. Example: [5, 20] */
   ma?: number[];
-  /** 오르는 봉 색. 테마 토큰 이름이나 CSS 색. 기본 "accent" (한국식: 상승은 붉은 계열) */
+  /** Color of rising candles. A theme token name or CSS color. Default "accent" (Korean convention: rises in red tones) */
   upColor?: string;
-  /** 내리는 봉 색. 기본 "neutralStrong" */
+  /** Color of falling candles. Default "neutralStrong" */
   downColor?: string;
-  /** 봉이 이보다 많으면 이웃 봉을 합쳐요 (시가는 첫 봉, 종가는 끝 봉, 고가와 저가는 구간 끝값). 기본 그림 폭 / 4 */
+  /** Above this many candles, neighboring candles are merged (open from the first candle, close from the last, high and low from the extremes of the span). Default: plot width / 4 */
   maxCandles?: number;
-  /** 가격 축 범위 고정 */
+  /** Fixed price axis range */
   yDomain?: [number, number];
-  /** 주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선(종가), 주말 음영 */
+  /** Annotations: target band, period, reference line, event, forecast, trend line (close), weekend shading */
   annotations?: Annotation[];
 }
 
 interface Candle<T> {
-  /** 원본(정렬 뒤) 첫 행 인덱스 */
+  /** Index of the first source row (after sorting) */
   i: number;
-  /** 합친 행 수 */
+  /** Number of merged rows */
   span: number;
   key: string;
   label: string;
@@ -99,15 +99,15 @@ interface Candle<T> {
   datum: T;
 }
 
-/** 이동평균선 색 (짧은 기간부터). 카드 범례도 이 순서를 써요 */
+/** Moving average line colors (shortest period first). The card legend uses this order too */
 export const MA_TOKENS = ["ink", "muted", "dim"] as const;
 
-/** 그릴 이동평균 기간: 2 이상이고 봉 수보다 작은 것 중 앞의 3개 */
+/** Moving average periods to draw: the first 3 of those that are at least 2 and smaller than the candle count */
 export function maPeriods(ma: readonly number[] | undefined, count: number): number[] {
   return (ma ?? []).filter((d) => d >= 2 && d < count).slice(0, MA_TOKENS.length);
 }
 
-/** 행을 시점 순 봉으로. 종가가 없는 행은 빼고, 시가, 고가, 저가가 비면 이웃 값으로 채워요. dated는 모든 행이 날짜인지 */
+/** Rows to candles in time order. Rows without a close are dropped; a missing open, high or low is filled from neighboring values. dated tells whether every row is a date */
 function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, "x" | "open" | "high" | "low" | "close" | "volume" | "dayFirst">, locale: string): { candles: Candle<T>[]; dated: boolean } {
   const gx = getter(props.x, "date");
   const go = numGetter(props.open, "open");
@@ -118,7 +118,7 @@ function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, 
   const df = props.dayFirst ?? dayFirstOf(data.map((d, i) => gx(d, i)));
   const raw = data.map((d, i) => {
     const xv = gx(d, i);
-    // 숫자 x는 1e10보다 클 때만 시각(ms)으로 봐요. 작은 수(1, 2, 3이나 연도 2024)는 1970년 날짜가 아니라 그대로 이름표로
+    // A numeric x counts as a timestamp (ms) only above 1e10. Small numbers (1, 2, 3 or the year 2024) stay as labels instead of becoming dates in 1970
     // A four-digit year string ("2020") is a label too, not 1 January of that year.
     const dt = (typeof xv === "number" && Math.abs(xv) <= 1e10) || (typeof xv === "string" && /^\d{4}$/.test(xv.trim())) ? null : toDate(xv, df);
     return { d, i, xv, dt, t: dt ? dt.getTime() : i, c: gc(d, i), o: go(d, i), h: gh(d, i), l: gl(d, i), v: gv ? gv(d, i) : NaN };
@@ -134,7 +134,7 @@ function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, 
     const h = Math.max(o, r.c, Number.isFinite(r.h) ? r.h : -Infinity);
     const l = Math.min(o, r.c, Number.isFinite(r.l) ? r.l : Infinity);
     const label = r.dt ? formatDate(r.dt, { locale, year: "numeric", month: "short", day: "numeric" }) : String(r.xv ?? k + 1);
-    // 같은 시점이 두 번 와도 이벤트와 구간(onBrush)의 키가 겹치지 않게
+    // So that event and range (onBrush) keys stay unique even when the same time point appears twice
     let key = r.dt ? String(r.t) : String(r.xv);
     if (keys.has(key)) key = `${key}#${k}`;
     keys.add(key);
@@ -144,7 +144,7 @@ function toCandles<T>(data: readonly T[], props: Pick<CandlestickChartProps<T>, 
   return { candles: out, dated };
 }
 
-/** 이웃 봉을 묶어 max개 이하로 */
+/** Merge neighboring candles down to at most max */
 function mergeCandles<T>(cs: Candle<T>[], max: number): Candle<T>[] {
   if (cs.length <= max || max < 2) return cs;
   const size = Math.ceil(cs.length / max);
@@ -170,7 +170,7 @@ function mergeCandles<T>(cs: Candle<T>[], max: number): Candle<T>[] {
   return out;
 }
 
-/** 단순 이동평균. 앞쪽 period-1개는 NaN */
+/** Simple moving average. The first period-1 values are NaN */
 function movingAverage(values: readonly number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN);
   if (period < 1) return out;
@@ -183,14 +183,14 @@ function movingAverage(values: readonly number[], period: number): number[] {
   return out;
 }
 
-/** 캔들스틱: 기간마다 시가, 고가, 저가, 종가. 상승은 강조색, 하락은 회색 */
+/** Candlestick: open, high, low and close per period. Rises in the accent color, falls in gray */
 export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(240, Math.min(340, w * 0.55)), duration: 700, format: "number" });
   const { p, width: W, height: H } = c;
 
   const all = useMemo(() => toCandles(props.data, props, c.locale), [props.data, props.x, props.open, props.high, props.low, props.close, props.volume, props.dayFirst, c.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const dated = all.dated;
-  // 확대한 구간 (봉 순서)
+  // The zoomed range (in candle order)
   const zoom = useZoom(c.sig);
   const view = zoom.view;
   const visible = useMemo(() => (view ? all.candles.slice(view[0], view[1] + 1) : all.candles), [all, view]);
@@ -200,12 +200,12 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     return { up: color(props.upColor, "accent"), down: color(props.downColor, "neutralStrong") };
   }, [p, props.upColor, props.downColor]);
 
-  // 축과 그림 영역 (가격 축은 오른쪽)
+  // Axes and plot area (the price axis on the right)
   const top = 10;
   const bottom = 22;
   const plotW0 = Math.max(40, W - 56);
   const maxCandles = Math.max(8, Math.round(props.maxCandles ?? plotW0 / 4));
-  // 봉을 합치고 가격, 거래량 범위를 한 번에 재요
+  // Merge candles and measure the price and volume ranges in one pass
   const { cs, lo, hi, vmax, hasVolume } = useMemo(() => {
     const merged = mergeCandles(visible, maxCandles);
     let l = Infinity;
@@ -227,13 +227,13 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   const volH = hasVolume ? Math.max(28, (H - top - bottom) * 0.18) : 0;
   const priceBottom = H - bottom - (hasVolume ? volH + 8 : 0);
   const yCount = Math.max(2, Math.round((priceBottom - top) / 60));
-  // 주석의 기준선과 구간도 축 안에 들어오게 (lo, hi는 데이터 값 그대로 설명과 가격표에 써요)
+  // Keep annotation reference lines and bands inside the axis too (lo and hi stay the raw data values for the description and price tag)
   const noteYs = annotationYs(props.annotations);
   const dom: [number, number] = props.yDomain ?? fitDomain(Math.min(lo, ...noteYs), Math.max(hi, ...noteYs), yCount, { zero: false });
-  // 가격 축은 금융 화면 관례대로 줄이지 않은 전체 숫자 (format을 주면 그걸 써요)
+  // The price axis shows full, unabbreviated numbers, as is the convention on financial screens (format overrides this)
   const tickFmt = makeTickFormatter(props.format, c.locale, 0);
   const yTicks = scaleLinear(dom, [0, 1]).ticks(yCount);
-  // 축 눈금과 종가 가격표 중 넓은 쪽에 맞춰요
+  // Fit the wider of the axis ticks and the closing price tag
   const right = Math.max(yAxisWidth(yTicks, tickFmt, c.locale), textWidth(tickFmt(hi), 10.5, 700) + 14) + 4;
   const x0 = 4;
   const x1 = W - right;
@@ -257,21 +257,21 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
         const base = H - bottom;
         return { key: q.key, to: [y(q.o), y(q.c), y(q.h), y(q.l), vy(q.v)], from: [mid, mid, mid, mid, base], enter: [mid, mid, mid, mid, base], delay: n > 1 ? (k / (n - 1)) * sweep : 0, data: k };
       }),
-    // y, vy는 아래 값들로 정해져요
+    // y and vy are determined by the values below
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cs, H, dom[0], dom[1], volH, vmax, sweep],
   );
   const m = useMotion(marks, c.motion);
 
-  // 이동평균은 합치거나 확대하기 전 모든 종가로 구하고, 합친 봉은 그 마지막 원래 봉의 값을 읽어요
-  // (합친 봉끼리 평균을 내면 5일선이 5개 묶음 평균이 되고, 확대하면 앞쪽이 비어요)
+  // Moving averages are computed from all closes before merging or zooming, and a merged candle reads the value of its last original candle
+  // (averaging merged candles would turn the 5-day line into an average of 5 groups, and zooming would leave the start empty)
   const maFull = useMemo(() => {
     const closes = all.candles.map((q) => q.c);
     return maPeriods(props.ma, closes.length).map((d) => ({ d, v: movingAverage(closes, d) }));
   }, [props.ma, all]);
   const mas = useMemo(() => maFull.map((ma) => ({ d: ma.d, v: cs.map((q) => ma.v[q.i + q.span - 1]) })), [maFull, cs]);
-  // 이동평균선은 크기와 봉이 바뀔 때만 다시 만들어요 (등장 중에는 투명도만 바뀌어요).
-  // geometry의 linePath를 쓰면 곡선 코드까지 묶여 들어와서(약 1KB) 직선만 여기서 이어요
+  // Moving average lines are rebuilt only when the size or candles change (only opacity changes during the entrance).
+  // Using linePath from geometry would bundle the curve code as well (about 1KB), so straight segments are joined here
   const maPaths = useMemo(
     () =>
       mas.map((ma) => {
@@ -281,7 +281,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
         });
         return d;
       }),
-    // cx, y는 아래 값들로 정해져요
+    // cx and y are determined by the values below
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mas, x1, priceBottom, dom[0], dom[1]],
   );
@@ -302,7 +302,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     count: n,
     indexAt,
     inPlot: (px, py) => px >= x0 && px <= x1 && py >= top && py <= H - bottom,
-    // 봉의 i는 확대 전 전체 순서라 그대로 돌려줘요
+    // A candle's i is its position in the full, unzoomed order, so return it as is
     toXRange: (r) => {
       const a = cs[r.from];
       const b = cs[r.to];
@@ -331,7 +331,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     };
   }
 
-  // 고른 기간: 첫 시가에서 끝 종가까지 등락, 최고가, 최저가
+  // Selected period: change from the first open to the last close, highest high, lowest low
   let brushLayer: ReactNode = null;
   let announce: string | undefined;
   if (brush.range && brush.range.to < n) {
@@ -355,7 +355,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     if (!brush.dragging) announce = `${msg.span(cs[from].label, cs[to].label, main)}${brushText.extremes(c.fv(cs[maxK].h), c.fv(cs[minK].l))}.${hint}`;
   }
 
-  // 마지막(강조) 봉의 종가 선과 축 위 가격표
+  // Closing price line of the last (highlighted) candle and its price tag on the axis
   const last = markK >= 0 ? cs[markK] : null;
   const tagY = last ? Math.max(top + 8, Math.min(priceBottom - 8, y(last.c))) : null;
   let lastTag: ReactNode = null;
@@ -374,7 +374,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     );
   }
 
-  // 시간 축 눈금. 날짜면 눈금 시점에 닿은 마지막 봉에 붙여요
+  // Time axis ticks. For dates, attach each tick to the last candle that reaches the tick's time
   const xTicks = useMemo(() => {
     const ticks: { x: number; label: string }[] = [];
     if (n > 1) {
@@ -391,7 +391,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
       }
     }
     return fitTickLabels(ticks, 0, x1 + 2);
-    // cx는 x1과 봉 수로 정해져요
+    // cx is determined by x1 and the candle count
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cs, dated, x1, c.locale]);
 
@@ -402,7 +402,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
   }, [cs, n, lo, hi, fv, c.locale, msg, brushText]);
   const maColors = MA_TOKENS.map((t) => p.paint(t));
 
-  // 주석의 x 값을 픽셀로. 날짜는 봉 사이를 시간 비율로 잇고, 보이는 범위 밖은 평균 봉 간격으로 늘려요
+  // Annotation x values to pixels. Dates interpolate between candles by time, and beyond the visible range they extend by the average candle spacing
   const per = n > 1 ? (cs[n - 1].t - cs[0].t) / (n - 1) || 1 : 1;
   const xAtTime = (t: number) => {
     if (t <= cs[0].t) return cx(0) - ((cs[0].t - t) / per) * step;
@@ -416,7 +416,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     }
     return cx(a) + ((t - cs[a].t) / (cs[b].t - cs[a].t || 1)) * step;
   };
-  // 같은 시점(날짜)이나 같은 키, 이름표인 봉. 없으면 -1
+  // The candle with the same time point (date), key or label. -1 when none
   const kOf = (val: unknown) => {
     const t = dated ? toDate(val)?.getTime() : undefined;
     return cs.findIndex((q) => (dated ? q.t === t : q.key === String(val) || q.label === String(val)));
@@ -430,7 +430,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     const k = kOf(val);
     return k < 0 ? null : cx(k);
   };
-  // 주석 설명의 x: 봉이 있는 시점이면 봉 이름표("2025년 9월 25일")로
+  // x in annotation descriptions: the candle label ("2025년 9월 25일") when a candle exists at that time point
   const xText = (val: unknown) => cs[kOf(val)]?.label ?? String(val ?? "");
   const ag: AnnotationGeom = {
     p,
@@ -440,14 +440,14 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     y,
     x0,
     x1,
-    // 이동평균 값 글자가 맨 위 줄에 있어서 그 아래부터
+    // The moving average value text sits in the top row, so start below it
     top: top + (mas.length ? 14 : 0),
     bottom: priceBottom,
     time: dated && n > 1 ? { t0: cs[0].t, t1: cs[n - 1].t, n, xt: xAtTime } : undefined,
     points: () => cs.map((q, k) => ({ x: cx(k), y: y(q.c) })),
   };
 
-  // 이동평균 값: 가리킨 봉(없으면 마지막 봉) 기준. 이름은 카드 범례가 알려줘요
+  // Moving average values: for the pointed candle (the last candle when none). The card legend gives the names
   const maK = c.active !== null && cs[c.active] ? c.active : n - 1;
   let maX = x0 + 2;
   const maLabels = mas.map((ma, mi) => {
@@ -483,7 +483,7 @@ export function CandlestickChart<T = Row>(props: CandlestickChartProps<T>) {
     >
       <GridY p={p} ticks={yTicks} y={y} x0={x0} x1={x1} fmt={tickFmt} locale={c.locale} side="right" zero={false} labels={false} />
       <g aria-hidden="true">
-        {/* 가격표에 가려지는 눈금 글자는 그리지 않아요 (겹치면 둘 다 읽기 어려워요) */}
+        {/* Tick labels hidden behind the price tag are not drawn (when they overlap, both are hard to read) */}
         {tickLabels(yTicks, tickFmt, c.locale).map((label, i) =>
           tagY !== null && Math.abs(y(yTicks[i]) - tagY) < 14 ? null : (
             <Txt key={yTicks[i]} x={x1 + 6} y={Math.round(y(yTicks[i])) + 0.5} size={AXIS_FONT} fill={p.paint("muted")}>

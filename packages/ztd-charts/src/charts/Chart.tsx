@@ -109,15 +109,15 @@ export const CHART_COMPONENTS: Record<string, ComponentType<any>> = {
 };
 
 /**
- * 타입이나 별칭으로 채널, 이름 찾기 (레지스트리 전체를 끌어오지 않아요).
- * 0.4까지 scatter는 bubble의 별칭이었어요. size 채널이 있는 scatter 스펙은 그때처럼 bubble로 그려요. 육각 밀도(bin "hex")는 크기를 쓰지 않아 산점도 그대로예요
+ * Look up channels and name by type or alias (without pulling in the whole registry).
+ * Up to 0.4, scatter was an alias of bubble. A scatter spec with a size channel is still drawn as bubble, as it was then. Hexbin density (bin "hex") uses no size, so it stays a scatter plot
  */
 export function resolveDef(type: string, encoding?: ChartSpec["encoding"], options?: ChartSpec["options"]): ChartMeta | undefined {
   const def = resolveMeta(type);
   return def?.type === "scatter" && encoding?.size !== undefined && !hexBinned(options) ? resolveMeta("bubble") : def;
 }
 
-/** encoding(채널 -> 필드)을 컴포넌트 프롭으로 */
+/** Turn encoding (channel -> field) into component props */
 export function encodingToProps(def: Pick<ChartMeta, "encoding">, encoding: ChartSpec["encoding"] = {}): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const c of def.encoding) {
@@ -128,8 +128,8 @@ export function encodingToProps(def: Pick<ChartMeta, "encoding">, encoding: Char
 }
 
 /**
- * 스펙으로 범례 만들기 (card.legend: "auto"). locale은 차트를 그리는 로캘이고 캔들스틱 범례 글자에 써요.
- * options.hidden 계열은 빼요. withHidden이면 숨긴 계열까지 모두 적어요 (켜고 끄는 범례)
+ * Build a legend from the spec (card.legend: "auto"). locale is the locale the chart is drawn in; the candlestick legend text uses it.
+ * Series in options.hidden are left out. With withHidden, every series is listed, hidden ones included (the toggle legend)
  */
 export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], locale: string, withHidden = false): LegendItem[] {
   const def = resolveDef(spec.type, spec.encoding, spec.options);
@@ -137,42 +137,42 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
   const enc = spec.encoding ?? {};
   const opt = spec.options ?? {};
   const h = opt.highlight as Highlight | undefined;
-  // 숨긴 계열은 범례에서만 빼요(색은 모든 계열로 정해요)
+  // Hidden series are left out of the legend only (colors are set from all series)
   const off = new Set(!withHidden && TOGGLES.includes(def.type) && Array.isArray(opt.hidden) ? opt.hidden.map(String) : []);
   const shown = (items: LegendItem[]) => items.filter((it) => !off.has(it.label));
   const perItem = ["pie", "donut", "waffle"];
-  // 도넛은 비중이 든 자기 범례(오른쪽이나 아래)를 그려요. 카드 범례까지 그리면 범례가 두 번 나와요
+  // A donut draws its own legend with shares (right or below). Adding the card legend would show the legend twice
   if (def.type === "donut" && opt.legend !== "none") return [];
   if (perItem.includes(def.type)) {
     const gl = strGetter(enc.label as string | undefined, "label");
     const gv = numGetter(enc.value as string | undefined, "value");
     const isWaffle = def.type === "waffle";
     const items = rows.map((r, i) => ({ r, label: gl(r, i), value: isWaffle ? gv(r, i) : sliceValue(gv(r, i)) }));
-    // 파이, 도넛은 차트와 같은 규칙으로 "기타"를 묶고 기타는 강조하지 않아요
+    // Pie and donut group "Other" by the same rule as the chart, and Other is never highlighted
     const { kept, other } = isWaffle ? { kept: items, other: null } : groupOther(items, opt.other as number | undefined, (n, value) => ({ r: {}, label: otherLabel(langOf(locale), n), value }));
     const hi = resolveHighlight(h, kept.map((x) => x.r), kept.map((x) => x.label), kept.map((x) => x.value), isWaffle ? "first" : "max");
     const all = other ? [...kept, other] : kept;
-    // 차트가 칠하는 색 함수 그대로 (와플은 categorical, 파이와 도넛은 colorMode에 따라)
+    // The same color function the chart paints with (categorical for waffle, by colorMode for pie and donut)
     const tokens = legendColors((p) => (isWaffle ? categorical(p, all.length, hi) : sliceSwatches(p, all.length, hi, opt.colorMode as "categorical" | "emphasis" | undefined)));
-    // 반원 와플(의석 차트)은 점이라 범례도 원이에요
+    // A half-circle waffle (parliament chart) is made of dots, so its legend uses circles too
     const dot = isWaffle && opt.shape === "arc";
     return all.map((x, i) => ({ label: x.label, color: tokens[i], ...(dot && { shape: "circle" as const }) }));
   }
   if (def.type === "candlestick") {
-    // 차트가 그리는 이동평균만 (행 수보다 긴 기간은 빼요)
+    // Only the moving averages the chart draws (periods longer than the row count are left out)
     const ma = maPeriods(Array.isArray(opt.ma) ? (opt.ma as number[]) : undefined, rows.length);
     const t = CANDLE_TEXT[langOf(locale)];
     return [{ label: t.up, color: (opt.upColor as string | undefined) ?? "accent" }, { label: t.down, color: (opt.downColor as string | undefined) ?? "neutralStrong" }, ...ma.map((d, i) => ({ label: t.maLegend(d), color: MA_TOKENS[i], shape: "line" as const }))];
   }
   if (def.type === "network") {
-    // 차트가 칠하는 묶음 색 함수 그대로 (networkSwatches). 강조 노드는 강조색이라 범례에 넣지 않아요
+    // The same group color function the chart paints with (networkSwatches). Highlighted nodes use the accent color, so they stay out of the legend
     const groups = groupNames(opt.groups);
     if (groups.length < 2) return [];
     const tokens = legendColors((p) => networkSwatches(p, groups.length));
     return groups.map((g, i) => ({ label: g, color: tokens[i], shape: "circle" as const }));
   }
   if (def.type === "symbolMap") {
-    // 기호 지도의 묶음 색: 차트와 같이 데이터에 나온 순서, 강조 없는 categoricalDots
+    // Group colors of the symbol map: in data order like the chart, categoricalDots without highlight
     if (typeof enc.group !== "string") return [];
     const g = strGetter(enc.group, "group");
     const groups = uniq(rows.map((r, i) => g(r, i)).filter(Boolean));
@@ -181,19 +181,19 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
     return groups.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const }));
   }
   if (def.type === "scatter") {
-    // 육각 밀도는 계열을 쓰지 않아요. 색 범례는 차트 안에 있어요
+    // Hexbin density uses no series. Its color legend is inside the chart
     if (typeof enc.series !== "string" || hexBinned(opt)) return [];
     const g = strGetter(enc.series, "series");
     const series = uniq(rows.map((r, i) => g(r, i)));
     if (series.length < 2) return [];
-    // 차트와 같은 규칙: 색은 숨긴 계열까지 모든 계열로 정하고, 숨긴 계열은 범례에서만 빼요
+    // Same rule as the chart: colors are set from all series, hidden ones included, and hidden series are left out of the legend only
     const dotHi = seriesHighlight(h, rows, series, g);
     const tokens = legendColors((p) => categoricalDots(p, series.length, dotHi));
     return shown(series.map((s, i) => ({ label: s, color: tokens[i], shape: "circle" as const })));
   }
   if (def.type === "timeline") {
-    // 묶음(group)마다 한 칸. 차트와 같은 색 함수(categorical)와 강조(묶음 이름)예요
-    // 색을 나누는 값은 group, 없으면 status(상태 띠). 차트와 같은 규칙이에요
+    // One item per group. Same color function (categorical) and highlight (group name) as the chart
+    // Colors are split by group, or by status (the status strip) when there is none. Same rule as the chart
     const byStatus = typeof enc.group !== "string";
     const field = byStatus ? enc.status : enc.group;
     if (typeof field !== "string") return [];
@@ -208,7 +208,7 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
       const g = strGetter(enc.series, "series");
       series = uniq(rows.map((r, i) => g(r, i)));
     }
-    // 막대 위 선(차례 3 ⑪): 막대(highlight가 없으면 강조하지 않아요)와 선(첫 선 강조색, 나머지 회색)을 함께 적어요
+    // Lines over bars (round 3 ⑪): list the bars (not highlighted when there is no highlight) together with the lines (first line in the accent color, the rest gray)
     const lines = barLineFields(def.type, enc, opt);
     if (lines.length) {
       const barHi = resolveHighlight(h as never, series as never[], series, series.map(() => 0), "none");
@@ -217,13 +217,13 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
       return [...shown(bars), ...lines.map((label, i) => ({ label, color: lineToken(i), shape: "line" as const }))];
     }
     if (series.length < 2) return [];
-    // 양쪽 막대는 차트와 같은 기본 강조(가장 바깥 긍정 계열)
+    // Diverging bars use the same default highlight as the chart (the outermost positive series)
     const diverging = def.type === "bar" && opt.layout === "diverging";
     const lead = diverging && h === undefined ? divergingLead(series.length, Array.isArray(opt.negative) ? opt.negative.map((n) => series.indexOf(String(n))) : [], typeof opt.neutral === "string" ? series.indexOf(opt.neutral) : -1) : -1;
     const hi = lead >= 0 ? new Set([lead]) : resolveHighlight(h as never, series as never[], series, series.map(() => 0), "first");
-    // 레이더는 강조만 accent 면, 나머지는 neutralStrong 테두리로 그려요
+    // Radar draws only the highlighted series as an accent fill, the rest as neutralStrong outlines
     if (def.type === "radar") return shown(series.map((s, i) => ({ label: s, color: hi.has(i) ? "accent" : "neutralStrong", shape: "square" as const })));
-    // 범례 색은 차트가 칠하는 색 함수 그대로예요 (섞은 중간 단계까지): 라인, 영역은 lineSwatches, 스트림은 층 순서와 기본 강조(합이 가장 큰 계열)까지 같이, 막대와 마리메코는 categorical
+    // Legend colors come from the same color function the chart paints with (blended in-between steps included): lineSwatches for line and area, the same layer order and default highlight (the series with the largest total) for stream, categorical for bar and marimekko
     const cm = opt.colorMode as "highlight" | "categorical" | undefined;
     let draw = (p: Painter) => categorical(p, series.length, hi);
     if (def.type === "line" || def.type === "area") draw = (p) => lineSwatches(p, series.length, hi, def.type === "area", cm);
@@ -239,13 +239,13 @@ export function autoLegend(spec: ChartSpec, rows: Record<string, unknown>[], loc
   return [];
 }
 
-/** 스펙의 facet이 그릴 수 있는 것이면 그 facet (line, area, bar, scatter. 양쪽 막대는 빼요). 아니면 undefined라 예전처럼 차트 하나를 그려요 */
+/** The spec's facet when it can be drawn (line, area, bar, scatter; diverging bars excluded). Otherwise undefined, and a single chart is drawn as before */
 export function specFacet(spec: Pick<ChartSpec, "facet" | "options">, type: string): SpecFacet | undefined {
   const f = spec.facet;
   return f && typeof f === "object" && typeof f.by === "string" && FACET_TYPES.includes(type) && !(type === "bar" && spec.options?.layout === "diverging") ? f : undefined;
 }
 
-/** 스펙 facet과 차트 프롭(Chart가 만든 것)으로 <ChartFacets> 프롭. 크기, 강조, 묶음, 이름, 설명은 패널마다 정하려고 빼요. <Chart>와 서버 SVG가 같이 써요 */
+/** <ChartFacets> props from the spec facet and the chart props (built by Chart). Size, highlight, group, title and description are left out so each panel sets its own. Shared by <Chart> and the server SVG */
 export function facetPropsOf(type: string, facet: SpecFacet, chartProps: Record<string, unknown>): Omit<ChartFacetsProps, "chart"> {
   const { data, width, height, highlight, syncId, ariaLabel, description, ...rest } = chartProps;
   return {
@@ -266,7 +266,7 @@ export function facetPropsOf(type: string, facet: SpecFacet, chartProps: Record<
 
 export interface ChartProps {
   spec: ChartSpec;
-  /** 스펙 options보다 우선해요 */
+  /** Takes precedence over the spec options */
   width?: number;
   height?: number;
   animate?: boolean;
@@ -275,37 +275,37 @@ export interface ChartProps {
   className?: string;
   onHover?: (e: ChartEvent<Record<string, unknown>> | null) => void;
   onClick?: (e: ChartEvent<Record<string, unknown>>) => void;
-  /** URL 데이터를 가져올 때 fetch 옵션 (인증 헤더 등) */
+  /** fetch options used when loading data from a URL (auth headers, etc.) */
   fetchInit?: RequestInit;
-  /** 차트와 카드의 로캘. 스펙 options.locale보다 우선이고, 없으면 ThemeProvider, 그다음 "en-US" */
+  /** Locale of the chart and card. Takes precedence over the spec's options.locale; without it, ThemeProvider, then "en-US" */
   locale?: string;
 }
 
-/** JSON 스펙 하나로 차트(와 카드)를 그려요 */
+/** Draws a chart (and its card) from a single JSON spec */
 export function Chart(props: ChartProps) {
   return useSpecChart(props, CHART_COMPONENTS);
 }
 
 /**
- * Chart의 몸통. 그릴 컴포넌트 표를 받아서, 대화형 HTML은 차트 하나만 실은 표로 같은 스펙을 그려요(서버 그림을 이어받아요).
- * 컴포넌트로 감싸지 말고 함수로 불러요: 감싸는 층이 생기면 안쪽 차트의 useId 값이 바뀌어 서버 그림과 어긋나요
+ * The body of Chart. It takes a table of components to draw with; interactive HTML draws the same spec with a table that holds only one chart (hydrating the server render).
+ * Call it as a function, not wrapped in a component: an extra wrapping layer changes the inner chart's useId values, so they no longer match the server render
  */
 export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONENTS) {
   const { spec } = props;
   const def = resolveDef(spec.type, spec.encoding, spec.options);
-  // { csv }는 렌더마다 다시 읽지 않아요
+  // { csv } is not parsed again on every render
   const inline = useMemo(() => inlineRows(spec.data), [spec.data]);
   const remote = !inline && spec.data && typeof spec.data === "object" && "url" in spec.data ? (spec.data as { url: string; format?: "json" | "csv" | "auto"; select?: string }) : null;
-  // 프롭, 스펙 options.locale 순서. 둘 다 없으면 카드와 차트가 ThemeProvider를 따라요
+  // Prop first, then the spec's options.locale. Without both, the card and chart follow ThemeProvider
   const explicit = specLocale(spec, props.locale);
   const locale = useChartLocale(explicit);
   const lang = langOf(locale);
   const st = useChartData(remote?.url ?? null, { parse: remote?.format ?? "auto", select: remote?.select, init: props.fetchInit, locale });
-  // 스펙 툴팁 틀(options.tooltip.template): 그 행의 다른 열까지 툴팁에 써요. 훅이라 일찍 돌아가기 전에 둬요
+  // Spec tooltip template (options.tooltip.template): the tooltip can use the row's other columns too. It is a hook, so it sits before any early return
   const template = specTemplate(spec);
   const tooltip = useMemo(() => (template ? templateTooltip(template, locale) : undefined), [template, locale]);
-  // 켜고 끄는 범례(card.legend "toggle")에서 보는 사람이 고른 숨긴 계열. 처음 값은 options.hidden이고, 스펙의 hidden이 바뀔 때만 처음 값으로 돌아가요
-  // (렌더마다 새 스펙 객체가 와도 그대로예요). 훅이라 일찍 돌아가기 전에 둬요
+  // Series the viewer hid in the toggle legend (card.legend "toggle"). It starts as options.hidden and resets to it only when the spec's hidden changes
+  // (it stays put even when each render brings a new spec object). It is a hook, so it sits before any early return
   const optHidden = spec.options?.hidden;
   const specHidden = Array.isArray(optHidden) ? optHidden.map(String) : [];
   const hiddenKey = specHidden.join("\u0001");
@@ -327,10 +327,10 @@ export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONE
     ...(props.replayKey !== undefined ? { replayKey: props.replayKey } : {}),
     ...(props.onHover ? { onHover: props.onHover } : {}),
     ...(props.onClick ? { onClick: props.onClick } : {}),
-    // 프롭, options.locale 순서로 고친 값("ko_KR" → "ko-KR"). 둘 다 없으면 ThemeProvider를 따라요
+    // The normalized value ("ko_KR" → "ko-KR"), prop first, then options.locale. Without both, it follows ThemeProvider
     locale: explicit,
   };
-  // 범례 항목이 모두 숨길 수 있는 계열일 때만 켜고 꺼요 (막대 위 선이 있으면 보통 범례)
+  // Toggle only when every legend item is a series that can be hidden (with lines over bars, it is a plain legend)
   const toggle = spec.card?.legend === "toggle" && legendToggles(def.type, spec.encoding ?? {}, options);
   const hidden = viewer && viewer.base === hiddenKey ? viewer.hidden : specHidden;
   if (toggle) chartProps.hidden = hidden;
@@ -340,8 +340,8 @@ export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONE
       return { base: hiddenKey, hidden: cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label] };
     });
   const h = (chartProps.height as number | undefined) ?? 220;
-  // 데이터를 가진 채 다시 불러올 때(refreshMs)는 차트를 그대로 둬요. 다시 불러오기가 한 번 실패해도 이전 데이터가 있으면 차트를 보여 줘요
-  // 작은 여러 개(spec.facet): by 값마다 같은 차트를 한 칸씩. facet이 없으면 예전 그대로 차트 하나예요
+  // While reloading with data already in hand (refreshMs), keep the chart as is. If a reload fails once, the chart still shows as long as there is earlier data
+  // Small multiples (spec.facet): the same chart once per by value, one cell each. Without facet, a single chart as before
   const facet = specFacet(spec, def.type);
   let body =
     remote && !rows.length && (st.loading || st.error || st.empty) ? (
@@ -355,7 +355,7 @@ export function useSpecChart(props: ChartProps, components: typeof CHART_COMPONE
     const c = spec.card;
     const items = c.legend === "auto" || c.legend === "toggle" ? autoLegend(spec, rows, locale, toggle) : c.legend;
     const legend = !items?.length ? undefined : toggle ? <Legend items={items} hidden={hidden} onToggle={onToggle} locale={explicit} /> : items;
-    // 내려받기 CSV는 차트가 그리는 열만 (페이지가 넘긴 다른 열은 빼요)
+    // The download CSV has only the columns the chart draws (other columns the page passed are left out)
     const download = c.download ? <DownloadButtons data={rows} columns={downloadFields(spec)} filename={c.title ?? def.type} formats={Array.isArray(c.download) ? c.download : undefined} locale={explicit} /> : undefined;
     body = (
       <ChartCard number={c.number} title={c.title ?? nameIn(def, lang)} subtitle={c.subtitle} legend={legend} actions={download} source={c.source || undefined} note={c.note || undefined} accent={c.accent} takeaway={c.takeaway} level={c.level} sample={c.sample} replay={c.replay !== false} className={props.className} locale={explicit}>

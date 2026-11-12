@@ -15,11 +15,11 @@ export interface ColumnProfile {
   max?: number;
   negatives?: boolean;
   integer?: boolean;
-  /** 날짜 간격이 하루 단위인지 */
+  /** Whether the dates are spaced in whole days */
   daily?: boolean;
-  /** 값이 두 개 이상 있고 모두 달라요 (항목 이름, 순번) */
+  /** Has two or more values, all different (item names, sequence numbers) */
   unique?: boolean;
-  /** 숫자가 행 순서대로 줄지 않아요 (시간 단계, 순번) */
+  /** Numbers never decrease in row order (time steps, sequence numbers) */
   sorted?: boolean;
 }
 
@@ -41,7 +41,7 @@ const TARGET_RE = /^(target|to|dst|도착|받은|dest)/i;
 const DATE_NAME = /(date|day|month|week|year|time|날짜|일자|월|주|연도|시간|기간|period)/i;
 const YEAR_NAME = /(year|연도|년도|^년$)/i;
 const MONTH_KO = /^(1[0-2]|[1-9])월$/;
-/** YYYYMMDD 숫자나 글자(20240315) */
+/** A YYYYMMDD number or string (20240315) */
 const YMD = /^\d{8}$/;
 const RANK_RE = /(rank|순위|등수)/i;
 const STAGE_RE = /(stage|step|funnel|단계|스텝)/i;
@@ -49,20 +49,20 @@ const PARENT_RE = /^(parent|manager|reports_?to|부모|상위)/i;
 const BEFORE_RE = /(before|prev|start|이전|전|작년|기존|old)/i;
 const AFTER_RE = /(after|next|end|이후|후|올해|신규|new)/i;
 const TARGET_KPI = /(target|goal|목표)/i;
-/** 타임라인의 시작, 끝 날짜 열 이름 */
+/** Names of the start and end date columns of a timeline */
 const SPAN_START = /(start|begin|from|opened|시작|착수)/i;
 const SPAN_END = /(end|finish|until|due|closed|stop|끝|종료|마감)/i;
-/** 엑셀 등이 빈 칸에 쓰는 표시 ("-", "n/a", "#N/A", "null") */
+/** Markers that Excel and others put in empty cells ("-", "n/a", "#N/A", "null") */
 const MISSING = /^(-|—|–|n\/?a|#n\/a|na|null|nan|none)$/i;
-/** 순번이 아니라 식별자라 x로 쓰지 않는 이름 */
+/** Names of identifiers rather than sequence numbers, so they are not used as x */
 const ID_NAME = /^(id|no|번호|#|key|코드|code)$/i;
-/** 폭포 차트의 시작, 끝 라벨 (없으면 증감이 아니라 순서 없는 조각이에요) */
+/** Start and end labels of a waterfall chart (without them, the values are unordered parts, not changes) */
 const WATERFALL_START = /^(시작|start|begin|opening|기초|전월|작년|이전|prev)/i;
 const WATERFALL_END = /^(끝|end|합계|total|closing|현재|이번)/i;
-/** 기간 라벨: 연도, 분기, "3월", 영어 월 이름(앞부분도. "Marketing"은 아니에요) */
+/** Period labels: years, quarters, "3월", English month names (prefixes too, but not "Marketing") */
 const isPeriod = (s: string) => /^(\d{4}|q[1-4])$/i.test(s) || MONTH_KO.test(s) || monthOf(s) > 0;
 const TOTAL_WORD = /^(total|합계|시작|start|end|끝)$/i;
-/** 항목이 많을 때 막대로 보여 줄 큰 항목 수 */
+/** Number of top items shown as bars when there are many items */
 const TOP_N = 7;
 
 export function profileData(rows: readonly Record<string, unknown>[]): DataProfile {
@@ -70,19 +70,19 @@ export function profileData(rows: readonly Record<string, unknown>[]): DataProfi
   const names = uniq(sample.slice(0, 200).flatMap((r) => Object.keys(r ?? {})));
   const columns = names.map((name): ColumnProfile => {
     const vals = sample.map((r) => r?.[name]);
-    // "-", "n/a" 같은 빈 칸 표시도 빈 칸이에요 (그리기에서도 빈 칸이에요)
+    // Empty-cell markers such as "-" and "n/a" count as empty too (they are empty when drawn as well)
     const present = vals.filter((v) => v !== null && v !== undefined && v !== "" && !(typeof v === "string" && MISSING.test(v.trim())));
     const nulls = vals.length - present.length;
     const nums = present.map((v) => toNumber(v));
     const numOk = present.length ? nums.filter(Number.isFinite).length / present.length : 0;
     const distinct = new Set(present.map((v) => String(v))).size;
     const unique = present.length > 1 && distinct === present.length;
-    // "1월"…"12월"은 순서가 있는 시간이에요 (파이 조각이 아니에요)
+    // "1월"…"12월" are ordered time values (not pie slices)
     if (present.length && present.every((v) => typeof v === "string" && MONTH_KO.test(v.trim()))) return { name, kind: "date", distinct, nulls, daily: false, unique };
-    // 연도 열(2019)과 이름이 날짜인 YYYYMMDD 숫자(20240315)도 시간이에요
+    // Year columns (2019) and YYYYMMDD numbers in a column named like a date (20240315) are time too
     const years = YEAR_NAME.test(name) && nums.every(isYear);
     const compact = years || (DATE_NAME.test(name) && present.every((v) => YMD.test(String(v).trim()) && toDate(v)));
-    // 차트가 날짜 축으로 읽는 표기(점, 한국식, 분기, 영어 월 이름)와 같아요
+    // Same notations the charts read as a date axis (dots, Korean style, quarters, English month names)
     const looksDate = present.length > 0 && (compact || (present.every((v) => v instanceof Date || (typeof v === "string" && isDateText(v.trim()))) && present.filter((v) => toDate(v)).length / present.length > 0.9));
     if (looksDate) {
       const ts = present.map((v) => toDate(v)?.getTime() ?? NaN).filter(Number.isFinite).sort((a, b) => a - b);
@@ -90,23 +90,23 @@ export function profileData(rows: readonly Record<string, unknown>[]): DataProfi
       const med = gaps.length ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 0;
       return { name, kind: "date", distinct, nulls, min: ts[0], max: ts[ts.length - 1], daily: med > 0 && med <= 86400000 * 1.5, unique };
     }
-    // 검사기와 같은 규칙: 숫자가 절반 넘으면 숫자 열이고 나머지 글자는 빈 칸으로 그려요
+    // Same rule as the validator: over half numbers makes a numeric column, and the remaining text is drawn as empty
     if (numOk >= 0.5 && !(typeof present[0] === "string" && /^0\d/.test(String(present[0])))) {
       const f = nums.filter(Number.isFinite);
       return { name, kind: "number", distinct, nulls, min: Math.min(...f), max: Math.max(...f), negatives: f.some((v) => v < 0), integer: f.every((v) => Number.isInteger(v)), unique, sorted: f.every((v, i) => i === 0 || v >= f[i - 1]) };
     }
     const avgLen = present.reduce<number>((a, v) => a + String(v).length, 0) / Math.max(1, present.length);
-    // 모두 다른 짧은 이름은 항목 이름이라 몇백 개여도 범주예요
+    // Short names that are all different are item names, so they are a category even when there are hundreds
     return { name, kind: (distinct <= Math.max(60, present.length * 0.6) || unique) && avgLen < 40 ? "category" : "text", distinct, nulls, unique };
   });
   return { rows: rows.length, columns };
 }
 
-/** x 하나에 붙은 범주 값의 평균 개수. 1에 가까우면 범주는 x의 속성이라 계열로 나누지 않아요 (처음 5,000행) */
+/** Average number of category values per x. Close to 1 means the category is an attribute of x, so it is not split into series (first 5,000 rows) */
 function perX(rows: readonly Record<string, unknown>[], x: string, c: string): number {
   const sample = rows.slice(0, 5000);
   const xs = new Set(sample.map((r) => String(r[x])));
-  // x 길이를 앞에 붙여 x와 범주 값의 경계가 어디든 다른 짝과 겹치지 않게
+  // Prefix the x length so a pair never collides with another wherever the boundary between x and the category value falls
   const pairs = new Set(sample.map((r) => `${String(r[x]).length}:${String(r[x])}${String(r[c])}`));
   return pairs.size / Math.max(1, xs.size);
 }
@@ -117,8 +117,8 @@ function mk(type: string, score: number, reason: string, rows: readonly Record<s
 }
 
 /**
- * 항목이 많을 때(모두 다른 이름 12개 넘게) 큰 7개를 가로 막대로. 나머지 합이 가장 큰 막대보다 작으면 "기타" 한 줄로 더하고,
- * 크면 막대가 납작해지니 큰 8개만 두고 나머지는 빼요. 스펙 데이터는 그 8줄이에요 (MCP가 보여 주는 8행 안)
+ * With many items (more than 12 distinct names), the top 7 as horizontal bars. When the rest sum to less than the largest bar, they are added as one "Other" row;
+ * when larger, the bars would flatten, so only the top 8 are kept and the rest dropped. The spec data is those 8 rows (within the 8 rows MCP shows)
  */
 function topBars(rows: readonly Record<string, unknown>[], label: string, value: string, t: (en: string, ko: string) => string): Suggestion {
   const ranked = rows.map((r) => ({ name: r[label], v: toNumber(r[value]) })).filter((x) => Number.isFinite(x.v)).sort((a, b) => b.v - a.v);
@@ -134,7 +134,7 @@ function topBars(rows: readonly Record<string, unknown>[], label: string, value:
   return mk("bar", 0.88, reason, data, { x: label, y: value }, { orientation: "horizontal" });
 }
 
-/** 추천 하나의 차트 이름과 카드 제목, 요약을 그 언어로. 한글 스펙은 options.locale도 "ko-KR"이에요 */
+/** One suggestion's chart name, card title and summary in that language. A Korean spec also gets options.locale "ko-KR" */
 function inLang(s: Suggestion, lang: Lang): Suggestion {
   if (lang === "en") return s;
   const def = localizeDef(getChartDef(s.type)!, lang);
@@ -142,20 +142,20 @@ function inLang(s: Suggestion, lang: Lang): Suggestion {
 }
 
 /**
- * 데이터 모양을 보고 어울리는 차트를 점수순으로 추천해요.
- * 이유(reason), 차트 이름, 카드 글은 영어, { lang: "ko" }면 한글이고 스펙의 options.locale은 "ko-KR"이에요.
+ * Suggests fitting charts in score order from the shape of the data.
+ * The reason, chart name and card text are English; with { lang: "ko" } they are Korean and the spec's options.locale is "ko-KR".
  */
 export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { limit?: number; lang?: Lang } = {}): { profile: DataProfile; suggestions: Suggestion[] } {
   const lang = opts.lang ?? "en";
-  /** 같은 이유의 영어와 한글 */
+  /** The English and Korean versions of the same reason */
   const t = (en: string, ko: string) => (lang === "ko" ? ko : en);
   const profile = profileData(rows);
   const cols = profile.columns;
   const n = profile.rows;
-  // 값 열은 빈 칸이 적은 것부터
+  // Value columns with fewer empty cells first
   const numsAll = cols.filter((c) => c.kind === "number" && !RANK_RE.test(c.name)).sort((a, b) => a.nulls - b.nulls);
   const ranksC = cols.filter((c) => c.kind === "number" && RANK_RE.test(c.name));
-  // 날짜 열이 없고 값 열이 둘 이상이면, 줄지 않고 모두 다른 숫자 열(20행 이상, 식별자 이름이 아닌)은 시간 단계 x예요
+  // With no date column and two or more value columns, a numeric column that never decreases and has all different values (20+ rows, not an identifier name) is a time-step x
   const seq = cols.some((c) => c.kind === "date") || numsAll.length < 2 || n < 20 ? undefined : numsAll.find((c) => c.sorted && c.unique && !ID_NAME.test(c.name));
   const dates = seq ? [seq] : cols.filter((c) => c.kind === "date");
   const nums = numsAll.filter((c) => c !== seq);
@@ -164,7 +164,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
   const v0 = nums[0];
   if (!n || !cols.length) return { profile, suggestions: [] };
 
-  // 흐름: source/target
+  // Flow: source/target
   const src = cats.find((c) => SOURCE_RE.test(c.name));
   const dst = cats.find((c) => TARGET_RE.test(c.name));
   if (src && dst && v0) {
@@ -175,7 +175,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     if (reciprocal) out.push(mk("chord", 0.92, t(`${src.name}→${dst.name} goes both ways, so a chord diagram fits`, `${src.name}→${dst.name} 관계가 양방향이라 코드 다이어그램이 맞아요`), rows, { source: src.name, target: dst.name, value: v0.name }));
     out.push(mk("sankey", reciprocal ? 0.8 : 0.95, chained ? t("The flow runs through several stages, which a Sankey diagram shows well", "흐름이 여러 단계로 이어져서 생키 다이어그램이 잘 맞아요") : t("A Sankey diagram shows the amount between source and target as band width", "생키 다이어그램으로 출발과 도착 사이 양을 띠 굵기로 보여 줘요"), rows, { source: src.name, target: dst.name, value: v0.name }));
   }
-  // 네트워크는 값이 없어도 그려요(행마다 1). 노드가 10개를 넘으면 생키, 코드보다 읽기 쉬워요
+  // A network draws even without values (1 per row). With more than 10 nodes it is easier to read than sankey or chord
   if (src && dst) {
     const nodes = new Set(rows.flatMap((r) => [String(r[src.name]), String(r[dst.name])])).size;
     const strong = nodes > 10 || !v0;
@@ -190,7 +190,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     );
   }
 
-  // 시작과 끝: 이름이 시작, 끝인 날짜 열 두 개와 이름 열이면 타임라인 (일정, 실행 기록)
+  // Start and end: two date columns named start and end plus a name column make a timeline (schedules, run logs)
   const startC = dates.find((c) => SPAN_START.test(c.name));
   const endC = dates.find((c) => c !== startC && SPAN_END.test(c.name));
   const itemC = cats.find((c) => c.distinct >= 2) ?? cols.find((c) => c.kind === "text");
@@ -199,7 +199,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     out.push(mk("timeline", 0.94, t(`${startC.name} and ${endC.name} mark when each ${itemC.name} ran, so a timeline shows what ran when and what overlapped`, `${startC.name}부터 ${endC.name}까지 ${itemC.name}마다 언제 이어졌는지라서 타임라인으로 무엇이 언제, 겹쳐서 이어졌는지 보여 줘요`), rows, { label: itemC.name, start: startC.name, end: endC.name, ...(statusC ? { group: statusC.name } : {}) }));
   }
 
-  // 계층: id와 부모 id (조직도, 폴더 표). 부모 칸 대부분이 id 열의 값이면 트리예요
+  // Hierarchy: id and parent id (org charts, folder tables). When most parent cells are values of the id column, it is a tree
   const parentCol = cols.find((c) => PARENT_RE.test(c.name));
   const idCol = parentCol && cols.find((c) => c !== parentCol && c.unique);
   if (parentCol && idCol) {
@@ -211,16 +211,16 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     }
   }
 
-  // 시간
+  // Time
   const t0 = dates[0];
   if (t0 && v0) {
-    // 범주는 x 하나에 값이 여럿 붙을 때만 계열이에요. 달마다 채널이 하나면 선을 쪼개지 않고 채널별 합계 막대를 따로 권해요
+    // A category is a series only when several of its values attach to one x. With one channel per month, the line is not split; a separate bar of totals per channel is suggested instead
     const small = cats.filter((c) => c.distinct >= 2 && c.distinct <= 12);
     const seriesCat = small.find((c) => perX(rows, t0.name, c.name) >= 1.5);
     const attrCat = seriesCat ? undefined : small[0];
     const span = (t0.max ?? 0) - (t0.min ?? 0);
-    // YYYYMMDD 숫자(20240315)와 ISO가 아닌 날짜 글자("2025.03.01")는 날짜로 읽으라고 적어요.
-    // 차트도 날짜로 읽지만, 적어 두면 검사기가 "글자가 날짜가 됐어요" 경고를 내지 않아요 (선, 영역, 스트림만 xType을 받아요)
+    // YYYYMMDD numbers (20240315) and non-ISO date strings ("2025.03.01") are marked to be read as dates.
+    // The charts read them as dates anyway, but marking them keeps the validator from warning that "text became dates" (only line, area and stream accept xType)
     const head = rows.slice(0, 50).map((r) => String(r[t0.name] ?? "").trim());
     const xt = head.some((v) => YMD.test(v) || (isDateText(v) && !ISO_DATE_RE.test(v))) ? { xType: "date" } : undefined;
     if (t0.daily && span > 86400000 * 60 && !seriesCat) out.push(mk("calendar", 0.9, t("Daily values over more than two months show weekday and seasonal patterns in a calendar heatmap", "하루 단위 값이 두 달 넘게 있어 캘린더 히트맵으로 요일, 계절 패턴이 보여요"), rows, { date: t0.name, value: v0.name }));
@@ -239,13 +239,13 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     }
   }
 
-  // 순위 흐름
+  // Rank flow
   const rk = ranksC[0];
   const timeCat = dates[0] ?? cats.find((c) => DATE_NAME.test(c.name));
   const item = cats.find((c) => c !== timeCat && c.distinct >= 3 && c.distinct <= 12);
   if (rk && timeCat && item) out.push(mk("bump", 0.94, t(`There is a ${rk.name} field, so a bump chart shows the rank changes`, `${rk.name} 필드가 있어서 범프 차트로 순위 변화를 보여 줘요`), rows, { x: timeCat.name, series: item.name, rank: rk.name }));
 
-  // 범주 + 값
+  // Category + value
   const cat = cats.find((c) => c !== src && c !== dst && !STAGE_RE.test(c.name)) ?? cats[0];
   const stage = cats.find((c) => STAGE_RE.test(c.name));
   if (stage && v0 && !src) {
@@ -255,7 +255,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
   }
   if (cat && v0 && !t0 && !src) {
     const perCat = n / Math.max(1, cat.distinct);
-    // 둘째 범주는 값이 둘 이상이고, 첫째도 모두 다른 이름이면 또 다른 이름 열(별명, 코드)이 아니어야 해요
+    // A second category needs two or more values, and when the first also has all-different names, it must not be just another name column (alias, code)
     const second = cats.find((c) => c !== cat && c !== src && c !== dst && c.distinct >= 2 && !(c.unique && cat.unique));
     if (perCat >= 6 && !second) {
       out.push(mk("box", 0.86, t(`Each ${cat.name} has many values, so a box plot summarizes the distribution`, `${cat.name}마다 값이 여러 개라 분포를 박스 플롯으로 요약해요`), rows, { group: cat.name, value: v0.name }));
@@ -296,7 +296,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
       const sorted = [...vals].sort((a, b) => b - a);
       const tot = sorted.reduce((a, b) => a + b, 0) || 1;
       const top20 = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.2))).reduce((a, b) => a + b, 0) / tot;
-      // 폭포 차트는 시작이나 끝(이름이나 기간 라벨, 합계 표시 열)이 있을 때만 앞서요. 없으면 순서 없는 조각이라 막대가 나아요
+      // Waterfall ranks first only when there is a start or end (a name or period label, a total-marker column). Without one, the values are unordered parts, so bars are better
       const first = String(rows[0]?.[cat.name] ?? "").trim();
       const last = String(rows[rows.length - 1]?.[cat.name] ?? "").trim();
       const ends = WATERFALL_START.test(first) || WATERFALL_END.test(last) || (isPeriod(first) && isPeriod(last)) || cats.some((c) => c !== cat && rows.some((r) => TOTAL_WORD.test(String(r[c.name]))));
@@ -316,7 +316,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     }
   }
 
-  // 두 숫자 (전후)
+  // Two numbers (before and after)
   if (cat && nums.length >= 2 && !t0) {
     const a = nums.find((c) => BEFORE_RE.test(c.name));
     const b = nums.find((c) => AFTER_RE.test(c.name) && c !== a);
@@ -336,10 +336,10 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     out.push(mk("gauge", 0.95, t("A single value works best as a large gauge", "값이 하나라서 게이지로 크게 보여 줘요"), rows, { value: val.name, ...(tg ? { target: tg.name } : {}) }));
   }
 
-  // 관계
+  // Relationship
   if (nums.length >= 2 && !src) {
     const label = cats[0] ?? cols.find((c) => c.kind === "text");
-    // 행이 6개보다 적으면 관계를 보기 어려워 점수를 낮추고, x·y 이름 열, 값 열 셋 이상, 20행 이상이면 관계가 분명해요
+    // With fewer than 6 rows a relationship is hard to see, so the score drops; columns named x and y, three or more value columns, or 20+ rows make the relationship clear
     const nx = nums.find((c) => /^x$/i.test(c.name));
     const ny = nums.find((c) => /^y$/i.test(c.name));
     const named = !!nx && !!ny;
@@ -353,7 +353,7 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     out.push(mk(third ? "bubble" : "scatter", n < 6 ? 0.7 : named || nums.length >= 3 || n >= 20 ? 0.88 : 0.8, third ? t(`A bubble chart shows ${xs.name}, ${ys.name} and ${third.name} together`, `버블 차트로 ${xs.name}, ${ys.name}, ${third.name} 세 값을 함께 보여 줘요`) : t(`A scatter plot shows how ${xs.name} relates to ${ys.name}`, `산점도로 ${xs.name} 값과 ${ys.name} 값의 관계를 보여 줘요`), rows, enc));
   }
 
-  // 같은 타입은 가장 높은 점수만
+  // Keep only the highest score per type
   const best = new Map<string, Suggestion>();
   for (const s of out) {
     const prev = best.get(s.type);

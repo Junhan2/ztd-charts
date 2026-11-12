@@ -14,7 +14,7 @@ import type { ChartLang } from "../core/i18n";
 
 const en = {
   kind: "Dumbbell chart",
-  /** 두 값의 기본 이름 */
+  /** Default names of the two values */
   names: ["Before", "After"] as [string, string],
   diff: "Difference",
 };
@@ -25,15 +25,15 @@ const MSG: Record<ChartLang, typeof en> = {
 
 export interface DumbbellChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
-  /** 이전 값. 기본 "start" */
+  /** Before value. Default "start" */
   start?: Accessor<T, number>;
-  /** 이후 값. 기본 "end" */
+  /** After value. Default "end" */
   end?: Accessor<T, number>;
-  /** 범례 이름. 기본 ["Before", "After"] (한국어 로캘은 ["이전", "이후"]) */
+  /** Legend names. Default ["Before", "After"] (["이전", "이후"] in the Korean locale) */
   labels?: [string, string];
-  /** 이후 값 순으로 정렬. 기본 true */
+  /** Sort by the after value. Default true */
   sort?: boolean;
-  /** 축에 0 포함. 기본 false */
+  /** Include 0 in the axis. Default false */
   zero?: boolean;
 }
 
@@ -46,7 +46,7 @@ interface Bell<T> {
   datum: T;
 }
 
-/** 덤벨 차트: 항목마다 두 값의 차이 (전후, 목표와 실제) */
+/** Dumbbell chart: the gap between two values per item (before and after, target and actual) */
 export function DumbbellChart<T = Row>(props: DumbbellChartProps<T>) {
   const n0 = props.data.length;
   const c = useChart(props, { height: () => Math.max(150, Math.min(360, n0 * 30 + 44)), duration: 800, stagger: 70 });
@@ -114,8 +114,8 @@ export function DumbbellChart<T = Row>(props: DumbbellChartProps<T>) {
       </g>
       {m.items.map((it) => {
         const r = it.data;
-        // 줄은 지금 순서(r.i)로 정해요. m.items는 처음 생긴 순서라 정렬이 바뀌면 어긋나요.
-        // 빠지는 줄은 옛 자리에 남아 새 줄과 겹치니 그리지 않아요
+        // Rows follow the current order (r.i). m.items keeps the order items first appeared in, so it drifts when the sort changes.
+        // A leaving row would stay in its old slot and overlap the new rows, so it is not drawn
         if (it.exiting) return null;
         const k = r.i;
         const [xa, xb, o] = it.v;

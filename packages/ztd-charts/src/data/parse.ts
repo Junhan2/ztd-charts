@@ -4,11 +4,11 @@ export type Cell = string | number | null;
 export type CsvRow = Record<string, Cell>;
 
 export interface ParseCSVOptions {
-  /** 구분자. 없으면 첫 줄을 보고 , \t ; 중에서 골라요 */
+  /** Delimiter. When omitted, picks one of , \t ; from the first line */
   delimiter?: string;
-  /** 숫자처럼 보이는 칸을 number로. 기본 true */
+  /** Turns cells that look numeric into numbers. Default true */
   typed?: boolean;
-  /** 첫 줄이 머리글. 기본 true */
+  /** The first line is the header. Default true */
   header?: boolean;
 }
 
@@ -38,21 +38,21 @@ function detectDelimiter(src: string): string {
 
 const NUMERIC = /^[-+(]?[₩$€£¥]?\s?\d[\d,]*(\.\d+)?([eE][-+]?\d+)?\)?\s?(%|원|명|건|개|회)?$/;
 
-/** 문자열 칸 하나를 타입 있는 값으로 */
+/** One string cell to a typed value */
 export function coerceCell(s: string): Cell {
   const t = s.trim();
   if (t === "") return null;
-  // 앞자리 0이 있는 코드(우편번호 등)는 문자열로 둬요
+  // Codes with a leading 0 (postal codes and the like) stay strings
   if (/^-?0\d/.test(t)) return t;
   if (NUMERIC.test(t) || /^[-+]?\.\d+$/.test(t)) {
-    // 천 단위 쉼표가 틀리면(1,2,3) toNumber가 NaN이라 글자로 남아요
+    // With wrong thousands separators (1,2,3), toNumber gives NaN, so it stays text
     const n = toNumber(t);
     if (Number.isFinite(n)) return n;
   }
   return t;
 }
 
-/** RFC 4180 CSV 파서. 따옴표, 칸 안 줄바꿈, BOM, CRLF를 지원해요 */
+/** RFC 4180 CSV parser. Supports quotes, line breaks inside cells, BOM and CRLF */
 export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] {
   const { typed = true, header = true } = options;
   const src = text.replace(/^\uFEFF/, "");
@@ -72,7 +72,7 @@ export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] 
         } else q = false;
       } else cell += c;
     } else if (c === '"' && !cell.trim()) {
-      // 칸 처음의 따옴표는 앞 공백(a, "b, c")이 있어도 따옴표 칸이에요
+      // A quote at the start of a cell makes a quoted cell even after leading spaces (a, "b, c")
       q = true;
       cell = "";
     }
@@ -100,7 +100,7 @@ export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] 
   clean[0].forEach((k, i) => {
     const base = k.trim() || `col${i + 1}`;
     let name = base;
-    // 겹치면 _2, _3 … 중 아직 없는 이름 (a,a,a_2가 a_2 둘이 되어 열을 잃지 않게)
+    // On a clash, the first of _2, _3 … not yet taken (so a,a,a_2 does not become two a_2 and lose a column)
     for (let n = 2; used.has(name); n++) name = `${base}_${n}`;
     used.add(name);
     keys.push(name);
@@ -108,7 +108,7 @@ export function parseCSV(text: string, options: ParseCSVOptions = {}): CsvRow[] 
   return clean.slice(1).map((r) => Object.fromEntries(keys.map((k, i) => [k, conv(r[i] ?? "")])));
 }
 
-/** 객체 배열을 CSV 문자열로 */
+/** An array of objects to a CSV string */
 export function toCSV(rows: readonly Record<string, unknown>[], columns?: string[]): string {
   const cols = columns ?? Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
   const esc = (v: unknown) => {
@@ -120,8 +120,8 @@ export function toCSV(rows: readonly Record<string, unknown>[], columns?: string
 }
 
 /**
- * 2차원 배열을 객체 배열로. 첫 줄이 머리글이에요.
- * Google Sheets API(values), SQL 결과(rows + fields) 같은 모양에 써요.
+ * A 2D array to an array of objects. The first row is the header.
+ * For shapes such as the Google Sheets API (values) and SQL results (rows + fields).
  */
 export function fromRows(rows: readonly (readonly unknown[])[], columns?: readonly string[], options: { typed?: boolean } = {}): Record<string, unknown>[] {
   if (!rows.length) return [];
@@ -132,9 +132,9 @@ export function fromRows(rows: readonly (readonly unknown[])[], columns?: readon
 }
 
 /**
- * 객체를 객체 배열로.
- * - { "1월": 10, "2월": 12 } -> [{ label: "1월", value: 10 }, ...]
- * - { 월: ["1월","2월"], 매출: [10,12] } (열 모음) -> [{ 월: "1월", 매출: 10 }, ...]
+ * An object to an array of objects.
+ * - { "Jan": 10, "Feb": 12 } -> [{ label: "Jan", value: 10 }, ...]
+ * - { month: ["Jan","Feb"], sales: [10,12] } (column set) -> [{ month: "Jan", sales: 10 }, ...]
  */
 export function fromObjects(obj: Record<string, unknown>, options: { labelKey?: string; valueKey?: string } = {}): Record<string, unknown>[] {
   const { labelKey = "label", valueKey = "value" } = options;
@@ -147,7 +147,7 @@ export function fromObjects(obj: Record<string, unknown>, options: { labelKey?: 
   return Object.entries(obj).map(([k, v]) => ({ [labelKey]: k, [valueKey]: v }));
 }
 
-/** 넓은 표(열마다 계열)를 긴 표(series, value)로 */
+/** A wide table (one series per column) to a long table (series, value) */
 export function melt(rows: readonly Record<string, unknown>[], idKeys: readonly string[], options: { seriesKey?: string; valueKey?: string; valueKeys?: readonly string[] } = {}): Record<string, unknown>[] {
   const { seriesKey = "series", valueKey = "value" } = options;
   const out: Record<string, unknown>[] = [];
@@ -159,7 +159,7 @@ export function melt(rows: readonly Record<string, unknown>[], idKeys: readonly 
   return out;
 }
 
-/** 경로("data.items")로 안쪽 배열 꺼내기 */
+/** Gets a nested array by path ("data.items") */
 export function pluck(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const p of path.split(".").filter(Boolean)) {
@@ -170,9 +170,9 @@ export function pluck(obj: unknown, path: string): unknown {
 }
 
 /**
- * 아무 모양의 입력을 객체 배열로.
- * CSV 문자열, JSON 문자열, 2차원 배열, 숫자 배열, 객체 배열,
- * { data: [...] }, { rows, columns }, { values: [[...]] }(Google Sheets), 키-값 맵
+ * Input of any shape to an array of objects.
+ * CSV strings, JSON strings, 2D arrays, number arrays, object arrays,
+ * { data: [...] }, { rows, columns }, { values: [[...]] } (Google Sheets), key-value maps
  */
 export function normalizeData(input: unknown): Record<string, unknown>[] {
   if (input === null || input === undefined) return [];
@@ -183,7 +183,7 @@ export function normalizeData(input: unknown): Record<string, unknown>[] {
       try {
         return normalizeData(JSON.parse(s));
       } catch {
-        /* CSV로 읽어요 */
+        /* read it as CSV */
       }
     }
     return parseCSV(s);
@@ -208,7 +208,7 @@ export function normalizeData(input: unknown): Record<string, unknown>[] {
   return [];
 }
 
-/** 데이터 변경 감지용 서명. 큰 배열은 표본만 봐요 */
+/** Signature for detecting data changes. Large arrays are only sampled */
 export function dataSignature(data: unknown): string {
   if (!Array.isArray(data)) {
     try {
@@ -233,7 +233,7 @@ export function dataSignature(data: unknown): string {
   return `${n}:${safe(sample)}`;
 }
 
-/** Largest-Triangle-Three-Buckets. 선 모양을 지키면서 점 수를 줄여요 */
+/** Largest-Triangle-Three-Buckets. Reduces the point count while keeping the line's shape */
 export function lttb<P extends { x: number; y: number }>(pts: readonly P[], threshold: number): P[] {
   const n = pts.length;
   if (threshold >= n || threshold < 3) return pts.slice();

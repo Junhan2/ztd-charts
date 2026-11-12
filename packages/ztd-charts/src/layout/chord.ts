@@ -21,8 +21,8 @@ export interface Chord {
 }
 
 /**
- * 코드 다이어그램 배치. 마디마다 상대와 주고받은 합(보낸 값 + 받은 값, 자기 자신은 한 번)에 비례한 각도라서,
- * 받기만 하는 마디도 호가 생겨요. 칸의 value 는 한쪽 방향 값 그대로예요(툴팁의 보낸·받은 값).
+ * Chord diagram layout. Each node gets an angle proportional to the total it exchanges with the others (sent plus received, a self-link counted once),
+ * so a node that only receives still gets an arc. A cell's value is the one-way value as is (the sent and received values in the tooltip).
  */
 export function chordLayout(matrix: readonly (readonly number[])[], padAngle = 0.04): { groups: ChordGroup[]; chords: Chord[] } {
   const n = matrix.length;
@@ -57,7 +57,7 @@ export function chordLayout(matrix: readonly (readonly number[])[], padAngle = 0
   return { groups, chords };
 }
 
-/** 리본 path: 두 호를 가운데를 지나는 2차 곡선으로 이어요 */
+/** Ribbon path: joins two arcs with quadratic curves through the center */
 export function ribbonPath(cx: number, cy: number, r: number, s0: number, s1: number, t0: number, t1: number): string {
   const p = (a: number) => polar(cx, cy, r, a);
   const f = (n: number) => Math.round(n * 100) / 100;

@@ -27,9 +27,9 @@ export interface SunburstChartProps<T = Row> extends BaseChartProps<T> {
   group?: Accessor<T, string>;
   path?: string[];
   children?: string;
-  /** 큰 순서로 정렬. 기본 false (데이터 순서) */
+  /** Sort largest first. Default false (data order) */
   sort?: boolean;
-  /** 가운데 구멍 비율. 기본 0.3 */
+  /** Center hole ratio. Default 0.3 */
   hole?: number;
 }
 
@@ -42,8 +42,8 @@ interface ArcInfo<T> extends Arc<T> {
 }
 
 /**
- * 고리 조각 가운데에 가로로 쓰는 이름의 최대 폭. 높이 h 인 글자 상자의 네 모서리가 조각 가장자리에서 pad 만큼 안쪽에 드는 가장 큰 폭이에요.
- * 고리 왼쪽·오른쪽에서는 가로 글자가 고리 두께 방향으로 놓여서 호 길이보다 훨씬 좁아요. 넘치면 글자가 카드 바탕 위로 나가 안 보여요.
+ * Maximum width of a name written horizontally at the center of a ring segment: the largest width at which all four corners of a text box of height h stay pad inside the segment's edges.
+ * On the left and right of the ring, horizontal text runs across the ring's thickness, so the room is much narrower than the arc length. Overflowing text spills onto the card background and disappears.
  */
 function labelRoom(r0: number, r1: number, a0: number, a1: number, h: number, pad: number): number {
   const rm = (r0 + r1) / 2;
@@ -51,7 +51,7 @@ function labelRoom(r0: number, r1: number, a0: number, a1: number, h: number, pa
   const [px, py] = polar(0, 0, rm, mid);
   const half = (a1 - a0) / 2 - pad / rm;
   const fits = (w: number) => {
-    // 상자에서 고리 중심까지 가장 가까운 거리가 안쪽 반지름보다 커야 해요
+    // The box's closest distance to the ring center must exceed the inner radius
     if (Math.hypot(Math.max(Math.abs(px) - w / 2, 0), Math.max(Math.abs(py) - h / 2, 0)) < r0 + pad) return false;
     for (const x of [px - w / 2, px + w / 2])
       for (const y of [py - h / 2, py + h / 2]) {
@@ -72,7 +72,7 @@ function labelRoom(r0: number, r1: number, a0: number, a1: number, h: number, pa
   return lo;
 }
 
-/** 선버스트: 원형으로 그린 계층. 안쪽 고리가 상위 단계예요 */
+/** Sunburst: a hierarchy drawn as rings. Inner rings are higher levels */
 export function SunburstChart<T = Row>(props: SunburstChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(270, w * 0.62)), duration: 900 });
   const { p, width: W, height: H } = c;

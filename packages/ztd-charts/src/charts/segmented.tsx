@@ -15,15 +15,15 @@ const en = { kind: "Segmented bar", share: "Share", total: "Total" };
 const MSG: Record<ChartLang, typeof en> = { en, ko: { kind: "비율 막대", share: "비중", total: "합계" } };
 
 export interface SegmentedBarProps<T = Row> extends BaseChartProps<T> {
-  /** 항목 이름 필드. 기본 "label" */
+  /** Item name field. Default "label" */
   label?: Accessor<T, string>;
-  /** 값 필드. 기본 "value" */
+  /** Value field. Default "value" */
   value?: Accessor<T, number>;
-  /** "tall"(28px, 안에 비중) | "thin"(8px, 글자 없이). 기본 "tall" */
+  /** "tall" (28px, shares inside) | "thin" (8px, no text). Default "tall" */
   variant?: "tall" | "thin";
-  /** 큰 값부터 놓기. 기본 true */
+  /** Place the largest values first. Default true */
   sort?: boolean;
-  /** 막대 아래 이름, 값, 비중 목록. 기본 true */
+  /** List of names, values and shares under the bar. Default true */
   list?: boolean;
 }
 
@@ -32,7 +32,7 @@ interface Part<T> {
   label: string;
   value: number;
   share: number;
-  /** 비중 글자 ("42%") */
+  /** Share text ("42%") */
   pct: string;
   sw: Swatch;
   hi: boolean;
@@ -46,7 +46,7 @@ function listColumns(width: number, n: number): number {
   return width >= 420 && n >= 4 ? 2 : 1;
 }
 
-/** 비율 막대: 전체 하나를 항목 비중대로 나눈 막대. 강조 항목 하나만 색으로 */
+/** Segmented bar: one whole split into segments by each item's share. Only the one highlighted item is colored */
 export function SegmentedBar<T = Row>(props: SegmentedBarProps<T>) {
   const tall = props.variant !== "thin";
   const barH = tall ? 28 : 8;
@@ -71,7 +71,7 @@ export function SegmentedBar<T = Row>(props: SegmentedBarProps<T>) {
     return { parts: list, total };
   }, [props.data, props.label, props.value, props.sort, props.highlight, p, pct]);
 
-  // 0인 항목은 막대에 그리지 않아요 (목록에는 남아요). 조각 사이는 바탕색 2px 틈
+  // Items with 0 are not drawn in the bar (they stay in the list). Segments are separated by a 2px gap in the background color
   const layout = useMemo(() => {
     const drawn = parts.filter((q) => q.share > 0);
     const room = Math.max(0, W - GAP * Math.max(0, drawn.length - 1));

@@ -20,7 +20,7 @@ const en = {
   kind: "Beeswarm",
   group: "Group",
   med: "Median",
-  /** 이름 없는 점 */
+  /** A point without a name */
   nth: (i: number) => `#${i}`,
   median: (g: string, v: string) => `${g} median ${v}`,
   desc: (n: number, groups: number, medians: string) => `${plural(n, "point")}${medians ? `, ${plural(groups, "group")} (${medians})` : ""}`,
@@ -38,17 +38,17 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface BeeswarmChartProps<T = Row> extends BaseChartProps<T> {
-  /** 값 필드. 기본 "value" */
+  /** Value field. Default "value" */
   value?: Accessor<T, number>;
-  /** 그룹(행) 필드. 없으면 한 줄 */
+  /** Group (row) field. Without it, a single row */
   group?: Accessor<T, string>;
-  /** 점 이름 */
+  /** Point name */
   label?: Accessor<T, string>;
-  /** 점 반지름. 없으면 개수에 맞춰요 */
+  /** Point radius. Without it, sized to the point count */
   radius?: number;
-  /** 그룹 중앙값 표시. 기본 true */
+  /** Show the group median. Default true */
   showMedian?: boolean;
-  /** 이 개수보다 많으면 캔버스로. 기본 2000 */
+  /** Above this many points, draw on canvas. Default 2000 */
   canvasThreshold?: number;
 }
 
@@ -63,9 +63,9 @@ interface Bee<T> {
   datum: T;
 }
 
-/** 비스웜: 점 하나하나를 겹치지 않게 늘어놓은 분포 */
+/** Beeswarm: a distribution with every single point laid out without overlap */
 export function BeeswarmChart<T = Row>(props: BeeswarmChartProps<T>) {
-  // 값이 하나도 없는 그룹은 빼요 (중앙값이 NaN이 되어 SVG에 NaN이 남아요)
+  // Drop groups with no values (their median would be NaN and leave NaN in the SVG)
   const groups0 = useMemo(() => {
     if (!props.group) return [""];
     const gg = strGetter(props.group, "group");
@@ -104,7 +104,7 @@ export function BeeswarmChart<T = Row>(props: BeeswarmChartProps<T>) {
   const hiGroup = useMemo(() => (props.group ? resolveHighlight(props.highlight as never, groups as never[], groups, medians, "max") : new Set<number>()), [props.group, props.highlight, groups, medians]);
   const hiPoint = useMemo(() => (!props.group ? resolveHighlight(props.highlight, base.map((b) => b.d), base.map((b) => b.label), base.map((b) => b.v), "max") : new Set<number>()), [props.group, props.highlight, base]);
 
-  // 폭을 재기 전 렌더는 그려지지 않으니 배치를 건너뛰어요 (1만 점이면 수백 ms)
+  // The render before the width is measured is never drawn, so skip the layout (hundreds of ms for 10,000 points)
   const pending = c.pending;
   const bees = useMemo<Bee<T>[]>(() => {
     if (pending) return [];

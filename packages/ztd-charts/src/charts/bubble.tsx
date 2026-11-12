@@ -24,9 +24,9 @@ const en = {
   size: "Size",
   sizeWord: "size",
   nth: (i: number) => `#${i}`,
-  /** r: x 최소, x 최대, y 최소, y 최대 */
+  /** r: x min, x max, y min, y max */
   desc: (sized: boolean, n: number, r: string[]) => `${sized ? "Bubble chart" : "Scatter plot"}. ${plural(n, "point")}. x from ${r[0]} to ${r[1]}, y from ${r[2]} to ${r[3]}.`,
-  /** 설명: 로그 눈금이라 뺀 점 (y가 0 이하) */
+  /** Description: points left out because of the log scale (y at or below 0) */
   logDropped: (n: number) => ` ${plural(n, "point")} with y at or below 0 ${n === 1 ? "is" : "are"} not shown on the log scale.`,
 };
 const MSG: Record<ChartLang, typeof en> = {
@@ -42,74 +42,74 @@ const MSG: Record<ChartLang, typeof en> = {
   },
 };
 
-/** 버블 차트와 산점도가 같이 받는 프롭 */
+/** Props shared by the bubble chart and scatter plot */
 interface PointChartProps<T> extends BaseChartProps<T> {
   x?: Accessor<T, number>;
   y?: Accessor<T, number>;
-  /** 이름 필드 (툴팁, 라벨) */
+  /** Name field (tooltip, labels) */
   label?: Accessor<T, string>;
   xLabel?: string;
   yLabel?: string;
-  /** 축에 0을 포함. 기본 false */
+  /** Include 0 in the axes. Default false */
   zero?: boolean;
-  /** 라벨을 붙일 최대 개수 (강조 + 큰 원 순). 기본 6 */
+  /** Maximum number of labels (highlighted first, then the largest circles). Default 6 */
   maxLabels?: number;
-  /** 이 개수보다 많으면 캔버스로 그려요. 기본 1500 */
+  /** Above this many points, draw on canvas. Default 1500 */
   canvasThreshold?: number;
   xFormat?: BaseChartProps<T>["format"];
-  /** "log"면 y축이 로그 눈금이에요(10, 100, 1,000이 같은 간격). 0 이하 값은 빼고 설명에 그 수를 적어요. 기본 "linear" */
+  /** "log" gives the y axis a log scale (10, 100, 1,000 equally spaced). Values at or below 0 are left out and their count goes in the description. Default "linear" */
   yScale?: "linear" | "log";
-  /** x 범위 고정 [처음, 끝]. 작은 여러 개(ChartFacets)가 패널의 축을 맞출 때 써요 */
+  /** Fixed x range [start, end]. Small multiples (ChartFacets) use it to align the panels' axes */
   xDomain?: [number, number];
-  /** y 범위 고정 [아래, 위]. 로그 눈금은 양 끝이 0보다 클 때만 써요 */
+  /** Fixed y range [min, max]. With a log scale, used only when both ends are above 0 */
   yDomain?: [number, number];
-  /** x축 눈금 글자. 기본 true. false면 글자만 빼고 자리는 둬요 */
+  /** x axis tick labels. Default true. false removes only the labels and keeps their space */
   showXAxis?: boolean;
-  /** y축 눈금 글자와 yLabel. 기본 true. false면 글자와 그 자리를 빼요 */
+  /** y axis tick labels and yLabel. Default true. false removes the labels and their space */
   showYAxis?: boolean;
 }
 
 export interface BubbleChartProps<T = Row> extends PointChartProps<T> {
-  /** 원 크기 필드. 없으면 산점도 */
+  /** Circle size field. Without it, a scatter plot */
   size?: Accessor<T, number>;
-  /** 원 반지름 범위(px). 기본 [4, 26] */
+  /** Circle radius range (px). Default [4, 26] */
   sizeRange?: [number, number];
 }
 
 export interface ScatterChartProps<T = Row> extends PointChartProps<T> {
-  /** 계열 필드. 강조 계열은 accent, 나머지는 회색 단계로 칠하고, 계열이 4개 이하면 이름을 점 옆에 바로 붙여요 */
+  /** Series field. The highlighted series is painted accent and the rest in gray steps; with 4 or fewer series, names are labeled right next to the points */
   series?: Accessor<T, string>;
-  /** 숨길 계열 이름. 색은 모든 계열로 정해서 숨겨도 남은 계열 색이 그대로예요 */
+  /** Names of series to hide. Colors are set from all series, so the remaining series keep their colors */
   hidden?: readonly string[];
-  /** "linear"면 보이는 점에 맞춘 최소제곱 추세선을 그려요. 툴팁에 기울기와 R² */
+  /** "linear" draws a least-squares trend line fitted to the visible points. Slope and R² in the tooltip */
   fit?: "linear";
-  /** 기준선 { x, y }. 둘 다 있으면 그림을 사분면으로 나눠요 */
+  /** Reference lines { x, y }. With both, the plot is split into quadrants */
   refLines?: { x?: number; y?: number };
-  /** 사분면 이름: 왼쪽 위, 오른쪽 위, 왼쪽 아래, 오른쪽 아래 순서. refLines에 x와 y가 모두 있을 때 그려요 */
+  /** Quadrant names in the order top left, top right, bottom left, bottom right. Drawn when refLines has both x and y */
   quadrants?: readonly string[];
-  /** x 값이 같은 점을 옆으로 퍼뜨려요. amount는 가장 좁은 x 간격에 곱하는 폭(기본 0.4), seed는 고정 씨앗(기본 1)이에요 */
+  /** Spreads points with the same x value sideways. amount is the width as a multiple of the smallest x gap (default 0.4); seed is a fixed random seed (default 1) */
   jitter?: { amount?: number; seed?: number };
-  /** series가 있으면 계열 이름, 인덱스, 배열, "first"(기본)로 계열을 골라요. 판별 함수는 그 계열의 행 하나라도 맞으면 그 계열을 강조해요. series가 없으면 점을 골라요(기본 없음) */
+  /** With series, picks series by name, index, array or "first" (default). A predicate function highlights a series when any one of its rows matches. Without series, it picks points (none by default) */
   highlight?: Highlight<T>;
-  /** "hex"면 점을 육각 칸에 세어 점 수로 칠해요(빈 칸은 그리지 않아요). 계열, 흔들림, 점 이름, 강조, 캔버스는 쓰지 않아요 */
+  /** "hex" counts points into hexagonal cells and colors each cell by its count (empty cells are not drawn). Series, jitter, point names, highlight and canvas are not used */
   bin?: "hex";
-  /** 육각 칸 폭(px, 마주 보는 두 변 사이). 기본 16, 4~200 */
+  /** Hexagon cell width (px, between two opposite sides). Default 16, 4~200 */
   binSize?: number;
-  /** bin "hex"의 색 단계 수 (2~12). 기본 5 */
+  /** Number of color steps for bin "hex" (2~12). Default 5 */
   colorSteps?: number;
-  /** bin "hex"의 색 척도 양 끝 점 수 [적은 쪽, 많은 쪽]. 작은 여러 개(ChartFacets)가 패널의 색을 맞출 때 써요 */
+  /** Point counts at both ends of the bin "hex" color scale [low, high]. Small multiples (ChartFacets) use it to match colors across panels */
   binDomain?: [number, number];
-  /** bin "hex"의 위쪽 색 범례. 기본 true. 작은 여러 개는 범례를 묶음 위에 한 번 그려서 패널에서는 false예요 */
+  /** The color legend on top for bin "hex". Default true. Small multiples draw the legend once above the group, so it is false in the panels */
   binLegend?: boolean;
 }
 
-/** PointChart가 받는 프롭. kit은 ScatterChart만 넘기는 산점도 기능 묶음이고, 없으면 버블 차트예요 */
+/** Props PointChart takes. kit is the bundle of scatter features that only ScatterChart passes; without it, a bubble chart */
 type PointProps<T> = BubbleChartProps<T> & ScatterChartProps<T> & { kit: ScatterKit | undefined };
 
-/** 산점도만 받는 옵션. 버블 차트에서는 비어 있어서 스펙 options에 섞여 와도 그리지 않아요 */
+/** Options only the scatter plot takes. Empty for the bubble chart, so they draw nothing even when mixed into the spec options */
 type ScatterOptions<T> = Pick<ScatterChartProps<T>, "series" | "hidden" | "fit" | "refLines" | "quadrants" | "jitter">;
 
-/** 육각 밀도에서 쓰지 않는 점 목록 */
+/** Point list for hexbin density, which uses no points */
 const NO_DOTS: never[] = [];
 
 interface Dot<T> {
@@ -123,33 +123,33 @@ interface Dot<T> {
   label: string;
   hi: boolean;
   datum: T;
-  /** 계열 순번. 계열이 없으면 -1 */
+  /** Series index. -1 without series */
   si: number;
 }
 
-/** 산점도 옵션이 없을 때 쓰는 빈 목록. 렌더마다 새 배열이면 라벨 배치를 매 프레임 다시 해요 */
+/** Empty list used when there are no scatter options. A new array on every render would redo the label layout every frame */
 const NO_BOXES: Box[] = [];
 const NO_SERIES_LABELS: SeriesLabel[] = [];
 const NO_PLACED_TAGS: PlacedTag[] = [];
 const NO_NAMES: string[] = [];
 
-/** x축 이름 자리: 그림 오른쪽 아래 안쪽 */
+/** Position of the x axis title: inside the plot's bottom-right corner */
 const xTitleAt = (b: PlotBox) => ({ x: b.x1 - 2, y: b.y1 - 8 });
 
-/** 그리는 순서: 강조가 위, 같으면 작은 원이 위. 0보다 크면 a가 b보다 위에 그려져요 */
+/** Draw order: highlighted on top; otherwise the smaller circle on top. Above 0 means a is drawn over b */
 function drawOrder<T>(a: Dot<T>, b: Dot<T>): number {
   return Number(a.hi) - Number(b.hi) || b.r - a.r;
 }
 
-/** 버블 차트: x, y, 크기 세 값을 한 번에. 크기가 없으면 산점도 */
+/** Bubble chart: three values at once, x, y and size. Without size, a scatter plot */
 export function BubbleChart<T = Row>(props: BubbleChartProps<T>) {
-  // 스펙 options에 산점도 옵션이 섞여 와도 버블 차트는 산점도 기능을 켜지 않아요
+  // The bubble chart does not turn on scatter features even when scatter options are mixed into the spec options
   return <PointChart<T> {...props} kit={undefined} />;
 }
 
 /**
- * 산점도: 버블 차트와 같은 그리기에 크기 없이 작은 점. 계열 색, 추세선, 기준선과 사분면, 흔들림, 방향 키 이동, 육각 밀도를 더해요.
- * facetPlan은 작은 여러 개(ChartFacets)가 부르는 패널 프롭 다듬기예요(육각 밀도의 같은 색 척도). 컴포넌트에 붙여서 산점도를 쓸 때만 번들에 들어가요
+ * Scatter plot: the bubble chart's drawing with small points and no size. Adds series colors, a trend line, reference lines and quadrants, jitter, arrow-key navigation and hexbin density.
+ * facetPlan is the panel-prop adjuster that small multiples (ChartFacets) call (one shared color scale for hexbin density). It is attached to the component, so it lands in the bundle only when the scatter plot is used
  */
 export const ScatterChart = /* @__PURE__ */ Object.assign(
   function ScatterChart<T = Row>(props: ScatterChartProps<T>) {
@@ -159,37 +159,37 @@ export const ScatterChart = /* @__PURE__ */ Object.assign(
 );
 
 const finiteOrUndefined = (v: number | undefined): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-/** 고정 범위로 쓸 수 있는 [작은 값, 큰 값]. 두 끝이 유한하고 작은 값이 먼저일 때만이고, 아니면 데이터 범위를 써요 (validateSpec이 알려요) */
+/** A [low, high] usable as a fixed range: only when both ends are finite and the smaller comes first; otherwise the data range is used (validateSpec reports it) */
 const fixedRange = (d: unknown): [number, number] | undefined => (Array.isArray(d) && d.length === 2 && Number.isFinite(d[0]) && Number.isFinite(d[1]) && d[0] < d[1] ? (d as [number, number]) : undefined);
 
 function PointChart<T>(props: PointProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(220, Math.min(320, w * 0.6)), duration: 800, stagger: 0 });
   const { p, width: W, height: H } = c;
   const kit = props.kit;
-  // 육각 밀도(산점도 bin "hex"): 칸의 점 수만 그려서 계열, 숨김, 흔들림은 쓰지 않아요 (validateSpec이 알려요)
+  // Hexbin density (scatter bin "hex"): draws only the point count per cell, so series, hiding and jitter are not used (validateSpec reports it)
   const hex = kit && props.bin === "hex" ? kit.hex : null;
   const so: ScatterOptions<T> = !kit ? {} : hex ? { fit: props.fit, refLines: props.refLines, quadrants: props.quadrants } : props;
   const hasSize = !kit && props.size !== undefined;
   const isLog = props.yScale === "log";
-  // 행마다 계열 이름 (계열 필드를 한 번만 읽어요)
+  // Series name per row (the series field is read only once)
   const rowSeries = useMemo(() => {
     if (so.series === undefined) return null;
     const g = strGetter(so.series, "series");
     return props.data.map((d, i) => g(d, i));
   }, [props.data, so.series]);
-  // 색은 숨긴 계열까지 모든 계열로 한 번 정해요. 그래야 계열 하나를 숨겨도 나머지 색이 그대로예요. 그래서 계열 목록도 모든 행으로 만들어요
+  // Colors are set once from all series, hidden ones included, so hiding one series leaves the other colors unchanged. That is why the series list is built from all rows too
   const seriesNames = useMemo(() => (kit && rowSeries ? kit.uniq(rowSeries) : NO_NAMES), [kit, rowSeries]);
-  // 배열 옵션은 렌더마다 새로 올 수 있어서 글자로 비교해요
+  // Array options may arrive as new arrays on every render, so compare them as strings
   const hiddenKey = so.hidden?.join("\u0001") ?? "";
   const quadrantKey = so.quadrants?.join("\u0001") ?? "";
   const jitterAmount = so.jitter ? Math.max(0, so.jitter.amount ?? 0.4) : 0;
   const jitterSeed = so.jitter?.seed ?? 1;
   const refX = finiteOrUndefined(so.refLines?.x);
-  // 로그 눈금에서 0 이하 y 기준선은 범위, 선, 사분면에 쓰지 않고, 추세선(값 단위 최소제곱이라 로그 축에서는 휘어요)은 그리지 않아요
+  // On a log scale, a y reference line at or below 0 is not used for the range, line or quadrants, and the trend line (least squares in value units, so it would curve on a log axis) is not drawn
   const refYIn = finiteOrUndefined(so.refLines?.y);
   const refY = isLog && refYIn !== undefined && refYIn <= 0 ? undefined : refYIn;
   const fitOn = so.fit === "linear" && !isLog;
-  // 산점도 옵션이 그림을 바꿀 때만 계열, 추세, 기준선 설명을 더해요. 옵션이 없거나 효과가 없으면(빈 hidden, 폭 0 흔들림) 버블 차트의 산점도와 같은 그림과 설명이에요
+  // Series, trend and reference-line descriptions are added only when scatter options change the picture. Without options, or with options that have no effect (empty hidden, zero-width jitter), the picture and description match the bubble chart's scatter plot
   const hasScatterOptions = rowSeries !== null || fitOn || refX !== undefined || refY !== undefined || jitterAmount > 0;
 
   const raw = useMemo(() => {
@@ -197,16 +197,16 @@ function PointChart<T>(props: PointProps<T>) {
     const gy = numGetter(props.y, "y");
     const gs = hasSize ? numGetter(props.size, "size") : null;
     const gl = strGetter(props.label, "label");
-    // px는 그리는 x예요. 흔들림이 없으면 x 그대로라 처음부터 같은 값으로 둬요
+    // px is the drawn x. Without jitter it equals x, so it starts with the same value
     const rows = props.data
       .map((d, i) => {
         const vx = gx(d, i);
         return { d, i, x: vx, y: gy(d, i), s: gs ? Math.max(0, gs(d, i) || 0) : 1, label: gl(d, i), si: -1, px: vx };
       })
       .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.y) && (!isLog || r.y > 0));
-    // 버블 차트와 흔들림, 계열이 없는 산점도는 여기서 끝나요. 점이 많을 때 행을 한 번 더 돌지 않게요
+    // The bubble chart, and a scatter plot without jitter or series, stop here, so many points do not cost another pass over the rows
     if (!kit || (jitterAmount <= 0 && !rowSeries)) return rows;
-    // 흔들림 폭은 숨긴 계열까지 넣은 x 간격으로 재요. 계열을 숨겨도 남은 점이 제자리예요
+    // Jitter width is measured from the x gaps of all series, hidden ones included, so the remaining points stay in place when a series is hidden
     const gap = jitterAmount > 0 ? kit.smallestGap(rows.map((r) => r.x)) : 0;
     const index = new Map(seriesNames.map((s, k) => [s, k]));
     const hidden = new Set(hiddenKey ? hiddenKey.split("\u0001") : []);
@@ -222,7 +222,7 @@ function PointChart<T>(props: PointProps<T>) {
     }
     return out;
   }, [props.data, props.x, props.y, props.size, props.label, hasSize, kit, rowSeries, seriesNames, hiddenKey, jitterAmount, jitterSeed, isLog]);
-  // 로그 눈금이라 뺀 점(y가 0 이하)의 수. 설명에 적어요
+  // Number of points left out because of the log scale (y at or below 0). Written into the description
   const logDropped = useMemo(() => {
     if (!isLog) return 0;
     const gx = numGetter(props.x, "x");
@@ -233,7 +233,7 @@ function PointChart<T>(props: PointProps<T>) {
   const n = raw.length;
   const useCanvas = !hex && c.hydrated && n > (props.canvasThreshold ?? 1500);
   const ext = useMemo(() => ({ x: extent(raw.map((r) => r.x)), y: extent(raw.map((r) => r.y)), s: extent(raw.map((r) => r.s)) }), [raw]);
-  // 축 범위는 흔들린 자리와 기준선까지 넣어요. 둘 다 없으면 데이터 범위 그대로예요
+  // Axis ranges include jittered positions and reference lines. Without either, the data range as is
   const plotExt = useMemo(() => {
     if (!jitterAmount && refX === undefined && refY === undefined) return ext;
     return { ...ext, x: extent(refX === undefined ? raw.map((r) => r.px) : [...raw.map((r) => r.px), refX]), y: refY === undefined ? ext.y : extent([ext.y[0], ext.y[1], refY]) };
@@ -250,12 +250,12 @@ function PointChart<T>(props: PointProps<T>) {
   const xMaxAbs = Math.max(Math.abs(xDom[0]), Math.abs(xDom[1]));
   const yFmt = useMemo(() => makeTickFormatter(props.format, c.locale, yMaxAbs), [props.format, c.locale, yMaxAbs]);
   const xFmt = useMemo(() => makeTickFormatter(props.xFormat, c.locale, xMaxAbs), [props.xFormat, c.locale, xMaxAbs]);
-  // 육각 밀도는 위쪽 줄에 색 범례를 둬요 (y축 이름과 같은 줄)
+  // Hexbin density puts its color legend in the top row (the same row as the y axis title)
   const top = hex && props.binLegend !== false ? HEX_TOP : props.yLabel ? 20 : 10;
   const bottom = PLOT_BOTTOM;
   const [rMin, rMax] = props.sizeRange ?? (hasSize ? [4, Math.max(10, Math.min(28, W / 22))] : [n > 2000 ? 1.6 : n > 300 ? 2.6 : 4, 0]);
   const pad = hasSize ? rMax * 0.6 : DOT_PAD;
-  // 로그 자는 자기 길이로 눈금을 골라요 (선형 자의 눈금은 길이와 상관없어요)
+  // A log scale picks ticks by its own length (linear scale ticks do not depend on length)
   const y = (isLog ? scaleLog : scaleLinear)(yDom, [H - bottom - pad, top + pad]);
   const yTicks = y.ticks(yCount);
   const showY = props.showYAxis !== false;
@@ -285,10 +285,10 @@ function PointChart<T>(props: PointProps<T>) {
   const dots = useMemo<Dot<T>[]>(() => (hex ? NO_DOTS : raw.map((r, k) => ({ i: k, x: x(r.px), y: y(r.y), r: rs(r.s), vx: r.x, vy: r.y, vs: r.s, label: r.label, hi: hi.has(k), datum: r.d, si: r.si }))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [raw, hi, W, H, xDom[0], xDom[1], yDom[0], yDom[1], rMin, rMax, hex]);
-  // 육각 밀도: 축 범위 안의 점(확대나 고정 범위 밖은 빼요)을 화면 좌표로 한 번에 세요. 칸, 항목, 툴팁, 낭독은 kit.hex가 만들어요
+  // Hexbin density: count the points inside the axis ranges (excluding those outside a zoom or fixed range) in screen coordinates, in one pass. kit.hex builds the cells, items, tooltip and screen reader text
   const hv = useMemo(
     () => hex && hex.view<T>(props, { raw, x, y, box, left, c, xFmt }),
-    // 눈금 함수는 렌더마다 새로 만들어서 범위 숫자로 비교하고, 프롭은 육각 밀도가 읽는 것만 봐요(부모가 다시 그려도 점을 다시 세지 않게)
+    // Scale functions are rebuilt on every render, so compare their range numbers, and watch only the props hexbin density reads (so a parent re-render does not recount the points)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hex, raw, box, left, xDom[0], xDom[1], yDom[0], yDom[1], c.lang, c.locale, xFmt, c.fmt, props.binSize, props.colorSteps, props.binDomain?.[0], props.binDomain?.[1], props.binLegend, props.xFormat, props.format, props.unit, props.xLabel, props.yLabel],
   );
@@ -302,7 +302,7 @@ function PointChart<T>(props: PointProps<T>) {
   }, [order, useCanvas, W, D]);
   const m = useMotion(marks, c.motion);
 
-  // 빠른 근접 검색용 격자
+  // Grid for fast nearest-point lookup
   const grid = useMemo(() => {
     const cell = 24;
     const g = new Map<string, number[]>();
@@ -320,7 +320,7 @@ function PointChart<T>(props: PointProps<T>) {
     const cy0 = Math.floor(py / cell);
     let best = -1;
     let bd = Infinity;
-    // 포인터가 여러 원 안에 있으면 맨 위에 그려진 원을 골라요. 큰 원 안의 작은 원도 잡히게
+    // When the pointer is inside several circles, pick the one drawn on top, so a small circle inside a big one can still be hit
     let hit = -1;
     const reach = hasSize ? Math.ceil(rMax / cell) + 1 : 1;
     for (let dx = -reach; dx <= reach; dx++)
@@ -358,7 +358,7 @@ function PointChart<T>(props: PointProps<T>) {
   const fitTagY = fitTag?.y;
   const fitTagAnchor = fitTag?.anchor;
 
-  // 산점도 옵션의 이름표가 서로, 그리고 x축 이름과 겹치지 않게 미리 자리를 잡아 둬요. 옵션이 없으면 비어 있어요
+  // Reserve positions up front so the scatter option labels do not overlap each other or the x axis title. Empty without options
   const trendTag = st?.trendTag;
   const reserved = useMemo(() => {
     if (!kit || !hasScatterOptions) return NO_BOXES;
@@ -376,9 +376,9 @@ function PointChart<T>(props: PointProps<T>) {
     [kit, c.showLabels, hiSeries, dots, seriesNames, grid, reserved, box],
   );
 
-  // 라벨: 강조 먼저, 그다음 큰 원. 겹치면 건너뛰어요
+  // Labels: highlighted first, then the largest circles. Skip any that overlap
   const labels = useMemo(() => {
-    // 계열이 있으면 점 대신 계열 이름을 붙여서 점 라벨은 기본 0개예요
+    // With series, series names are labeled instead of points, so the default point label count is 0
     const max = props.maxLabels ?? (rowSeries ? 0 : 6);
     if (!c.showLabels || n > 400 || max <= 0) return [];
     const cands = [...dots].sort((a, b) => Number(b.hi) - Number(a.hi) || b.r - a.r).filter((d) => d.label);
@@ -417,7 +417,7 @@ function PointChart<T>(props: PointProps<T>) {
         if (d.si >= 0) e.series = seriesNames[d.si];
         return e;
       }),
-    // 표는 툴팁과 같은 포맷: y는 단위까지 (축 눈금처럼 줄이지 않아요)
+    // The table uses the tooltip's format: y with its unit (not shortened like axis ticks)
     [dots, hasSize, xFmt, fv, fmt, msg, seriesNames, hv],
   );
 
@@ -433,8 +433,8 @@ function PointChart<T>(props: PointProps<T>) {
   const prog = useCanvas ? m.get("__p")?.[0] ?? 1 : 1;
   const neutralRaw = p.theme.neutralStrong;
   const accentRaw = p.theme.accent;
-  // 캔버스 칠하기 묶음: 강조 아닌 점을 먼저 옅게, 강조를 나중에. 계열이 있으면 계열마다, 없으면 회색과 강조 둘이에요.
-  // 계열이 없으면 색을 테마 색 글자로만 정해서 theme 프롭 객체가 렌더마다 새로 와도 점을 다시 칠하지 않아요
+  // Canvas paint groups: non-highlighted points first and faint, highlighted ones last. One per series with series; otherwise two, gray and highlight.
+  // Without series, colors depend only on the theme color strings, so the points are not repainted even when the theme prop object is new on every render
   const canvasGroups = useMemo<CanvasGroup[]>(() => {
     if (kit && colors && hiSeries) return kit.canvasGroups(dots, colors, hiSeries);
     const rest: number[] = [];
@@ -453,7 +453,7 @@ function PointChart<T>(props: PointProps<T>) {
         ctx.fillStyle = g.fill(color);
         for (const k of g.ks) {
           const d = dots[k];
-          // 강조는 함께 커지고, 나머지는 왼쪽부터 차례로 커져요
+          // Highlighted points grow together; the rest grow in turn from the left
           const grow = g.isHi ? Math.min(1, t * 1.2) : Math.max(0, Math.min(1, (t * 1.4 - (d.x / xr) * 0.4) * 2.5));
           if (grow <= 0) continue;
           ctx.beginPath();
@@ -466,10 +466,10 @@ function PointChart<T>(props: PointProps<T>) {
     [canvasGroups, dots, W],
   );
 
-  // 방향 키(산점도): 화살표 방향의 가장 가까운 점으로. 첫 키는 강조 점으로 가요. 나머지 키(Home, End, Escape, Enter)는 ChartFrame이 맡아요
+  // Arrow keys (scatter): move to the nearest point in the arrow's direction. The first key goes to the highlighted point. ChartFrame handles the other keys (Home, End, Escape, Enter)
   const onKey = hv
     ? (e: KeyboardEvent<HTMLDivElement>) => {
-        // 육각 칸: 화살표는 그 방향 이웃 칸으로. Home, End는 ChartFrame이 맡아요(가장 촘촘한 칸, 가장 성긴 칸)
+        // Hex cells: arrows move to the neighboring cell in that direction. ChartFrame handles Home and End (the densest cell, the sparsest cell)
         const next = hv.step(kit ? kit.arrowStep(e.key) : null, c.active);
         if (next !== null && next >= 0) c.setActive(next, "keyboard");
         return next !== null;
@@ -488,13 +488,13 @@ function PointChart<T>(props: PointProps<T>) {
   const xTicks = x.ticks(Math.max(2, Math.round(W / 110)));
   const xTitle = xTitleAt(box);
   const baseDesc = msg.desc(hasSize, n, [xFmt(xmn), xFmt(xmx), yFmt(ymn), yFmt(ymx)]);
-  // 산점도 문장은 점을 모두 세어서 만들어요. 렌더(애니메이션 프레임)마다 다시 세지 않게 묶어 둬요
+  // The scatter sentence is built by counting every point. Memoized so it is not recounted on every render (animation frame)
   const scatterDesc = useMemo(() => {
     if (!kit || !st || !hasScatterOptions) return "";
     const refs = [...(refX === undefined ? [] : [`x ${xFmt(refX)}`]), ...(refY === undefined ? [] : [`y ${fv(refY)}`])];
     return kit.describe(st, { points: raw, seriesNames, fit, xName: props.xLabel ?? "x", yName: props.yLabel ?? "y", refs, refX, refY, quadrants: quadrantNames });
   }, [kit, st, hasScatterOptions, refX, refY, xFmt, fv, raw, seriesNames, fit, props.xLabel, props.yLabel, quadrantNames]);
-  // 산점도: 고정 범위(확대) 안에 점이 하나도 없으면 빈 축 대신 그 까닭을 그림과 설명에 적어요
+  // Scatter: when no point falls inside the fixed range (zoom), state the reason in the picture and description instead of showing empty axes
   const outOfRange = useMemo(
     () => (kit && st && (fixedX || fixedY) && kit.noneInside(raw, xDom, yDom) ? st.outOfRange : ""),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -545,7 +545,7 @@ function PointChart<T>(props: PointProps<T>) {
       </g>
       {hv ? null : refLines}
       {hex && hv ? <hex.Layer p={p} v={hv} box={box} active={c.active} c={c} m={m} onPick={c.click} /> : null}
-      {/* 육각 칸은 면이라 기준선을 칸 위에 그려요 */}
+      {/* Hex cells are filled areas, so reference lines are drawn over them */}
       {hv ? refLines : null}
       {!useCanvas
         ? m.items.map((it) => {
@@ -553,7 +553,7 @@ function PointChart<T>(props: PointProps<T>) {
             if (!d) return null;
             const [cx, cy, r] = it.v;
             const isA = c.active === d.i;
-            // 빠지는 점은 옛 데이터의 계열 번호라 새 계열 색에 없을 수 있어요
+            // A leaving point carries the series index of the old data, which may be missing from the new series colors
             const sw = colors && d.si >= 0 ? colors[d.si] : undefined;
             const fill = sw ? sw.fill : d.hi ? accent.fill : p.paint(hasSize ? "neutral" : "neutralStrong");
             return (

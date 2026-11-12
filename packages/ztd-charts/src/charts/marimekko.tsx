@@ -25,12 +25,12 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface MarimekkoChartProps<T = Row> extends Omit<BaseChartProps<T>, "highlight"> {
-  /** 열(가로 구분) 필드. 기본 "x" */
+  /** Column (horizontal split) field. Default "x" */
   x?: Accessor<T, string>;
-  /** 쌓는 계열 필드. 기본 "series" */
+  /** Stacked series field. Default "series" */
   series?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 강조할 계열(이름 또는 인덱스). 함수는 계열 이름을 받아요. 기본 첫 계열 */
+  /** Series to highlight (name or index). A function receives the series name. Default: the first series */
   highlight?: Highlight<string>;
 }
 
@@ -51,7 +51,7 @@ interface Seg<T> {
   datum: T | null;
 }
 
-/** 마리메코 차트: 폭(열 비중)과 높이(열 안 비중)로 두 비율을 같이 */
+/** Marimekko chart: two shares at once, as width (column share) and height (share within the column) */
 export function MarimekkoChart<T = Row>(props: MarimekkoChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(270, w * 0.58)), duration: 700, stagger: 120 });
   const { p, width: W, height: H } = c;

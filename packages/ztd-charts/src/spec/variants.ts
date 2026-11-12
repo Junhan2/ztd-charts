@@ -2,17 +2,17 @@ import { VARIANT_NAMES_KO } from "./locales/variants-ko";
 import * as S from "./samples";
 import type { ChartDef, ChartSpec, Lang } from "./types";
 
-/** 이름 붙은 꼴 하나. 차트 예시 스펙의 options 위에 덮어써요 */
+/** One named variant. Laid over the options of the chart's example spec */
 export interface ChartVariant {
-  /** 주소와 CLI에 쓰는 이름 (예: "horizontal") */
+  /** Name used in URLs and the CLI (for example "horizontal") */
   id: string;
-  /** 화면 이름. 한글은 locales/variants-ko.ts의 VARIANT_NAMES_KO */
+  /** Display name. Korean names are VARIANT_NAMES_KO in locales/variants-ko.ts */
   name: string;
-  /** 예시 options 위에 덮어써요. null은 예시의 그 옵션을 빼요 */
+  /** Laid over the example's options. null removes that option from the example */
   options: Record<string, unknown>;
-  /** 예시 encoding 위에 덮어쓰는 채널. 범위 띠처럼 예시 데이터의 다른 필드를 쓰는 꼴, 육각 밀도처럼 채널을 빼는 꼴(null)만 있어요 */
+  /** Channels laid over the example's encoding. Only variants that use other fields of the sample data, such as the range band, or that remove a channel (null), such as hexbin density, have it */
   encoding?: Record<string, string | string[] | null>;
-  /** 예시 데이터 대신 쓰는 데이터. 다른 지도를 보여 주는 지도 꼴(미국 주, 한국 시도)만 있어요 */
+  /** Data used instead of the sample data. Only map variants that show a different map (US states, Korean provinces) have it */
   data?: ChartSpec["data"];
 }
 
@@ -20,9 +20,9 @@ export interface ChartVariant {
 const v = (id: string, name: string, options: Record<string, unknown>, encoding?: ChartVariant["encoding"], data?: ChartVariant["data"]): ChartVariant => ({ id, name, options, ...(encoding && { encoding }), ...(data && { data }) });
 
 /**
- * 차트마다 이름 붙은 꼴. 예시 데이터를 그대로 쓰고 옵션만 바꿔요 (범위 띠는 예시 데이터의 p5, p95 필드를 encoding에 더해요. 다른 지도를 보여 주는 지도 꼴은 데이터도 바꿔요).
- * 문서 차트 페이지의 변형 모음, CLI `example <type> --variant <id>`, MCP get_chart_schema가 같이 써요.
- * 옵션이 없는 차트(marimekko, bump)와 꼴이라 할 만한 옵션이 없는 차트(slope)는 없어요
+ * Named variants per chart. They keep the sample data and change only options (the range band adds the sample data's p5 and p95 fields to encoding; map variants that show a different map change the data too).
+ * Shared by the variant gallery on the docs chart pages, CLI `example <type> --variant <id>` and MCP get_chart_schema.
+ * Charts with no options (marimekko, bump) and charts with no options worth a variant (slope) have none
  */
 export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
   pie: [v("values", "Values on slices", { labelMode: "value" }), v("names", "Names on slices", { labelMode: "label" }), v("emphasis", "Only the highlight in color", { colorMode: "emphasis" })],
@@ -102,20 +102,20 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
   ],
 };
 
-/** 차트의 변형을 한 언어로. type은 정식 이름(레지스트리 type)이고, 없으면 빈 배열 */
+/** A chart's variants in one language. type is the canonical name (registry type); an empty array when there are none */
 export function variantsIn(type: string, lang: Lang): ChartVariant[] {
   const names = lang === "ko" ? VARIANT_NAMES_KO[type] : undefined;
   return (VARIANTS[type] ?? []).map((x) => ({ ...x, name: names?.[x.id] ?? x.name }));
 }
 
-/** 예시 스펙에 변형을 입혀요. 한국어 예시를 넘기면 한국어 예시에 입혀요. 그 꼴이 없으면 null */
+/** Applies a variant to the example spec. Pass the Korean example to apply it to the Korean example. null when there is no such variant */
 export function variantSpec(def: Pick<ChartDef, "type" | "example">, id: string): ChartSpec | null {
   const found = VARIANTS[def.type]?.find((x) => x.id === id);
   if (!found) return null;
-  // null은 예시의 그 채널, 옵션을 빼요
+  // null removes that channel or option from the example
   const kept = <V,>(o: Record<string, V | null>) => Object.fromEntries(Object.entries(o).filter(([, x]) => x !== null)) as Record<string, V>;
   const encoding = found.encoding && { encoding: kept({ ...def.example.encoding, ...found.encoding }) };
-  // 데이터를 바꾸는 꼴(다른 지도)은 예시 데이터를 말하던 부제와 한 줄 요약을 빼요
+  // A variant that changes the data (a different map) drops the subtitle and one-line summary that described the sample data
   const { subtitle: _s, takeaway: _t, ...card } = def.example.card ?? {};
   const data = found.data && { data: found.data, ...(def.example.card && { card }) };
   return { ...def.example, ...encoding, ...data, options: kept({ ...def.example.options, ...found.options }) };

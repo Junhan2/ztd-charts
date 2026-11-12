@@ -1,8 +1,8 @@
 export type StackOffset = "zero" | "expand" | "silhouette" | "wiggle";
 
 /**
- * 쌓기. values[s][k] (계열 s, 위치 k).
- * zero: 0부터, expand: 100% 기준, silhouette: 가운데 기준, wiggle: 스트림그래프 (띠의 출렁임을 줄이는 기준선)
+ * Stacking. values[s][k] (series s, position k).
+ * zero: from 0, expand: to 100%, silhouette: centered, wiggle: streamgraph (a baseline that reduces the bands' wobble)
  */
 export function stack(values: readonly (readonly number[])[], offset: StackOffset = "zero"): { y0: number[][]; y1: number[][] } {
   const ns = values.length;
@@ -32,7 +32,7 @@ export function stack(values: readonly (readonly number[])[], offset: StackOffse
     }
   }
   for (let k = 0; k < nk; k++) {
-    // 0부터 쌓을 때는 음수를 0 아래로 따로 쌓아요 (양수는 위로, 음수는 아래로)
+    // When stacking from 0, negatives stack separately below 0 (positives up, negatives down)
     if (offset === "zero") {
       let pos = 0;
       let neg = 0;
@@ -69,7 +69,7 @@ export function stack(values: readonly (readonly number[])[], offset: StackOffse
       lo = Math.min(lo, y0[0]?.[k] ?? 0);
       hi = Math.max(hi, y1[ns - 1]?.[k] ?? 0);
     }
-    // 가장 두꺼운 지점이 가운데 오도록 평균 중심선을 0에 맞춰요
+    // Aligns the mean center line to 0 so the thickest point sits in the middle
     let mid = 0;
     for (let k = 0; k < nk; k++) mid += ((y0[0]?.[k] ?? 0) + (y1[ns - 1]?.[k] ?? 0)) / 2;
     mid /= nk;
@@ -83,20 +83,20 @@ export function stack(values: readonly (readonly number[])[], offset: StackOffse
 }
 
 export interface DivergingOptions {
-  /** 0선 아래(가로 막대면 왼쪽)에 놓을 계열 자리. 0선에서 바깥 순서예요 */
+  /** Series positions to place below the zero line (left of it for horizontal bars), ordered outward from the zero line */
   negative?: readonly number[];
-  /** 0선 양쪽에 반씩 놓는 계열 자리 */
+  /** Position of the series split half and half across the zero line */
   neutral?: number;
-  /** 조각을 그 줄 절댓값 합의 몫(%)으로 */
+  /** Expresses each segment as a share (%) of its row's sum of absolute values */
   percent?: boolean;
-  /** 자리는 차지하지 않고 percent의 분모에만 드는 계열 (숨긴 계열). 숨겨도 다른 쪽이 움직이지 않아요 */
+  /** Series that take no space but still count in the percent denominator (hidden series). Hiding them does not move the other side */
   skip?: ReadonlySet<number>;
 }
 
 /**
- * 양쪽으로 쌓기 (리커트, 인구 피라미드). values[s][k]. y0은 0선 쪽 끝, y1은 바깥 끝이에요(가운데 계열은 왼쪽 끝, 오른쪽 끝).
- * negative 계열은 값 크기만큼 0선 아래로, 나머지는 데이터 순서로 위로 쌓아요. 이미 음수인 값은 부호대로 아래로 가고,
- * 아래쪽에서는 데이터 순서가 왼쪽부터 읽히게 바깥부터 놓아요. neg, pos는 줄마다 양쪽 합계(가운데 계열은 빼요)
+ * Diverging stack (Likert, population pyramid). values[s][k]. y0 is the end at the zero line, y1 the outer end (for the neutral series, the left and right ends).
+ * negative series stack below the zero line by their magnitude, the rest stack upward in data order. Values that are already negative go down by their sign,
+ * and below the line they are placed from the outside so the data order reads from the left. neg and pos are each row's totals on either side (the neutral series excluded)
  */
 export function divergingStack(values: readonly (readonly number[])[], opts: DivergingOptions = {}): { y0: number[][]; y1: number[][]; neg: number[]; pos: number[] } {
   const ns = values.length;
@@ -118,7 +118,7 @@ export function divergingStack(values: readonly (readonly number[])[], opts: Div
       y0[mid][k] = -h;
       y1[mid][k] = h;
     }
-    // 0 - h: 가운데 계열이 없을 때 -0이 아니라 0에서 시작해요
+    // 0 - h: without a neutral series it starts at 0, not -0
     let lo = 0 - h;
     let hi = h;
     const down = (s: number) => {
@@ -140,14 +140,14 @@ export function divergingStack(values: readonly (readonly number[])[], opts: Div
   return { y0, y1, neg, pos };
 }
 
-/** 양쪽 쌓기의 기본 강조 계열: negative가 있으면 가장 바깥 긍정 계열(negative도 neutral도 아닌 마지막 계열), 없으면 -1. 차트와 자동 범례가 같이 써요 */
+/** Default highlighted series of a diverging stack: with negative set, the outermost positive series (the last one that is neither negative nor neutral); otherwise -1. Shared by the chart and the automatic legend */
 export function divergingLead(n: number, negative: readonly number[], neutral = -1): number {
   if (!negative.some((s) => s >= 0)) return -1;
   for (let s = n - 1; s >= 0; s--) if (s !== neutral && !negative.includes(s)) return s;
   return -1;
 }
 
-/** 스트림그래프에 보기 좋은 계열 순서 (inside-out): 일찍 큰 값이 나오는 계열을 가운데로 */
+/** Series order that suits a streamgraph (inside-out): series that peak early go to the middle */
 export function insideOut(values: readonly (readonly number[])[]): number[] {
   const n = values.length;
   const peak = values.map((row) => {

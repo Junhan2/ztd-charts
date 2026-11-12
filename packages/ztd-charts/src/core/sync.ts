@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ChartCtx } from "./useChart";
 
-/** 같은 이름으로 묶은 차트들이 짚은 x를 함께 보여 줘요. ChartGrid sync가 이 값을 내려 줘요 */
+/** Charts linked under the same name show the pointed x together. ChartGrid sync provides this value */
 export const SyncContext = createContext<string | undefined>(undefined);
 
-/** 짚은 자리. 키가 같은 차트끼리 맞추고, 키 꼴이 다르면(날짜 x와 글자 범주) 화면 이름표로 맞춰요 */
+/** The pointed position. Charts with the same keys match by key; when the key forms differ (a date x and text categories), they match by the on-screen label */
 export interface SyncPoint {
   key: string;
   label: string;
@@ -27,7 +27,7 @@ export function sendSync(id: string, at: SyncPoint | null, from: object): void {
   groups.get(id)?.forEach((fn) => fn(at, from));
 }
 
-/** 받은 자리의 인덱스. 이름표로 찾는 건 1,000칸까지만 (긴 날짜 이름표는 읽을 때 만들어서 다 훑으면 느려요) */
+/** Index of the received position. Lookup by label covers only up to 1,000 cells (long date labels are built on read, so scanning them all is slow) */
 export function syncIndex(keys: readonly string[], labels: readonly string[], at: SyncPoint): number {
   const i = keys.indexOf(at.key);
   if (i >= 0 || labels.length > 1000) return i;
@@ -35,8 +35,8 @@ export function syncIndex(keys: readonly string[], labels: readonly string[], at
 }
 
 /**
- * x가 있는 차트(라인, 영역, 막대, 캔들스틱)가 불러요. syncId나 ChartGrid sync가 있을 때만 짚은 자리를 주고받아요.
- * keys, labels는 events 인덱스 순서예요. 이 코드는 부르는 차트에만 실려요 (다른 차트의 크기는 그대로)
+ * Called by charts with an x (line, area, bar, candlestick). Pointed positions are exchanged only with a syncId or ChartGrid sync.
+ * keys and labels follow the events index order. This code ships only with the charts that call it (other charts' size is unchanged)
  */
 export function useSync<T>(c: ChartCtx<T>, syncId: string | undefined, keys: readonly string[], labels: readonly string[]): void {
   const group = useContext(SyncContext);

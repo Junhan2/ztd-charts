@@ -15,7 +15,7 @@ import { getter, numGetter } from "../data/accessor";
 const TOP = 10;
 const BOTTOM = 22;
 
-/** 시간 폭을 "30s", "1m" / "30초", "1분"처럼 */
+/** Time span as "30s", "1m" / "30초", "1분" */
 const span = (ms: number, ko: boolean) => {
   const [n, u] = ms >= 3600000 ? [ms / 3600000, ko ? "시간" : "h"] : ms >= 60000 ? [ms / 60000, ko ? "분" : "m"] : [ms / 1000, ko ? "초" : "s"];
   return `${Math.round(n * 10) / 10}${u}`;
@@ -35,15 +35,15 @@ const MSG: Record<ChartLang, typeof en> = {
 };
 
 export interface LiveLineChartProps<T = Row> extends BaseChartProps<T> {
-  /** 시각 필드(Date, ms 숫자, ISO 문자열). 기본 "t" */
+  /** Time field (Date, ms number, ISO string). Default "t" */
   x?: Accessor<T, unknown>;
-  /** 값 필드. 기본 "v" */
+  /** Value field. Default "v" */
   y?: Accessor<T, number>;
-  /** 보이는 시간 폭(ms). 기본 60000(1분) */
+  /** Visible time span (ms). Default 60000 (1 minute) */
   window?: number;
-  /** 선 아래 그라데이션. 기본 true */
+  /** Gradient under the line. Default true */
   area?: boolean;
-  /** y 범위 고정. 없으면 보이는 점에 맞춰 부드럽게 따라가요 */
+  /** Fixed y range. Without it, the range smoothly follows the visible points */
   yDomain?: [number, number];
 }
 
@@ -54,8 +54,8 @@ interface Pt<T> {
 }
 
 /**
- * 화면 시계를 한 프레임(dt ms) 옮겨요. 데이터가 끊겨 시계가 가장 새 점(tA)을 넘어도 멈추지 않아서 선 끝이 왼쪽으로 밀려나고,
- * 다시 온 점은 오른쪽 끝에 바로 붙어요. 두 간격 넘게 뒤처지면 그만큼 빨리 따라잡고(쌓인 점이 한꺼번에 와도), 창 하나보다 앞서면 가장 새 점으로 돌아와요
+ * Advances the screen clock by one frame (dt ms). When data stops and the clock passes the newest point (tA), it keeps running, so the line's end is pushed left,
+ * and the next point to arrive attaches right at the right edge. When it falls more than two intervals behind it catches up that much faster (even when a backlog of points arrives at once), and when it gets more than one window ahead it returns to the newest point
  */
 export function stepClock(clock: number, dt: number, s: { tA: number; gap: number; win: number; paused: boolean }): number {
   if (s.paused) return clock;
@@ -64,7 +64,7 @@ export function stepClock(clock: number, dt: number, s: { tA: number; gap: numbe
   return next > s.tA + s.win ? s.tA : next;
 }
 
-/** 시각 td의 값 (두 점 사이는 직선으로). 점이 없으면 NaN */
+/** Value at time td (linear between two points). NaN when there are no points */
 function valueAt<T>(pts: Pt<T>[], td: number): number {
   let k = pts.length - 1;
   while (k > 0 && pts[k].t > td) k--;
@@ -75,10 +75,10 @@ function valueAt<T>(pts: Pt<T>[], td: number): number {
 }
 
 /**
- * 실시간 라인 차트: 새 점이 들어오면 선이 왼쪽으로 미끄러지고, 오른쪽 끝의 점과 값 표가 선을 따라가요.
- * 화면의 시각은 데이터의 시각을 조금 뒤에서 따라가서 다음 점이 오기 전에 선 끝이 비지 않아요. 데이터가 끊기면 멈추지 않고 흘러서
- * 선 끝이 왼쪽으로 밀려나고(빈자리가 끊김을 보여 줘요), 다시 온 점은 오른쪽 끝에 바로 붙어요.
- * 마우스나 키보드로 점을 짚으면 멈춰서 값을 읽게 해요. 동작 줄이기에서는 점이 들어올 때만 옮겨요
+ * Live line chart: when a new point comes in, the line slides left, and the dot and value tag at the right end follow the line.
+ * Screen time trails data time slightly, so the line's end never runs empty before the next point arrives. When data stops, time keeps flowing, so
+ * the line's end is pushed left (the empty space shows the gap), and the next point to arrive attaches right at the right edge.
+ * Pointing at a point with the mouse or keyboard pauses it so the value can be read. With reduced motion, it moves only when a point comes in
  */
 export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(160, Math.min(260, w * 0.42)), duration: 500 });
@@ -88,7 +88,7 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   const msg = MSG[c.lang];
   const ko = c.lang === "ko";
 
-  // 시각 순 점. 시각이나 값을 읽지 못한 행은 빼요
+  // Points in time order. Rows whose time or value cannot be read are dropped
   const pts = useMemo(() => {
     const gx = getter(props.x, "t");
     const gy = numGetter(props.y, "v");
@@ -99,13 +99,13 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   }, [props.data, props.x, props.y]);
   const n = pts.length;
   const tA = n ? pts[n - 1].t : 0;
-  // 점 간격: 최근 다섯 간격의 가운데 값
+  // Point interval: the median of the last five intervals
   const gaps: number[] = [];
   for (let i = Math.max(1, n - 5); i < n; i++) gaps.push(pts[i].t - pts[i - 1].t);
   gaps.sort((a, b) => a - b);
   const gap = gaps[gaps.length >> 1] ?? 0;
-  // 그릴 점: 창 왼쪽 밖 한 점까지 (선이 왼쪽 끝에서 끊기지 않게). 점을 짚는 동안은 왼쪽 끝을 묶어 둬서
-  // 새 점이 와도 짚은 점의 순서가 그대로예요
+  // Points to draw: up to one point past the window's left edge (so the line does not stop short at the left end). While a point is pointed at, the left end is pinned, so
+  // the pointed point keeps its index even when new points arrive
   const cut = useRef(0);
   if (c.active === null || !cut.current) cut.current = tA - win - 2 * gap;
   let s0 = 0;
@@ -120,7 +120,7 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   }
   const yCount = Math.max(2, Math.round(H / 60));
   const [g0, g1] = props.yDomain ?? fitDomain(lo, hi, yCount, { zero: false });
-  // 범위가 바뀌면 축이 튀지 않고 따라가요
+  // When the range changes, the axis follows smoothly instead of jumping
   const marks = useMemo<Mark<null>[]>(() => [{ key: "y", to: [g0, g1], data: null }], [g0, g1]);
   const m = useMotion(marks, c.motion);
   const [d0, d1] = m.get("y") ?? [g0, g1];
@@ -134,11 +134,11 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   const x0 = left + 4;
   const x1 = W - tagW - 14;
   const px = (x1 - x0) / win;
-  // 경로는 가장 새 점을 x1에 두고 그려요. 화면 시각이 그 점보다 늦으면 묶음 전체를 오른쪽으로 밀어 둬요
+  // The path is drawn with the newest point at x1. When screen time is behind that point, the whole group is shifted right
   const line = vis.map((q) => [x1 + (q.t - tA) * px, y(q.v)] as [number, number]);
   const lp = polyline(line);
 
-  // 화면 오른쪽 끝의 시각 (stepClock). 데이터가 끊기면 가장 새 점을 넘어서도 흘러요
+  // The time at the right edge of the screen (stepClock). When data stops, it keeps flowing past the newest point
   const clock = useRef(0);
   const moving = c.motion.enabled;
   const shown = c.motion.active;
@@ -151,19 +151,19 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   const live = useRef(snap);
   live.current = snap;
 
-  // 화면에 보이고 움직임이 켜졌을 때만 모든 차트가 같이 쓰는 프레임 루프에 붙어요 (다시 보이면 가장 새 점부터)
+  // Hooks into the frame loop all charts share only while on screen with motion on (when visible again, it starts from the newest point)
   useEffect(() => {
     if (!moving || !shown) return undefined;
     clock.current = live.current.tA;
     let at = 0;
     return subscribeTick((now) => {
       const L = live.current;
-      // 프레임이 늦게 와도(버벅임) 흐른 시간을 그대로 써요. 잘라 쓰면 시계가 뒤처졌다가 다음 점에서 급히 따라잡아요.
-      // 아주 긴 공백은 stepClock이 창 하나보다 앞선 시계를 가장 새 점으로 돌려놔요
+      // Even when a frame comes late (jank), use the full elapsed time. Capping it would let the clock fall behind and then rush to catch up at the next point.
+      // For a very long pause, stepClock resets a clock that is more than one window ahead to the newest point
       const dt = at ? now - at : 0;
       at = now;
       clock.current = stepClock(clock.current, dt, L);
-      // 시계가 가장 새 점을 넘으면(끊김) 끝점과 값 표도 선 끝을 따라 왼쪽으로 가요
+      // When the clock passes the newest point (a gap), the end dot and value tag also move left with the line's end
       const s = (L.tA - clock.current) * L.px;
       groupRef.current?.setAttribute("transform", tr(s));
       headRef.current?.setAttribute("transform", headAt(L, s, clock.current));
@@ -192,7 +192,7 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
       className={props.className}
       style={props.style}
       theme={props.theme}
-      // 가장 가까운 점: 지금 밀린 만큼 빼고 시각으로 바꿔 찾아요
+      // Nearest point: subtract the current shift, convert to time, and search
       onPointerMove={(mx, _my, e) => {
         if (!vis.length) return;
         const t = tA + (mx - shift - x1) / px;
@@ -253,12 +253,12 @@ export function LiveLineChart<T = Row>(props: LiveLineChartProps<T>) {
   );
 }
 
-/** 머리(오른쪽 끝 점)의 높이: 화면 시각의 값, 그림 안으로 */
+/** Height of the head (the dot at the right end): the value at screen time, clamped inside the plot */
 function headY<T>(L: { vis: Pt<T>[]; y: (v: number) => number; bottom: number }, t: number): number {
   return Math.max(TOP, Math.min(L.bottom, L.y(valueAt(L.vis, t))));
 }
 
-/** 끝점 자리: 선 끝(끊겨서 밀려나면 그만큼 왼쪽)과 그 시각의 값. 그리기와 프레임 루프가 같이 써요 */
+/** Position of the end dot: the line's end (further left by the shift when data stops) and the value at that time. Shared by drawing and the frame loop */
 function headAt<T>(L: { vis: Pt<T>[]; y: (v: number) => number; bottom: number; x1: number; tA: number }, shift: number, clock: number): string {
   return tr(L.x1 + Math.min(0, shift), headY(L, Math.min(clock, L.tA)));
 }

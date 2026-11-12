@@ -35,11 +35,11 @@ const MSG: Record<ChartLang, typeof en> = {
 export interface ParetoChartProps<T = Row> extends BaseChartProps<T> {
   label?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** 기준선(%). 기본 80 */
+  /** Threshold line (%). Default 80 */
   threshold?: number;
-  /** 큰 순서 정렬. 기본 true */
+  /** Sort largest first. Default true */
   sort?: boolean;
-  /** x 라벨 대신 "#1, #2…" 순위 (한국어 로캘은 "1위, 2위…"). 기본 false */
+  /** Show ranks "#1, #2…" instead of x labels (the Korean locale shows "1위, 2위…"). Default false */
   rankLabels?: boolean;
 }
 
@@ -53,7 +53,7 @@ interface ParetoBar<T> {
   datum: T;
 }
 
-/** 파레토 차트: 큰 순서의 막대 + 누적 비율 선. 상위 몇 개가 80%를 만드는지 보여줘요 */
+/** Pareto chart: bars sorted largest first plus a cumulative percentage line. Shows how few top items make up 80% */
 export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(190, Math.min(260, w * 0.55)), duration: 650, stagger: 55 });
   const { p, width: W, height: H } = c;
@@ -74,7 +74,7 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
     if (props.highlight !== undefined) {
       resolveHighlight(props.highlight, out.map((b) => b.datum), out.map((b) => b.label), out.map((b) => b.value)).forEach((k) => (out[k].hi = true));
     } else {
-      // 누적이 기준선에 닿기 전까지 (최소 1개)
+      // Until the cumulative share reaches the threshold (at least 1)
       for (const b of out) {
         b.hi = true;
         if (b.cum >= th - 0.5) break;
@@ -93,7 +93,7 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
   const right = 30;
   const y = scaleLinear([0, 100], [H - bottom, top]);
   const labels = bars.map((b, k) => (props.rankLabels ? msg.rank(k + 1) : b.label));
-  // 칸은 순서로 나눠요. 이름이 같은 항목도 따로 칸을 받아요
+  // Bands are keyed by index, so items with the same name still get their own band
   const x = scaleBand(labels.map((_, k) => `${k}`), [left + 4, W - right], 0.28, 0.1);
   const bw = x.bandwidth;
   const cxs = labels.map((_, k) => x(`${k}`) + bw / 2);
@@ -112,7 +112,7 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
 
   const accent = swatch(p, "accent");
   const neutral = swatch(p, "neutral");
-  // 누적선 점은 막대 순서(b.i) 자리에 둬요. m.items는 처음 생긴 순서라 정렬이 바뀌면 선이 엉켜요
+  // Put cumulative line points at the bar's position (b.i). m.items keeps first-seen order, so the line would tangle when the sort order changes
   const pts: [number, number][] = [];
   m.items.forEach((it) => {
     if (it.data && !it.exiting) pts[it.data.i] = [cxs[it.data.i] ?? 0, it.v[1]];
@@ -140,7 +140,7 @@ export function ParetoChart<T = Row>(props: ParetoChartProps<T>) {
       </Txt>
       {m.items.map((it) => {
         const b = it.data;
-        // 빠지는 막대는 옛 순서 칸에 남아 새 막대와 겹치니 그리지 않아요
+        // Exiting bars stay in their old slots and would overlap the new bars, so skip them
         if (!b || it.exiting) return null;
         const yy = it.v[0];
         const h = y(0) - yy;

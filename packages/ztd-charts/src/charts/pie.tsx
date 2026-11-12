@@ -24,12 +24,12 @@ const MSG: Record<ChartLang, typeof en> = {
   ko: { pie: "파이 차트", donut: "도넛 차트", share: "비중", desc: (n, total, top) => `${n}개 항목, 합계 ${total}. ${top}.`, other: (n) => `기타 ${n}개` },
 };
 
-/** "기타" 조각 이름 (스펙 범례도 같은 이름을 써요) */
+/** Name of the "Other" slice (the spec legend uses the same name) */
 export const otherLabel = (lang: ChartLang, n: number) => MSG[lang].other(n);
 
 /**
- * 큰 값 n개만 남기고(kept, 원래 순서) 나머지를 "기타" 한 조각(other)으로 묶어요. 기타는 맨 끝에 그리고 강조하지 않아요.
- * 묶을 조각이 둘 이상일 때만 묶어요(아니면 other는 null). make는 묶은 개수와 합으로 기타 조각을 만들어요
+ * Keeps the n largest values (kept, in original order) and groups the rest into one "Other" slice (other). Other is drawn last and never highlighted.
+ * Groups only when two or more slices would be grouped (otherwise other is null). make builds the Other slice from the grouped count and sum
  */
 export function groupOther<R extends { value: number }>(rows: R[], n: number | undefined, make: (count: number, value: number) => R): { kept: R[]; other: R | null } {
   if (typeof n !== "number" || !(n >= 1) || rows.length <= n + 1) return { kept: rows, other: null };
@@ -44,34 +44,34 @@ export function groupOther<R extends { value: number }>(rows: R[], n: number | u
   return { kept: rows.filter((_, i) => keep.has(i)), other: make(rest.length, sum(rest.map((r) => r.value))) };
 }
 
-/** 조각 값: 0보다 큰 유한한 수만. 음수, 0, NaN, Infinity는 0 (Infinity가 합계를 망가뜨려 NaN이 되지 않게) */
+/** Slice value: only finite numbers above 0. Negative values, 0, NaN and Infinity become 0 (so an Infinity cannot turn the total into NaN) */
 export const sliceValue = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
 
 export interface PieChartProps<T = Row> extends BaseChartProps<T> {
-  /** 항목 이름. 기본 "label" */
+  /** Item name. Default "label" */
   label?: Accessor<T, string>;
-  /** 값. 기본 "value" */
+  /** Value. Default "value" */
   value?: Accessor<T, number>;
-  /** "categorical"이면 항목마다 다른 무채색, "emphasis"면 강조만 색. 기본 "categorical" */
+  /** "categorical" gives each item a different neutral gray; "emphasis" colors only the highlight. Default "categorical" */
   colorMode?: "categorical" | "emphasis";
-  /** 큰 값부터 정렬. 기본 false */
+  /** Sort largest first. Default false */
   sort?: boolean;
-  /** 시작 각도(도). 0이면 12시. 기본 0 */
+  /** Start angle (degrees). 0 is 12 o'clock. Default 0 */
   startAngle?: number;
-  /** 조각 안 라벨: "percent" | "value" | "label" | "none". 기본 "percent" */
+  /** Label inside each slice: "percent" | "value" | "label" | "none". Default "percent" */
   labelMode?: "percent" | "value" | "label" | "none";
-  /** 큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요. 기본 묶지 않음 */
+  /** Keeps the n largest slices and groups the rest into one "Other" slice. Other is never highlighted. Default: no grouping */
   other?: number;
 }
 
 export interface DonutChartProps<T = Row> extends PieChartProps<T> {
-  /** 안쪽 반지름 비율(0~0.9). 기본 0.62 */
+  /** Inner radius ratio (0 to 0.9). Default 0.62 */
   innerRadius?: number;
-  /** 가운데 숫자. "total"(기본) | "highlight" | 숫자 | null(숨김) */
+  /** Center number. "total" (default) | "highlight" | a number | null (hidden) */
   centerValue?: "total" | "highlight" | number | null;
-  /** 가운데 숫자 아래 설명. 예: "전환(건)" */
+  /** Caption under the center number. Example: "Conversions" */
   centerLabel?: string;
-  /** 오른쪽 범례. "auto"는 폭이 넉넉하면 오른쪽, 좁으면 아래. 기본 "auto" */
+  /** Right-side legend. "auto" puts it on the right when wide enough, below when narrow. Default "auto" */
   legend?: "auto" | "right" | "bottom" | "none";
 }
 
@@ -87,7 +87,7 @@ interface Slice<T> {
   datum: T;
 }
 
-/** 파이, 도넛 조각의 색: colorMode "emphasis"면 강조만 accent, 아니면 categorical. 차트와 카드 범례(autoLegend)가 같이 써요 */
+/** Pie and donut slice colors: with colorMode "emphasis" only the highlight gets accent, otherwise categorical. Shared by the chart and the card legend (autoLegend) */
 export function sliceSwatches(p: Painter, n: number, hi: ReadonlySet<number>, colorMode?: "categorical" | "emphasis"): Swatch[] {
   return colorMode === "emphasis" ? emphasis(p, n, hi) : categorical(p, n, hi);
 }
@@ -108,7 +108,7 @@ function useSlices<T>(props: PieChartProps<T>) {
     });
     const grouped = other ? [...kept, other] : kept;
     const total = sum(grouped.map((r) => r.value));
-    // 기타 조각은 강조 후보에서 빼요 (가장 커도 강조색을 받지 않게)
+    // Leave the Other slice out of the highlight candidates (so it never gets the accent color, even when it is the largest)
     const hi = resolveHighlight(props.highlight, kept.map((r) => r.d), kept.map((r) => r.label), kept.map((r) => r.value), "max");
     return { rows: grouped, total, hi };
   }, [data, props.label, props.value, props.sort, props.highlight, props.other, lang]);
@@ -135,7 +135,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
   const outsidePad = isDonut ? 4 : 20;
   const R = Math.max(10, Math.min(plotW, plotH) / 2 - outsidePad);
   const r0 = R * props.inner;
-  // 가운데 설명이 구멍보다 넓으면 글자를 9.5px까지 줄여 보고, 그래도 넘치면 말줄임 ("Conversi…" 대신 "Conversions")
+  // If the center caption is wider than the hole, shrink the text down to 9.5px first, and truncate only if it still overflows ("Conversions" instead of "Conversi…")
   const capSize = props.centerLabel ? Math.max(9.5, Math.min(11, (11 * r0 * 1.6) / textWidth(props.centerLabel, 11))) : 11;
   const cx = legendMode === "right" ? Math.max(R + outsidePad, plotW / 2 + 6) : W / 2;
   const cy = plotH / 2;
@@ -180,7 +180,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
   const labelMode = props.labelMode ?? (isDonut ? "none" : "percent");
   const labelR = isDonut ? (r0 + R) / 2 : R * 0.62;
 
-  // 바깥 라벨: 작은 조각은 원 밖으로. null이면 자리가 없어 라벨을 그리지 않아요
+  // Outside labels: small slices get their label outside the circle. null means there is no room, so no label is drawn
   const outside = useMemo(() => {
     const out = new Map<number, { x: number; y: number; anchor: "start" | "end" | "middle" } | null>();
     if (labelMode === "none" || !c.showLabels) return out;
@@ -195,7 +195,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
         list.push({ i: s.i, x, y, side: Math.sin(mid) >= 0 ? 1 : -1 });
       }
     });
-    // 한쪽에 15px 간격으로 들어가는 만큼만 큰 조각부터 남겨요. 넘치면 라벨이 위로 쌓여 카드 밖으로 나가 제목을 덮어요
+    // Keep only as many labels per side as fit at 15px spacing, largest slices first. Overflowing labels stack upward, leave the card and cover the title
     const gap = 15;
     const pad = 8;
     const room = Math.max(0, Math.floor((plotH - 2 * pad) / gap) + 1);
@@ -325,7 +325,7 @@ function PieBase<T>(props: DonutChartProps<T> & { inner: number }) {
         <g>
           {slices.map((s, k) => {
             const right = legendMode === "right";
-            // 아래 범례는 두 칸 사이를 20px 띄워요. 붙이면 왼쪽 칸 비중이 오른쪽 칸 색 상자에 닿아요
+            // The bottom legend leaves 20px between its two columns. Without it, the left column's share touches the right column's swatch
             const colW = right ? legendW - 12 : (W - 36) / 2;
             const lx = right ? plotW + 8 : 8 + (k % 2) * (colW + 20);
             const ly = right ? cy - ((slices.length - 1) * legendRowH) / 2 + k * legendRowH : plotH + 12 + Math.floor(k / 2) * 20;
@@ -363,12 +363,12 @@ function sliceText<T>(s: Slice<T>, mode: string, fv: (v: number) => string, pct:
   return pct(s.pct);
 }
 
-/** 파이 차트: 2~4개 항목의 비중 */
+/** Pie chart: shares of 2 to 4 items */
 export function PieChart<T = Row>(props: PieChartProps<T>) {
   return <PieBase {...props} inner={0} />;
 }
 
-/** 도넛 차트: 가운데에 합계를 보여주는 비중 차트 */
+/** Donut chart: a share chart with the total in the center */
 export function DonutChart<T = Row>(props: DonutChartProps<T>) {
   const inner = Math.max(0.2, Math.min(0.9, props.innerRadius ?? 0.62));
   return <PieBase {...props} inner={inner} />;

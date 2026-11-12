@@ -2,8 +2,8 @@ import { toDate } from "../core/format";
 import type { Accessor } from "../core/types";
 
 /**
- * 행에 그 필드가 있는지. Object.prototype에서 물려받은 이름(constructor, toString)은 필드가 아니고,
- * 클래스 인스턴스의 getter(프로토타입에 있어요)는 필드예요
+ * Whether the row has that field. Names inherited from Object.prototype (constructor, toString) are not fields,
+ * while getters of class instances (which live on the prototype) are
  */
 export function hasField(o: object, k: string): boolean {
   return Object.hasOwn(o, k) || (k in o && !(k in {}));
@@ -26,8 +26,8 @@ function field(d: unknown, k: string): unknown {
 }
 
 /**
- * "1,234", "12%", "₩5,000", " 3.5 " 같은 문자열도 숫자로. 못 읽으면 NaN ("$", "1,2,3"도).
- * 무한대도 NaN(빈 값)이에요. 문자열 "Infinity"와 같은 규칙이고, 합계와 비율을 망가뜨려 그림에 NaN이 생기지 않게
+ * Turns strings such as "1,234", "12%", "₩5,000", " 3.5 " into numbers too. NaN when unreadable ("$" and "1,2,3" too).
+ * Infinity is NaN (a missing value) as well. Same rule as the string "Infinity", so it cannot break sums and ratios and put NaN in the drawing
  */
 export function toNumber(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
@@ -36,7 +36,7 @@ export function toNumber(v: unknown): number {
     const s = v.trim();
     const neg = /^\(.*\)$/.test(s);
     const body = s.replace(/[()\s%₩$€£¥원명건개회]/g, "").replace(/^\+/, "");
-    // 숫자 부분이 비었거나 천 단위 쉼표가 틀리면(1,2,3) 숫자가 아니에요. coerceCell과 같은 규칙
+    // Not a number when the numeric part is empty or the thousands separators are wrong (1,2,3). Same rule as coerceCell
     if (!body || (body.includes(",") && !/^-?\d{1,3}(,\d{3})*(\.\d+)?$/.test(body))) return NaN;
     const n = Number(body.replace(/,/g, ""));
     return Number.isFinite(n) ? (neg ? -n : n) : NaN;
@@ -62,7 +62,7 @@ export function strGetter<T>(a: Accessor<T, unknown> | undefined, def: string): 
   return (d, i) => {
     const v = g(d, i);
     if (v === undefined || v === null) return "";
-    // 로컬 날짜로. toISOString은 UTC라 한국 자정이 전날이 돼서 시간대만큼 옮겨 읽어요
+    // As a local date. toISOString is UTC, so midnight in Korea would become the previous day; shift by the time zone offset before reading
     if (v instanceof Date) return new Date(v.getTime() - v.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
     return String(v);
   };
@@ -73,7 +73,7 @@ export function dateGetter<T>(a: Accessor<T, unknown> | undefined, def: string):
   return (d, i) => toDate(g(d, i));
 }
 
-/** 접근자가 데이터에 없는 필드를 가리키면 그 이름을 돌려줘요 (검증용) */
+/** Returns the field name when the accessor points to a field missing from the data (for validation) */
 export function missingField<T>(a: Accessor<T, unknown> | undefined, def: string, data: readonly T[]): string | null {
   if (typeof a === "function" || !data.length) return null;
   const k = a ?? def;
@@ -81,7 +81,7 @@ export function missingField<T>(a: Accessor<T, unknown> | undefined, def: string
   return sample.some((d) => field(d, k) !== undefined) ? null : k;
 }
 
-/** 처음 나온 순서대로 고유값 */
+/** Unique values in order of first appearance */
 export function uniq(xs: readonly string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

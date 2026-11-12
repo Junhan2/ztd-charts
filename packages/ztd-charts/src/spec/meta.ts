@@ -1,7 +1,7 @@
 import type { ChannelDef, ChartSpec, Lang } from "./types";
 
 /**
- * 차트마다 encoding 채널. <Chart spec>은 레지스트리(예시 데이터 포함) 대신 이 작은 모듈만 써요.
+ * Encoding channels per chart. <Chart spec> uses only this small module instead of the registry (which includes the sample data).
  */
 /* @__NO_SIDE_EFFECTS__ */
 const ch = (name: string, type: ChannelDef["type"], required: boolean, description: string, extra: Partial<ChannelDef> = {}): ChannelDef => ({ name, type, required, description, ...extra });
@@ -21,7 +21,7 @@ const CH_marimekko: ChannelDef[] = [ch("x", "string", true, "Column field"), ch(
 const CH_heatmap: ChannelDef[] = [ch("x", "string", true, "Column field"), ch("y", "string", true, "Row field"), VALUE];
 const CH_radar: ChannelDef[] = [ch("axis", "string", true, "Metric (axis) field"), ch("value", "number", true, "Value field", { multi: true }), ch("series", "string", false, "Series field")];
 const CH_bubble: ChannelDef[] = [ch("x", "number", true, "x value"), ch("y", "number", true, "y value"), ch("size", "number", false, "Circle size"), ch("label", "string", false, "Name")];
-/** 범위 띠 (라인, 영역): 넓은 표면 y와 같은 순서의 배열, 긴 표면 필드 하나 */
+/** Range band (line, area): an array in the same order as y for a wide table, one field for a long table */
 const UPPER = ch("upper", "number", false, "Upper bound of the range band. Same shape as lower", { multi: true });
 const CH_line: ChannelDef[] = [ch("x", "any", true, "x field (date, number or category)"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field (long tables)"), ch("lower", "number", false, "Lower bound of the range band. In wide tables an array in the order of y", { multi: true }), UPPER];
 const CH_area: ChannelDef[] = [ch("x", "any", true, "x field"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field"), ch("lower", "number", false, 'Lower bound of the range band, with stack "none" only. In wide tables an array in the order of y', { multi: true }), UPPER];
@@ -121,7 +121,7 @@ export const CHANNELS: Record<string, ChannelDef[]> = {
   flowMap: CH_flowMap,
 };
 
-/** 타입 -> 컴포넌트 이름, 영어 이름, 한글 이름. 한글 이름은 여기 한 곳에만 둬요 (localizeDef, 한글 검증 메시지가 같이 써요) */
+/** Type -> component name, English name, Korean name. Korean names live only here (shared by localizeDef and the Korean validation messages) */
 export const META: Record<string, { component: string; name: string; nameKo: string }> = {
   pie: { component: "PieChart", name: "Pie chart", nameKo: "파이 차트" },
   donut: { component: "DonutChart", name: "Donut chart", nameKo: "도넛 차트" },
@@ -169,65 +169,65 @@ export const META: Record<string, { component: string; name: string; nameKo: str
   flowMap: { component: "FlowMap", name: "Flow map", nameKo: "흐름 지도" },
 };
 
-/** 차트 이름을 한 언어로. 예: nameIn(META.pie, "ko") === "파이 차트" */
+/** A chart name in one language. Example: nameIn(META.pie, "ko") === "파이 차트" */
 export function nameIn(meta: { name: string; nameKo: string }, lang: Lang): string {
   return lang === "ko" ? meta.nameKo : meta.name;
 }
 
-/** 스펙을 그릴 로캘: override(프롭, --locale 같은 바깥 값), 그다음 options.locale. 둘 다 없으면 undefined */
+/** The locale to render a spec in: override (an outside value such as a prop or --locale), then options.locale. undefined when neither is set */
 export function specLocale(spec: Pick<ChartSpec, "options">, override?: string): string | undefined {
   const l = override ?? spec.options?.locale;
-  // "ko_KR"처럼 밑줄로 쓴 로캘도 받아요 (Intl은 "ko-KR"만 읽어요). 빈 문자열은 없는 것으로
+  // Also accepts locales written with an underscore, such as "ko_KR" (Intl reads only "ko-KR"). An empty string counts as unset
   return typeof l === "string" && l ? l.replace(/_/g, "-") : undefined;
 }
 
-/** 작은 여러 개(spec.facet)로 나눠 그릴 수 있는 차트. 검사기, <Chart>, 서버 그림이 같이 써요 */
+/** Charts that can be split into small multiples (spec.facet). Shared by the validator, <Chart> and the server render */
 /**
- * 차트 한 변의 최대 크기(px). 실제 차트가 닿지 않는 값(MCP render_chart 폭 상한 2400의 4배 넘게)이에요.
- * 스펙 options.width, height는 validateSpec이 이 값으로 검사하고, 검사 없이 크기를 받는 곳(서버 렌더 옵션, CLI 플래그)은 이 값으로 줄여요.
- * 아주 큰 높이가 서버에서 그림(그리고 PNG 비트맵)을 끝없이 키우지 않게 해요
+ * Maximum size of one side of a chart (px). A value real charts never reach (over 4 times the MCP render_chart width limit of 2400).
+ * validateSpec checks the spec's options.width and height against it, and places that take sizes unvalidated (server render options, CLI flags) reduce them to it.
+ * Keeps a huge height from growing the server drawing (and the PNG bitmap) without bound
  */
 export const MAX_CHART_SIZE = 10_000;
 
-/** 검사 없이 들어온 크기를 MAX_CHART_SIZE 안으로. 숫자가 아니면 그대로 둬요(쓰는 쪽의 기본값이 맡아요) */
+/** Brings an unvalidated size within MAX_CHART_SIZE. Leaves non-numbers as they are (the caller's default handles them) */
 export function capChartSize<T extends number | undefined>(v: T): T {
   return (typeof v === "number" && v > MAX_CHART_SIZE ? MAX_CHART_SIZE : v) as T;
 }
 
 export const FACET_TYPES = ["line", "area", "bar", "scatter"];
 
-/** facet 패널 최대 수. 넘는 값은 앞에서부터 이만큼만 그리고 검사기가 뺀 수를 알려요 */
+/** Maximum number of facet panels. Beyond it, only this many are drawn from the start, and the validator reports how many were left out */
 export const FACET_MAX = 24;
 
-/** 계열을 숨길 수 있는(hidden) 차트. card.legend "toggle"이 켜고 끄는 차트이기도 해요 */
+/** Charts that can hide series (hidden). These are also the charts whose series card.legend "toggle" turns on and off */
 export const TOGGLES = ["line", "area", "bar", "scatter", "timeline"];
 
-/** 막대 위에 그리는 선의 필드(차례 3 ⑪). 세로 막대에만, 100% 막대와 양쪽 막대가 아닐 때만 그려요 */
+/** Fields of the lines drawn over bars (round 3 ⑪). Drawn only on vertical bars, and not on 100% or diverging bars */
 export function barLineFields(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): string[] {
   return type === "bar" && opt.orientation !== "horizontal" && opt.layout !== "percent" && opt.layout !== "diverging" ? ([] as unknown[]).concat(enc.line ?? []).map(String) : [];
 }
 
-/** card.legend "toggle"로 켜고 끌 수 있는지: 범례 항목이 모두 숨길 수 있는 계열일 때만 (막대 위 선이 있으면 보통 범례). <Chart>와 검사기가 같이 써요 */
+/** Whether card.legend "toggle" can turn series on and off: only when every legend item is a hideable series (with lines over bars, a plain legend). Shared by <Chart> and the validator */
 export function legendToggles(type: string, enc: Record<string, unknown>, opt: Record<string, unknown>): boolean {
-  // 육각 밀도 산점도는 계열을 쓰지 않아서 켜고 끌 범례가 없어요
+  // The hexbin density scatter uses no series, so there is no legend to toggle
   return TOGGLES.includes(type) && !barLineFields(type, enc, opt).length && !(type === "scatter" && hexBinned(opt));
 }
 
 /**
- * 스펙 options가 육각 밀도(bin "hex")인지. 육각 밀도 산점도는 size 채널이 있어도 버블로 바꾸지 않고, 계열 범례와 켜고 끄는 범례가 없어요.
- * resolveDef, autoLegend, legendToggles, validateSpec이 같은 판정을 써요
+ * Whether the spec options ask for hexbin density (bin "hex"). A hexbin density scatter does not become a bubble chart even with a size channel, and has no series legend or toggleable legend.
+ * resolveDef, autoLegend, legendToggles and validateSpec use the same check
  */
 export function hexBinned(opt: unknown): boolean {
   return !!opt && typeof opt === "object" && (opt as { bin?: unknown }).bin === "hex";
 }
 
-/** 스펙의 툴팁 틀(options.tooltip.template). 글자가 아니거나 비었으면 undefined */
+/** The spec's tooltip template (options.tooltip.template). undefined when it is not a string or is empty */
 export function specTemplate(spec: Pick<ChartSpec, "options">): string | undefined {
   const t = (spec.options?.tooltip as { template?: unknown } | undefined)?.template;
   return typeof t === "string" && t ? t : undefined;
 }
 
-/** 차트 이름 별칭 (AI가 자주 쓰는 이름) */
+/** Chart name aliases (names AI often uses) */
 export const TYPE_ALIASES: Record<string, string> = {
   doughnut: "donut",
   column: "bar",
@@ -284,14 +284,14 @@ export const TYPE_ALIASES: Record<string, string> = {
 export interface ChartMeta {
   type: string;
   component: string;
-  /** 영어 이름 */
+  /** English name */
   name: string;
-  /** 한글 이름 */
+  /** Korean name */
   nameKo: string;
   encoding: ChannelDef[];
 }
 
-/** 타입이나 별칭으로 채널과 이름 찾기 */
+/** Looks up channels and names by type or alias */
 export function resolveMeta(type: string): ChartMeta | undefined {
   const t = CHANNELS[type] ? type : TYPE_ALIASES[type] ?? Object.keys(META).find((k) => k.toLowerCase() === type.toLowerCase() || META[k].component.toLowerCase() === type.toLowerCase());
   if (!t || !META[t]) return undefined;
@@ -299,8 +299,8 @@ export function resolveMeta(type: string): ChartMeta | undefined {
 }
 
 /**
- * 차트가 그리는 열: encoding(채널 순서, 배열은 펼쳐서)과 열 이름을 받는 옵션(dimensions, start, end, ranges), 겹치지 않게.
- * 내려받기 CSV가 페이지가 넘긴 다른 열까지 내보내지 않게 써요. 하나도 없으면 빈 배열(내려받기 단추는 모든 열을 써요)
+ * Columns the chart draws: encoding (in channel order, arrays spread) and options that take column names (dimensions, start, end, ranges), without duplicates.
+ * Keeps the download CSV from exporting other columns the page passed in. An empty array when there are none (the download buttons then use every column)
  */
 export function downloadFields(spec: Pick<ChartSpec, "type" | "encoding" | "options">): string[] {
   const out = new Set<string>();

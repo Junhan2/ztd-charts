@@ -1,17 +1,17 @@
 import { langOf } from "./i18n";
 
-/** 숫자, 날짜 포맷. 기본 로캘은 en-US이고 "ko"면 만, 억 단위와 원화를 써요 */
+/** Number and date formats. The default locale is en-US; "ko" uses the 만 and 억 units (10^4 and 10^8) and the won */
 export type FormatName = "number" | "integer" | "percent" | "ratio" | "compact" | "currency" | "decimal";
 export type ValueFormatter = (v: number) => string;
 
-/** 값 뒤에 단위. 값이 없으면 "-"만 보여요 (단위를 붙이면 "-원"처럼 읽혀요). 차트와 StatCard가 같은 규칙을 써요 */
+/** Unit after the value. A missing value shows only "-" (with the unit it would read like "-원"). Charts and StatCard follow the same rule */
 export const withUnit = (fmt: ValueFormatter, unit = ""): ValueFormatter => (v) => (Number.isFinite(v) ? `${fmt(v)}${unit}` : fmt(v));
 export type FormatSpec = FormatName | ValueFormatter | (Intl.NumberFormatOptions & { suffix?: string; prefix?: string });
 
 export const DEFAULT_LOCALE = "en-US";
 
 const nfCache = new Map<string, Intl.NumberFormat>();
-/** 최대 자릿수를 주지 않으면 소수 한 자리. 최소 자릿수가 더 크면 그만큼, 통화는 그 통화의 자릿수(USD 2)를 그대로 써요 */
+/** One decimal place unless a maximum is given. A larger minimum wins, and a currency keeps its own digits (USD 2) */
 function nf(locale: string, o: Intl.NumberFormatOptions): Intl.NumberFormat {
   const opts = o.maximumFractionDigits !== undefined || o.style === "currency" ? o : { ...o, maximumFractionDigits: Math.max(1, o.minimumFractionDigits ?? 0) };
   const key = locale + JSON.stringify(opts);
@@ -23,7 +23,7 @@ function nf(locale: string, o: Intl.NumberFormatOptions): Intl.NumberFormat {
   return f;
 }
 
-/** 반올림하면 0이 되는 음수의 "-0"을 떼요 (-0.03 → "0", "-0%" → "0%"). 0이 아닌 숫자가 하나도 없으면 0이에요 */
+/** Drops the "-0" of a negative number that rounds to 0 (-0.03 → "0", "-0%" → "0%"). Text without any nonzero digit counts as 0 */
 function dropNegativeZero(s: string): string {
   return /^[-\u2212]/.test(s) && !/[1-9]/.test(s) ? s.slice(1) : s;
 }
@@ -34,13 +34,13 @@ export function formatNumber(v: number, opts: Intl.NumberFormatOptions & { local
   return dropNegativeZero(nf(locale, rest).format(v));
 }
 
-/** 소수 한 자리로 줄이면 0이 되는 아주 작은 값 (0은 아님) */
+/** A very small value that becomes 0 at one decimal place (but not 0 itself) */
 const isTiny = (v: number) => v !== 0 && Math.abs(v) < 0.05;
 
-/** 아주 작은 값은 유효 숫자 2자리로 ("0" 대신 "0.000012") */
+/** Very small values get 2 significant digits ("0.000012" instead of "0") */
 const formatTiny = (v: number, locale: string, suffix = "") => `${formatNumber(v, { locale, maximumSignificantDigits: 2, maximumFractionDigits: 20 })}${suffix}`;
 
-/** 0~100 값을 "42%"로. 1% 미만만 소수 한 자리, 0.05% 미만은 유효 숫자 2자리 */
+/** Formats a 0 to 100 value as "42%". One decimal place only below 1%, 2 significant digits below 0.05% */
 export function formatPercent(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
   if (!Number.isFinite(v)) return "-";
   if (isTiny(v) && opts.maximumFractionDigits === undefined) return formatTiny(v, opts.locale ?? DEFAULT_LOCALE, "%");
@@ -48,7 +48,7 @@ export function formatPercent(v: number, opts: Intl.NumberFormatOptions & { loca
   return `${formatNumber(v, { maximumFractionDigits: a > 0 && a < 1 ? 1 : 0, ...opts })}%`;
 }
 
-/** 짧게 줄인 숫자. 영어는 1.2K, 3.4M, 1.2B (Intl compact), 한국어는 1.2만, 3.4억 */
+/** Compact number. English gives 1.2K, 3.4M, 1.2B (Intl compact); Korean gives 1.2만, 3.4억 */
 export function formatCompact(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
   if (!Number.isFinite(v)) return "-";
   const { locale = DEFAULT_LOCALE, ...rest } = opts;
@@ -67,7 +67,7 @@ export function formatCompact(v: number, opts: Intl.NumberFormatOptions & { loca
       const q = a / u;
       const fd = Math.max(rest.minimumFractionDigits ?? 0, rest.maximumFractionDigits ?? (u === 1 || q < 100 ? 1 : 0));
       const rounded = Math.round(q * 10 ** fd) / 10 ** fd;
-      // 반올림해서 윗단위가 되면 올려요 (9,999.96 → 1만, 99,995,000 → 1억)
+      // When rounding reaches the next unit, move up to it (9,999.96 → 1만, 99,995,000 → 1억)
       if (k > 0 && rounded >= units[k - 1][0] / u) {
         k--;
         continue;
@@ -79,7 +79,7 @@ export function formatCompact(v: number, opts: Intl.NumberFormatOptions & { loca
   return dropNegativeZero(nf(locale, { notation: "compact", ...rest }).format(v));
 }
 
-/** 통화 포맷 옵션. 통화가 없으면 한국어는 원화, 나머지는 달러이고 원화만 소수점 없이 써요 */
+/** Currency format options. Without a currency, Korean uses the won and every other language the dollar; only the won is written without decimals */
 const currencyOptions = (locale?: string, currency = langOf(locale) === "ko" ? "KRW" : "USD"): Intl.NumberFormatOptions => ({ style: "currency", currency, maximumFractionDigits: currency === "KRW" ? 0 : 2 });
 
 export function formatCurrency(v: number, opts: Intl.NumberFormatOptions & { locale?: string } = {}): string {
@@ -87,7 +87,7 @@ export function formatCurrency(v: number, opts: Intl.NumberFormatOptions & { loc
   return formatNumber(v, { ...currencyOptions(opts.locale, currency), ...rest });
 }
 
-/** 포맷 이름, Intl 옵션, 함수를 포맷터로. Intl 인스턴스는 한 번만 만들어요 */
+/** Turns a format name, Intl options or a function into a formatter. The Intl instance is created only once */
 export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOCALE, fallback?: FormatName): ValueFormatter {
   if (typeof spec === "function") return spec;
   const fixed = (opts: Intl.NumberFormatOptions, suffix = "", prefix = ""): ValueFormatter => {
@@ -118,68 +118,68 @@ export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOC
   }
 }
 
-/** 축 눈금용: 큰 수는 짧게 */
+/** For axis ticks: large numbers in compact form */
 export function makeTickFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOCALE, maxAbs = 0): ValueFormatter {
   if (spec !== undefined) return makeFormatter(spec, locale);
-  // 짧은 표기는 소수 한 자리라 0.05보다 작은 눈금이 "0"이 돼요. 그런 값은 유효숫자 두 자리로 (로그 축)
+  // Compact notation has one decimal place, so ticks below 0.05 become "0". Such values get two significant digits (log axis)
   if (maxAbs >= 1e5) return (v) => (isTiny(v) ? formatTiny(v, locale) : formatCompact(v, { locale }));
   return (v) => formatNumber(v, { locale });
 }
 
-/** 연, 월, 일로 로컬 자정. 없는 날("2024-02-30")은 다음 달로 넘기지 않고 null */
+/** Local midnight from year, month and day. A nonexistent day ("2024-02-30") gives null instead of rolling into the next month */
 function ymd(y: string | number, m: string | number, d: string | number = 1): Date | null {
   const t = new Date(+y, +m - 1, +d);
   return t.getMonth() === +m - 1 && t.getDate() === +d ? t : null;
 }
 
-/** 4자리 정수라 연도로 읽는 값인지 */
+/** Whether the value is a 4-digit integer and so read as a year */
 export const isYear = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1000 && (v as number) <= 9999;
 
-/** ISO 꼴 날짜 글자 ("2024-03", "2024-03-05", "2024-03-05 14:00", "2024-03-05T14:00Z") */
+/** ISO-style date text ("2024-03", "2024-03-05", "2024-03-05 14:00", "2024-03-05T14:00Z") */
 export const ISO_DATE_RE = /^\d{4}-\d{1,2}(-\d{1,2})?([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-/** 영어 월 이름(세 글자 넘는 앞부분도)의 월. 아니면 0 ("Marketing", "Mayday"는 월이 아니에요) */
+/** Month of an English month name (prefixes longer than three letters too). 0 otherwise ("Marketing" and "Mayday" are not months) */
 export const monthOf = (w: string) => {
   const s = w.toLowerCase();
   return s.length < 3 ? 0 : MONTHS.findIndex((n) => n.startsWith(s)) + 1;
 };
-/** 두 자리 연도 (엑셀과 같게 00~29는 20xx, 30~99는 19xx) */
+/** Two-digit year (as in Excel, 00 to 29 is 20xx and 30 to 99 is 19xx) */
 const yy = (s: string) => +s + (+s < 30 ? 2000 : 1900);
 
-/** 날짜를 읽는 차트(선, 영역, 스트림, 스파크라인, 스카이라인, 캔들, 캘린더)의 dayFirst 프롭 */
+/** The dayFirst prop of charts that read dates (line, area, stream, sparkline, skyline, candlestick, calendar) */
 export interface DayFirstProps {
-  /** "05/03/2024"처럼 일, 월이 모두 될 수 있는 날짜를 일이 앞으로 읽어요. 없으면 열의 분명한 날짜가 정하고, 아니면 월이 앞 */
+  /** Reads a date like "05/03/2024", where either part could be the day or the month, as day first. When unset, the unambiguous dates in the column decide; failing that, month first */
   dayFirst?: boolean;
 }
 
-/** 시각(ms)의 로컬 날짜 "YYYY-MM-DD" */
+/** Local date "YYYY-MM-DD" of a timestamp (ms) */
 export function isoDay(t: number): string {
   const d = new Date(t);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** 날짜 글자의 [연, 월, 일, 종류]. 종류 1 날, 2 달, 3 분기. 날짜 표기가 아니면 null */
+/** [year, month, day, kind] of a date text. Kind 1 day, 2 month, 3 quarter. null when the text is not a date */
 export type DateParts = [number, number, number, 1 | 2 | 3];
 
-/** 연이 앞인 표기: ISO 날짜와 달, 점이나 빗금, 8자리 숫자, 한국식. 일이 없으면 달(종류 2) */
+/** Year-first notations: ISO dates and months, dots or slashes, 8-digit numbers, Korean style. Without a day it is a month (kind 2) */
 const YEAR_FIRST = [/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/, /^(\d{4})[./]\s*(\d{1,2})[./]\s*(\d{1,2})\.?$/, /^(19\d\d|20\d\d|2100)(\d\d)(\d\d)$/, /^(\d{4})년\s*(\d{1,2})월(?:\s*(\d{1,2})일)?$/];
-/** 연이 끝에 있는 "05/03/2024" (같은 구분자 두 번). 1, 3번째 묶음이 일과 월 후보, 4번째가 연 */
+/** Year-last "05/03/2024" (the same separator twice). Groups 1 and 3 are the day and month candidates, group 4 the year */
 export const DMY_RE = /^(\d{1,2})([./-])(\d{1,2})\2(\d{4})$/;
-/** 툴팁 틀(options.tooltip.template)의 칸 {이름}. TEMPLATE_NAMES는 짚은 항목에서, 다른 이름은 그 행의 열에서 읽어요 (templateTooltip과 검사기가 같이 써요) */
+/** A {name} slot in a tooltip template (options.tooltip.template). TEMPLATE_NAMES are read from the pointed item, other names from that row's columns (shared by templateTooltip and the validator) */
 export const TEMPLATE_SLOT = /\{([^{}]+)\}/g;
 export const TEMPLATE_NAMES = ["label", "value", "series"];
 
 /**
- * 표에서 흔한 날짜 표기를 엄격하게 읽어요 (시간이 붙은 ISO는 빼고).
+ * Strictly reads the date notations common in tables (except ISO with a time).
  * "2024-03-05" "2024.03.05" "2024. 3. 5." "2024/03/05" 20240305 "2024년 3월 5일" "2024년 3월" "24.03.05"
  * "2024Q1" "Q1 2024" "2024년 1분기" "05/03/2024" "Mar 5, 2024" "5 Mar 2024" "Apr 2024".
- * 연이 끝에 있는 "05/03/2024"는 앞이 12보다 크면 일, 둘 다 12 이하면 dayFirst일 때만 일이 앞이에요
+ * In a year-last "05/03/2024", the first part is the day when it is above 12; when both are 12 or less, the day comes first only with dayFirst
  */
 export function dateParts(s: string, dayFirst?: boolean): DateParts | null {
   let m: RegExpExecArray | null;
   for (const re of YEAR_FIRST) if ((m = re.exec(s))) return [+m[1], +m[2], +(m[3] ?? 1), m[3] ? 1 : 2];
-  // 시간이 붙은 ISO("2024-03-05T14:00Z")는 아래 표기 어느 것도 아니에요. 큰 표에서 정규식 여덟 개를 더 돌리지 않게 여기서 끝내요
+  // ISO with a time ("2024-03-05T14:00Z") matches none of the notations below. Stop here so large tables do not run eight more regexes
   if (/^\d{4}-\d/.test(s)) return null;
   if ((m = /^(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/.exec(s))) return dayFirst ? [yy(m[3]), +m[2], +m[1], 1] : [yy(m[1]), +m[2], +m[3], 1];
   if ((m = /^(?:(\d{4})\s*-?\s*Q([1-4])|Q([1-4])\s*-?\s*(\d{4})|(\d{4})년\s*([1-4])분기)$/i.exec(s))) return [+(m[1] ?? m[4] ?? m[5]), +(m[2] ?? m[3] ?? m[6]) * 3 - 2, 1, 3];
@@ -200,12 +200,12 @@ export function dateParts(s: string, dayFirst?: boolean): DateParts | null {
   return null;
 }
 
-/** 날짜 축으로 읽는 글자인지 (ISO, 시간이 붙은 ISO, 위 표기) */
+/** Whether the text is read on a date axis (ISO, ISO with a time, the notations above) */
 export const isDateText = (s: string): boolean => ISO_DATE_RE.test(s) || dateParts(s) !== null;
 
 /**
- * 연이 끝에 있는 날짜("05/03/2024") 열의 일, 월 순서. 앞이 12보다 큰 값이 있으면 true(일이 앞),
- * 뒤가 12보다 큰 값이 있으면 false, 둘 다 없으면(모두 모호) undefined
+ * Day and month order of a column of year-last dates ("05/03/2024"). true (day first) when some first part is above 12,
+ * false when some second part is above 12, undefined when neither (all ambiguous)
  */
 export function dayFirstOf(values: readonly unknown[]): boolean | undefined {
   let out: boolean | undefined;
@@ -219,20 +219,20 @@ export function dayFirstOf(values: readonly unknown[]): boolean | undefined {
 }
 
 /**
- * 날짜로 바꿔요. 위 날짜 표기, 20240315(YYYYMMDD), 타임스탬프(10자리는 유닉스 초, 13자리는 ms), Date.
- * dayFirst는 "05/03/2024"처럼 일, 월이 모두 될 수 있을 때 일을 앞으로 읽을지예요
+ * Converts to a Date. Accepts the date notations above, 20240315 (YYYYMMDD), timestamps (10 digits are Unix seconds, 13 digits ms) and Date.
+ * dayFirst says whether to read the day first when either part could be the day or the month, as in "05/03/2024"
  */
 export function toDate(v: unknown, dayFirst?: boolean): Date | null {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
   if (typeof v === "number") {
     if (!Number.isFinite(v)) return null;
     if (Number.isInteger(v)) {
-      // 4자리 숫자는 연도로
+      // A 4-digit number is a year
       if (isYear(v)) return new Date(v, 0, 1);
-      // 8자리 19000101~21001231은 YYYYMMDD로 (그 범위의 ms는 1970-01-01 새벽이라 실제 타임스탬프와 겹치지 않아요)
+      // 8 digits from 19000101 to 21001231 are YYYYMMDD (as ms, that range falls in the early hours of 1970-01-01, so it does not clash with real timestamps)
       if (v >= 19000101 && v <= 21001231) return toDate(`${v}`);
     }
-    // 10자리는 유닉스 초 (10자리 ms는 1970년 1~4월뿐이라 실제 데이터와 겹치지 않아요)
+    // 10 digits are Unix seconds (10-digit ms covers only January to April 1970, so it does not clash with real data)
     return new Date(Math.abs(v) >= 1e9 && Math.abs(v) < 1e10 ? v * 1000 : v);
   }
   if (typeof v === "string" && v.trim()) {
@@ -247,7 +247,7 @@ export function toDate(v: unknown, dayFirst?: boolean): Date | null {
   return null;
 }
 
-/** formatDuration의 단위: Intl 단위 이름과 길이(ms). 큰 것부터 */
+/** Units for formatDuration: the Intl unit name and length (ms), largest first */
 const DURATION_UNITS: [string, number][] = [
   ["day", 86400000],
   ["hour", 3600000],
@@ -256,8 +256,8 @@ const DURATION_UNITS: [string, number][] = [
 ];
 
 /**
- * 걸린 시간(ms)을 로캘에 맞는 짧은 글로: "7 min", "2d 4h", "45 sec", "120 ms", 1년 넘으면 "1.5 yrs".
- * 큰 단위가 10 미만이면 다음 단위를 하나 더 붙여요(한국어 "2일 4시간"). 단위 글은 Intl.NumberFormat의 unit 꼴이에요
+ * Formats a duration (ms) as short text for the locale: "7 min", "2d 4h", "45 sec", "120 ms", and "1.5 yrs" beyond a year.
+ * When the larger unit is under 10, the next unit is added (Korean "2일 4시간"). Unit text uses Intl.NumberFormat's unit style
  */
 export function formatDuration(ms: number, locale = DEFAULT_LOCALE): string {
   if (!Number.isFinite(ms)) return "-";

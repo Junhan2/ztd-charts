@@ -15,12 +15,12 @@ export function r2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** 12시 방향에서 시계 방향으로 a 라디안 */
+/** a radians clockwise from 12 o'clock */
 export function polar(cx: number, cy: number, r: number, a: number): [number, number] {
   return [cx + r * Math.sin(a), cy - r * Math.cos(a)];
 }
 
-/** 도넛/파이 조각 path. r0 = 0이면 파이 조각 */
+/** Donut/pie slice path. A pie slice when r0 = 0 */
 export function arcPath(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number): string {
   const da = a1 - a0;
   if (!(Math.abs(da) > 1e-4) || r1 <= 0) return "";
@@ -43,7 +43,7 @@ export function arcPath(cx: number, cy: number, r0: number, r1: number, a0: numb
   return `M${r2(x0)},${r2(y0)}A${r2(r1)},${r2(r1)} 0 ${large} ${s} ${r2(x1)},${r2(y1)}L${r2(x2)},${r2(y2)}A${r2(r0)},${r2(r0)} 0 ${large} ${1 - s} ${r2(x3)},${r2(y3)}Z`;
 }
 
-/** 열린 호(선) path */
+/** Open arc (stroke) path */
 export function arcLine(cx: number, cy: number, r: number, a0: number, a1: number): string {
   const da = a1 - a0;
   if (!(Math.abs(da) > 1e-4)) return "";
@@ -61,7 +61,7 @@ export interface Corners {
   bl?: number;
 }
 
-/** 모서리마다 반지름을 다르게 줄 수 있는 사각형 path */
+/** Rectangle path whose corners can each take their own radius */
 export function roundRectPath(x: number, y: number, w: number, h: number, c: Corners | number): string {
   if (w < 0) {
     x += w;
@@ -93,7 +93,7 @@ export function roundRectPath(x: number, y: number, w: number, h: number, c: Cor
 
 type Pt = [number, number];
 
-/** 모노톤 큐빅(Fritsch-Carlson). 값을 넘어 출렁이지 않아요 */
+/** Monotone cubic (Fritsch-Carlson). It never overshoots the values */
 export function monotonePath(pts: Pt[], move = true): string {
   const n = pts.length;
   if (!n) return "";
@@ -140,7 +140,7 @@ export function linePath(pts: Pt[], curve: Curve = "smooth"): string {
   return polyline(pts);
 }
 
-/** 점을 직선으로 잇는 path. 곡선 코드가 필요 없는 차트(실시간 선)는 이것만 가져가요 */
+/** Path joining points with straight lines. Charts that need no curve code (live line) import only this */
 export function polyline(pts: Pt[]): string {
   if (!pts.length) return "";
   let d = `M${r2(pts[0][0])},${r2(pts[0][1])}`;
@@ -148,7 +148,7 @@ export function polyline(pts: Pt[]): string {
   return d;
 }
 
-/** 위 경계와 아래 경계로 면 path */
+/** Area path from a top and a bottom boundary */
 export function areaPath(top: Pt[], bottom: Pt[], curve: Curve = "smooth"): string {
   if (!top.length) return "";
   const rev = [...bottom].reverse();
@@ -160,12 +160,12 @@ export function areaPath(top: Pt[], bottom: Pt[], curve: Curve = "smooth"): stri
   return `${up}${down}Z`;
 }
 
-/** x0에서 x1까지 고르게 놓인 n개 가운데 px에 가장 가까운 인덱스 */
+/** Index nearest to px among n items spaced evenly from x0 to x1 */
 export function evenIndex(px: number, x0: number, x1: number, n: number): number {
   return Math.max(0, Math.min(n - 1, Math.round(((px - x0) / (x1 - x0 || 1)) * (n - 1))));
 }
 
-/** 정렬된 배열에서 v에 가장 가까운 인덱스 */
+/** Index nearest to v in a sorted array */
 export function nearestIndex(sorted: readonly number[], v: number): number {
   let lo = 0;
   let hi = sorted.length - 1;
@@ -210,17 +210,17 @@ export function argMin(xs: readonly number[]): number {
 }
 
 export interface LinearFit {
-  /** x가 1 늘 때 y가 느는 양 */
+  /** How much y grows when x grows by 1 */
   slope: number;
-  /** 결정계수(0~1). 점이 직선에 붙을수록 1이고, x나 y가 모두 같으면 0이에요 */
+  /** Coefficient of determination (0 to 1). The closer the points hug the line, the closer to 1; 0 when all x or all y are equal */
   r2: number;
-  /** 직선 위 y */
+  /** y on the line */
   at: (x: number) => number;
 }
 
 /**
- * 최소제곱 직선. 라인, 막대, 캔들스틱의 추세선 주석과 산점도 추세선이 같이 써요.
- * x가 모두 같으면 기울기 0인 가로선이에요
+ * Least-squares line. Shared by the trend line annotations of line, bar and candlestick charts and by the scatter plot trend line.
+ * When all x are equal, it is a horizontal line with slope 0
  */
 export function linearFit(pts: readonly { x: number; y: number }[]): LinearFit {
   const n = pts.length;
