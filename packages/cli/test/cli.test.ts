@@ -52,6 +52,14 @@ describe("ztd-charts CLI", () => {
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
   });
+  it("per-command --help prints usage instead of an arg-missing error", async () => {
+    for (const args of [["render", "--help"], ["info", "--help"], ["render", "-h"]]) {
+      const r = await run(...args);
+      expect(r.code).toBe(0);
+      expect(r.out).toContain("ztd-charts render");
+      expect(r.out).not.toContain("Missing the spec file path");
+    }
+  });
   it("list: 44종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
     const t = await run("list");
     expect(t.out).toContain("44 charts");
