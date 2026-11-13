@@ -89,7 +89,7 @@ async function main(argv0: string[]) {
     strict: false,
     options: {
       json: { type: "boolean" },
-      help: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
       out: { type: "string", short: "o" },
       "out-dir": { type: "string" },
       width: { type: "string", short: "w" },
