@@ -89,6 +89,7 @@ async function main(argv0: string[]) {
     strict: false,
     options: {
       json: { type: "boolean" },
+      help: { type: "boolean" },
       out: { type: "string", short: "o" },
       "out-dir": { type: "string" },
       width: { type: "string", short: "w" },
@@ -115,6 +116,12 @@ async function main(argv0: string[]) {
     writeFileSync(file, `${text}\n`);
     return out(t.saved(file));
   };
+
+  // Per-command --help: without this, e.g. `render --help` fell through to "Missing the spec file path"
+  if (f.help) {
+    process.stdout.write(t.help);
+    return;
+  }
 
   switch (cmd) {
     case "list": {
