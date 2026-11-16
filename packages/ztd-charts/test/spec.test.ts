@@ -388,6 +388,14 @@ describe("bar layout diverging", () => {
     expect(issues({ ...wide, options: { layout: "diverging", annotations: [{ type: "line", y: 5 }] } }).map((i) => i.split(":")[0])).toEqual(["!options.annotations annotations_ignored"]);
     expect(issues({ ...wide, encoding: { ...wide.encoding, line: "Agree" }, options: { layout: "diverging" } }).map((i) => i.split(":")[0])).toEqual(["!encoding.line line_ignored"]);
   });
+  it("reports centerLabels where it cannot take effect: outside diverging, on vertical bars and with a neutral series", () => {
+    expect(issues({ ...long, options: { layout: "diverging", negative: ["Male"], centerLabels: true } })).toEqual([]);
+    expect(issues({ ...wide, options: { centerLabels: false } })).toEqual([]);
+    const ignored = '!options.centerLabels center_labels_ignored: options.centerLabels needs layout "diverging", horizontal bars and no neutral series, so the names stay on the axis';
+    expect(issues({ ...wide, options: { centerLabels: true } })).toEqual([ignored]);
+    expect(issues({ ...long, options: { layout: "diverging", orientation: "vertical", negative: ["Male"], centerLabels: true } })).toEqual([ignored]);
+    expect(issues({ ...wide, options: { layout: "diverging", negative: ["Disagree"], neutral: "Neutral", centerLabels: true } }, "ko")).toEqual(['!options.centerLabels center_labels_ignored: options.centerLabels 옵션은 layout "diverging"인 가로 막대에 neutral 계열이 없을 때만 써요. 이름은 축에 그대로 둬요']);
+  });
 });
 
 describe("options.tooltip.template", () => {
@@ -475,6 +483,27 @@ describe("options.annotations", () => {
   it("puts the annotation types in the JSON Schema", () => {
     expect(JSON.stringify(schemaFor("line"))).toContain('"enum":["band","line","event","forecast","trend","weekends"]');
     expect(JSON.stringify(schemaFor("candlestick"))).toContain('"annotations"');
+  });
+});
+
+describe("sankey stages (encoding.dimensions)", () => {
+  it("a spec with dimensions and no source or target passes the validator and the JSON Schema", () => {
+    const spec = {
+      type: "sankey",
+      data: [
+        { plan: "Free", feature: "Charts", day30: "Active", users: 2100 },
+        { plan: "Free", feature: "Export", day30: "Churned", users: 900 },
+        { plan: "Pro", feature: "Export", day30: "Upgraded", users: 640 },
+      ],
+      encoding: { dimensions: ["plan", "feature", "day30"], value: "users" },
+      options: { highlight: "Export", dimensionLabels: { day30: "After 30 days" } },
+    };
+    for (const lang of ["en", "ko"] as const) {
+      const r = validateSpec(spec, { lang });
+      expect([...r.errors, ...r.warnings], lang).toEqual([]);
+    }
+    expect(validateAll(spec), JSON.stringify(validateAll.errors?.slice(0, 3))).toBe(true);
+    expect(new Ajv2020({ strict: false }).compile(schemaFor("sankey")!)(spec)).toBe(true);
   });
 });
 

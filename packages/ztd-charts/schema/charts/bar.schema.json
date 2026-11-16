@@ -107,6 +107,11 @@
           "default": false,
           "type": "boolean"
         },
+        "centerLabels": {
+          "description": "Layout \"diverging\" with horizontal bars and no neutral series: row names in a column at the zero line instead of on the left, as in a population pyramid. A unit is the same length on both sides",
+          "default": false,
+          "type": "boolean"
+        },
         "aggregate": {
           "description": "How rows with the same x (and series) combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
           "default": "sum",

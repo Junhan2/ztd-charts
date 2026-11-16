@@ -516,6 +516,14 @@
               "default": "vs. previous",
               "type": "string"
             },
+            "flow": {
+              "description": "Stage direction. \"right\" puts each stage in a column from left to right, with each rate vs. the previous stage on the band between bars (with rateBase \"first\", under each count). A column too narrow for its bar and rate draws \"down\"",
+              "default": "down",
+              "enum": [
+                "down",
+                "right"
+              ]
+            },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
               "type": "number",
@@ -3540,6 +3548,11 @@
               "default": false,
               "type": "boolean"
             },
+            "centerLabels": {
+              "description": "Layout \"diverging\" with horizontal bars and no neutral series: row names in a column at the zero line instead of on the left, as in a population pyramid. A unit is the same length on both sides",
+              "default": false,
+              "type": "boolean"
+            },
             "aggregate": {
               "description": "How rows with the same x (and series) combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
               "default": "sum",
@@ -5468,16 +5481,26 @@
               "type": "string",
               "description": "Target node (string)"
             },
+            "dimensions": {
+              "description": "Stage columns of a wide table, left to right (2 to 6). Each row is one path, so source and target are not used. Without value, each row counts 1 (string)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
             "value": {
               "type": "string",
               "description": "Value field (number)"
             }
           },
-          "required": [
-            "source",
-            "target",
-            "value"
-          ],
           "additionalProperties": false
         },
         "options": {
@@ -5492,6 +5515,10 @@
               "description": "Gap between nodes (px)",
               "default": 14,
               "type": "number"
+            },
+            "dimensionLabels": {
+              "description": "Rename the stage columns of encoding.dimensions: { field: title }",
+              "type": "object"
             },
             "height": {
               "description": "Height in px. Without it, each chart picks a default that fits its width",
@@ -6217,11 +6244,12 @@
               "enum": [
                 "box",
                 "violin",
-                "both"
+                "both",
+                "raincloud"
               ]
             },
             "outliers": {
-              "description": "Show outlier dots",
+              "description": "Show outlier dots. Raincloud ignores it, since its dots show every sample",
               "default": true,
               "type": "boolean"
             },
@@ -7583,6 +7611,11 @@
             "jitter": {
               "description": "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render",
               "type": "object"
+            },
+            "hull": {
+              "description": "Outlines each visible series (all dots without a series channel) with a rounded shape in its color under the dots. Every dot stays inside its outline. Not drawn with bin \"hex\"",
+              "default": false,
+              "type": "boolean"
             },
             "xDomain": {
               "description": "Fixed x range [start, end], smallest first. Use it to zoom in: dots outside are not drawn, and with bin \"hex\" only the dots inside are counted",

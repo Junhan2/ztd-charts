@@ -51,6 +51,8 @@ export interface BarChartProps<T = Row> extends BaseChartProps<T> {
   neutral?: string;
   /** layout "diverging": show each segment as its share (%) of the row's absolute total. Default false */
   percent?: boolean;
+  /** layout "diverging" with horizontal bars and no neutral series: the row names go in a column at the zero line instead of on the left (population pyramid). The value axis is split around the column, so a unit is the same length on both sides. Default false */
+  centerLabels?: boolean;
   /** How to combine several rows with the same category and series. Default "sum" */
   aggregate?: Aggregate;
   /** What to highlight: a category with one series, a series with several. Default "max" / the first series. With several series, a predicate function receives the series name, not the row: (name, index) => boolean */
@@ -209,7 +211,10 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   // Axis layout. Removing the left labels removes their space too
   const showY = props.showYAxis !== false;
   const showX = props.showXAxis !== false;
-  const catW = horizontal && showY ? Math.min(W * 0.32, Math.max(...model.labels.map((l) => textWidth(l, 11.5, 600)), 24) + 10) : 0;
+  // Center labels (diverging, horizontal, no neutral series, which would sit across the column): the names leave the left side for a column at the zero line,
+  // as wide as the widest name + 16px (at most 34% of the width). The value scale ends that much earlier and the right side moves right by it
+  const colW = divOpts && horizontal && showY && props.centerLabels === true && (divOpts.neutral ?? -1) < 0 ? Math.min(W * 0.34, Math.max(0, ...model.labels.map((l) => textWidth(l, 11.5, 600))) + 16) : 0;
+  const catW = horizontal && showY && !colW ? Math.min(W * 0.32, Math.max(...model.labels.map((l) => textWidth(l, 11.5, 600)), 24) + 10) : 0;
   const ticks = scaleLinear(dom, [0, 1]).ticks(horizontal ? Math.max(2, Math.round(W / 130)) : Math.max(2, Math.round(H / 70)));
   const left = horizontal ? catW + 6 : showY ? yAxisWidth(ticks, tickFmt, c.locale) : 0;
   const top = horizontal ? 4 : showValues ? 16 : 8;
@@ -227,7 +232,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const x0 = horizontal ? left + (diverging ? sidePad(0) : 0) : left + 4;
   const x1 = horizontal ? W - Math.max(8, valPad) : W - 2;
   const band = horizontal ? scaleBand(model.keys, [top, H - bottom], 0.3, 0.12) : scaleBand(model.keys, [x0, x1], nS > 1 && layout === "grouped" ? 0.24 : 0.32, 0.12);
-  const v = horizontal ? scaleLinear(dom, [x0, x1]) : scaleLinear(dom, [H - bottom - negPad, top]);
+  const v = horizontal ? scaleLinear(dom, [x0, x1 - colW]) : scaleLinear(dom, [H - bottom - negPad, top]);
   const inner = layout === "grouped" && nS > 1 ? scaleBand(model.series, [0, band.bandwidth], 0.12, 0) : null;
   const r = Math.min(p.theme.radiusMark, (inner ? inner.bandwidth : band.bandwidth) / 4);
   /** Center of category k's band (where the line's point sits) */
@@ -265,8 +270,10 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
   const geom = (sg: BarSeg) => {
     const pos = band(model.keys[sg.k]) + (inner ? inner(sg.series) : 0);
     const th = inner ? inner.bandwidth : band.bandwidth;
-    const a = v(sg.v0);
-    const b = v(sg.v1);
+    // Center labels: a segment on the right side (by its series and sign, as the stack places it, so a 0 there stays right too) moves right by the column
+    const dx = colW && sg.value >= 0 && !divOpts?.negative.includes(keep[sg.s]) ? colW : 0;
+    const a = v(sg.v0) + dx;
+    const b = v(sg.v1) + dx;
     return { pos, th, a, b };
   };
 
@@ -312,7 +319,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         return { key: sg.key, to: [g.pos, g.th, g.a, g.b], from: [g.pos, g.th, layout === "grouped" ? base : a0, layout === "grouped" ? base : a0], enter: [g.pos, g.th, a0, a0], delay: sg.k * stg + (sg.ring ?? sg.s) * (layout === "grouped" ? 30 : 70), data: sg };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [segs, W, H, dom[0], dom[1], stg, layout, horizontal],
+    [segs, W, H, dom[0], dom[1], stg, layout, horizontal, colW],
   );
   const m = useMotion(marks, c.motion);
 
@@ -377,11 +384,12 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
     <ChartFrame c={c} kind={msg.kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} announce={announce} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
       {horizontal ? (
         <g aria-hidden="true">
-          {ticks.map((t) => (
-            <g key={t}>
-              <line x1={Math.round(v(t)) + 0.5} x2={Math.round(v(t)) + 0.5} y1={top} y2={H - bottom} stroke={p.paint(t === 0 ? "dim" : "line")} />
+          {/* With center labels the zero tick goes on both edges of the name column (thin dim lines in place of the bold zero line), and the ticks right of it move right by the column */}
+          {ticks.flatMap((t) => (colW && !t ? [v(0), v(0) + colW] : [v(t) + (t > 0 ? colW : 0)]).map((x, j) => [t, x, j])).map(([t, x, j]) => (
+            <g key={`${t}:${j}`}>
+              <line x1={Math.round(x) + 0.5} x2={Math.round(x) + 0.5} y1={top} y2={H - bottom} stroke={p.paint(t === 0 ? "dim" : "line")} />
               {showX ? (
-                <Txt x={v(t)} y={H - bottom + 11} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>
+                <Txt x={x} y={H - bottom + 11} anchor="middle" size={AXIS_FONT} fill={p.paint("muted")}>
                   {tickFmt(t)}
                 </Txt>
               ) : null}
@@ -458,7 +466,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
       {diverging ? (
         <g aria-hidden="true">
           {totals.map(([lo, hi], k) => {
-            const [a, b] = rowEnds(k).map(v);
+            const [a, b] = rowEnds(k).map((x, j) => v(x) + j * colW);
             const c0 = band(model.keys[k]) + band.bandwidth / 2;
             const op = m.fade(k * stg + 320, 260) * (activeCat === null || activeCat === k ? 1 : 0.38);
             const txt = (text: string | null, end: number, side: -1 | 1) =>
@@ -474,7 +482,7 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
               </g>
             );
           })}
-          {horizontal ? <line x1={Math.round(v(0)) + 0.5} x2={Math.round(v(0)) + 0.5} y1={top} y2={H - bottom} stroke={p.paint("ink")} strokeWidth={1.5} /> : <line x1={x0} x2={W} y1={Math.round(v(0)) + 0.5} y2={Math.round(v(0)) + 0.5} stroke={p.paint("ink")} strokeWidth={1.5} />}
+          {colW ? null : horizontal ? <line x1={Math.round(v(0)) + 0.5} x2={Math.round(v(0)) + 0.5} y1={top} y2={H - bottom} stroke={p.paint("ink")} strokeWidth={1.5} /> : <line x1={x0} x2={W} y1={Math.round(v(0)) + 0.5} y2={Math.round(v(0)) + 0.5} stroke={p.paint("ink")} strokeWidth={1.5} />}
         </g>
       ) : null}
       {lineModel ? (
@@ -502,9 +510,10 @@ export function BarChart<T = Row>(props: BarChartProps<T>) {
         <g aria-hidden="true">
           {model.keys.map((key, k) => {
             const strong = single && hi.has(k);
+            // Center labels: in the middle of the column, with 8px to spare on each side
             return (
-              <Txt key={key} x={catW} y={band(key) + band.bandwidth / 2} anchor="end" size={11.5} weight={strong ? 800 : 500} fill={p.paint(strong ? "ink" : "muted")}>
-                {truncate(model.labels[k], catW - 4, 11.5, strong ? 800 : 500)}
+              <Txt key={key} x={colW ? v(0) + colW / 2 : catW} y={band(key) + band.bandwidth / 2} anchor={colW ? "middle" : "end"} size={11.5} weight={strong ? 800 : 500} fill={p.paint(strong ? "ink" : "muted")}>
+                {truncate(model.labels[k], colW ? colW - 16 : catW - 4, 11.5, strong ? 800 : 500)}
               </Txt>
             );
           })}

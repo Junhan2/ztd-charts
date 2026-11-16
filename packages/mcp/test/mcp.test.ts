@@ -46,7 +46,7 @@ describe("MCP tools", () => {
     expect(r.content[1].text).toContain("<LineChart");
     expect(j.variants.map((v: { id: string }) => v.id)).toContain("forecast");
     expect(firstJson((await call("get_chart_schema", { type: "doughnut" })).content).type).toBe("donut");
-    expect((await call("get_chart_schema", { type: "pyramid" })).isError).toBe(true);
+    expect((await call("get_chart_schema", { type: "wordCloud" })).isError).toBe(true);
     expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(44);
   });
   it("validate_spec: error paths and suggestions", async () => {

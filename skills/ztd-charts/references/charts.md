@@ -34,7 +34,7 @@
 - Use when: Ordered steps such as a sign-up or purchase flow
 - Avoid when: The steps have no order, or values grow from step to step
 - encoding: label, value
-- Chart options: showRates, rateBase: previous|first, rateLabel
+- Chart options: showRates, rateBase: previous|first, rateLabel, flow: down|right
 - Default highlight: the stage with the lowest conversion
 
 ```json
@@ -205,7 +205,7 @@
 - Use when: Comparing sizes across categories precisely
 - Avoid when: The flow over time is the point (a line works better)
 - encoding: x, y[], series?, line?[]
-- Chart options: layout: grouped|stacked|percent|diverging, orientation: vertical|horizontal, sort, negative, neutral, percent, aggregate: sum|mean|last|count, annotations, hidden
+- Chart options: layout: grouped|stacked|percent|diverging, orientation: vertical|horizontal, sort, negative, neutral, percent, centerLabels, aggregate: sum|mean|last|count, annotations, hidden
 - Default highlight: the first series or item
 - Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 
@@ -335,8 +335,8 @@
 - What: How much flows between stages
 - Use when: User flow from traffic source to purchase or drop-off
 - Avoid when: The flow loops back, or there are more than 30 nodes
-- encoding: source, target, value
-- Chart options: nodeWidth, nodePadding
+- encoding: source?, target?, dimensions?[], value?
+- Chart options: nodeWidth, nodePadding, dimensionLabels
 - Default highlight: the largest value
 
 ```json
@@ -388,7 +388,7 @@
 - Use when: Distribution and outliers together, such as response time by API
 - Avoid when: The audience is not used to quartiles (a beeswarm is easier)
 - encoding: group, value
-- Chart options: variant: box|violin|both, outliers, zero, whiskers
+- Chart options: variant: box|violin|both|raincloud, outliers, zero, whiskers
 - Default highlight: the largest value
 
 ```json
@@ -466,7 +466,7 @@
 - Use when: How two numeric values relate, such as cost and latency per request, with up to 4 series
 - Avoid when: x is time (a line works better), or there are more than 50,000 dots without bin "hex"
 - encoding: x, y, series?, label?
-- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter, xDomain, yDomain, bin: hex, binSize, colorSteps
+- Chart options: xLabel, yLabel, zero, maxLabels, canvasThreshold, xFormat, yScale: linear|log, hidden, fit: linear, refLines, quadrants, jitter, hull, xDomain, yDomain, bin: hex, binSize, colorSteps
 - Default highlight: none, or the first series when a series channel is set
 - Small multiples: spec.facet { by, columns?, scale?: "shared" | "free" }
 

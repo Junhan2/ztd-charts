@@ -29,16 +29,26 @@
           "type": "string",
           "description": "Target node (string)"
         },
+        "dimensions": {
+          "description": "Stage columns of a wide table, left to right (2 to 6). Each row is one path, so source and target are not used. Without value, each row counts 1 (string)",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
+        },
         "value": {
           "type": "string",
           "description": "Value field (number)"
         }
       },
-      "required": [
-        "source",
-        "target",
-        "value"
-      ],
       "additionalProperties": false
     },
     "options": {
@@ -53,6 +63,10 @@
           "description": "Gap between nodes (px)",
           "default": 14,
           "type": "number"
+        },
+        "dimensionLabels": {
+          "description": "Rename the stage columns of encoding.dimensions: { field: title }",
+          "type": "object"
         },
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",

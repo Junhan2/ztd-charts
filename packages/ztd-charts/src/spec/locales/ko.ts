@@ -50,7 +50,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "단계에 순서가 없거나 값이 늘어날 때",
     why: "전환율이 가장 낮은 단계를 자동으로 강조해서 어디서 이탈하는지 바로 보여요.",
     channels: { label: "단계 이름", value: "단계 인원" },
-    options: { showRates: "오른쪽에 전환율 표시", rateBase: "전환율 기준", rateLabel: '전환율 열 제목. 한국어 로캘의 기본값은 "전 단계 대비"' },
+    options: { showRates: "오른쪽에 전환율 표시", rateBase: "전환율 기준", rateLabel: '전환율 열 제목. 한국어 로캘의 기본값은 "전 단계 대비"', flow: '단계 방향. "right"는 단계마다 열을 왼쪽에서 오른쪽으로 세우고, 전 단계 대비 전환율을 막대 사이 띠 위에 적어요(rateBase가 "first"면 인원 아래에). 열이 막대와 전환율을 담기에 좁으면 "down"으로 그려요' },
     example: { data: S.funnelSampleKo, encoding: { label: "stage", value: "users" }, card: { subtitle: "단계별 사용자(명)", takeaway: "단계별 이탈" } },
   },
   waffle: {
@@ -176,7 +176,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "시간 흐름이 핵심일 때(라인 차트가 나아요)",
     why: "계열이 하나면 가장 큰 막대만, 여럿이면 강조 계열만 색으로 칠해요.",
     channels: { x: "범주 필드", y: "값 필드. 넓은 표에서는 배열", series: "계열 필드", line: "세로 막대 위에 같은 축으로 그리는 선(목표, 작년 등). 여럿이면 배열. highlight를 정하지 않으면 막대는 회색이고, 계열 필드가 있으면 같은 x의 값을 평균해요" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: '계열 배치 방식. "diverging"은 negative 계열을 0선 왼쪽, 나머지를 오른쪽에 쌓아요(리커트 설문, 찬반, 인구 피라미드)', orientation: '방향. layout "diverging"이면 기본이 가로예요', sort: 'true면 값 순 정렬(계열 하나일 때). layout "diverging"에서 "positive"나 "negative"면 그쪽 합계가 큰 줄부터', negative: 'layout "diverging": 0선 왼쪽(세로면 아래)에 놓을 계열, 0선에서 바깥 순서. 넓은 표는 y 필드 이름, 긴 표는 series 값. 나머지 계열은 데이터 순서로 오른쪽에 놓고, 이미 음수인 값은 왼쪽에 둬요. 예: ["반대", "매우 반대"]', neutral: 'layout "diverging": 0선 양쪽에 반씩 놓는 계열. 예: "보통"', percent: 'layout "diverging": 조각마다 그 줄 절댓값 합의 몫(%)', annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]", hidden: HIDDEN },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', layout: '계열 배치 방식. "diverging"은 negative 계열을 0선 왼쪽, 나머지를 오른쪽에 쌓아요(리커트 설문, 찬반, 인구 피라미드)', orientation: '방향. layout "diverging"이면 기본이 가로예요', sort: 'true면 값 순 정렬(계열 하나일 때). layout "diverging"에서 "positive"나 "negative"면 그쪽 합계가 큰 줄부터', negative: 'layout "diverging": 0선 왼쪽(세로면 아래)에 놓을 계열, 0선에서 바깥 순서. 넓은 표는 y 필드 이름, 긴 표는 series 값. 나머지 계열은 데이터 순서로 오른쪽에 놓고, 이미 음수인 값은 왼쪽에 둬요. 예: ["반대", "매우 반대"]', neutral: 'layout "diverging": 0선 양쪽에 반씩 놓는 계열. 예: "보통"', percent: 'layout "diverging": 조각마다 그 줄 절댓값 합의 몫(%)', centerLabels: 'layout "diverging"인 가로 막대에 neutral 계열이 없을 때: 줄 이름을 왼쪽 대신 0선 자리의 열에 적어요(인구 피라미드). 양쪽의 1단위 길이가 같아요', annotations: "세로 막대 주석: 목표 구간, 기간, 기준선, 사건, 예측(뒤 막대는 옅게 점선 테두리), 추세선. [{ type, x, y, from, label }]", hidden: HIDDEN },
     example: { data: S.barSampleKo, encoding: { x: "quarter", y: "revenue", series: "team" }, options: { layout: "stacked", highlight: "해외" }, card: { subtitle: "분기별 매출(억 원)", takeaway: "해외 비중이 매 분기 커져요", legend: "auto" } },
   },
   radialBar: {
@@ -265,8 +265,8 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     useWhen: "유입 채널에서 구매나 이탈까지 사용자 흐름을 볼 때",
     avoidWhen: "흐름이 순환하거나 노드가 30개를 넘을 때",
     why: "노드 위치를 여러 번 고쳐 겹침을 줄이는 배치(relaxation)를 의존성 없이 구현했어요. 띠가 왼쪽에서 오른쪽으로 흘러가며 등장해요.",
-    channels: { source: "출발 노드", target: "도착 노드", value: "값 필드" },
-    options: { nodeWidth: "노드 폭(px)", nodePadding: "노드 간격(px)" },
+    channels: { source: "출발 노드", target: "도착 노드", dimensions: "넓은 표의 단계 열, 왼쪽부터(2~6개). 행 하나가 경로 하나라서 source와 target은 쓰지 않아요. value가 없으면 행마다 1로 세요", value: "값 필드" },
+    options: { nodeWidth: "노드 폭(px)", nodePadding: "노드 간격(px)", dimensionLabels: "encoding.dimensions 단계 열 이름 바꾸기: { 필드: 제목 }" },
     example: { data: S.sankeySampleKo, encoding: { source: "source", target: "target", value: "value" }, options: { highlight: "구매", unit: "명" }, card: { subtitle: "유입에서 구매까지(명)", takeaway: "상품 상세에서 절반이 떠나요" } },
   },
   chord: {
@@ -300,9 +300,9 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     summary: "그룹별 분포 요약(사분위, 중앙값, 이상값)",
     useWhen: "API별 응답 시간처럼 분포와 이상값을 같이 볼 때",
     avoidWhen: "청중이 사분위에 익숙하지 않을 때(비스웜이 쉬워요)",
-    why: "variant 하나로 박스, 바이올린, 둘 다 중에서 골라요. 중앙값에서 위아래로 펼쳐지며 등장해요.",
+    why: "variant 하나로 박스, 바이올린, 둘 다, 빗방울 구름(반쪽 밀도 곡선, 얇은 상자, 표본마다 점) 중에서 골라요. 중앙값에서 위아래로 펼쳐지며 등장해요.",
     channels: { group: "그룹 필드", value: "값 필드" },
-    options: { variant: "모양", outliers: "이상값 점 표시", zero: "축에 0 포함", whiskers: "수염 끝 백분위 [낮은 쪽, 높은 쪽]. 예: [5, 95]. 없으면 사분위 범위의 1.5배 안에서 가장 먼 값" },
+    options: { variant: "모양", outliers: "이상값 점 표시. 빗방울 구름은 점이 모든 표본을 보여 주므로 무시해요", zero: "축에 0 포함", whiskers: "수염 끝 백분위 [낮은 쪽, 높은 쪽]. 예: [5, 95]. 없으면 사분위 범위의 1.5배 안에서 가장 먼 값" },
     example: { data: S.boxSample, encoding: { group: "api", value: "ms" }, options: { unit: "ms", variant: "box" }, card: { subtitle: "API별 응답 시간(ms)", takeaway: "결제 API가 가장 느려요" } },
   },
   parallel: {
@@ -511,6 +511,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
       refLines: "기준선 { x, y }. 둘 다 있으면 그림을 사분면으로 나눠요",
       quadrants: "사분면 이름. refLines에 x와 y가 모두 있을 때 그려요. 순서는 왼쪽 위, 오른쪽 위, 왼쪽 아래, 오른쪽 아래",
       jitter: "{ amount, seed }: x 값이 같은 점을 옆으로 퍼뜨려요. 가장 좁은 x 간격 × amount(기본 0.4)까지 움직이고, 씨앗(seed, 기본 1)이 같으면 언제나 같은 그림이에요",
+      hull: '보이는 계열마다(계열 채널이 없으면 전체 점에 하나) 점 아래에 계열 색의 둥근 윤곽을 그려요. 모든 점이 윤곽 안에 들어가요. bin "hex"에서는 그리지 않아요',
       xDomain: '고정 x 범위 [처음, 끝], 작은 값이 먼저예요. 확대할 때 써요: 범위 밖 점은 그리지 않고, bin "hex"는 범위 안 점만 세요',
       yDomain: '고정 y 범위 [아래, 위], 작은 값이 먼저예요. yScale "log"면 두 끝이 0보다 커야 해요',
       bin: '"hex"면 점을 육각 칸에 세어 점 수로 칠해요. 점이 수만 개여도 어디에 몰렸는지 보여요. 빈 칸은 그리지 않고, 계열, 크기, 점 이름, 흔들림, 캔버스 전환은 쓰지 않아요',

@@ -353,6 +353,14 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     out.push(mk(third ? "bubble" : "scatter", n < 6 ? 0.7 : named || nums.length >= 3 || n >= 20 ? 0.88 : 0.8, third ? t(`A bubble chart shows ${xs.name}, ${ys.name} and ${third.name} together`, `버블 차트로 ${xs.name}, ${ys.name}, ${third.name} 세 값을 함께 보여 줘요`) : t(`A scatter plot shows how ${xs.name} relates to ${ys.name}`, `산점도로 ${xs.name} 값과 ${ys.name} 값의 관계를 보여 줘요`), rows, enc));
   }
 
+  // Stages: 3 or more category columns of 2 to 12 values, with no date, source or target column, read as one path per row (a wide table). Last, so it never moves an existing suggestion of the same score
+  const stageCols = cats.filter((c) => c.distinct >= 2 && c.distinct <= 12);
+  if (stageCols.length >= 3 && !src && !dst && !cols.some((c) => c.kind === "date")) {
+    const names = stageCols.slice(0, 6).map((c) => c.name);
+    const path = names.join(" → ");
+    out.push(mk("sankey", 0.78, t(`Each row runs ${path}, so a Sankey diagram shows how the amount splits at each stage`, `행마다 ${path} 순서로 이어져서 생키 다이어그램으로 단계마다 양이 나뉘는 모습을 보여 줘요`), rows, { dimensions: names, ...(v0 && { value: v0.name }) }));
+  }
+
   // Keep only the highest score per type
   const best = new Map<string, Suggestion>();
   for (const s of out) {

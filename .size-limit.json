@@ -33,7 +33,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "12.4 KB"
+    "limit": "12.8 KB"
   },
   {
     "name": "WaffleChart",
@@ -189,7 +189,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "21.95 KB"
+    "limit": "22.06 KB"
   },
   {
     "name": "RadialBarChart",
@@ -309,7 +309,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "13.6 KB"
+    "limit": "14.65 KB"
   },
   {
     "name": "ChordChart",
@@ -357,7 +357,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "14.4 KB"
+    "limit": "14.92 KB"
   },
   {
     "name": "ParallelCoordinates",
@@ -429,7 +429,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "22.55 KB"
+    "limit": "23.19 KB"
   },
   {
     "name": "TileMap",
@@ -603,7 +603,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "139.3 KB"
+    "limit": "141.99 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -615,7 +615,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "182.9 KB"
+    "limit": "186.41 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -627,7 +627,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "53.85 KB"
+    "limit": "55.07 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",
@@ -635,6 +635,6 @@
       "packages/cli/dist/client/react.js",
       "packages/cli/dist/client/area.js"
     ],
-    "limit": "100.45 KB"
+    "limit": "100.54 KB"
   }
 ]

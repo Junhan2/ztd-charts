@@ -45,11 +45,12 @@
           "enum": [
             "box",
             "violin",
-            "both"
+            "both",
+            "raincloud"
           ]
         },
         "outliers": {
-          "description": "Show outlier dots",
+          "description": "Show outlier dots. Raincloud ignores it, since its dots show every sample",
           "default": true,
           "type": "boolean"
         },

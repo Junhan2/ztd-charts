@@ -47,7 +47,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (English by default, Korean with --locale ko)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.11.3");
+    expect((await run("--version")).out.trim()).toBe("0.12.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
@@ -333,6 +333,15 @@ describe("CLI API", () => {
     const a = await png(spec);
     expect(a.equals(await png(spec))).toBe(true);
     // The jitter really changes the image
+    expect(a.equals(await png(def.example))).toBe(false);
+  });
+  it("scatter with group outlines (hull) draws the same PNG twice", async () => {
+    const def = CHARTS.find((c) => c.type === "scatter")!;
+    const spec = { ...def.example, options: { ...def.example.options, hull: true } };
+    const png = async (s: Parameters<typeof render>[0]) => (await render(s, { format: "png", width: 560, scale: 1 })).png!;
+    const a = await png(spec);
+    expect(a.equals(await png(spec))).toBe(true);
+    // The outlines really change the image
     expect(a.equals(await png(def.example))).toBe(false);
   });
   it("suggest", () => {
