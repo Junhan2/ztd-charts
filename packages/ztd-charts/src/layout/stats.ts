@@ -207,7 +207,7 @@ const LOG_STEPS = [[1], [1, 3], [1, 2, 5], [1, 1.6, 2.5, 4, 6.3], [1, 1.25, 1.6,
 const tidy = (v: number) => Number(v.toPrecision(12));
 
 /** An easy-to-read width. With up, the smallest such value at or above w; otherwise the nearest one */
-function niceWidth(w: number, up = false): number {
+export function niceWidth(w: number, up = false): number {
   const p = 10 ** Math.floor(Math.log10(w));
   const list = NICE.map((m) => tidy(m * p));
   if (up) return list.find((c) => c >= w * (1 - 1e-9)) ?? tidy(10 * p);

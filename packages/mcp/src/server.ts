@@ -4,7 +4,7 @@ import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSni
 import { CHARTS, GROUPS, LEVELS, parseCSV, normalizeData, specLocale, type ChartGroup, type ChartLevel } from "ztd-charts/spec";
 
 export const SERVER_NAME = "ztd-charts";
-export const SERVER_VERSION = "0.12.0";
+export const SERVER_VERSION = "0.13.0";
 /** Chart count used in the descriptions. Counted from the list so adding a chart needs no manual edit */
 const N = CHARTS.length;
 
@@ -45,7 +45,7 @@ export function createServer(): McpServer {
     "get_chart_schema",
     {
       title: "Get chart schema",
-      description: `Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all ${N} charts (about 336 KB, so prefer asking for one type).`,
+      description: `Get the JSON Schema for one chart type (encoding channels, options with types/defaults), plus a complete example spec and a React snippet. Omit type for the full schema of all ${N} charts (about 365 KB, so prefer asking for one type).`,
       inputSchema: { type: z.string().optional().describe('Chart type, e.g. "pie", "line", "sankey". Aliases like "doughnut", "violin" work.') },
       annotations: { readOnlyHint: true, idempotentHint: true },
     },

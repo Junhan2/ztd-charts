@@ -5,9 +5,10 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { gzipSync } from "node:zlib";
+import { gzipSync, inflateSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { findFonts, getChartSchema, listCharts, reactSnippet, render, specSnippet, stripEmoji, suggest, validate } from "../src/api";
+import { lightTheme, mixHex } from "ztd-charts";
 import { BUILTIN_MAPS, CHARTS } from "ztd-charts/spec";
 
 const exec = promisify(execFile);
@@ -22,6 +23,38 @@ const run = async (...args: string[]) => {
     return { code: x.code, out: x.stdout, err: x.stderr };
   }
 };
+
+/**
+ * Color of one pixel of a PNG from render(): resvg writes 8-bit RGBA without interlacing, so inflating the IDAT chunks and undoing each row's filter is enough.
+ * No PNG library, because the public repo's tests have none
+ */
+function pngPixel(png: Buffer): (x: number, y: number) => string {
+  expect([png[24], png[25], png[28]]).toEqual([8, 6, 0]);
+  const w = png.readUInt32BE(16);
+  const idat: Buffer[] = [];
+  for (let o = 8; o < png.length; o += png.readUInt32BE(o) + 12) if (png.toString("latin1", o + 4, o + 8) === "IDAT") idat.push(png.subarray(o + 8, o + 8 + png.readUInt32BE(o)));
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = w * 4;
+  const rows = raw.length / (stride + 1);
+  const px = Buffer.alloc(rows * stride);
+  for (let y = 0; y < rows; y++) {
+    const f = raw[y * (stride + 1)];
+    for (let i = 0; i < stride; i++) {
+      const a = i >= 4 ? px[y * stride + i - 4] : 0;
+      const b = y ? px[(y - 1) * stride + i] : 0;
+      const c = y && i >= 4 ? px[(y - 1) * stride + i - 4] : 0;
+      const p = a + b - c;
+      const paeth = Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c) ? a : Math.abs(p - b) <= Math.abs(p - c) ? b : c;
+      px[y * stride + i] = (raw[y * (stride + 1) + 1 + i] + [0, a, b, (a + b) >> 1, paeth][f]) & 255;
+    }
+  }
+  return (x, y) => {
+    const o = Math.round(y) * stride + Math.round(x) * 4;
+    return `#${[px[o], px[o + 1], px[o + 2]].map((v) => v.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+  };
+}
+/** Whether two #RRGGBB colors differ by at most 2 in every channel */
+const near = (a: string, b: string) => [1, 3, 5].every((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <= 2);
 
 let server: Server;
 let base = "";
@@ -47,7 +80,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (English by default, Korean with --locale ko)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.12.0");
+    expect((await run("--version")).out.trim()).toBe("0.13.0");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
@@ -77,13 +110,13 @@ describe("ztd-charts CLI", () => {
     expect((await inH("rendr", "--help")).code).toBe(1);
     expect((await run("help")).out).toContain("ztd-charts snippet <spec.json>");
   });
-  it("list: 44 charts (table, JSON, the level filter takes the id or the old Korean name)", async () => {
+  it("list: 47 charts (table, JSON, the level filter takes the id or the old Korean name)", async () => {
     const t = await run("list");
-    expect(t.out).toContain("44 charts");
+    expect(t.out).toContain("47 charts");
     expect(t.out).toContain("Intermediate");
-    expect((await run("list", "--locale=ko")).out).toContain("44종");
+    expect((await run("list", "--locale=ko")).out).toContain("47종");
     const j = JSON.parse((await run("list", "--json")).out);
-    expect(j).toHaveLength(44);
+    expect(j).toHaveLength(47);
     const adv = JSON.parse((await run("list", "--level", "심화", "--json")).out);
     expect(adv.length).toBeGreaterThan(0);
     expect(adv.every((c: { level: string }) => c.level === "advanced")).toBe(true);
@@ -92,7 +125,7 @@ describe("ztd-charts CLI", () => {
   it("info, schema, example", async () => {
     expect((await run("info", "sankey")).out).toContain("<SankeyChart");
     const all = JSON.parse((await run("schema")).out);
-    expect(all.oneOf).toHaveLength(44);
+    expect(all.oneOf).toHaveLength(47);
     await run("schema", "pie", "--out", "pie.schema.json");
     expect(JSON.parse(readFileSync(join(dir, "pie.schema.json"), "utf8")).properties.type.const).toBe("pie");
     await run("example", "donut", "--out", "donut.json");
@@ -258,7 +291,7 @@ describe("CLI API", () => {
     expect((await render({ type: "bar", data: [{ k: "배", v: 5 }], encoding: { x: "k", y: "v" } }, { format: "png" })).notes).toBeUndefined();
   });
   it("listCharts, getChartSchema, validate, reactSnippet", () => {
-    expect(listCharts()).toHaveLength(44);
+    expect(listCharts()).toHaveLength(47);
     expect(listCharts({ group: "flow" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(listCharts({ group: "흐름" }).map((c) => c.type)).toEqual(["funnel", "sankey", "chord"]);
     expect(getChartSchema("violin")).toMatchObject({ properties: { type: { const: "box" } } });
@@ -299,12 +332,24 @@ describe("CLI API", () => {
     // The line over bars is a channel too, so it passes through as is
     expect(reactSnippet({ type: "bar", data: [{ m: "1월", 올해: 1, 작년: 2 }], encoding: { x: "m", y: "올해", line: "작년" } })).toContain('line="작년"');
   });
-  it("render draws all 44 charts as PNG", async () => {
+  it("render draws all 47 charts as PNG", async () => {
     for (const c of CHARTS) {
       const r = await render(c.example, { format: "png", width: 560, scale: 1 });
       expect(r.png!.subarray(1, 4).toString(), c.type).toBe("PNG");
       expect(r.width).toBe(560);
     }
+  });
+  it("render: a horizon band redrawn with <use> keeps its own color in the PNG", async () => {
+    // B is 10 (15 / 2 rounded up), so 15 fills band 1 and the lower half of band 2: band 2's color in the lower half of the row, band 1's above it
+    const spec = { type: "horizon", data: Array.from({ length: 10 }, (_, i) => ({ t: i, s: "A", v: 15 })), encoding: { x: "t", y: "v", series: "s" }, options: { bands: 2, legend: false, showValues: false } };
+    const svg = (await render(spec, { format: "svg", width: 400, theme: "light" })).svg!;
+    expect(svg).toMatch(/<use href="#[^"]+" y="[^"]+" fill="#[0-9A-F]{6}"><\/use>/i);
+    const [x, y, w, h] = /<clipPath id="[^"]+"><rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/.exec(svg)!.slice(1).map(Number);
+    const at = pngPixel((await render(spec, { format: "png", width: 400, theme: "light", scale: 1 })).png!);
+    // The chart sits at the 24px padding of an image without a card
+    const band2 = mixHex(lightTheme.accent, lightTheme.ink, 0.6);
+    expect(at(24 + x + w / 2, 24 + y + h * 0.78), "band 2").toSatisfy((c: string) => near(c, band2));
+    expect(at(24 + x + w / 2, 24 + y + h * 0.22), "band 1").toSatisfy((c: string) => near(c, lightTheme.accent));
   });
   it("render makes the same PNG twice from the same skyline spec (default width)", async () => {
     const spec = CHARTS.find((c) => c.type === "skyline")!.example;

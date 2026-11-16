@@ -1,6 +1,6 @@
 # ztd charts: full reference
 
-> ztd charts (npm package ztd-charts) is a React 18+ chart library with 44 animated, interactive, accessible chart types drawn in pure SVG. It has zero runtime dependencies: react and react-dom are peer dependencies. Each chart can be written as a JSON spec { type, data, encoding, options, card } and rendered with <Chart spec/>, validated against a JSON Schema, drawn to PNG, SVG or HTML by the ztd-charts CLI, or picked and drawn by AI agents through a stdio MCP server. MIT license.
+> ztd charts (npm package ztd-charts) is a React 18+ chart library with 47 animated, interactive, accessible chart types drawn in pure SVG. It has zero runtime dependencies: react and react-dom are peer dependencies. Each chart can be written as a JSON spec { type, data, encoding, options, card } and rendered with <Chart spec/>, validated against a JSON Schema, drawn to PNG, SVG or HTML by the ztd-charts CLI, or picked and drawn by AI agents through a stdio MCP server. MIT license.
 
 Key facts:
 
@@ -37,14 +37,14 @@ Channels whose prop name differs: gauge value -> valueKey, gauge target -> targe
 
 Entry points:
 
-- `ztd-charts`: the 44 chart components (<PieChart>, <LineChart> and so on), <Chart spec/>, <ChartCard>, <ChartGrid>, <ChartFacets> (small multiples), <ChartState>, <ThemeProvider>, useChartData, number formatters
+- `ztd-charts`: the 47 chart components (<PieChart>, <LineChart> and so on), <Chart spec/>, <ChartCard>, <ChartGrid>, <ChartFacets> (small multiples), <ChartState>, <ThemeProvider>, useChartData, number formatters
 - `ztd-charts/spec`: works without React. CHARTS (the registry), validateSpec, specSchema, schemaFor, suggestCharts, chartsIn, localizeDef, sample data
 - `ztd-charts/server`: renderSpecToSVG (a standalone SVG with the card frame), renderSpecToHTML, resolveSpecData
 - `ztd-charts/schema.json`: JSON Schema (draft 2020-12) for every spec. One chart: `ztd-charts/schema/charts/<type>.schema.json`
 
 Spec:
 
-- type: one of the 44 types below. Aliases: doughnut -> donut, column -> bar, stackedBar -> bar, groupedBar -> bar, butterfly -> bar, pyramid -> bar, populationPyramid -> bar, stacked -> area, streamgraph -> stream, radial -> radialBar, radialbar -> radialBar, progress -> gauge, progressRing -> gauge, kpi -> gauge, violin -> box, boxplot -> box, raincloud -> box, calendarHeatmap -> calendar, parallel-coordinates -> parallel, parallelCoordinates -> parallel, mekko -> marimekko, spider -> radar, ohlc -> candlestick, candle -> candlestick, stock -> candlestick, segment -> segmented, segmentedBar -> segmented, proportionBar -> segmented, stackedBar100 -> segmented, hist -> histogram, tilemap -> tileMap, tileGrid -> tileMap, cartogram -> tileMap, barChartRace -> barRace, racingBar -> barRace, racingBars -> barRace, raceBar -> barRace, arcDiagram -> network, graph -> network, nodeLink -> network, gantt -> timeline, ganttChart -> timeline, schedule -> timeline, dendrogram -> tree, orgChart -> tree, treeChart -> tree, choroplethMap -> choropleth, filledMap -> choropleth, map -> choropleth, bubbleMap -> symbolMap, proportionalSymbolMap -> symbolMap, pointMap -> symbolMap, originDestination -> flowMap, odMap -> flowMap, alluvial -> sankey, parallelSets -> sankey
+- type: one of the 47 types below. Aliases: doughnut -> donut, column -> bar, stackedBar -> bar, groupedBar -> bar, butterfly -> bar, pyramid -> bar, populationPyramid -> bar, stacked -> area, streamgraph -> stream, radial -> radialBar, radialbar -> radialBar, progress -> gauge, progressRing -> gauge, kpi -> gauge, violin -> box, boxplot -> box, raincloud -> box, calendarHeatmap -> calendar, parallel-coordinates -> parallel, parallelCoordinates -> parallel, mekko -> marimekko, spider -> radar, ohlc -> candlestick, candle -> candlestick, stock -> candlestick, segment -> segmented, segmentedBar -> segmented, proportionBar -> segmented, stackedBar100 -> segmented, hist -> histogram, tilemap -> tileMap, tileGrid -> tileMap, cartogram -> tileMap, barChartRace -> barRace, racingBar -> barRace, racingBars -> barRace, raceBar -> barRace, arcDiagram -> network, graph -> network, nodeLink -> network, gantt -> timeline, ganttChart -> timeline, schedule -> timeline, dendrogram -> tree, orgChart -> tree, treeChart -> tree, choroplethMap -> choropleth, filledMap -> choropleth, map -> choropleth, bubbleMap -> symbolMap, proportionalSymbolMap -> symbolMap, pointMap -> symbolMap, originDestination -> flowMap, odMap -> flowMap, alluvial -> sankey, parallelSets -> sankey, kpiTable -> sparkTable, metricTable -> sparkTable, sparklineTable -> sparkTable, retention -> cohort, cohortTable -> cohort, retentionTable -> cohort, horizonChart -> horizon, horizonGraph -> horizon
 - data: an array of row objects, { values }, { csv } or { url, format?, select? }. <Chart>, the CLI and the MCP render_chart tool fetch the url.
 - encoding: channel -> field name. y can be an array of fields for wide tables.
 - options.highlight: Item to highlight. An index, a name, an array, or "max" | "min" | "first" | "last" | "none". Without it, each chart picks its own default (listed per chart in llms-full.txt).
@@ -63,13 +63,13 @@ Data helpers:
 - Accessors accept a field name (dot paths ok) or a function (d, i) => value. Strings like "1,234", "12%", "₩5,000" are read as numbers.
 - <ChartState loading error empty onRetry> shows matching states at chart height.
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.91 KB, DonutChart 13.96 KB, FunnelChart 12.79 KB, WaffleChart 15.16 KB, Treemap 12.84 KB, SunburstChart 13.26 KB, WaterfallChart 13.48 KB, ParetoChart 13.76 KB, MarimekkoChart 13.14 KB, Heatmap 14.27 KB, RadarChart 13.74 KB, BubbleChart 16.69 KB, LineChart 26.25 KB, AreaChart 26.25 KB, StreamGraph 16.53 KB, BarChart 22.06 KB, RadialBarChart 11.89 KB, GaugeChart 12.03 KB, BulletChart 12.71 KB, Sparkline 14.56 KB, SlopeChart 12.83 KB, DumbbellChart 12.33 KB, LollipopChart 13.13 KB, BeeswarmChart 14.14 KB, RidgelineChart 13.02 KB, SankeyChart 14.62 KB, ChordChart 12.6 KB, CalendarHeatmap 15.09 KB, BumpChart 14.55 KB, BoxPlot 14.92 KB, ParallelCoordinates 13.61 KB, CandlestickChart 20.21 KB, SegmentedBar 12.54 KB, SkylineChart 19.38 KB, HistogramChart 18.34 KB, ScatterChart 23.19 KB, TileMap 15.88 KB, Choropleth 19.04 KB, SymbolMap 20.35 KB, FlowMap 21.08 KB, Tree 16.97 KB, Timeline 20.78 KB, BarRace 17.85 KB, NetworkChart 15.94 KB, StatCard 15.22 KB, LiveLineChart 13.67 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.91 KB, DonutChart 13.96 KB, FunnelChart 12.79 KB, WaffleChart 15.16 KB, Treemap 12.84 KB, SunburstChart 13.26 KB, WaterfallChart 13.48 KB, ParetoChart 13.76 KB, MarimekkoChart 13.14 KB, Heatmap 14.27 KB, RadarChart 13.74 KB, BubbleChart 16.69 KB, LineChart 26.25 KB, AreaChart 26.25 KB, StreamGraph 16.53 KB, BarChart 22.06 KB, RadialBarChart 11.89 KB, GaugeChart 12.03 KB, BulletChart 12.71 KB, Sparkline 14.56 KB, SlopeChart 12.83 KB, DumbbellChart 12.33 KB, LollipopChart 13.13 KB, BeeswarmChart 14.14 KB, RidgelineChart 13.02 KB, SankeyChart 14.62 KB, ChordChart 12.6 KB, CalendarHeatmap 15.09 KB, BumpChart 14.55 KB, BoxPlot 14.92 KB, ParallelCoordinates 13.61 KB, CandlestickChart 20.21 KB, SegmentedBar 12.54 KB, SkylineChart 19.38 KB, HistogramChart 18.34 KB, ScatterChart 23.19 KB, TileMap 15.88 KB, Choropleth 19.04 KB, SymbolMap 20.35 KB, FlowMap 21.08 KB, Tree 16.97 KB, Timeline 20.78 KB, BarRace 17.85 KB, NetworkChart 15.94 KB, SparkTable 15.88 KB, CohortChart 13.57 KB, HorizonChart 17.6 KB, StatCard 15.22 KB, LiveLineChart 13.67 KB
 
 Source: https://github.com/Junhan2/ztd-charts (MIT license). The two sections below are the agent skill (skills/ztd-charts/SKILL.md) and the reference for every chart, both from the repository.
 
 ## ztd charts skill
 
-44 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
+47 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
 
 ### Steps
 
@@ -95,6 +95,7 @@ Decide the question first, then the form.
 | Structure, paths (org chart, folders, dependencies, outage reach) | parent + child, nested children, or id + parent rows | `tree` (`highlight` names or paths such as "Orders/Checkout" light the route to the root) | `treemap` (when each part's share matters more) |
 | Change over time | date + value (+ series) | `line` | `area` (when the sum means something), `sparkline` (next to a KPI) |
 | Mix changing over time | date + series + value | `area` stack | `stream` (5 or more series, flow first) |
+| Many series over time in one unit (13 to 60) | date + series + value | `horizon` (one thin row per series, each value folded into color bands; the legend on top gives each band's range; values below `baseline` mirror in gray; `scale: "free"` fits each row to its own values) | `line` with `facet` (12 or fewer series), `sparkTable` (series in different units) |
 | Rank changes | period + item + rank | `bump` | `slope` (two periods only), `barRace` (told as a story in a talk or video, one step at a time) |
 | Two points in time | item + before/after | `dumbbell` | `slope` |
 | When things ran and what overlapped (schedule, job runs, agent run, incident) | label + start + end (numbers or dates) | `timeline` (same label shares a row; start = end is a point event; empty end is still open, up to `now`; one label with `status` per segment is a status strip, colored by state) | `bar` (only the duration matters) |
@@ -106,6 +107,7 @@ Decide the question first, then the form.
 | Who is connected, who is central | source + target (+ value) | `network` (arc layout, `groups` for node groups) | `chord` (10 groups or fewer, amounts matter) |
 | Distribution | group + many values | `box` | `histogram` (one measure's shape, p95 and a limit), `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
 | Finding patterns | category × category + value | `heatmap` | `calendar` (daily, one year) |
+| Retention by signup cohort | cohort + period since start + people or share (+ cohort size) | `cohort` (one row per cohort; the first period, where everyone is still there, is gray and left out of the color scale; the average row on top is weighted by cohort size) | `heatmap` (any two categories), `line` (two cohorts' curves compared exactly) |
 | Comparing regions | region (name or code) + value | `tileMap` (`"auto"` picks the grid from the data: `us-states` for the 50 US states and DC, `kr-sido` for Korea's 16 regions from 2026-07-01; `kr-sido-2025` for older data with Gwangju and Jeonnam apart; or your own grid) | `bar` (exact ranking matters more than place) |
 | Where it is high and low on a real map | region (name or code) + value | `choropleth` (`"auto"` picks the map from the data: `world` by ISO code or country name, `us-states`, `kr-sido`, or a GeoJSON FeatureCollection; `focus: "europe"` crops the world map. Server, CLI and MCP load the maps; in the browser register the one you draw, for this and the other two map charts: `import { world } from "ztd-charts/geo/world"; registerMap(world)`) | `tileMap` (every region equally visible, small ones included) |
 | Amounts at places on a map | lon + lat (or a country or state name) + value | `symbolMap` (circle area is the value; `"auto"` picks the map that holds the points, so US cities land on `us-states`; no city list ships, so cities need coordinates) | `choropleth` (a rate across whole regions) |
@@ -113,6 +115,7 @@ Decide the question first, then the form.
 | Two or three metrics together | 2 or 3 numbers + name | `scatter` (two numbers) | `bubble` (a third number as size), `scatter` with `bin: "hex"` (thousands of overlapping points: hexagons shaded by count) |
 | Comparing several metrics | item × metrics (4 to 8) | `radar` (1 or 2 series) | `parallel` (many items) |
 | Against a target | value + target | `gauge` (one), `bullet` (several) | `radialBar` (3 to 6 goals) |
+| Several KPIs in different units at a glance | metric + period + value (+ target) | `sparkTable` (one row per metric: trend, latest value, change, target; `metrics` sets format, unit and `better: "down"` per row) | `line` (one metric's exact values), `bullet` (actual against target without the trend) |
 
 Avoid: more than 5 items in a pie, 3 or more series in a radar, bubble size for exact comparison, a line over unordered categories.
 
@@ -195,7 +198,7 @@ export function Revenue() {
 - MCP (stdio): `npx -y ztd-charts-mcp`. Tools `list_charts`, `get_chart_schema`, `validate_spec`, `render_chart`, `suggest_chart`. `render_chart` takes `locale: "ko"` for Korean chart text.
 - Without React, `ztd-charts/spec` has the registry in English. Korean names, descriptions and examples: `chartsIn("ko")` or `localizeDef(def, "ko")`. Korean messages: `validateSpec(spec, { lang: "ko" })`, `suggestCharts(rows, { lang: "ko" })`.
 
-## Reference for all 44 charts
+## Reference for all 47 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -773,6 +776,45 @@ export function Revenue() {
 
 ```json
 {"type":"flowMap","data":[{"from":"Shanghai","to":"Los Angeles","teu":412000},{"from":"Shanghai","to":"Rotterdam","teu":268000},{"from":"Singapore","to":"Rotterdam","teu":231000}],"encoding":{"source":"from","target":"to","value":"teu"},"options":{"places":{"Shanghai":[121.47,31.23],"Singapore":[103.82,1.35],"Rotterdam":[4.48,51.92],"Los Angeles":[-118.24,34.05],"Busan":[129.08,35.18],"Dubai":[55.27,25.2],"New York":[-74.01,40.71],"Santos":[-46.33,-23.96],"Hamburg":[9.99,53.55]},"format":"compact"},"card":{"number":"44","title":"Flow map","subtitle":"Container shipments between ports (TEU)","takeaway":"Shanghai to LA is the top lane","level":"advanced"}}
+```
+
+### sparkTable · KPI table (`<SparkTable>`, Basic, KPI)
+
+- What: One row per metric: its trend, latest value, change and target side by side
+- Use when: The latest value and trend of several metrics in different units, in one table
+- Avoid when: Readers need the exact changes of one metric over time (a line chart does that)
+- encoding: label, x, value, target?
+- Chart options: metrics, better: up|down, change: period|previous|none, changeLabel, sort: none|value|change, valueBar, rowHeight, header, aggregate: sum|mean|last|count, dayFirst
+- Default highlight: none (options.highlight names rows)
+
+```json
+{"type":"sparkTable","data":[{"metric":"Revenue","week":"2026-07-06","value":171200,"target":190000},{"metric":"Revenue","week":"2026-07-13","value":174900,"target":190000},{"metric":"Revenue","week":"2026-07-20","value":173400,"target":190000}],"encoding":{"label":"metric","x":"week","value":"value","target":"target"},"options":{"metrics":{"Revenue":{"format":"currency"},"Churn rate":{"unit":"%","better":"down"},"p95 response time":{"unit":"ms","better":"down"}}},"card":{"number":"45","title":"KPI table","subtitle":"Last 12 weeks, dashed line is the target","takeaway":"Only p95 response time got worse","level":"basic"}}
+```
+
+### cohort · Cohort chart (`<CohortChart>`, Intermediate, Trend)
+
+- What: Retention by signup cohort: one row per cohort, one column per period since it started
+- Use when: Following groups that started together, such as users by signup month, to see how many are still active 1, 2, 3 ... periods later
+- Avoid when: Comparing the exact shape of two cohorts' curves (use a line chart)
+- encoding: cohort, period, value, size?
+- Chart options: valueType: auto|count|percent|ratio, show: rate|count, average, colorSteps, showValues, legend, legendLabels
+- Default highlight: none (options.highlight names a cohort)
+
+```json
+{"type":"cohort","data":[{"cohort":"2026-01","month":0,"active":1240,"size":1240},{"cohort":"2026-01","month":1,"active":707,"size":1240},{"cohort":"2026-01","month":2,"active":558,"size":1240}],"encoding":{"cohort":"cohort","period":"month","value":"active","size":"size"},"card":{"number":"46","title":"Cohort chart","subtitle":"Share of each monthly signup cohort still active, by months since signup","takeaway":"A third are still active six months in","level":"intermediate"}}
+```
+
+### horizon · Horizon chart (`<HorizonChart>`, Advanced, Trend)
+
+- What: Many time series in thin rows, each value folded into a few colored bands
+- Use when: 13 to 60 time series in the same unit on one card
+- Avoid when: 12 or fewer series (a line chart or small multiples read faster), or first-time readers have no time to read the legend
+- encoding: x, y[], series?
+- Chart options: bands, rowHeight, baseline, downColor, scale: shared|free, showValues, legend, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count
+- Default highlight: none (options.highlight names a series)
+
+```json
+{"type":"horizon","data":[{"week":"2026-05-04","service":"checkout","change":8},{"week":"2026-05-04","service":"search","change":10.9},{"week":"2026-05-04","service":"cart","change":5.5}],"encoding":{"x":"week","y":"change","series":"service"},"options":{"unit":"%"},"card":{"number":"47","title":"Horizon chart","subtitle":"Year-over-year change in weekly requests by service (%)","takeaway":"Checkout grew while coupons fell below 0","level":"advanced"}}
 ```
 
 ### Common options

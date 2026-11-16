@@ -38,7 +38,7 @@ export function localizeDef(def: ChartDef, lang: Lang): ChartDef {
   };
 }
 
-/** The 44 charts in one language. Example: chartsIn("ko")[0].name === "파이 차트" */
+/** The 47 charts in one language. Example: chartsIn("ko")[0].name === "파이 차트" */
 export function chartsIn(lang: Lang): ChartDef[] {
   return lang === "ko" ? CHARTS.map((c) => localizeDef(c, "ko")) : CHARTS;
 }

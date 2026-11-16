@@ -29,7 +29,7 @@ function summarize(svg: string) {
   };
 }
 
-describe("SSR: all 44 types", () => {
+describe("SSR: all 47 types", () => {
   for (const c of CHARTS) {
     for (const theme of ["dark", "light"] as const) {
       it(`${c.type} (${theme})`, () => {

@@ -2,7 +2,7 @@ import { plural } from "ztd-charts/server";
 import type { ColumnProfile } from "ztd-charts/spec";
 
 /** CLI messages. English is the source; Korean with --locale ko */
-export const VERSION = "0.12.0";
+export const VERSION = "0.13.0";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
@@ -27,7 +27,7 @@ const enEvery = `Every command
   --locale <code>   Language of messages and chart text, and number format: en (default) or ko`;
 
 const en = {
-  help: `ztd-charts ${VERSION}  CLI for 44 React chart types
+  help: `ztd-charts ${VERSION}  CLI for 47 React chart types
 
 Usage
 ${Object.values(enUsage).join("\n")}
@@ -118,7 +118,7 @@ const koEvery = `모든 명령
   --locale <code>   안내 문구, 차트 글자, 숫자 형식의 언어: en(기본) 또는 ko`;
 
 const ko: CliText = {
-  help: `ztd-charts ${VERSION}  React 차트 44종을 위한 CLI
+  help: `ztd-charts ${VERSION}  React 차트 47종을 위한 CLI
 
 사용법
 ${Object.values(koUsage).join("\n")}

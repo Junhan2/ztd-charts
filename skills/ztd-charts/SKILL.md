@@ -1,11 +1,11 @@
 ---
 name: ztd-charts
-description: "Use when building React charts with ztd-charts: picking a chart that fits the data (44 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
+description: "Use when building React charts with ztd-charts: picking a chart that fits the data (47 types), writing and validating a JSON spec, connecting real data such as REST, CSV, Supabase or Google Sheets, writing card copy (title, one-line takeaway, level badge), and previewing with the CLI or MCP. Read it when the user wants a chart, dashboard, visualization, graph or report as React code or a JSON spec."
 ---
 
 # ztd charts skill
 
-44 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
+47 chart types for React 18+. Pure SVG, zero runtime dependencies, entrance animation when a chart scrolls into view. The design has one rule: **only one highlighted item gets the accent color, everything else stays neutral, with a bold one-line takeaway under the card.**
 
 ## Steps
 
@@ -31,6 +31,7 @@ Decide the question first, then the form.
 | Structure, paths (org chart, folders, dependencies, outage reach) | parent + child, nested children, or id + parent rows | `tree` (`highlight` names or paths such as "Orders/Checkout" light the route to the root) | `treemap` (when each part's share matters more) |
 | Change over time | date + value (+ series) | `line` | `area` (when the sum means something), `sparkline` (next to a KPI) |
 | Mix changing over time | date + series + value | `area` stack | `stream` (5 or more series, flow first) |
+| Many series over time in one unit (13 to 60) | date + series + value | `horizon` (one thin row per series, each value folded into color bands; the legend on top gives each band's range; values below `baseline` mirror in gray; `scale: "free"` fits each row to its own values) | `line` with `facet` (12 or fewer series), `sparkTable` (series in different units) |
 | Rank changes | period + item + rank | `bump` | `slope` (two periods only), `barRace` (told as a story in a talk or video, one step at a time) |
 | Two points in time | item + before/after | `dumbbell` | `slope` |
 | When things ran and what overlapped (schedule, job runs, agent run, incident) | label + start + end (numbers or dates) | `timeline` (same label shares a row; start = end is a point event; empty end is still open, up to `now`; one label with `status` per segment is a status strip, colored by state) | `bar` (only the duration matters) |
@@ -42,6 +43,7 @@ Decide the question first, then the form.
 | Who is connected, who is central | source + target (+ value) | `network` (arc layout, `groups` for node groups) | `chord` (10 groups or fewer, amounts matter) |
 | Distribution | group + many values | `box` | `histogram` (one measure's shape, p95 and a limit), `beeswarm` (up to 2,000 dots), `ridgeline` (5 or more groups), `box` variant violin |
 | Finding patterns | category × category + value | `heatmap` | `calendar` (daily, one year) |
+| Retention by signup cohort | cohort + period since start + people or share (+ cohort size) | `cohort` (one row per cohort; the first period, where everyone is still there, is gray and left out of the color scale; the average row on top is weighted by cohort size) | `heatmap` (any two categories), `line` (two cohorts' curves compared exactly) |
 | Comparing regions | region (name or code) + value | `tileMap` (`"auto"` picks the grid from the data: `us-states` for the 50 US states and DC, `kr-sido` for Korea's 16 regions from 2026-07-01; `kr-sido-2025` for older data with Gwangju and Jeonnam apart; or your own grid) | `bar` (exact ranking matters more than place) |
 | Where it is high and low on a real map | region (name or code) + value | `choropleth` (`"auto"` picks the map from the data: `world` by ISO code or country name, `us-states`, `kr-sido`, or a GeoJSON FeatureCollection; `focus: "europe"` crops the world map. Server, CLI and MCP load the maps; in the browser register the one you draw, for this and the other two map charts: `import { world } from "ztd-charts/geo/world"; registerMap(world)`) | `tileMap` (every region equally visible, small ones included) |
 | Amounts at places on a map | lon + lat (or a country or state name) + value | `symbolMap` (circle area is the value; `"auto"` picks the map that holds the points, so US cities land on `us-states`; no city list ships, so cities need coordinates) | `choropleth` (a rate across whole regions) |
@@ -49,6 +51,7 @@ Decide the question first, then the form.
 | Two or three metrics together | 2 or 3 numbers + name | `scatter` (two numbers) | `bubble` (a third number as size), `scatter` with `bin: "hex"` (thousands of overlapping points: hexagons shaded by count) |
 | Comparing several metrics | item × metrics (4 to 8) | `radar` (1 or 2 series) | `parallel` (many items) |
 | Against a target | value + target | `gauge` (one), `bullet` (several) | `radialBar` (3 to 6 goals) |
+| Several KPIs in different units at a glance | metric + period + value (+ target) | `sparkTable` (one row per metric: trend, latest value, change, target; `metrics` sets format, unit and `better: "down"` per row) | `line` (one metric's exact values), `bullet` (actual against target without the trend) |
 
 Avoid: more than 5 items in a pie, 3 or more series in a radar, bubble size for exact comparison, a line over unordered categories.
 

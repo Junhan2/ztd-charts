@@ -34,7 +34,7 @@ describe("MCP tools", () => {
     expect(tools.find((t) => t.name === "list_charts")!.annotations?.readOnlyHint).toBe(true);
   });
   it("list_charts: all and filtered", async () => {
-    expect(firstJson((await call("list_charts", {})).content).count).toBe(44);
+    expect(firstJson((await call("list_charts", {})).content).count).toBe(47);
     const r = firstJson((await call("list_charts", { group: "distribution" })).content);
     expect(r.charts.map((c: { type: string }) => c.type)).toEqual(["beeswarm", "ridgeline", "box", "histogram"]);
   });
@@ -47,7 +47,7 @@ describe("MCP tools", () => {
     expect(j.variants.map((v: { id: string }) => v.id)).toContain("forecast");
     expect(firstJson((await call("get_chart_schema", { type: "doughnut" })).content).type).toBe("donut");
     expect((await call("get_chart_schema", { type: "wordCloud" })).isError).toBe(true);
-    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(44);
+    expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(47);
   });
   it("validate_spec: error paths and suggestions", async () => {
     const j = firstJson((await call("validate_spec", { spec: { type: "bar", data: [{ q: "1분기", revenue: 1 }], encoding: { x: "q", y: "revenu" } } })).content);
@@ -123,7 +123,7 @@ describe("MCP tools", () => {
     const { resources } = await client.listResources();
     expect(resources[0].uri).toBe("ztd-charts://schema/chart-spec.json");
     const r = await client.readResource({ uri: resources[0].uri });
-    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(44);
+    expect(JSON.parse((r.contents[0] as { text: string }).text).oneOf).toHaveLength(47);
   });
 });
 
@@ -133,7 +133,7 @@ describe("stdio server (build output)", () => {
     const c = new Client({ name: "stdio-test", version: "0.0.0" });
     await c.connect(new StdioClientTransport({ command: "node", args: [bin], stderr: "ignore" }));
     const r = await c.callTool({ name: "list_charts", arguments: { level: "basic" } });
-    expect(JSON.parse((r.content as Content[])[0].text!).count).toBe(11);
+    expect(JSON.parse((r.content as Content[])[0].text!).count).toBe(12);
     await c.close();
   });
 });

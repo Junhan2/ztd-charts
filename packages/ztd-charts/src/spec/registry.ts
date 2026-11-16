@@ -682,6 +682,74 @@ const ENTRIES: ChartEntry[] = [
     ],
     example: { data: S.flowMapSample, encoding: { source: "from", target: "to", value: "teu" }, options: { places: S.flowMapPlaces, format: "compact" }, card: { subtitle: "Container shipments between ports (TEU)", takeaway: "Shanghai to LA is the top lane" } },
   },
+  {
+    type: "sparkTable",
+    level: "basic",
+    group: "kpi",
+    summary: "One row per metric: its trend, latest value, change and target side by side",
+    useWhen: "The latest value and trend of several metrics in different units, in one table",
+    avoidWhen: "Readers need the exact changes of one metric over time (a line chart does that)",
+    why: 'Every row shares one period axis but has its own scale, so revenue, users and rates sit in one table. The change pill takes the accent only for a move in the good direction (better: "down" for metrics such as churn), so the rows that got worse stay gray. When the trend column would get narrower than 64px, the target column and then the change column give way.',
+    options: [
+      op("metrics", "object", 'Format, unit and better per row, keyed by row name, such as { "Churn rate": { "unit": "%", "better": "down" } }. Rows without an entry use the shared format, unit and better'),
+      op("better", "enum", '"up" when a higher value is better, "down" when lower is better (churn, latency). The change pill takes the accent only for a move in the good direction', { enum: ["up", "down"], default: "up" }),
+      op("change", "enum", '"period" compares the first and last value of the visible periods, "previous" the last value with the one before it, "none" hides the column', { enum: ["period", "previous", "none"], default: "period" }),
+      op("changeLabel", "string", 'Header of the change column. Default "Change" ("vs. previous" with change "previous")'),
+      op("sort", "enum", '"none" keeps the data order, "value" puts the largest latest value first, "change" the best change first (a fall counts as a gain for better: "down" rows)', { enum: ["none", "value", "change"], default: "none" }),
+      op("valueBar", "boolean", "A bar beside each value, relative to the largest. Ignored when rows use different formats or units", { default: false }),
+      op("rowHeight", "number", "Row height in px", { default: 32, min: 24, max: 56 }),
+      op("header", "boolean", "Header row with the period range and the column names", { default: true }),
+      AGGREGATE,
+      DAY_FIRST,
+    ],
+    example: {
+      data: S.sparkTableSample,
+      encoding: { label: "metric", x: "week", value: "value", target: "target" },
+      options: { metrics: { Revenue: { format: "currency" }, "Churn rate": { unit: "%", better: "down" }, "p95 response time": { unit: "ms", better: "down" } } },
+      card: { subtitle: "Last 12 weeks, dashed line is the target", takeaway: "Only p95 response time got worse" },
+    },
+  },
+  {
+    type: "cohort",
+    level: "intermediate",
+    group: "trend",
+    summary: "Retention by signup cohort: one row per cohort, one column per period since it started",
+    useWhen: "Following groups that started together, such as users by signup month, to see how many are still active 1, 2, 3 ... periods later",
+    avoidWhen: "Comparing the exact shape of two cohorts' curves (use a line chart)",
+    why: "Each cell is colored by the share still active. The first period, where everyone is still there, is light gray and left out of the color scale, so the later periods use the whole scale. The average row on top weighs each cohort by its size, and periods a cohort has not reached yet stay empty.",
+    options: [
+      op("valueType", "enum", '"count" (people still active), "percent" (58) or "ratio" (0.58). "auto" reads counts when there is a size field, ratios when every value is at most 1, percents when every value is at most 100, otherwise counts with each cohort\'s first period as its size', { enum: ["auto", "count", "percent", "ratio"], default: "auto" }),
+      op("show", "enum", '"rate" writes the share in each cell, "count" the people still active (only when counts are known). Colors always follow the share', { enum: ["rate", "count"], default: "rate" }),
+      op("average", "boolean", "Average row on top: the people still active over the cohort sizes, counting only the cohorts that reached each period (the plain mean of the shares without counts)", { default: true }),
+      op("colorSteps", "number", "Number of color steps. The legend shows each step", { default: 5, min: 2, max: 12 }),
+      op("showValues", "any", 'Values in cells. "auto" shows them when they fit', { default: "auto" }),
+      op("legend", "boolean", "Show the color legend", { default: true }),
+      op("legendLabels", "array", "Names at both ends of the legend", { items: "string" }),
+    ],
+    example: { data: S.cohortSample, encoding: { cohort: "cohort", period: "month", value: "active", size: "size" }, card: { subtitle: "Share of each monthly signup cohort still active, by months since signup", takeaway: "A third are still active six months in" } },
+  },
+  {
+    type: "horizon",
+    level: "advanced",
+    group: "trend",
+    summary: "Many time series in thin rows, each value folded into a few colored bands",
+    useWhen: "13 to 60 time series in the same unit on one card",
+    avoidWhen: "12 or fewer series (a line chart or small multiples read faster), or first-time readers have no time to read the legend",
+    why: "Values fold into bands of one size, so a thin row still shows high and low and dozens of series fit on one card. Values below the baseline mirror into the row in gray, and the legend on top gives each band's range.",
+    options: [
+      op("bands", "number", "Color bands per row, 1 to 3. Default 1 when rowHeight is 24 or more, otherwise 2", { min: 1 }),
+      op("rowHeight", "number", "Row height in px. Default 18 up to 24 series, otherwise 14. A set height stretches the rows", { min: 12, max: 48 }),
+      op("baseline", "number", "Where the bands start. Values below it mirror into the row in downColor", { default: 0 }),
+      op("downColor", "string", "Color below the baseline (token name or CSS color)", { default: "neutralStrong" }),
+      op("scale", "enum", '"shared": the same bands on every row, so rows compare. "free": each row fits its own values', { enum: ["shared", "free"], default: "shared" }),
+      op("showValues", "boolean", "Value column on the right: the last value, or the value at the pointed time", { default: true }),
+      op("legend", "boolean", "Legend on top with each band's range", { default: true }),
+      XTYPE,
+      DAY_FIRST,
+      AGGREGATE,
+    ],
+    example: { data: S.horizonSample, encoding: { x: "week", y: "change", series: "service" }, options: { unit: "%" }, card: { subtitle: "Year-over-year change in weekly requests by service (%)", takeaway: "Checkout grew while coupons fell below 0" } },
+  },
 ];
 
 /** Key order follows ChartDef (the CLI, MCP and schema files write in this order) */
@@ -707,7 +775,7 @@ function fill({ type, level, group, summary, useWhen, avoidWhen, why, options, e
   };
 }
 
-/** The 44 charts. Text and examples are English; Korean through localizeDef(def, "ko") or chartsIn("ko") */
+/** The 47 charts. Text and examples are English; Korean through localizeDef(def, "ko") or chartsIn("ko") */
 export const CHARTS: ChartDef[] = /* @__PURE__ */ ENTRIES.map(fill);
 
 export const CHART_TYPES = /* @__PURE__ */ CHARTS.map((c) => c.type);

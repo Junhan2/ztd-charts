@@ -29,11 +29,13 @@ import { CalendarHeatmap } from "./calendar";
 import { CANDLE_TEXT, CandlestickChart, MA_TOKENS, maPeriods } from "./candlestick";
 import { ChordChart } from "./chord";
 import { Choropleth } from "./choropleth";
+import { CohortChart } from "./cohort";
 import { FlowMap } from "./flowMap";
 import { DumbbellChart } from "./dumbbell";
 import { FunnelChart } from "./funnel";
 import { Heatmap } from "./heatmap";
 import { HistogramChart } from "./histogram";
+import { HorizonChart } from "./horizon";
 import { LollipopChart } from "./lollipop";
 import { MarimekkoChart } from "./marimekko";
 import { ParallelCoordinates } from "./parallel";
@@ -47,6 +49,7 @@ import { SegmentedBar } from "./segmented";
 import { SkylineChart } from "./skyline";
 import { SlopeChart } from "./slope";
 import { Sparkline } from "./sparkline";
+import { SparkTable } from "./sparkTable";
 import { StreamGraph, streamHighlight, streamOrder, streamSwatches } from "./stream";
 import { SunburstChart } from "./sunburst";
 import { SymbolMap } from "./symbolMap";
@@ -106,6 +109,9 @@ export const CHART_COMPONENTS: Record<string, ComponentType<any>> = {
   choropleth: Choropleth,
   symbolMap: SymbolMap,
   flowMap: FlowMap,
+  sparkTable: SparkTable,
+  cohort: CohortChart,
+  horizon: HorizonChart,
 };
 
 /**

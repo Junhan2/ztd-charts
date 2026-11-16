@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 // Borrows the esbuild that tsup uses, so no new dependency
 const esbuild = createRequire(require.resolve("tsup"))("esbuild");
-// Bundles the library source from the workspace. Thanks to "sideEffects": false in package.json, the 43 unused charts are left out
+// Bundles the library source from the workspace. Thanks to "sideEffects": false in package.json, the 46 unused charts are left out
 const lib = dirname(require.resolve("ztd-charts/package.json"));
 const out = join(root, "dist/client");
 rmSync(out, { recursive: true, force: true });

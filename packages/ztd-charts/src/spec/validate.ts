@@ -7,6 +7,7 @@ import { dimensionLinks, SANKEY_MAX_DIMENSIONS, SANKEY_MAX_VALUES } from "../lay
 import { r2 } from "../core/geometry";
 import { gridName, mergedAway, resolveGrid, TILE_MAPS, tileMatcher, tileNames, type TileDef } from "../layout/tileGrid";
 import { readTimeline, timelineDomain } from "../layout/timeline";
+import { COHORT_MAX_CELLS, readCohort } from "../layout/cohort";
 import { findNodes, preorder, stratify } from "../layout/tree";
 import { nameMatcher } from "../layout/regions";
 import { GEOJSON_LIMITS, geojsonShapes, geojsonSize } from "../geo/codec";
@@ -16,7 +17,7 @@ import type { GeoJSONFeatureCollection, GeoMap } from "../geo/types";
 import { HIGHLIGHT_KEYWORDS } from "../core/highlight";
 import { DMY_RE, ISO_DATE_RE, TEMPLATE_NAMES, TEMPLATE_SLOT, isDateText, isoDay, toDate } from "../core/format";
 import { plural } from "../core/i18n";
-import { FACET_MAX, FACET_TYPES, META, hexBinned, legendToggles, specTemplate } from "./meta";
+import { FACET_MAX, FACET_TYPES, HORIZON_MAX_SERIES, META, hexBinned, legendToggles, specTemplate } from "./meta";
 import { ANNOTATION_TYPES, CHARTS, COMMON_OPTIONS, getChartDef, TYPE_ALIASES } from "./registry";
 import type { ChartSpec, Lang, OptionDef, SpecIssue, ValidationResult } from "./types";
 
@@ -744,6 +745,30 @@ function checkTimeline(rows: Record<string, unknown>[] | null, enc: Record<strin
 }
 
 /**
+ * Cohort checks: reads with the same rules as the chart (readCohort). Says what valueType "auto" read the values as (without a size channel),
+ * show "count" when people counts are unknown, and the older cohorts left out above COHORT_MAX_CELLS cells
+ */
+function checkCohort(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, warn: Report, t: (en: string, ko: string) => string) {
+  if (!rows) return;
+  const m = readCohort(rows, { cohort: fieldOf(enc, "cohort"), period: fieldOf(enc, "period"), value: fieldOf(enc, "value"), size: typeof enc.size === "string" ? enc.size : undefined }, o.valueType);
+  if (m.guessed) {
+    const retry = t('If that is wrong, set options.valueType to "count", "percent" or "ratio"', '다르면 options.valueType을 "count", "percent", "ratio" 중 하나로 정해 주세요');
+    const read =
+      m.type === "ratio"
+        ? t("Values are read as ratios from 0 to 1 because every value is at most 1", "모든 값이 1 이하라 0~1 비율로 읽었어요")
+        : m.type === "percent"
+          ? t("Values are read as percents because every value is at most 100", "모든 값이 100 이하라 퍼센트로 읽었어요")
+          : t("Values are read as people counts, with each cohort's first period as its size, because some values are above 100", "100보다 큰 값이 있어 사람 수로 읽고 코호트마다 첫 기간 값을 크기로 썼어요");
+    warn("options.valueType", "cohort_value_type_guessed", `${read}. ${retry}`);
+  }
+  if (o.show === "count" && !m.counted) warn("options.show", "cohort_count_unknown", t('options.show "count" needs people counts, but the values are shares and there is no size channel, so cells show shares', 'options.show "count"는 사람 수가 있어야 해요. 값이 비율이고 size 채널이 없어서 칸에 비율을 적어요'));
+  if (m.trimmed) {
+    const kept = m.cohorts.length;
+    warn("data", "cohort_trimmed", t(`${m.total} cells are more than ${COHORT_MAX_CELLS}, so only the most recent ${plural(kept, "cohort")} ${kept === 1 ? "is" : "are"} drawn and ${m.trimmed} older ${m.trimmed === 1 ? "one is" : "ones are"} left out`, `칸이 ${m.total}개라 ${COHORT_MAX_CELLS}칸에 들어가는 최근 코호트 ${kept}개만 그리고 이전 코호트 ${m.trimmed}개는 빼요`));
+  }
+}
+
+/**
  * Shared by map charts (choropleth, symbol map, flow map): resolves options.map to a map (choose) and reports map objects put in the spec, oversized GeoJSON, values that are not maps,
  * unregistered and missing maps, and empty features, out-of-range coordinates and duplicate ids in GeoJSON. null when there is no map to draw
  */
@@ -1120,6 +1145,28 @@ function checkNetwork(rows: Record<string, unknown>[] | null, enc: Record<string
 }
 
 /**
+ * KPI table checks: more than 60 rows (the chart draws the first 60), options.metrics keys that are not rows,
+ * and valueBar when rows use different formats or units (the chart draws no bars then)
+ */
+function checkSparkTable(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, warn: Report, t: (en: string, ko: string) => string) {
+  if (!rows?.length) return;
+  const lf = fieldOf(enc, "label");
+  // Same names as the chart reads (prepSeries): the text of the label cell, "" when empty
+  const names = uniq(rows.flatMap((r) => (r && typeof r === "object" ? [String(r[lf] ?? "")] : [])));
+  const extra = names.length - 60;
+  if (extra > 0) warn("encoding.label", "too_many_rows", t(`${names.length} rows: a KPI table draws the first 60, so ${plural(extra, "row is", "rows are")} left out`, `줄이 ${names.length}개예요. 지표 표는 앞의 60줄만 그려서 ${extra}줄은 빠져요`));
+  const metrics = o.metrics && typeof o.metrics === "object" && !Array.isArray(o.metrics) ? (o.metrics as Record<string, unknown>) : {};
+  const unknown = Object.keys(metrics).filter((k) => !names.includes(k));
+  if (unknown.length) warn("options.metrics", "metric_not_found", t(`${quoted(unknown, t)} ${unknown.length === 1 ? "is" : "are"} not a row in the data`, `${quoted(unknown, t)} 줄이 데이터에 없어요`));
+  const look = (name: string) => {
+    const m = metrics[name] && typeof metrics[name] === "object" ? (metrics[name] as Record<string, unknown>) : {};
+    return JSON.stringify([m.format ?? o.format, m.unit ?? o.unit]);
+  };
+  if (o.valueBar === true && new Set(names.slice(0, 60).map(look)).size > 1)
+    warn("options.valueBar", "value_bar_ignored", t("Rows use different formats or units, so the value bars are not drawn", "줄마다 표기나 단위가 달라서 값 막대를 그리지 않아요"));
+}
+
+/**
  * Sankey stages from a wide table (encoding.dimensions): fewer than 2 columns is an error, past 6 only the first 6 are drawn, source and target are not used,
  * and columns with more than 12 values are grouped into "Other (n)". The grouping runs the same dimensionLinks as the chart, so the counts match what is drawn
  */
@@ -1140,6 +1187,22 @@ function checkSankeyDimensions(rows: Record<string, unknown>[] | null, enc: Reco
   grouped.forEach((n, k) => {
     if (n) warn("encoding.dimensions", "dimension_grouped", t(`"${fields[k]}" has ${n + keep} values, so the ${keep} with the largest totals stay and the other ${n} are grouped into "Other (${n})"`, `"${fields[k]}" 값이 ${n + keep}개라 합계가 큰 ${keep}개만 두고 나머지 ${n}개는 "기타 ${n}개"로 묶어요`));
   });
+}
+
+/**
+ * Horizon checks: options.bands above 3 or not a whole number (the shared check reports below 1), and the series count
+ * (over HORIZON_MAX_SERIES only the first are drawn; 7 or fewer read faster as a line chart). Series are counted as the chart reads them
+ */
+function checkHorizon(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, o: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  const b = o.bands;
+  if (typeof b === "number" && b >= 1 && (b > 3 || !Number.isInteger(b))) err("options.bands", "bad_bands", t(`options.bands must be 1, 2 or 3 (got ${b})`, `options.bands 값은 1, 2, 3 중 하나여야 해요(지금 ${b})`));
+  if (!rows?.length) return;
+  const wide = Array.isArray(enc.y);
+  const sf = typeof enc.series === "string" ? enc.series : null;
+  const n = wide ? (enc.y as unknown[]).length : sf ? new Set(rows.map((r) => String(r?.[sf] ?? ""))).size : 1;
+  const path = wide || !sf ? "encoding.y" : "encoding.series";
+  if (n > HORIZON_MAX_SERIES) warn(path, "too_many_series", t(`A horizon chart draws up to ${HORIZON_MAX_SERIES} series, and the data has ${n}, so only the first ${HORIZON_MAX_SERIES} are drawn`, `호라이즌 차트는 계열을 ${HORIZON_MAX_SERIES}개까지 그려요. 데이터에 ${n}개가 있어서 앞의 ${HORIZON_MAX_SERIES}개만 그려요`));
+  else if (n <= 7) warn(path, "few_series", t(`Only ${n} series. With 7 or fewer, a line chart reads faster`, `계열이 ${n}개뿐이에요. 7개 이하면 라인 차트가 더 빨리 읽혀요`));
 }
 
 /**
@@ -1393,8 +1456,9 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   const facetBy = spec.facet === undefined ? undefined : checkFacet(spec.facet, def.type, optsObj, rows, fields, t, err, warn);
   if (def.type === "line" || def.type === "area") checkBand(def.type, enc, optsObj, rows, t, err, warn);
   // The charts that sum rows with the same x are the ones with an aggregate option
-  // The bar race sums rows with the same frame and item (label)
+  // The bar race sums rows with the same frame and item (label), the KPI table rows with the same period and row name (label)
   if (def.type === "barRace") checkDuplicates({ x: fieldOf(enc, "frame"), series: fieldOf(enc, "label") }, optsObj, rows, t, warn, undefined, "encoding.frame");
+  else if (def.type === "sparkTable") checkDuplicates({ x: fieldOf(enc, "x"), series: fieldOf(enc, "label") }, optsObj, rows, t, warn);
   else if (def.options.some((o) => o.name === "aggregate")) checkDuplicates(enc, optsObj, rows, t, warn, facetBy);
   if (def.type === "pie" || def.type === "donut") checkSlices(enc, optsObj, rows, t, warn);
   if (def.type === "slope") checkSlope(enc, optsObj, rows, t, warn);
@@ -1404,12 +1468,15 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   if (def.type === "tileMap") checkTileMap(rows, enc, optsObj, err, warn, t);
   if (def.type === "barRace") checkBarRace(rows, enc, optsObj, warn, t);
   if (def.type === "network") checkNetwork(rows, enc, optsObj, warn, t);
+  if (def.type === "sparkTable") checkSparkTable(rows, enc, optsObj, warn, t);
   if (def.type === "sankey") checkSankeyDimensions(rows, enc, err, warn, t);
   if (def.type === "timeline") checkTimeline(rows, enc, optsObj, err, warn, t);
   if (def.type === "tree") checkTree(rows, enc, optsObj, warn, t);
   if (def.type === "choropleth") checkChoropleth(rows, enc, optsObj, err, warn, t);
   if (def.type === "symbolMap") checkSymbolMap(rows, enc, optsObj, err, warn, t);
   if (def.type === "flowMap") checkFlowMap(rows, enc, optsObj, err, warn, t);
+  if (def.type === "cohort") checkCohort(rows, enc, optsObj, warn, t);
+  if (def.type === "horizon") checkHorizon(rows, enc, optsObj, err, warn, t);
   if (def.type === "bar") checkDiverging(enc, optsObj, rows, t, err, warn);
   if (def.type === "waffle") checkWaffle(enc, optsObj, rows, t, warn);
   if (def.type === "scatter") {

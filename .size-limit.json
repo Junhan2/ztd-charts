@@ -546,6 +546,42 @@
     "limit": "15.95 KB"
   },
   {
+    "name": "SparkTable",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ SparkTable }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "15.89 KB"
+  },
+  {
+    "name": "CohortChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ CohortChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "13.57 KB"
+  },
+  {
+    "name": "HorizonChart",
+    "path": "packages/ztd-charts/dist/index.js",
+    "import": "{ HorizonChart }",
+    "ignore": [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/server"
+    ],
+    "limit": "17.60 KB"
+  },
+  {
     "name": "StatCard",
     "path": "packages/ztd-charts/dist/index.js",
     "import": "{ StatCard }",
@@ -603,7 +639,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "141.99 KB"
+    "limit": "149.70 KB"
   },
   {
     "name": "Everything (index.js)",
@@ -615,7 +651,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "186.41 KB"
+    "limit": "197.27 KB"
   },
   {
     "name": "spec: validateSpec + specSchema",
@@ -627,7 +663,7 @@
       "react/jsx-runtime",
       "react-dom/server"
     ],
-    "limit": "55.07 KB"
+    "limit": "58.98 KB"
   },
   {
     "name": "Interactive HTML code (React + AreaChart)",
@@ -635,6 +671,6 @@
       "packages/cli/dist/client/react.js",
       "packages/cli/dist/client/area.js"
     ],
-    "limit": "100.54 KB"
+    "limit": "100.85 KB"
   }
 ]

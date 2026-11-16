@@ -109,6 +109,13 @@ export const VARIANTS: Readonly<Record<string, readonly ChartVariant[]>> = {
     v("kr-sido", "South Korea", { map: "kr-sido", places: S.flowMapKrPlaces }, { value: "boxes" }, S.flowMapKrSample),
     v("no-ranking", "Without the ranked list", { ranking: false }),
   ],
+  sparkTable: [
+    v("by-change", "Best change first", { sort: "change" }),
+    v("vs-previous", "Change from the previous week", { change: "previous" }),
+    v("ranked", "Revenue by country, ranked", { metrics: null, format: "currency", valueBar: true, sort: "value", highlight: "max" }, { label: "country", value: "revenue", target: null }, S.sparkTableRankedSample),
+  ],
+  cohort: [v("counts", "People in cells", { show: "count" }), v("no-average", "Without the average row", { average: false }), v("no-values", "Without values", { showValues: false })],
+  horizon: [v("one-band", "One band", { bands: 1, rowHeight: 28 }), v("three-bands", "Three bands", { bands: 3 }), v("own-scale", "Each row on its own scale", { scale: "free" })],
 };
 
 /** A chart's variants in one language. type is the canonical name (registry type); an empty array when there are none */
