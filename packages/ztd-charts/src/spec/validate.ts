@@ -3,6 +3,7 @@ import { hasField, numGetter, strGetter, toNumber, uniq } from "../data/accessor
 import { markPercentile } from "../data/percentile";
 import { HISTOGRAM_MAX_GROUPS, isPreBinned } from "../layout/stats";
 import { ARC_MAX_DOTS } from "../layout/seats";
+import { dimensionLinks, SANKEY_MAX_DIMENSIONS, SANKEY_MAX_VALUES } from "../layout/sankey";
 import { r2 } from "../core/geometry";
 import { gridName, mergedAway, resolveGrid, TILE_MAPS, tileMatcher, tileNames, type TileDef } from "../layout/tileGrid";
 import { readTimeline, timelineDomain } from "../layout/timeline";
@@ -376,11 +377,14 @@ function checkLogScale(enc: Record<string, unknown>, o: Record<string, unknown>,
 
 /**
  * Checks the bar sort value and diverging bars (layout "diverging"). It is an error when negative or neutral names are not among the series (y fields for a wide table, series values for a long table).
- * Reports negative, neutral, percent and side sort used without diverging, and annotations and lines that diverging does not draw
+ * Reports negative, neutral, percent and side sort used without diverging, centerLabels where it cannot take effect, and annotations and lines that diverging does not draw
  */
 function checkDiverging(enc: Record<string, unknown>, o: Record<string, unknown>, rows: Record<string, unknown>[] | null, t: (en: string, ko: string) => string, err: Report, warn: Report): void {
   const side = o.sort === "positive" || o.sort === "negative";
   if (o.sort !== undefined && typeof o.sort !== "boolean" && !side) err("options.sort", "bad_option_type", t('options.sort must be true, false, "positive" or "negative"', 'options.sort 값은 true, false, "positive", "negative" 중 하나여야 해요'));
+  // The name column takes the zero line's place, where a neutral series would sit
+  if (o.centerLabels === true && (o.layout !== "diverging" || o.orientation === "vertical" || o.neutral !== undefined))
+    warn("options.centerLabels", "center_labels_ignored", t('options.centerLabels needs layout "diverging", horizontal bars and no neutral series, so the names stay on the axis', 'options.centerLabels 옵션은 layout "diverging"인 가로 막대에 neutral 계열이 없을 때만 써요. 이름은 축에 그대로 둬요'));
   if (o.layout !== "diverging") {
     for (const k of ["negative", "neutral", "percent"]) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is used only with layout "diverging"`, `options.${k} 옵션은 layout "diverging"에서만 써요`));
     if (side) warn("options.sort", "ignored_option", t(`sort "${o.sort}" is used only with layout "diverging"`, `sort "${o.sort}" 값은 layout "diverging"에서만 써요`));
@@ -447,7 +451,7 @@ function checkWaffle(enc: Record<string, unknown>, o: Record<string, unknown>, r
 }
 
 /**
- * Scatter hexbin density (bin "hex") checks. A cell counts all points, so series, size, point names, jitter, hiding, point label count and highlight are not used, and cells are SVG paths, so there is no switch to canvas.
+ * Scatter hexbin density (bin "hex") checks. A cell counts all points, so series, size, point names, jitter, hiding, point label count, highlight and group outlines are not used, and cells are SVG paths, so there is no switch to canvas.
  * Also reports binSize and colorSteps used without bin. Small multiples use highlight to pick panels, so highlight is reported only without facet
  */
 function checkHexbin(enc: Record<string, unknown>, o: Record<string, unknown>, faceted: boolean, t: (en: string, ko: string) => string, warn: Report): void {
@@ -463,6 +467,7 @@ function checkHexbin(enc: Record<string, unknown>, o: Record<string, unknown>, f
   for (const [k, en, ko] of channels) if (enc[k] !== undefined) warn(`encoding.${k}`, "ignored_option", t(`encoding.${k} is not used with bin "hex". ${en}`, `bin "hex"에서는 encoding.${k} 채널을 쓰지 않아요. ${ko}`));
   const ignored = ["jitter", "hidden", "maxLabels", ...(faceted ? [] : ["highlight"])];
   for (const k of ignored) if (o[k] !== undefined) warn(`options.${k}`, "ignored_option", t(`options.${k} is not used with bin "hex", which draws counts per hexagon instead of dots`, `bin "hex"는 점 대신 칸마다 점 수를 그려서 options.${k} 옵션을 쓰지 않아요`));
+  if (o.hull !== undefined) warn("options.hull", "hull_ignored", t('options.hull is not drawn with bin "hex": hexagons count the dots instead of drawing each one, so there are no series outlines', 'bin "hex"는 점을 하나씩 그리지 않고 칸마다 세어서 options.hull 윤곽을 그리지 않아요'));
   if (o.canvasThreshold !== undefined) warn("options.canvasThreshold", "ignored_option", t('options.canvasThreshold is not used with bin "hex": hexagons are a few SVG paths at any dot count, so the chart never switches to canvas', 'bin "hex"에서는 options.canvasThreshold를 쓰지 않아요. 점이 아무리 많아도 칸은 SVG 경로 몇 개라 캔버스로 바꾸지 않아요'));
 }
 
@@ -1115,6 +1120,29 @@ function checkNetwork(rows: Record<string, unknown>[] | null, enc: Record<string
 }
 
 /**
+ * Sankey stages from a wide table (encoding.dimensions): fewer than 2 columns is an error, past 6 only the first 6 are drawn, source and target are not used,
+ * and columns with more than 12 values are grouped into "Other (n)". The grouping runs the same dimensionLinks as the chart, so the counts match what is drawn
+ */
+function checkSankeyDimensions(rows: Record<string, unknown>[] | null, enc: Record<string, unknown>, err: Report, warn: Report, t: (en: string, ko: string) => string) {
+  if (enc.dimensions === undefined) return;
+  const list = fieldList(enc.dimensions);
+  const max = SANKEY_MAX_DIMENSIONS;
+  if (list.length < 2) err("encoding.dimensions", "bad_dimensions", t(`encoding.dimensions needs 2 or more fields, one per stage column (got ${list.length})`, `encoding.dimensions에는 단계 열마다 필드 하나씩 2개 이상이 필요해요(지금 ${list.length}개)`));
+  if (list.length > max) warn("encoding.dimensions", "too_many_dimensions", t(`A Sankey diagram draws up to ${max} stage columns, so only the first ${max} of ${list.length} are used`, `생키 다이어그램은 단계 열을 ${max}개까지 그려요. ${list.length}개 중 앞의 ${max}개만 써요`));
+  if (enc.source !== undefined || enc.target !== undefined)
+    warn(enc.source !== undefined ? "encoding.source" : "encoding.target", "dimensions_with_links", t("encoding.dimensions is set, so source and target are not used: each row is one path through the dimensions", "encoding.dimensions가 있어서 source와 target은 쓰지 않아요. 행마다 dimensions 열을 지나는 경로 하나예요"));
+  const fields = list.slice(0, max).filter((f): f is string => typeof f === "string" && f !== "");
+  if (!rows?.length || fields.length < 2) return;
+  // Without a value field, each row counts 1 (as the chart reads it)
+  const vf = typeof enc.value === "string" ? enc.value : rows.some((r) => r && typeof r === "object" && hasField(r, "value")) ? "value" : null;
+  const { grouped } = dimensionLinks(rows, fields.map((f) => strGetter<Record<string, unknown>>(f, f)), vf ? numGetter<Record<string, unknown>>(vf, vf) : () => 1, { blank: "", other: String });
+  const keep = SANKEY_MAX_VALUES - 1;
+  grouped.forEach((n, k) => {
+    if (n) warn("encoding.dimensions", "dimension_grouped", t(`"${fields[k]}" has ${n + keep} values, so the ${keep} with the largest totals stay and the other ${n} are grouped into "Other (${n})"`, `"${fields[k]}" 값이 ${n + keep}개라 합계가 큰 ${keep}개만 두고 나머지 ${n}개는 "기타 ${n}개"로 묶어요`));
+  });
+}
+
+/**
  * Validates a spec. Returns errors (cannot render) and warnings (works but looks suspicious) separately.
  * Messages are English; Korean with { lang: "ko" }. code and path are the same in every language.
  * Korean messages use only the text in this file and META's nameKo, to keep the large Korean tables (locales/ko) out of the default bundle.
@@ -1202,7 +1230,8 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   }
   // The histogram needs different channels depending on row shape: value for raw rows; x0, x1, count for pre-binned rows
   const binned = def.type === "histogram" && isPreBinned(rows?.find((r) => r && typeof r === "object"), enc.value, enc.count);
-  const needed = def.type !== "histogram" ? null : binned ? ["x0", "x1", "count"] : ["value"];
+  // Sankey needs source, target and value only for link rows. With dimensions (a wide table), value is optional and each row counts 1 without it
+  const needed = def.type === "sankey" ? (enc.dimensions === undefined ? ["source", "target", "value"] : []) : def.type !== "histogram" ? null : binned ? ["x0", "x1", "count"] : ["value"];
   for (const c of def.encoding) {
     const v = enc[c.name];
     if (v === undefined) {
@@ -1375,6 +1404,7 @@ export function validateSpec(input: unknown, opts: { rows?: Record<string, unkno
   if (def.type === "tileMap") checkTileMap(rows, enc, optsObj, err, warn, t);
   if (def.type === "barRace") checkBarRace(rows, enc, optsObj, warn, t);
   if (def.type === "network") checkNetwork(rows, enc, optsObj, warn, t);
+  if (def.type === "sankey") checkSankeyDimensions(rows, enc, err, warn, t);
   if (def.type === "timeline") checkTimeline(rows, enc, optsObj, err, warn, t);
   if (def.type === "tree") checkTree(rows, enc, optsObj, warn, t);
   if (def.type === "choropleth") checkChoropleth(rows, enc, optsObj, err, warn, t);

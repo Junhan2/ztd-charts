@@ -89,6 +89,8 @@ export interface ScatterChartProps<T = Row> extends PointChartProps<T> {
   quadrants?: readonly string[];
   /** Spreads points with the same x value sideways. amount is the width as a multiple of the smallest x gap (default 0.4); seed is a fixed random seed (default 1) */
   jitter?: { amount?: number; seed?: number };
+  /** Group outlines under the points: a rounded shape around every point of each visible series (all points without series), in the series color. Not drawn with bin "hex". Default false */
+  hull?: boolean;
   /** With series, picks series by name, index, array or "first" (default). A predicate function highlights a series when any one of its rows matches. Without series, it picks points (none by default) */
   highlight?: Highlight<T>;
   /** "hex" counts points into hexagonal cells and colors each cell by its count (empty cells are not drawn). Series, jitter, point names, highlight and canvas are not used */
@@ -107,7 +109,7 @@ export interface ScatterChartProps<T = Row> extends PointChartProps<T> {
 type PointProps<T> = BubbleChartProps<T> & ScatterChartProps<T> & { kit: ScatterKit | undefined };
 
 /** Options only the scatter plot takes. Empty for the bubble chart, so they draw nothing even when mixed into the spec options */
-type ScatterOptions<T> = Pick<ScatterChartProps<T>, "series" | "hidden" | "fit" | "refLines" | "quadrants" | "jitter">;
+type ScatterOptions<T> = Pick<ScatterChartProps<T>, "series" | "hidden" | "fit" | "refLines" | "quadrants" | "jitter" | "hull">;
 
 /** Point list for hexbin density, which uses no points */
 const NO_DOTS: never[] = [];
@@ -189,8 +191,10 @@ function PointChart<T>(props: PointProps<T>) {
   const refYIn = finiteOrUndefined(so.refLines?.y);
   const refY = isLog && refYIn !== undefined && refYIn <= 0 ? undefined : refYIn;
   const fitOn = so.fit === "linear" && !isLog;
+  // Group outlines (scatter hull). Hexbin density leaves it out of so
+  const hull = so.hull;
   // Series, trend and reference-line descriptions are added only when scatter options change the picture. Without options, or with options that have no effect (empty hidden, zero-width jitter), the picture and description match the bubble chart's scatter plot
-  const hasScatterOptions = rowSeries !== null || fitOn || refX !== undefined || refY !== undefined || jitterAmount > 0;
+  const hasScatterOptions = rowSeries !== null || fitOn || refX !== undefined || refY !== undefined || jitterAmount > 0 || hull;
 
   const raw = useMemo(() => {
     const gx = numGetter(props.x, "x");
@@ -372,8 +376,8 @@ function PointChart<T>(props: PointProps<T>) {
   }, [kit, hasScatterOptions, quads, props.xLabel, box, fitTagX, fitTagY, fitTagAnchor, trendTag]);
 
   const seriesLabels = useMemo(
-    () => (kit && c.showLabels && hiSeries ? kit.placeSeriesLabels(dots, seriesNames, hiSeries, { box, reserved, grid }) : NO_SERIES_LABELS),
-    [kit, c.showLabels, hiSeries, dots, seriesNames, grid, reserved, box],
+    () => (kit && c.showLabels && hiSeries ? kit.placeSeriesLabels(dots, seriesNames, hiSeries, { box, reserved, grid, hull }) : NO_SERIES_LABELS),
+    [kit, c.showLabels, hiSeries, dots, seriesNames, grid, reserved, box, hull],
   );
 
   // Labels: highlighted first, then the largest circles. Skip any that overlap
@@ -466,7 +470,7 @@ function PointChart<T>(props: PointProps<T>) {
     [canvasGroups, dots, W],
   );
 
-  // Arrow keys (scatter): move to the nearest point in the arrow's direction. The first key goes to the highlighted point. ChartFrame handles the other keys (Home, End, Escape, Enter)
+  // Arrow keys (scatter): move to the nearest point in the arrow's direction (kit.dotKeys). The first key goes to the highlighted point. ChartFrame handles the other keys (Home, End, Escape, Enter)
   const onKey = hv
     ? (e: KeyboardEvent<HTMLDivElement>) => {
         // Hex cells: arrows move to the neighboring cell in that direction. ChartFrame handles Home and End (the densest cell, the sparsest cell)
@@ -474,16 +478,7 @@ function PointChart<T>(props: PointProps<T>) {
         if (next !== null && next >= 0) c.setActive(next, "keyboard");
         return next !== null;
       }
-    : kit
-    ? (e: KeyboardEvent<HTMLDivElement>) => {
-        const step = kit.arrowStep(e.key);
-        if (!step || !dots.length) return false;
-        const cur = c.active !== null && dots[c.active] ? c.active : null;
-        const next = cur === null ? kit.entryPoint(dots, step) : kit.nearestInDirection(dots, cur, step);
-        if (next !== null) c.setActive(next, "keyboard");
-        return true;
-      }
-    : undefined;
+    : kit?.dotKeys(c, dots);
 
   const xTicks = x.ticks(Math.max(2, Math.round(W / 110)));
   const xTitle = xTitleAt(box);
@@ -492,8 +487,8 @@ function PointChart<T>(props: PointProps<T>) {
   const scatterDesc = useMemo(() => {
     if (!kit || !st || !hasScatterOptions) return "";
     const refs = [...(refX === undefined ? [] : [`x ${xFmt(refX)}`]), ...(refY === undefined ? [] : [`y ${fv(refY)}`])];
-    return kit.describe(st, { points: raw, seriesNames, fit, xName: props.xLabel ?? "x", yName: props.yLabel ?? "y", refs, refX, refY, quadrants: quadrantNames });
-  }, [kit, st, hasScatterOptions, refX, refY, xFmt, fv, raw, seriesNames, fit, props.xLabel, props.yLabel, quadrantNames]);
+    return kit.describe(st, { points: raw, seriesNames, fit, xName: props.xLabel ?? "x", yName: props.yLabel ?? "y", refs, refX, refY, quadrants: quadrantNames, hull });
+  }, [kit, st, hasScatterOptions, refX, refY, xFmt, fv, raw, seriesNames, fit, props.xLabel, props.yLabel, quadrantNames, hull]);
   // Scatter: when no point falls inside the fixed range (zoom), state the reason in the picture and description instead of showing empty axes
   const outOfRange = useMemo(
     () => (kit && st && (fixedX || fixedY) && kit.noneInside(raw, xDom, yDom) ? st.outOfRange : ""),
@@ -543,6 +538,7 @@ function PointChart<T>(props: PointProps<T>) {
           </Txt>
         ) : null}
       </g>
+      {hull && kit?.hulls(p, dots, colors)}
       {hv ? null : refLines}
       {hex && hv ? <hex.Layer p={p} v={hv} box={box} active={c.active} c={c} m={m} onPick={c.click} /> : null}
       {/* Hex cells are filled areas, so reference lines are drawn over them */}

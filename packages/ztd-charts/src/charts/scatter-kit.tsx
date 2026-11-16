@@ -1,11 +1,13 @@
+import type { KeyboardEvent } from "react";
 import { Tag, tagBox } from "../core/annotations";
 import { Txt } from "../core/ChartFrame";
-import { argMin, linearFit, type LinearFit } from "../core/geometry";
+import { argMin, linearFit, polyline, type LinearFit } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import { plural, type ChartLang } from "../core/i18n";
 import { canvasColor, categoricalDots, type Swatch } from "../core/palette";
 import { overlaps, textWidth, truncate, type Box } from "../core/text";
 import type { Highlight } from "../core/types";
+import type { ChartCtx } from "../core/useChart";
 import { uniq } from "../data/accessor";
 import type { Painter } from "../theme/context";
 import { HEX_KIT } from "./scatter-hex";
@@ -27,6 +29,8 @@ const en = {
   trendTag: "Trend",
   /** When no point falls inside the fixed domain (xDomain, yDomain) */
   outOfRange: "No points in this range.",
+  /** Group outlines (options.hull) */
+  hull: " Outlines mark the area each series covers.",
 };
 const TEXT: Record<ChartLang, typeof en> = {
   en,
@@ -40,6 +44,7 @@ const TEXT: Record<ChartLang, typeof en> = {
     slope: "추세 기울기",
     trendTag: "추세",
     outOfRange: "이 범위에는 점이 없어요.",
+    hull: " 윤곽은 계열마다 점이 차지한 영역을 표시해요.",
   },
 };
 
@@ -65,6 +70,8 @@ export interface SeriesLabel {
   si: number;
   y: number;
   box: Box;
+  /** Drawn in ink even when not highlighted: with group outlines, muted text on the ink series' tint is only 4.4:1 in the light theme */
+  ink?: boolean;
 }
 
 /** One PointChart point (screen coordinates). si is the series index, -1 without series */
@@ -121,6 +128,18 @@ function entryPoint(pts: readonly DotAt[], step: readonly [number, number]): num
   const anyHi = pts.some((q) => q.hi);
   const k = argMin(pts.map((q) => (anyHi && !q.hi ? Infinity : q.x * step[0] + q.y * step[1])));
   return k < 0 ? null : k;
+}
+
+/** Arrow keys (scatter dots): move to the nearest point in the arrow's direction. The first key goes to the highlighted point. ChartFrame handles the other keys (Home, End, Escape, Enter) */
+function dotKeys(c: Pick<ChartCtx<unknown>, "active" | "setActive">, dots: readonly DotAt[]) {
+  return (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = arrowStep(e.key);
+    if (!step || !dots.length) return false;
+    const cur = c.active !== null && dots[c.active] ? c.active : null;
+    const next = cur === null ? entryPoint(dots, step) : nearestInDirection(dots, cur, step);
+    if (next !== null) c.setActive(next, "keyboard");
+    return true;
+  };
 }
 
 /** A value from 0 up to (but not including) 1, set by the seed and row index. It avoids Math.random, so it is the same on the server and in the browser, however many times it renders */
@@ -201,16 +220,107 @@ function quadrantTags(names: readonly string[], xr: number, yr: number, b: PlotB
 const SERIES_LABEL_SIZE = 11;
 const seriesLabelWeight = (hi: boolean) => (hi ? 700 : 600);
 
+type Pt = [number, number];
+
+/** Group outline (options.hull) of one series (si -1 without series): the convex hull of its dots on screen (1 point, 2 points or a polygon), widened by pad px on every side */
+interface Hull {
+  si: number;
+  pts: Pt[];
+  pad: number;
+}
+
+/**
+ * Convex hull (Andrew's monotone chain, one sort). Repeated points merge and points on an edge drop out, so dots on one spot give 1 point and dots on one line give its 2 ends.
+ * Before the sort, points strictly inside the quadrilateral of the leftmost, topmost, rightmost and bottommost points are dropped (they cannot be on the hull), so a dense cloud sorts only its edge
+ */
+function convexHull(all: readonly { x: number; y: number }[]): Pt[] {
+  type XY = (typeof all)[number];
+  const turn = (o: XY, a: XY, q: XY) => (a.x - o.x) * (q.y - o.y) - (a.y - o.y) * (q.x - o.x);
+  const ext = [all[0], all[0], all[0], all[0]];
+  for (const q of all) {
+    if (q.x < ext[0].x) ext[0] = q;
+    if (q.y < ext[1].y) ext[1] = q;
+    if (q.x > ext[2].x) ext[2] = q;
+    if (q.y > ext[3].y) ext[3] = q;
+  }
+  const s = all
+    .filter((q) => ext.some((a, i) => turn(a, ext[(i + 1) % 4], q) <= 0))
+    .sort((a, b) => a.x - b.x || a.y - b.y)
+    .filter((q, i, l) => !i || q.x !== l[i - 1].x || q.y !== l[i - 1].y);
+  const chain = (list: XY[]) => {
+    const out: XY[] = [];
+    for (const q of list) {
+      while (out.length > 1 && turn(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+      out.push(q);
+    }
+    // The last point starts the other chain
+    out.pop();
+    return out;
+  };
+  return (s.length < 3 ? s : [...chain(s), ...chain(s.reverse())]).map((q): Pt => [q.x, q.y]);
+}
+
+/** The outlines of the visible series, each widened by its dot radius + 4px. Kept per dot list, so the drawing and the label placement sort the dots once */
+const HULLS = new WeakMap<readonly DotAt[], Hull[]>();
+function seriesHulls(dots: readonly DotAt[]): Hull[] {
+  let out = HULLS.get(dots);
+  if (!out) {
+    const groups = new Map<number, DotAt[]>();
+    for (const d of dots) {
+      const g = groups.get(d.si);
+      if (g) g.push(d);
+      else groups.set(d.si, [d]);
+    }
+    out = [...groups].map(([si, g]) => ({ si, pad: g.reduce((m, d) => Math.max(m, d.r), 0) + 4, pts: convexHull(g) }));
+    HULLS.set(dots, out);
+  }
+  return out;
+}
+
+/** Whether a box reaches the widened outline: no separating axis (x, y, each outline edge's normal) between the outline polygon and the box grown by pad */
+function onHull(q: Hull, b: Box): boolean {
+  const corners: Pt[] = [
+    [b.x - q.pad, b.y - q.pad],
+    [b.x + b.w + q.pad, b.y + b.h + q.pad],
+    [b.x - q.pad, b.y + b.h + q.pad],
+    [b.x + b.w + q.pad, b.y - q.pad],
+  ];
+  const axes: Pt[] = [[1, 0], [0, 1], ...q.pts.map(([x, y], i): Pt => [y - q.pts[(i + 1) % q.pts.length][1], q.pts[(i + 1) % q.pts.length][0] - x])];
+  return axes.every(([nx, ny]) => {
+    const a = q.pts.map(([x, y]) => x * nx + y * ny);
+    const c = corners.map(([x, y]) => x * nx + y * ny);
+    return Math.max(...a) >= Math.min(...c) && Math.min(...a) <= Math.max(...c);
+  });
+}
+
+/** Group outlines under the dots (options.hull): each series' hull filled and stroked in the series color with round joins, so the wide stroke rounds it out. A background: not a pointer target, not read out */
+function hulls(p: Painter, dots: readonly DotAt[], colors: readonly Swatch[] | null) {
+  return (
+    <g aria-hidden="true" pointerEvents="none">
+      {seriesHulls(dots).map(({ si, pts, pad }) => {
+        // Without series, the gray of the dots
+        const fill = colors ? colors[si].fill : p.paint("neutralStrong");
+        return pts.length < 2 ? (
+          <circle key={si} cx={pts[0][0]} cy={pts[0][1]} r={pad} fill={fill} opacity={0.14} />
+        ) : (
+          <path key={si} d={polyline(pts) + (pts.length > 2 ? "Z" : "")} fill={fill} stroke={fill} strokeWidth={pad * 2} strokeLinejoin="round" strokeLinecap="round" opacity={0.14} />
+        );
+      })}
+    </g>
+  );
+}
+
 /**
  * Series label positions: starting from the real point nearest the centroid, the first spot beside it (right, left, above, below) that overlaps no point, reserved box, other label or the area outside the plot.
  * A color dot and name floating in empty space look like missing data, so each name sits right next to a real point of its series.
+ * With group outlines (hull), spots on another series' outline come last; when only such spots are free, the first free spot is used as without outlines.
  * Dropped when more than 4 series are visible or there is no room (the legend and tooltip carry the names)
  */
 function placeSeriesLabels(
   dots: readonly DotAt[],
   names: readonly string[],
   hiSeries: ReadonlySet<number>,
-  around: { box: PlotBox; reserved: readonly Box[]; grid: { g: Map<string, number[]>; cell: number } },
+  around: { box: PlotBox; reserved: readonly Box[]; grid: { g: Map<string, number[]>; cell: number }; hull?: boolean },
 ): SeriesLabel[] {
   const sums = names.map(() => ({ x: 0, y: 0, n: 0 }));
   for (const d of dots) {
@@ -243,24 +353,26 @@ function placeSeriesLabels(
     const cx = s.x / s.n;
     const cy = s.y / s.n;
     const near = dots.filter((d) => d.si === si).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
-    for (const d of near.slice(0, 40)) {
-      const gap = d.r + 4;
-      const tries = [
-        { x: d.x + gap, y: d.y - h / 2, w, h },
-        { x: d.x - gap - w, y: d.y - h / 2, w, h },
-        { x: d.x - w / 2, y: d.y - gap - h, w, h },
-        { x: d.x - w / 2, y: d.y + gap, w, h },
-      ];
-      const b = tries.find((t) => isFree(t) && !out.some((l) => overlaps(l.box, t, 2)));
-      if (!b) continue;
-      out.push({ si, y: b.y + h / 2, box: b });
-      return;
-    }
+    const others = around.hull ? seriesHulls(dots).filter((q) => q.si !== si) : [];
+    for (const clear of others.length ? [true, false] : [false])
+      for (const d of near.slice(0, 40)) {
+        const gap = d.r + 4;
+        const tries = [
+          { x: d.x + gap, y: d.y - h / 2, w, h },
+          { x: d.x - gap - w, y: d.y - h / 2, w, h },
+          { x: d.x - w / 2, y: d.y - gap - h, w, h },
+          { x: d.x - w / 2, y: d.y + gap, w, h },
+        ];
+        const b = tries.find((t) => isFree(t) && !out.some((l) => overlaps(l.box, t, 2)) && !(clear && others.some((q) => onHull(q, t))));
+        if (!b) continue;
+        out.push({ si, y: b.y + h / 2, box: b, ink: around.hull });
+        return;
+      }
   });
   return out;
 }
 
-/** Sentences appended to the default description when scatter options change the plot: point count per series, correlation direction and R², reference lines, point count per quadrant */
+/** Sentences appended to the default description when scatter options change the plot: point count per series, group outlines, correlation direction and R², reference lines, point count per quadrant */
 function describeScatter(
   text: typeof en,
   o: {
@@ -273,6 +385,7 @@ function describeScatter(
     refX?: number;
     refY?: number;
     quadrants: readonly string[];
+    hull?: boolean;
   },
 ): string {
   let s = "";
@@ -282,6 +395,7 @@ function describeScatter(
     const shown = counts.filter(([, k]) => k > 0);
     if (shown.length) s += text.seriesCounts(shown);
   }
+  if (o.hull) s += text.hull;
   // Below an R² of 0.1 (a correlation of about 0.3), no direction is stated
   if (o.fit) s += text.trend(o.fit.r2 < 0.1 ? 0 : Math.sign(o.fit.slope), o.xName, o.yName, o.fit.r2.toFixed(2));
   if (o.refs.length) s += text.refs(o.refs);
@@ -354,7 +468,7 @@ function Overlay(props: {
             const isHi = hiSeries.has(l.si);
             return (
               <g key={`s${l.si}`} aria-hidden="true" pointerEvents="none" opacity={fade}>
-                <Txt x={l.box.x} y={l.y} size={SERIES_LABEL_SIZE} weight={seriesLabelWeight(isHi)} fill={p.paint(isHi ? "ink" : "muted")}>
+                <Txt x={l.box.x} y={l.y} size={SERIES_LABEL_SIZE} weight={seriesLabelWeight(isHi)} fill={p.paint(isHi || l.ink ? "ink" : "muted")}>
                   {props.seriesNames[l.si]}
                 </Txt>
               </g>
@@ -374,8 +488,7 @@ function noneInside(pts: readonly { x: number; y: number }[], [x0, x1]: readonly
 export const SCATTER_KIT = {
   text: TEXT,
   arrowStep,
-  nearestInDirection,
-  entryPoint,
+  dotKeys,
   seededUnit,
   smallestGap,
   uniq,
@@ -390,6 +503,7 @@ export const SCATTER_KIT = {
   placeSeriesLabels,
   describe: describeScatter,
   RefLines,
+  hulls,
   Overlay,
   /** Hexagonal density (options.bin "hex") */
   hex: HEX_KIT,

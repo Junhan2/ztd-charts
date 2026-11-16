@@ -214,6 +214,86 @@ export function sankeyLayout(nodesIn: readonly SankeyNodeIn[], linksIn: readonly
   return { nodes, links };
 }
 
+/** Most stage columns drawn from a wide table (encoding.dimensions). Later columns are left out */
+export const SANKEY_MAX_DIMENSIONS = 6;
+/** Most values in one stage column. Past it, the 11 with the largest totals stay and the rest become one "Other (n)" node */
+export const SANKEY_MAX_VALUES = 12;
+
+/** Rows with the same path through the stage columns, merged: node and link indexes (the order sankeyLayout lays them out in) and the summed value */
+export interface SankeyPath {
+  nodes: number[];
+  links: number[];
+  value: number;
+}
+
+/**
+ * Stages from a wide table: each row is one path through the columns, left to right. A node id is the column number, \u0001 and the value,
+ * so a name in two columns is two nodes. An empty cell is a names.blank node, so every row passes every column.
+ * A column with more than 12 values keeps the 11 with the largest totals and merges the rest into one names.other(n) node, last in its column.
+ * Rows with the same path are merged first, then each pair of neighboring columns adds up into links. Rows with a value that is not above 0 are left out, as sankeyLayout leaves out such links.
+ * Nodes come column by column in order of first appearance, and every node has a link on both sides inside the stages, so sankeyLayout puts column k in layer k.
+ * grouped is the count of values merged into Other per column (0 for none)
+ */
+export function dimensionLinks<T>(rows: readonly T[], columns: readonly ((d: T, i: number) => string)[], value: (d: T, i: number) => number, names: { blank: string; other: (n: number) => string }): { nodes: SankeyNodeIn[]; links: SankeyLinkIn[]; paths: SankeyPath[]; grouped: number[] } {
+  const kept: { cells: string[]; v: number }[] = [];
+  if (columns.length > 1)
+    rows.forEach((d, i) => {
+      const v = value(d, i);
+      if (v > 0) kept.push({ cells: columns.map((read) => read(d, i)), v });
+    });
+  const nodes: SankeyNodeIn[] = [];
+  const grouped: number[] = [];
+  // Node index of each value, per column
+  const index = columns.map((_, k) => {
+    const totals = new Map<string, number>();
+    for (const r of kept) totals.set(r.cells[k], (totals.get(r.cells[k]) ?? 0) + r.v);
+    const over = totals.size > SANKEY_MAX_VALUES ? totals.size - SANKEY_MAX_VALUES + 1 : 0;
+    grouped.push(over);
+    const keep = over ? new Set([...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, SANKEY_MAX_VALUES - 1).map(([key]) => key)) : null;
+    const at = new Map<string, number>();
+    for (const key of totals.keys()) {
+      if (keep && !keep.has(key)) continue;
+      at.set(key, nodes.length);
+      nodes.push({ id: `${k}\u0001${key}`, label: key === "" ? names.blank : key });
+    }
+    if (keep) {
+      const other = nodes.length;
+      nodes.push({ id: `${k}\u0002`, label: names.other(over) });
+      for (const key of totals.keys()) if (!keep.has(key)) at.set(key, other);
+    }
+    return at;
+  });
+  const paths: SankeyPath[] = [];
+  const pathAt = new Map<string, SankeyPath>();
+  for (const r of kept) {
+    const ns = r.cells.map((cell, k) => index[k].get(cell)!);
+    const key = ns.join(",");
+    const p = pathAt.get(key);
+    if (p) p.value += r.v;
+    else {
+      const q: SankeyPath = { nodes: ns, links: [], value: r.v };
+      pathAt.set(key, q);
+      paths.push(q);
+    }
+  }
+  // Links between neighboring columns, gap by gap in order of first appearance
+  const links: SankeyLinkIn[] = [];
+  const linkAt = new Map<string, number>();
+  for (let k = 0; k + 1 < columns.length; k++)
+    for (const p of paths) {
+      const key = `${p.nodes[k]},${p.nodes[k + 1]}`;
+      let li = linkAt.get(key);
+      if (li === undefined) {
+        li = links.length;
+        linkAt.set(key, li);
+        links.push({ source: nodes[p.nodes[k]].id, target: nodes[p.nodes[k + 1]].id, value: 0 });
+      }
+      links[li].value += p.value;
+      p.links.push(li);
+    }
+  return { nodes, links, paths, grouped };
+}
+
 /** Link band path (horizontal Bezier) */
 export function sankeyLinkPath(l: { source: { x1: number }; target: { x0: number }; y0: number; y1: number; width: number }, t = 1): string {
   const xs = l.source.x1;

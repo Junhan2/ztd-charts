@@ -265,6 +265,19 @@ export const barSample = [
 ];
 export const barSampleKo = /* @__PURE__ */ relabel(barSample, { Q1: "1분기", Q2: "2분기", Q3: "3분기", Q4: "4분기", Domestic: "국내", Overseas: "해외" });
 
+/** Population by age band and sex (millions), oldest band first so it is the top row: a wide table for the bar variant "pyramid" */
+export const barPyramidSample = [
+  { age: "80+", Male: 1.2, Female: 2.1 },
+  { age: "70-79", Male: 2.6, Female: 3.2 },
+  { age: "60-69", Male: 3.9, Female: 4.2 },
+  { age: "50-59", Male: 4.4, Female: 4.5 },
+  { age: "40-49", Male: 4.3, Female: 4.3 },
+  { age: "30-39", Male: 3.8, Female: 3.7 },
+  { age: "20-29", Male: 3.5, Female: 3.3 },
+  { age: "10-19", Male: 3.1, Female: 2.9 },
+  { age: "0-9", Male: 2.7, Female: 2.6 },
+];
+
 export const radialBarSample = [
   { goal: "Revenue", rate: 82 },
   { goal: "Sign-ups", rate: 64 },
@@ -395,6 +408,37 @@ export const sankeySampleKo = /* @__PURE__ */ relabel(sankeySample, {
   "Drop-off ": "이탈 ",
   Purchase: "구매",
 });
+
+/** New accounts by plan, first feature used and status 30 days later: a wide table with one row per path (the sankey variant "stages") */
+export const sankeyStagesSample = [
+  { plan: "Free", feature: "Charts", day30: "Active", users: 1430 },
+  { plan: "Free", feature: "Charts", day30: "Upgraded", users: 340 },
+  { plan: "Free", feature: "Charts", day30: "Churned", users: 1090 },
+  { plan: "Free", feature: "Export", day30: "Active", users: 750 },
+  { plan: "Free", feature: "Export", day30: "Upgraded", users: 310 },
+  { plan: "Free", feature: "Export", day30: "Churned", users: 230 },
+  { plan: "Free", feature: "Share", day30: "Active", users: 480 },
+  { plan: "Free", feature: "Share", day30: "Upgraded", users: 150 },
+  { plan: "Free", feature: "Share", day30: "Churned", users: 420 },
+  { plan: "Pro", feature: "Charts", day30: "Active", users: 590 },
+  { plan: "Pro", feature: "Charts", day30: "Upgraded", users: 50 },
+  { plan: "Pro", feature: "Charts", day30: "Churned", users: 200 },
+  { plan: "Pro", feature: "Export", day30: "Active", users: 640 },
+  { plan: "Pro", feature: "Export", day30: "Upgraded", users: 80 },
+  { plan: "Pro", feature: "Export", day30: "Churned", users: 120 },
+  { plan: "Pro", feature: "Share", day30: "Active", users: 280 },
+  { plan: "Pro", feature: "Share", day30: "Upgraded", users: 30 },
+  { plan: "Pro", feature: "Share", day30: "Churned", users: 120 },
+  { plan: "Team", feature: "Charts", day30: "Active", users: 220 },
+  { plan: "Team", feature: "Charts", day30: "Upgraded", users: 10 },
+  { plan: "Team", feature: "Charts", day30: "Churned", users: 40 },
+  { plan: "Team", feature: "Export", day30: "Active", users: 260 },
+  { plan: "Team", feature: "Export", day30: "Upgraded", users: 20 },
+  { plan: "Team", feature: "Export", day30: "Churned", users: 30 },
+  { plan: "Team", feature: "Share", day30: "Active", users: 250 },
+  { plan: "Team", feature: "Share", day30: "Upgraded", users: 20 },
+  { plan: "Team", feature: "Share", day30: "Churned", users: 50 },
+];
 
 /** Collaboration requests between teams */
 export const chordSample = [

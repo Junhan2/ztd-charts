@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { AxisXBand, GridY, yAxisWidth } from "../core/axis";
-import { ChartFrame } from "../core/ChartFrame";
+import { ChartFrame, Txt } from "../core/ChartFrame";
 import { makeTickFormatter } from "../core/format";
-import { roundRectPath } from "../core/geometry";
+import { r2, roundRectPath } from "../core/geometry";
 import { resolveHighlight } from "../core/highlight";
 import type { Mark } from "../core/motion";
 import { swatch } from "../core/palette";
@@ -11,12 +11,13 @@ import type { Accessor, BaseChartProps, ChartEvent, Row, TooltipData } from "../
 import { useChart } from "../core/useChart";
 import { useMotion } from "../core/useMotion";
 import { numGetter, strGetter, uniq } from "../data/accessor";
-import { boxStats, kde, type BoxStats } from "../layout/stats";
+import { boxStats, dotUnit, kde, type BoxStats } from "../layout/stats";
 import { plural, type ChartLang } from "../core/i18n";
 
 const en = {
   box: "Box plot",
   violin: "Violin plot",
+  rain: "Raincloud plot",
   max: "Max (whisker)",
   q3: "Q3",
   med: "Median",
@@ -27,12 +28,14 @@ const en = {
   count: (n: number, outliers: number) => `${n}${outliers ? ` · ${plural(outliers, "outlier")}` : ""}`,
   summary: (median: string, q1: string, q3: string) => `median ${median}, IQR ${q1} to ${q3}`,
   median: (name: string, v: string) => `${name} median ${v}`,
+  dot: (n: number) => `1 dot = ${plural(n, "sample")}`,
 };
 const MSG: Record<ChartLang, typeof en> = {
   en,
   ko: {
     box: "박스 플롯",
     violin: "바이올린 플롯",
+    rain: "빗방울 구름 그림",
     max: "최대(수염)",
     q3: "3사분위",
     med: "중앙값",
@@ -43,15 +46,16 @@ const MSG: Record<ChartLang, typeof en> = {
     count: (n, outliers) => `${n}개${outliers ? ` · 이상값 ${outliers}` : ""}`,
     summary: (median, q1, q3) => `중앙값 ${median}, 사분위 ${q1}~${q3}`,
     median: (name, v) => `${name} 중앙값 ${v}`,
+    dot: (n) => `점 하나 = ${n}건`,
   },
 };
 
 export interface BoxPlotProps<T = Row> extends BaseChartProps<T> {
   group?: Accessor<T, string>;
   value?: Accessor<T, number>;
-  /** "box" | "violin" | "both". Default "box" */
-  variant?: "box" | "violin" | "both";
-  /** Outlier points. Default true */
+  /** "box" | "violin" | "both" | "raincloud" (half density curve, thin box and every sample as a dot, side by side). Default "box" */
+  variant?: "box" | "violin" | "both" | "raincloud";
+  /** Outlier points. Default true. Raincloud ignores it, since its dots already show every sample */
   outliers?: boolean;
   /** Include 0 in the axis. Default false */
   zero?: boolean;
@@ -66,12 +70,18 @@ interface BoxInfo {
   name: string;
   st: BoxStats;
   dens: number[];
+  /** Finite values (raincloud dots) */
+  v: number[];
   hi: boolean;
 }
 
 const VS = 48;
+/** Narrowest band (px) that leaves room for raincloud dots. A narrower band draws "both" instead */
+const RAIN_MIN = 44;
+/** Raincloud dot spacing (px): the value axis is cut into rows this tall, and the dots in a row sit this far apart */
+const PITCH = 5;
 
-/** Box plot and violin: distribution summary per group (quartiles, median, outliers) */
+/** Box plot, violin and raincloud: distribution summary per group (quartiles, median, outliers) */
 export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
   const c = useChart(props, { height: (w) => Math.max(200, Math.min(300, w * 0.55)), duration: 850, stagger: 90 });
   const { p, width: W, height: H } = c;
@@ -101,7 +111,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
     const ys = Array.from({ length: VS }, (_, k) => dom[0] + ((dom[1] - dom[0]) * k) / (VS - 1));
     const dens = variant === "box" ? names.map(() => [] as number[]) : names.map((n) => kde(by.get(n)!, ys));
     const hi = resolveHighlight(props.highlight as never, names as never[], names, stats.map((s) => s.median), "max");
-    const boxes: BoxInfo[] = names.map((n, g) => ({ g, name: n, st: stats[g], dens: dens[g], hi: hi.has(g) }));
+    const boxes: BoxInfo[] = names.map((n, g) => ({ g, name: n, st: stats[g], dens: dens[g], v: by.get(n)!, hi: hi.has(g) }));
     const peak = Math.max(1e-9, ...dens.flat());
     return { boxes, dom, ys, peak };
   }, [props.data, props.group, props.value, props.highlight, props.zero, variant, wLo, wHi]);
@@ -109,11 +119,33 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
   const tickFmt = makeTickFormatter(props.format, c.locale, Math.max(Math.abs(model.dom[0]), Math.abs(model.dom[1])));
   const ticks = scaleLinear(model.dom, [0, 1]).ticks(Math.max(2, Math.round(H / 70)));
   const left = yAxisWidth(ticks, tickFmt, c.locale);
-  const top = 10;
-  const bottom = 22;
-  const y = scaleLinear(model.dom, [H - bottom, top]);
   const band = scaleBand(model.boxes.map((b) => b.name), [left + 4, W - 4], 0.35, 0.15);
   const bw = Math.min(band.bandwidth, 64);
+  // Raincloud: dots left of each band's center line and the half curve right of it, each up to 42% of the band. A band too narrow for dots draws "both"
+  const rain = variant === "raincloud" && band.bandwidth >= RAIN_MIN;
+  const shape = variant === "raincloud" && !rain ? "both" : variant;
+  // A raincloud keeps a 16px row above the plot for "1 dot = N"
+  const top = rain ? 26 : 10;
+  const bottom = 22;
+  const base = H - bottom;
+  const y = scaleLinear(model.dom, [base, top]);
+  const room = Math.max(1, Math.floor(Math.min(band.bandwidth * 0.42, 44) / PITCH));
+
+  // Samples per 5px row of the value axis, by group name (an exiting group holds old data, so it must not read the new groups by index).
+  // One dot stands for unit samples, the smallest of 1, 2, 5, 10 … at which the fullest row fits its room
+  const dots = useMemo(() => {
+    const n = Math.max(1, Math.floor((base - top) / PITCH));
+    const counts = new Map<string, number[]>();
+    if (rain)
+      for (const b of model.boxes) {
+        const out = new Array<number>(n).fill(0);
+        for (const v of b.v) out[Math.min(n - 1, Math.max(0, Math.floor((base - y(v)) / PITCH)))]++;
+        counts.set(b.name, out);
+      }
+    return { counts, unit: dotUnit(Math.max(0, ...[...counts.values()].flat()), room) };
+    // y is determined by model, H and rain
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, H, rain, room]);
 
   const stg = c.motion.stagger ?? 90;
   const marks = useMemo<Mark<BoxInfo>[]>(
@@ -124,7 +156,7 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
         return { key: `b:${b.name}`, to, from: [med, med, med, med, med, 0], enter: [med, med, med, med, med, 0], delay: k * stg, data: b };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, H, stg],
+    [model, H, top, stg],
   );
   const m = useMotion(marks, c.motion);
   const accent = swatch(p, "accent");
@@ -148,8 +180,9 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
       ],
     };
   }
-  const kind = variant === "box" ? msg.box : msg.violin;
-  const desc = props.description ?? `${kind}. ${model.boxes.map((b) => msg.median(b.name, c.fv(b.st.median))).join(", ")}.`;
+  const kind = shape === "box" ? msg.box : rain ? msg.rain : msg.violin;
+  const dotNote = rain && dots.unit > 1 ? msg.dot(dots.unit) : "";
+  const desc = props.description ?? `${kind}. ${model.boxes.map((b) => msg.median(b.name, c.fv(b.st.median))).join(", ")}.${dotNote ? ` ${dotNote}.` : ""}`;
 
   return (
     <ChartFrame c={c} kind={kind} ariaLabel={props.ariaLabel} description={desc} events={events} tip={tip} renderTip={props.tooltip} className={props.className} style={props.style} theme={props.theme}>
@@ -161,35 +194,66 @@ export function BoxPlot<T = Row>(props: BoxPlotProps<T>) {
         const fill = b.hi ? accent.fill : p.paint("neutral");
         const stroke = b.hi ? accent.fill : p.paint("neutralStrong");
         const isA = c.active === b.g;
-        const half = variant === "box" ? bw / 2 : bw * 0.18;
+        const half = shape === "box" ? bw / 2 : rain ? 3.5 : bw * 0.18;
+        // Raincloud: the curve starts and the dots end this far from the center line, beside the thin box
+        const off = half + 2.5;
         let violin: string | null = null;
-        if (variant !== "box") {
-          const wmax = Math.min(band.bandwidth / 2, 40);
-          const pts = model.ys.map((v, k) => [cx + (b.dens[k] / model.peak) * wmax * o, y(v)] as [number, number]);
-          const back = [...pts].reverse().map(([px, py]) => [cx - (px - cx), py] as [number, number]);
-          violin = `M${pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}L${back.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}Z`;
+        if (shape !== "box") {
+          const x0 = rain ? cx + off : cx;
+          const wmax = rain ? Math.min(band.bandwidth * 0.42, 40) : Math.min(band.bandwidth / 2, 40);
+          let pts = model.ys.map((v, k) => [x0 + (b.dens[k] / model.peak) * wmax * o, y(v)] as [number, number]);
+          if (rain) {
+            // Only where the curve is wider than 0.5px, plus one sample at each end
+            const wide = b.dens.map((d) => (d / model.peak) * wmax >= 0.5);
+            const a = wide.indexOf(true);
+            pts = a < 0 ? [] : pts.slice(Math.max(0, a - 1), wide.lastIndexOf(true) + 2);
+          }
+          if (pts.length) {
+            // The violin mirrors the right half to the left; the raincloud's half closes along its flat side
+            const back: [number, number][] = rain ? [[x0, pts[pts.length - 1][1]], [x0, pts[0][1]]] : [...pts].reverse().map(([px, py]) => [cx - (px - cx), py]);
+            violin = `M${pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}L${back.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}Z`;
+          }
         }
+        const whisker = p.paint(b.hi && (shape === "box" || rain) ? "accent" : "dim");
+        const dotOpacity = b.hi ? 0.95 : 0.72;
         return (
           <g key={it.key} className="ztd-mark" opacity={it.exiting ? 0.4 : c.dim(b.g)} onPointerEnter={(e) => c.setActive(b.g, e.pointerType === "touch" ? "touch" : "pointer")} onClick={() => c.click(b.g)}>
             <rect x={cx - band.step / 2} y={top} width={band.step} height={H - top - bottom} fill="transparent" />
             {violin ? <path d={violin} fill={fill} fillOpacity={b.hi ? 0.85 : 0.9} stroke={stroke} strokeWidth={1} /> : null}
-            <line x1={cx} x2={cx} y1={hi} y2={q3} stroke={p.paint(b.hi && variant === "box" ? "accent" : "dim")} strokeWidth={1.4} />
-            <line x1={cx} x2={cx} y1={q1} y2={lo} stroke={p.paint(b.hi && variant === "box" ? "accent" : "dim")} strokeWidth={1.4} />
-            {variant === "box" ? (
+            <line x1={cx} x2={cx} y1={hi} y2={q3} stroke={whisker} strokeWidth={1.4} />
+            <line x1={cx} x2={cx} y1={q1} y2={lo} stroke={whisker} strokeWidth={1.4} />
+            {shape === "box" ? (
               <>
                 <line x1={cx - bw * 0.22} x2={cx + bw * 0.22} y1={hi} y2={hi} stroke={p.paint("dim")} strokeWidth={1.4} />
                 <line x1={cx - bw * 0.22} x2={cx + bw * 0.22} y1={lo} y2={lo} stroke={p.paint("dim")} strokeWidth={1.4} />
               </>
             ) : null}
-            <path d={roundRectPath(cx - half, Math.min(q1, q3), half * 2, Math.abs(q1 - q3), Math.min(4, half / 2))} fill={variant === "box" ? fill : p.paint(b.hi ? "onAccent" : "ink")} fillOpacity={variant === "box" ? 1 : 0.9} stroke={isA && c.via === "keyboard" ? p.paint("ink") : "none"} strokeWidth={2} />
-            <line x1={cx - half} x2={cx + half} y1={med} y2={med} stroke={variant === "box" ? p.paint(b.hi ? "onAccent" : "ink") : p.paint(b.hi ? "accent" : "panel")} strokeWidth={2.2} />
-            {props.outliers !== false
+            <path d={roundRectPath(cx - half, Math.min(q1, q3), half * 2, Math.abs(q1 - q3), Math.min(4, half / 2))} fill={shape === "box" ? fill : rain ? stroke : p.paint(b.hi ? "onAccent" : "ink")} fillOpacity={shape === "box" || rain ? 1 : 0.9} stroke={isA && c.via === "keyboard" ? p.paint("ink") : "none"} strokeWidth={2} />
+            <line x1={cx - half} x2={cx + half} y1={med} y2={med} stroke={shape === "box" ? p.paint(b.hi ? "onAccent" : "ink") : p.paint(b.hi && !rain ? "accent" : "panel")} strokeWidth={2.2} />
+            {props.outliers !== false && !rain
               ? b.st.outliers.map((v, k) => <circle key={k} cx={cx} cy={y(v)} r={2.6} fill="none" stroke={p.paint(b.hi ? "accent" : "neutralStrong")} strokeWidth={1.3} opacity={o} />)
               : null}
+            {/* Raincloud dots: each row stacks outward from the box as the chart enters, and a remainder under one dot's worth is a hollow ring */}
+            {(dots.counts.get(b.name) ?? []).flatMap((cnt, k) => {
+              const full = Math.floor(cnt / dots.unit);
+              const cy = r2(base - PITCH * (k + 0.5));
+              return Array.from({ length: Math.round(o * Math.ceil(cnt / dots.unit)) }, (_, j) =>
+                j < full ? (
+                  <circle key={`${k}:${j}`} cx={r2(cx - off - 2 - j * PITCH)} cy={cy} r={2} fill={stroke} fillOpacity={dotOpacity} />
+                ) : (
+                  <circle key={`${k}:${j}`} cx={r2(cx - off - 2 - j * PITCH)} cy={cy} r={1.35} fill="none" stroke={stroke} strokeOpacity={dotOpacity} strokeWidth={1.3} />
+                ),
+              );
+            })}
           </g>
         );
       })}
       <AxisXBand p={p} width={W} labels={model.boxes.map((b) => b.name)} centers={model.boxes.map((b) => band(b.name) + band.bandwidth / 2)} y={H - bottom + 13} strong={new Set(model.boxes.filter((b) => b.hi).map((b) => b.g))} />
+      {dotNote ? (
+        <Txt x={W - 4} y={14} anchor="end" size={10.5} weight={600} fill={p.paint("muted")}>
+          {dotNote}
+        </Txt>
+      ) : null}
     </ChartFrame>
   );
 }

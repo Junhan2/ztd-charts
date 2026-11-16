@@ -126,6 +126,11 @@
           "description": "{ amount, seed }: spreads dots that share an x value sideways, by up to amount × the smallest gap between x values (default 0.4). The seed (default 1) keeps the picture the same on every render",
           "type": "object"
         },
+        "hull": {
+          "description": "Outlines each visible series (all dots without a series channel) with a rounded shape in its color under the dots. Every dot stays inside its outline. Not drawn with bin \"hex\"",
+          "default": false,
+          "type": "boolean"
+        },
         "xDomain": {
           "description": "Fixed x range [start, end], smallest first. Use it to zoom in: dots outside are not drawn, and with bin \"hex\" only the dots inside are counted",
           "type": "array",

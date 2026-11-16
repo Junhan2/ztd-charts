@@ -36,7 +36,13 @@ const CH_dumbbell: ChannelDef[] = [LABEL, ch("start", "number", true, "Before va
 const CH_lollipop: ChannelDef[] = [LABEL, VALUE];
 const CH_beeswarm: ChannelDef[] = [ch("value", "number", true, "Value field"), ch("group", "string", false, "Group (row) field"), ch("label", "string", false, "Dot name")];
 const CH_ridgeline: ChannelDef[] = [ch("group", "string", true, "Group field"), ch("value", "number", true, "Value field")];
-const CH_sankey: ChannelDef[] = [ch("source", "string", true, "Source node"), ch("target", "string", true, "Target node"), VALUE];
+/** Link rows (source, target, value) or a wide table (dimensions). The validator asks for source, target and value only without dimensions */
+const CH_sankey: ChannelDef[] = [
+  ch("source", "string", false, "Source node"),
+  ch("target", "string", false, "Target node"),
+  ch("dimensions", "string", false, "Stage columns of a wide table, left to right (2 to 6). Each row is one path, so source and target are not used. Without value, each row counts 1", { multi: true }),
+  ch("value", "number", false, "Value field"),
+];
 const CH_chord: ChannelDef[] = [ch("source", "string", true, "Sending group"), ch("target", "string", true, "Receiving group"), VALUE];
 const CH_calendar: ChannelDef[] = [ch("date", "date", true, "Date field"), VALUE];
 const CH_bump: ChannelDef[] = [ch("x", "any", true, "Period field"), ch("series", "string", true, "Item field"), ch("rank", "number", false, "Rank field (1 is first)"), ch("value", "number", false, "Value field (instead of rank, largest is first)")];
@@ -233,6 +239,9 @@ export const TYPE_ALIASES: Record<string, string> = {
   column: "bar",
   stackedBar: "bar",
   groupedBar: "bar",
+  butterfly: "bar",
+  pyramid: "bar",
+  populationPyramid: "bar",
   stacked: "area",
   streamgraph: "stream",
   radial: "radialBar",
@@ -242,6 +251,7 @@ export const TYPE_ALIASES: Record<string, string> = {
   kpi: "gauge",
   violin: "box",
   boxplot: "box",
+  raincloud: "box",
   calendarHeatmap: "calendar",
   "parallel-coordinates": "parallel",
   parallelCoordinates: "parallel",
@@ -279,6 +289,8 @@ export const TYPE_ALIASES: Record<string, string> = {
   pointMap: "symbolMap",
   originDestination: "flowMap",
   odMap: "flowMap",
+  alluvial: "sankey",
+  parallelSets: "sankey",
 };
 
 export interface ChartMeta {

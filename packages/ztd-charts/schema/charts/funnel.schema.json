@@ -57,6 +57,14 @@
           "default": "vs. previous",
           "type": "string"
         },
+        "flow": {
+          "description": "Stage direction. \"right\" puts each stage in a column from left to right, with each rate vs. the previous stage on the band between bars (with rateBase \"first\", under each count). A column too narrow for its bar and rate draws \"down\"",
+          "default": "down",
+          "enum": [
+            "down",
+            "right"
+          ]
+        },
         "height": {
           "description": "Height in px. Without it, each chart picks a default that fits its width",
           "type": "number",
