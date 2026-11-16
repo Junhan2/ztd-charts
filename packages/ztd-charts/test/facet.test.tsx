@@ -17,15 +17,15 @@ const orders = REGIONS.flatMap((region, r) => Array.from({ length: 12 }, (_, w) 
 const spec = (extra: Partial<ChartSpec> = {}): ChartSpec => ({ type: "line", data: orders, encoding: { x: "week", y: "orders" }, facet: { by: "region" }, card: { title: "Weekly orders" }, ...extra });
 const input = (over: Partial<FacetInput> = {}): FacetInput => ({ type: "line", data: orders, by: "region", chartProps: { x: "week", y: "orders" }, width: 632, locale: "en-US", lang: "en", ...over });
 
-describe("facet: 나누기와 배치", () => {
-  it("by 값마다 패널 하나, 값이 처음 나오는 순서", () => {
+describe("facet: splitting and layout", () => {
+  it("one panel per by value, in first-seen order", () => {
     const rows = [{ g: "b", v: 1 }, { g: "a", v: 2 }, { g: "b", v: 3 }, { g: "c", v: 4 }];
     const { values, groups, dropped } = facetGroups(rows, "g");
     expect(values).toEqual(["b", "a", "c"]);
     expect(groups.map((g) => g.map((r) => r.v))).toEqual([[1, 3], [2], [4]]);
     expect(dropped).toBe(0);
   });
-  it("24개까지만 그리고, 검사기가 뺀 수를 경고해요", () => {
+  it("draws only up to 24 and the validator warns with the count left out", () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ x: 1, y: i, k: `k${i}` }));
     const g = facetGroups(rows, "k");
     expect(g.values).toHaveLength(24);
@@ -38,7 +38,7 @@ describe("facet: 나누기와 배치", () => {
     expect(w?.message).toContain("Only the first 24 panels are drawn, so 6 values are (6 rows) left out");
     expect(validateSpec({ type: "bar", data: rows, encoding: { x: "x", y: "y" }, facet: { by: "k" } }, { lang: "ko" }).warnings.find((x) => x.code === "facet_many_panels")?.message).toContain("6개 값(6행)은 빠져요");
   });
-  it('빈 값("", null, 필드 없음)은 한 패널로 묶고 "(blank)" 이름을 제목, 차트 이름, 설명에 써요. 행은 빠지지 않아요', () => {
+  it('empty values ("", null, missing field) group into one panel, named "(blank)" in its title, chart name and description. No rows are dropped', () => {
     const rows = [
       { w: "W1", g: "A", v: 1 },
       { w: "W2", g: "A", v: 2 },
@@ -61,7 +61,7 @@ describe("facet: 나누기와 배치", () => {
     expect(renderToStaticMarkup(<Chart spec={s} width={632} animate={false} />)).toContain('aria-label="Orders, (blank)"');
     expect(validateSpec(s).warnings.map((x) => x.code)).not.toContain("facet_many_panels");
   });
-  it("패널 140px 이상으로 들어가는 만큼, 390px 화면 카드 안은 두 칸, 마지막 줄이 혼자 남지 않게 고르게", () => {
+  it("as many columns as fit at 140px or more per panel, two inside a card on a 390px screen, balanced so the last row is not left alone", () => {
     // Inner card width on a 390px screen: 390 - side margins 32 - stage padding 20 - card 42 = 296
     expect(facetColumns(296, 8)).toBe(2);
     expect(facetColumns(632, 8)).toBe(4);
@@ -72,8 +72,8 @@ describe("facet: 나누기와 배치", () => {
   });
 });
 
-describe("facet: 같은 값 축과 자유 축", () => {
-  it("같은 값 축은 모든 행의 범위로 한 번 재서 모든 패널에 같아요", () => {
+describe("facet: shared and free value axes", () => {
+  it("a shared value axis is measured once over all rows and is the same in every panel", () => {
     const plan = planFacets(input());
     const all = extent(orders.map((r) => r.orders));
     const want = fitDomain(all[0], all[1], Math.max(2, Math.round(plan.ph / 70)), { zero: false });
@@ -85,7 +85,7 @@ describe("facet: 같은 값 축과 자유 축", () => {
     expect(plan.panels.map((p) => p.props.showYAxis)).toEqual([true, false, false, false, true, false, false, false]);
     expect(plan.panels.map((p) => p.props.showXAxis)).toEqual([false, false, false, false, true, true, true, true]);
   });
-  it("같은 값 축이면 날짜 범위가 다른 패널도 x 눈금(자리와 글자 꼴)이 같고, 자유 축은 패널마다예요", () => {
+  it("with a shared axis, panels with different date ranges get the same x ticks (position and label form), and a free axis is per panel", () => {
     // One region spans January to December, the other June to August. Both panels are in the bottom row, so both draw x labels
     const months = (from: number, to: number, region: string) => Array.from({ length: to - from + 1 }, (_, i) => ({ m: `2025-${String(from + i).padStart(2, "0")}-01`, region, v: 10 + i }));
     const rows = [...months(1, 12, "Year"), ...months(6, 8, "Summer")];
@@ -101,7 +101,7 @@ describe("facet: 같은 값 축과 자유 축", () => {
     const free = xTicks("free");
     expect(free[1]).not.toBe(free[0]);
   });
-  it("같은 값 축에서 x 값이 적으면(1~12주) 모든 패널이 첫 x부터 같은 간격으로 솎은 같은 눈금을 그려요", () => {
+  it("with a shared axis and few x values (weeks 1~12), every panel draws the same ticks thinned at the same step from the first x", () => {
     // 8 regions × x 1~12. Even when one region has only weeks 3~9, the ticks are the same
     const rows = REGIONS.flatMap((region, r) => Array.from({ length: 12 }, (_, w) => ({ w: w + 1, region, v: 100 + r * 10 + w })).filter((d) => r !== 5 || (d.w >= 3 && d.w <= 9)));
     const s: ChartSpec = { type: "line", data: rows, encoding: { x: "w", y: "v" }, facet: { by: "region" } };
@@ -118,7 +118,7 @@ describe("facet: 같은 값 축과 자유 축", () => {
     expect(drawn).toEqual(["1 3 5 7 9 11", "1 3 5 7 9 11", "1 3 5 7 9 11", "1 3 5 7 9 11"]);
     expect(renderSpecToSVG(s)).toContain(">1</text>");
   });
-  it("자유 축은 패널마다 자기 범위이고 모든 패널이 값 축 글자를 그려요", () => {
+  it("a free axis uses each panel's own range and every panel draws value axis labels", () => {
     const plan = planFacets(input({ scale: "free" }));
     for (const pn of plan.panels) {
       expect(pn.props.yDomain).toBeUndefined();
@@ -136,15 +136,15 @@ describe("facet: 같은 값 축과 자유 축", () => {
   });
 });
 
-describe("facet: 묶음, 강조, 접근성", () => {
-  it("syncId는 스펙으로 정해져서 몇 번을 만들어도 같고, 데이터가 다르면 달라요. options.syncId가 있으면 그것", () => {
+describe("facet: group, highlight, accessibility", () => {
+  it("syncId comes from the spec, so it is the same on every build and differs for different data. options.syncId wins when set", () => {
     const a = facetSyncId("line", "region", { x: "week", y: "orders" }, orders);
     expect(facetSyncId("line", "region", { x: "week", y: "orders" }, orders.map((r) => ({ ...r })))).toBe(a);
     expect(facetSyncId("line", "region", { x: "week", y: "orders" }, orders.slice(1))).not.toBe(a);
     expect(new Set(planFacets(input()).panels.map((p) => p.props.syncId))).toEqual(new Set([a]));
     expect(planFacets(input({ syncId: "mine" })).panels.every((p) => p.props.syncId === "mine")).toBe(true);
   });
-  it("highlight가 by 값이면 그 패널만 강조색, 나머지는 무채색. 다른 값은 패널마다 그대로", () => {
+  it("a highlight that is a by value accents only that panel and leaves the rest neutral. Other values pass through to each panel", () => {
     const plan = planFacets(input({ highlight: "West" }));
     expect(plan.panels.filter((p) => p.isPicked).map((p) => p.value)).toEqual(["West"]);
     expect(plan.panels.find((p) => p.value === "West")?.props.highlight).toBeUndefined();
@@ -157,7 +157,7 @@ describe("facet: 묶음, 강조, 접근성", () => {
     const withAccent = panels.filter((p) => p.toLowerCase().includes(`stroke="${accent}"`)).map((p) => p.slice(1, p.indexOf('"', 1)));
     expect(withAccent).toEqual(["West"]);
   });
-  it("패널마다 온전한 차트: 이름 \"<카드 제목>, <값>\", 키보드 포커스, 숨긴 표. 묶음은 한 문장 설명", () => {
+  it("each panel is a full chart: name \"<card title>, <value>\", keyboard focus, hidden table. The group gets a one-sentence description", () => {
     const html = renderToStaticMarkup(<Chart spec={spec()} width={632} animate={false} />);
     for (const r of REGIONS) expect(html).toContain(`aria-label="Weekly orders, ${r}"`);
     expect(html.match(/class="ztd-root[^"]*" role="group"[^>]*tabindex="0"/g)).toHaveLength(8);
@@ -167,7 +167,7 @@ describe("facet: 묶음, 강조, 접근성", () => {
     expect(desc).toMatch(/Lakes ends highest at /);
     expect(desc).toContain("Lower at the end than at the start: North, South.");
   });
-  it("ChartFacets는 스펙 없이도 써요 (계열 하나인 라인은 제목 오른쪽에 마지막 값)", () => {
+  it("ChartFacets works without a spec (a single-series line shows the last value right of the title)", () => {
     const html = renderToStaticMarkup(
       <ThemeProvider theme="light">
         <ChartFacets chart={LineChart} type="line" data={orders} by="region" chartProps={{ x: "week", y: "orders", animate: false }} width={632} title="Orders" />
@@ -180,14 +180,14 @@ describe("facet: 묶음, 강조, 접근성", () => {
   });
 });
 
-describe("facet: 검사와 스키마", () => {
-  it("line, area, bar, scatter가 아니면 오류에 쓸 수 있는 차트를 적어요", () => {
+describe("facet: validation and schema", () => {
+  it("for charts other than line, area, bar, scatter, the error lists the charts that can be used", () => {
     const v = validateSpec({ type: "pie", data: [{ label: "a", value: 1, g: "x" }], encoding: { label: "label", value: "value" }, facet: { by: "g" } });
     expect(v.valid).toBe(false);
     expect(v.errors.find((e) => e.code === "facet_unsupported")?.message).toBe("facet works on line, area, bar, scatter charts, not on pie");
     expect(validateSpec({ type: "pie", data: [{ label: "a", value: 1, g: "x" }], facet: { by: "g" } }, { lang: "ko" }).errors.find((e) => e.code === "facet_unsupported")?.message).toContain("line, area, bar, scatter 차트에서만");
   });
-  it('양쪽 막대(layout "diverging")와 tileMap에는 facet을 쓰지 않아요: 검사기 오류, <Chart>는 차트 하나', () => {
+  it('diverging bars (layout "diverging") and tileMap take no facet: a validator error, and <Chart> draws one chart', () => {
     const rows = [{ q: "A", g: "x", no: 3, yes: 5 }, { q: "B", g: "y", no: 2, yes: 4 }];
     const div: ChartSpec = { type: "bar", data: rows, encoding: { x: "q", y: ["no", "yes"] }, options: { layout: "diverging", negative: ["no"], orientation: "horizontal" }, facet: { by: "g" } };
     const err = validateSpec(div).errors.find((e) => e.path === "facet");
@@ -198,14 +198,14 @@ describe("facet: 검사와 스키마", () => {
     const tile = validateSpec({ type: "tileMap", data: [{ id: "x", v: 1, g: "a" }], facet: { by: "g" } });
     expect(tile.errors.find((e) => e.code === "facet_unsupported")?.message).toContain("facet works on line, area, bar, scatter charts, not on tileMap");
   });
-  it("by가 데이터에 없으면 가까운 필드 이름을 권해요 (영어, 한국어)", () => {
+  it("suggests a close field name when by is not in the data (English, Korean)", () => {
     const bad = spec({ facet: { by: "regoin" } });
     const en = validateSpec(bad).errors.find((e) => e.path === "facet.by");
     expect(en?.code).toBe("field_not_found");
     expect(en?.message).toContain('Did you mean "region"?');
     expect(validateSpec(bad, { lang: "ko" }).errors.find((e) => e.path === "facet.by")?.message).toContain('"region"인가요?');
   });
-  it("columns가 양의 정수가 아니거나 scale이 두 값이 아니면 오류 (영어, 한국어)", () => {
+  it("errors when columns is not a positive integer or scale is not one of the two values (English, Korean)", () => {
     for (const columns of ["2} onLoad={alert(1)", 0, 1.5, -2]) {
       const bad = spec({ facet: { by: "region", columns: columns as number } });
       expect(validateSpec(bad).errors.find((e) => e.path === "facet.columns")?.message).toBe("facet.columns must be a whole number of 1 or more");
@@ -218,11 +218,11 @@ describe("facet: 검사와 스키마", () => {
     // Even in <Chart>, which skips validation, an invalid columns value is treated as absent
     expect(facetColumns(632, 8, "2} onLoad" as unknown as number)).toBe(facetColumns(632, 8));
   });
-  it("지역마다 같은 주는 더한 것으로 보지 않아요 (중복 x 경고는 패널마다)", () => {
+  it("does not treat the same week in different regions as added (the duplicate x warning is per panel)", () => {
     expect(validateSpec(spec()).warnings.map((w) => w.code)).not.toContain("duplicate_x");
     expect(validateSpec(spec({ facet: undefined })).warnings.map((w) => w.code)).toContain("duplicate_x");
   });
-  it("스키마는 네 차트에만 facet을 적어요", () => {
+  it("the schema lists facet only for the four charts", () => {
     expect(schemaFor("line")?.properties).toHaveProperty("facet");
     expect(schemaFor("scatter")?.properties).toHaveProperty("facet");
     expect(schemaFor("pie")?.properties).not.toHaveProperty("facet");
@@ -233,8 +233,8 @@ describe("facet: 검사와 스키마", () => {
   });
 });
 
-describe("facet: 서버 SVG", () => {
-  it("독립 SVG 하나에 카드 틀과 by 값마다 패널 하나, 두 번 그려도 같아요", () => {
+describe("facet: server SVG", () => {
+  it("one standalone SVG with the card frame and one panel per by value, the same when drawn twice", () => {
     const s = spec({ card: { title: "Weekly orders", takeaway: "Lakes grows fastest", source: "Sample" } });
     const a = renderSpecToSVG(s);
     expect(a.match(/<svg xmlns=/g)).toHaveLength(1);
@@ -244,7 +244,7 @@ describe("facet: 서버 SVG", () => {
     expect(a).not.toMatch(/var\(|color-mix/);
     expect(renderSpecToSVG(s)).toBe(a);
   });
-  it('facet 값의 <, ", &는 서버 SVG와 HTML에서 이스케이프돼요 (패널 제목, data-facet, 이름)', () => {
+  it('<, ", & in facet values are escaped in server SVG and HTML (panel title, data-facet, name)', () => {
     const hostile = '<b onload="x">R&D</b>';
     const rows = orders.map((r) => (r.region === "West" ? { ...r, region: hostile } : r));
     const s = spec({ data: rows, options: { highlight: hostile } });

@@ -134,8 +134,8 @@ function flush(ms: number) {
   for (let k = 0; k < 4 && frames.length; k++) for (const fn of frames.splice(0)) fn(t);
 }
 
-describe("데이터가 바뀔 때 빠지는 항목 (useMotion exiting)", () => {
-  it("등장이 끝난 모든 차트에 다른 언어 예시, 절반, 한 행, 빈 데이터, 원래 데이터를 차례로 줘도 던지지 않아요", async () => {
+describe("items leaving when data changes (useMotion exiting)", () => {
+  it("no chart throws when, after its entrance ends, it gets another language's example, half, one row, empty data and the original data in turn", async () => {
     const { act, createRoot, Chart, spec } = mods;
     const failures: string[] = [];
     let entered = 0;

@@ -26,7 +26,7 @@ const run = async (...args: string[]) => {
 let server: Server;
 let base = "";
 beforeAll(async () => {
-  if (!existsSync(CLI)) throw new Error("먼저 pnpm build로 CLI를 빌드하세요");
+  if (!existsSync(CLI)) throw new Error("Build the CLI first with pnpm build");
   server = createServer((req, res) => {
     if (req.url?.startsWith("/sales.csv")) {
       res.writeHead(200, { "content-type": "text/csv; charset=utf-8" });
@@ -46,13 +46,38 @@ beforeAll(async () => {
 afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
-  it("--version, help (기본 영어, --locale ko면 한국어)", async () => {
+  it("--version, help (English by default, Korean with --locale ko)", async () => {
     expect((await run("--version")).out.trim()).toBe("0.11.3");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");
   });
-  it("list: 44종 (표, JSON, 필터는 id와 예전 한글 이름 모두)", async () => {
+  it("<command> --help prints that command's usage and runs nothing; an unknown command still fails", async () => {
+    const h = mkdtempSync(join(tmpdir(), "ztd-help-"));
+    writeFileSync(join(h, "spec.json"), JSON.stringify({ type: "pie", data: [{ label: "a", value: 1 }] }));
+    const inH = async (...args: string[]) => {
+      try {
+        const r = await exec("node", [CLI, ...args], { cwd: h });
+        return { code: 0, out: r.stdout };
+      } catch (e) {
+        const x = e as { code: number; stdout: string };
+        return { code: x.code, out: x.stdout };
+      }
+    };
+    for (const cmd of ["list", "info", "schema", "example", "validate", "render", "init", "suggest", "snippet"]) {
+      const r = await inH(cmd, "--help");
+      expect(r.code, cmd).toBe(0);
+      expect(r.out, cmd).toContain(`ztd-charts ${cmd}`);
+      expect(r.out.match(/^ {2}ztd-charts /gm), cmd).toHaveLength(1);
+    }
+    expect((await inH("render", "spec.json", "-h")).out).toContain("--out chart.svg");
+    expect((await inH("init", "--help")).code).toBe(0);
+    expect(readdirSync(h)).toEqual(["spec.json"]);
+    expect((await inH("--locale", "ko", "render", "--help")).out).toContain("사용법");
+    expect((await inH("rendr", "--help")).code).toBe(1);
+    expect((await run("help")).out).toContain("ztd-charts snippet <spec.json>");
+  });
+  it("list: 44 charts (table, JSON, the level filter takes the id or the old Korean name)", async () => {
     const t = await run("list");
     expect(t.out).toContain("44 charts");
     expect(t.out).toContain("Intermediate");
@@ -78,7 +103,7 @@ describe("ztd-charts CLI", () => {
     expect(bad.code).toBe(1);
     expect(bad.err).toContain("grouped, percent, horizontal");
   });
-  it("validate: 성공 0, 실패 1과 메시지", async () => {
+  it("validate: 0 on success, 1 and a message on failure", async () => {
     expect((await run("validate", "donut.json")).code).toBe(0);
     writeFileSync(join(dir, "bad.json"), JSON.stringify({ type: "pie", data: [{ a: "x", b: 1 }], encoding: { label: "aa", value: "b" } }));
     const bad = await run("validate", "bad.json");
@@ -149,13 +174,13 @@ describe("ztd-charts CLI", () => {
     expect(readFileSync(join(dir, "flow.html"), "utf8")).toContain("Natural Earth 1:110m countries");
     expect(reactSnippet(flow)).toContain('import { world } from "ztd-charts/geo/world";');
   });
-  it("dist/client: React 한 파일과 차트마다 한 파일, 지도 출처 고지, HTML 안에서 깨지는 글자가 없어요", () => {
+  it("dist/client: one React file and one file per chart, the map attribution notice, no text that breaks inside HTML", () => {
     const client = fileURLToPath(new URL("../dist/client", import.meta.url));
     const files = readdirSync(client).sort();
     expect(files).toEqual(["NOTICE.md", "react.js", ...CHARTS.map((d) => `${d.type}.js`), ...BUILTIN_MAPS.map((m) => `geo-${m}.js`)].sort());
     for (const f of files) expect(readFileSync(join(client, f), "utf8"), f).not.toMatch(/<\/script|<!--/i);
   });
-  it("render --locale ko: 차트 글자와 배지가 한국어", async () => {
+  it("render --locale ko: chart text and badges are in Korean", async () => {
     expect((await run("render", "donut.json", "--out", "d-en.svg")).code).toBe(0);
     expect((await run("render", "donut.json", "--out", "d-ko.svg", "--locale", "ko")).code).toBe(0);
     const en = readFileSync(join(dir, "d-en.svg"), "utf8");
@@ -165,7 +190,7 @@ describe("ztd-charts CLI", () => {
     expect(ko).toContain("도넛 차트. 4개 항목, 합계");
     expect(ko).toContain(">기본<");
   });
-  it("render: data.url (CSV, JSON select)를 먼저 가져와요", async () => {
+  it("render: fetches data.url (CSV, JSON select) first", async () => {
     writeFileSync(join(dir, "url.json"), JSON.stringify({ type: "line", data: { url: `${base}/sales.csv` }, encoding: { x: "month", y: "revenue" } }));
     const r = await run("render", "url.json", "--out", "u.svg");
     expect(r.code).toBe(0);
@@ -173,7 +198,7 @@ describe("ztd-charts CLI", () => {
     writeFileSync(join(dir, "api.json"), JSON.stringify({ type: "bar", data: { url: `${base}/api`, select: "data.items" }, encoding: { x: "day", y: "n" } }));
     expect((await run("render", "api.json", "--out", "a.svg")).code).toBe(0);
   });
-  it("init: 파일을 만들고 두 번째는 건너뛰어요", async () => {
+  it("init: creates the files and skips them the second time", async () => {
     const r1 = await run("init", "app", "--type", "funnel");
     expect(r1.out).toContain("Created: charts/funnel.spec.json");
     const r2 = await run("init", "app", "--type", "funnel");
@@ -186,7 +211,7 @@ describe("ztd-charts CLI", () => {
     expect(readme).not.toMatch(/npx ztd-charts /);
     expect(readFileSync(join(dir, "app/charts/Dashboard.tsx"), "utf8").startsWith('"use client";')).toBe(true);
   });
-  it("suggest: CSV, URL, --out-dir 스펙은 바로 렌더돼요", async () => {
+  it("suggest: CSV, URL, --out-dir specs render as is", async () => {
     writeFileSync(join(dir, "stages.csv"), "stage,users\n방문,1000\n조회,620\n장바구니,190\n구매,76\n");
     const r = await run("suggest", "stages.csv", "--out-dir", "sugg");
     expect(r.out).toContain("1. Funnel chart (funnel)");
@@ -196,7 +221,7 @@ describe("ztd-charts CLI", () => {
     const j = JSON.parse((await run("suggest", `${base}/sales.csv`, "--json")).out);
     expect(j.suggestions[0].type).toBe("line");
   });
-  it("모르는 명령과 없는 파일", async () => {
+  it("unknown command and missing file", async () => {
     expect((await run("nope")).code).toBe(1);
     expect((await run("validate", "없음.json")).err).toContain("File not found");
     expect((await run("validate", "없음.json", "--locale", "ko")).err).toContain("파일이 없어요");
@@ -205,7 +230,7 @@ describe("ztd-charts CLI", () => {
     expect(s.code).toBe(1);
     expect(s.err).toContain("File not found: 없음.csv");
   });
-  it("잘못된 옵션 값은 결과를 만들지 않고 1로 끝나요", async () => {
+  it("an invalid option value makes no output and exits with 1", async () => {
     const jpg = await run("render", "donut.json", "--out", "d.jpg");
     expect(jpg.code).toBe(1);
     expect(jpg.err).toContain(".svg, .png or .html");
@@ -223,7 +248,7 @@ describe("ztd-charts CLI", () => {
 });
 
 describe("CLI API", () => {
-  it("PNG 글자에서 이모지만 빼고 알려요 (©, ™, 숫자는 그대로, 화면 낭독 글은 그대로)", async () => {
+  it("strips only emoji from PNG text and reports it (©, ™ and digits stay, screen reader text stays)", async () => {
     const svg = '<svg><desc>🍎 사과</desc><text x="1">🍎 사과</text><text>Apple 🍎</text><text>👍🏽 ok</text><text>🇰🇷 서울</text><text>#️⃣ 1</text><text>👨‍👩‍👧 가족</text><text>© 2025 ™ 42</text></svg>';
     const out = stripEmoji(svg);
     expect(out.removed).toBe(6);
@@ -274,27 +299,27 @@ describe("CLI API", () => {
     // The line over bars is a channel too, so it passes through as is
     expect(reactSnippet({ type: "bar", data: [{ m: "1월", 올해: 1, 작년: 2 }], encoding: { x: "m", y: "올해", line: "작년" } })).toContain('line="작년"');
   });
-  it("render는 44종 모두 PNG로 그려요", async () => {
+  it("render draws all 44 charts as PNG", async () => {
     for (const c of CHARTS) {
       const r = await render(c.example, { format: "png", width: 560, scale: 1 });
       expect(r.png!.subarray(1, 4).toString(), c.type).toBe("PNG");
       expect(r.width).toBe(560);
     }
   });
-  it("render는 같은 스카이라인 스펙에서 두 번 같은 PNG를 만들어요 (기본 폭)", async () => {
+  it("render makes the same PNG twice from the same skyline spec (default width)", async () => {
     const spec = CHARTS.find((c) => c.type === "skyline")!.example;
     const [a, b] = [await render(spec, { format: "png" }), await render(spec, { format: "png" })];
     expect(a.png!.length).toBeGreaterThan(1000);
     expect(Buffer.compare(a.png!, b.png!)).toBe(0);
   });
-  it("npm 패키지에 PNG용 Pretendard 다섯 굵기와 OFL 라이선스가 실려요", async () => {
+  it("the npm package ships five Pretendard weights for PNG and the OFL license", async () => {
     // On Linux with no fonts at all (containers like node:22-slim), all PNG text disappears when these fonts are missing
     const { stdout } = await exec("npm", ["pack", "--dry-run", "--json"], { cwd: fileURLToPath(new URL("..", import.meta.url)) });
     const files = (JSON.parse(stdout) as { files: { path: string }[] }[])[0].files.map((f) => f.path);
     for (const w of ["Regular", "Medium", "SemiBold", "Bold", "ExtraBold"]) expect(files).toContain(`fonts/Pretendard-${w}.otf`);
     expect(files).toContain("fonts/LICENSE.txt");
   });
-  it("--font로 글꼴을 주면 패키지에 실은 Pretendard는 읽지 않아요", () => {
+  it("with --font, the bundled Pretendard is not read", () => {
     const fromBundle = (list: string[]) => list.filter((f) => f.includes(`${sep}cli${sep}fonts${sep}`));
     const bundled = fromBundle(findFonts());
     expect(bundled).toHaveLength(5);

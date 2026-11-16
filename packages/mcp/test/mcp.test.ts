@@ -23,8 +23,8 @@ const call = async (name: string, args: Record<string, unknown>) => {
 };
 const firstJson = (c: Content[]) => JSON.parse(c[0].text!);
 
-describe("MCP 도구", () => {
-  it("다섯 도구와 입력 스키마", async () => {
+describe("MCP tools", () => {
+  it("five tools and their input schemas", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(["get_chart_schema", "list_charts", "render_chart", "suggest_chart", "validate_spec"]);
     for (const t of tools) {
@@ -33,12 +33,12 @@ describe("MCP 도구", () => {
     }
     expect(tools.find((t) => t.name === "list_charts")!.annotations?.readOnlyHint).toBe(true);
   });
-  it("list_charts: 전체와 필터", async () => {
+  it("list_charts: all and filtered", async () => {
     expect(firstJson((await call("list_charts", {})).content).count).toBe(44);
     const r = firstJson((await call("list_charts", { group: "distribution" })).content);
     expect(r.charts.map((c: { type: string }) => c.type)).toEqual(["beeswarm", "ridgeline", "box", "histogram"]);
   });
-  it("get_chart_schema: 스키마, 예시, React 코드. 별칭과 모르는 타입", async () => {
+  it("get_chart_schema: schema, example, React code. Aliases and unknown types", async () => {
     const r = await call("get_chart_schema", { type: "line" });
     const j = firstJson(r.content);
     expect(j.schema.properties.type.const).toBe("line");
@@ -49,19 +49,19 @@ describe("MCP 도구", () => {
     expect((await call("get_chart_schema", { type: "pyramid" })).isError).toBe(true);
     expect(firstJson((await call("get_chart_schema", {})).content).oneOf).toHaveLength(44);
   });
-  it("validate_spec: 오류 경로와 제안", async () => {
+  it("validate_spec: error paths and suggestions", async () => {
     const j = firstJson((await call("validate_spec", { spec: { type: "bar", data: [{ q: "1분기", revenue: 1 }], encoding: { x: "q", y: "revenu" } } })).content);
     expect(j.valid).toBe(false);
     expect(j.errors[0]).toMatchObject({ path: "encoding.y", code: "field_not_found" });
     expect(j.errors[0].message).toContain('Did you mean "revenue"?');
   });
-  it("validate_spec: locale, 그다음 스펙 options.locale이면 한국어 메시지 (render_chart와 같게)", async () => {
+  it("validate_spec: Korean messages from locale, then the spec's options.locale (same as render_chart)", async () => {
     const spec = { type: "bar", data: [{ q: "1분기", revenue: 1 }], encoding: { x: "q", y: "revenu" } };
     const msg = async (args: Record<string, unknown>) => firstJson((await call("validate_spec", args)).content).errors[0].message as string;
     expect(await msg({ spec, locale: "ko" })).toContain('"revenue"인가요?');
     expect(await msg({ spec: { ...spec, options: { locale: "ko-KR" } } })).toContain('"revenue"인가요?');
   });
-  it("render_chart: PNG 이미지, SVG, React 코드", async () => {
+  it("render_chart: PNG image, SVG, React code", async () => {
     const r = await call("render_chart", { spec: { type: "pie", data: [{ label: "a", value: 3 }, { label: "b", value: 1 }], card: { title: "비중", takeaway: "a가 75%" } }, format: "both", theme: "light", width: 480, scale: 1 });
     expect(r.isError).toBe(false);
     const img = r.content.find((c) => c.type === "image")!;
@@ -90,18 +90,18 @@ describe("MCP 도구", () => {
     const f = await call("render_chart", { spec: flow, format: "svg", width: 640 });
     expect(f.content.find((c) => c.text?.startsWith("<svg"))!.text!).toContain("Flow map. 1 flow between 2 places");
   });
-  it("render_chart: locale로 차트 글자 언어를 정해요 (기본 영어)", async () => {
+  it("render_chart: locale sets the chart text language (English by default)", async () => {
     const spec = { type: "pie", data: [{ label: "a", value: 3 }, { label: "b", value: 1 }] };
     const svgOf = (r: { content: Content[] }) => r.content.find((c) => c.text?.startsWith("<svg"))!.text!;
     expect(svgOf(await call("render_chart", { spec, format: "svg" }))).toContain("Pie chart. 2 items, total 4.");
     expect(svgOf(await call("render_chart", { spec, format: "svg", locale: "ko" }))).toContain("파이 차트. 2개 항목, 합계 4.");
   });
-  it("render_chart: 틀린 스펙은 isError와 검증 결과", async () => {
+  it("render_chart: an invalid spec returns isError and the validation result", async () => {
     const r = await call("render_chart", { spec: { type: "pie" } });
     expect(r.isError).toBe(true);
     expect(JSON.parse(r.content[1].text!).errors[0].code).toBe("missing_data");
   });
-  it("suggest_chart: csv, rows, 입력 없음", async () => {
+  it("suggest_chart: csv, rows, no input", async () => {
     const a = firstJson((await call("suggest_chart", { csv: "from,to,value\n검색,상세,10\n상세,구매,4\n상세,이탈,6\n" })).content);
     expect(a.suggestions[0].type).toBe("sankey");
     const b = firstJson((await call("suggest_chart", { rows: [{ cat: "A", sub: "a1", v: 3 }, { cat: "A", sub: "a2", v: 2 }, { cat: "B", sub: "b1", v: 4 }] })).content);
@@ -112,14 +112,14 @@ describe("MCP 도구", () => {
     expect(local.isError).toBe(true);
     expect(local.content[0].text).toContain("http:// or https://");
   });
-  it("suggest_chart: locale ko면 이름, 이유, 스펙이 한국어 (ztd-charts suggest --locale ko와 같게)", async () => {
+  it("suggest_chart: with locale ko, names, reasons and specs are in Korean (same as ztd-charts suggest --locale ko)", async () => {
     const csv = "month,channel,revenue\n2025-01,검색,120\n2025-01,SNS,64\n2025-02,검색,128\n2025-02,SNS,75\n2025-03,검색,131\n2025-03,SNS,92\n2025-04,검색,140\n2025-04,SNS,104\n";
     const j = firstJson((await call("suggest_chart", { csv, limit: 1, locale: "ko" })).content);
     expect(j.suggestions[0]).toMatchObject({ type: "line", name: "라인 차트" });
     expect(j.suggestions[0].reason).toMatch(/[가-힣]/);
     expect(j.suggestions[0].spec.options.locale).toBe("ko-KR");
   });
-  it("리소스: JSON Schema", async () => {
+  it("resource: JSON Schema", async () => {
     const { resources } = await client.listResources();
     expect(resources[0].uri).toBe("ztd-charts://schema/chart-spec.json");
     const r = await client.readResource({ uri: resources[0].uri });
@@ -127,9 +127,9 @@ describe("MCP 도구", () => {
   });
 });
 
-describe("stdio 서버 (빌드 결과)", () => {
+describe("stdio server (build output)", () => {
   const bin = fileURLToPath(new URL("../dist/index.js", import.meta.url));
-  it.skipIf(!existsSync(bin))("npx로 띄운 것처럼 stdio로 대화해요", async () => {
+  it.skipIf(!existsSync(bin))("talks over stdio as if launched with npx", async () => {
     const c = new Client({ name: "stdio-test", version: "0.0.0" });
     await c.connect(new StdioClientTransport({ command: "node", args: [bin], stderr: "ignore" }));
     const r = await c.callTool({ name: "list_charts", arguments: { level: "basic" } });

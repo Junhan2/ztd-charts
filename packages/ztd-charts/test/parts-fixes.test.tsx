@@ -119,16 +119,16 @@ describe("locale and date labels", () => {
   });
 });
 
-describe("색 척도 옵션: 뒤집기, 가운데 값, 단계 (차례 2 ⑬)", () => {
+describe("color scale options: reverse, center value, steps", () => {
   const cellOpacity = (html: string) => [...html.matchAll(/<path d="[^"]*" fill="([^"]*)" opacity="([\d.]+)" class="ztd-mark"/g)].map((m) => ({ fill: m[1], opacity: +m[2] }));
   const heat = (vals: number[], props: Record<string, unknown> = {}) =>
     renderToStaticMarkup(<Heatmap data={vals.map((v, i) => ({ x: `c${i}`, y: "r", v }))} x="x" y="y" value="v" width={480} animate={false} {...props} />);
-  it("colorReverse면 1위(가장 작은 값)가 가장 진해요", () => {
+  it("with colorReverse, rank 1 (the smallest value) is darkest", () => {
     const cells = cellOpacity(heat([1, 2, 3, 4], { colorReverse: true }));
     expect(cells[0].opacity).toBe(1);
     expect(cells[3].opacity).toBeCloseTo(0.08, 5);
   });
-  it("colorReverse면 기본 강조(테두리)도 가장 작은 값으로 가고, highlight를 주면 그걸 따라요", () => {
+  it("with colorReverse, the default highlight (outline) also goes to the smallest value, and a given highlight is followed", () => {
     const vals = [3, 1, 4, 2];
     expect(heat(vals, { colorReverse: true })).toBe(heat(vals, { colorReverse: true, highlight: "min" }));
     expect(heat(vals, { colorReverse: true })).not.toBe(heat(vals, { colorReverse: true, highlight: "max" }));
@@ -139,7 +139,7 @@ describe("색 척도 옵션: 뒤집기, 가운데 값, 단계 (차례 2 ⑬)", (
     expect(outlined(cal({ colorReverse: true }))).toBe(1);
     expect(cal({ colorReverse: true })).toBe(cal({ colorReverse: true, highlight: "2024-03-05" }));
   });
-  it("colorCenter: 0보다 작은 칸은 회색, 같은 크기면 같은 진하기 (SVG 내보내기도 테마 색으로)", () => {
+  it("colorCenter: cells below 0 are grey, equal sizes get equal shades (SVG export uses theme colors too)", () => {
     const cells = cellOpacity(heat([-4, -2, 2, 4], { colorCenter: 0 }));
     expect(cells.map((c) => (c.fill.startsWith("var(--ztd-neutral-strong") ? "gray" : c.fill.startsWith("var(--ztd-accent") ? "accent" : c.fill))).toEqual(["gray", "gray", "accent", "accent"]);
     expect(cells[0].opacity).toBeCloseTo(cells[3].opacity, 5);
@@ -147,12 +147,12 @@ describe("색 척도 옵션: 뒤집기, 가운데 값, 단계 (차례 2 ⑬)", (
     const svg = renderSpecToSVG({ type: "heatmap", data: [-4, 4].map((v, i) => ({ x: `c${i}`, y: "r", v })), encoding: { x: "x", y: "y", value: "v" }, options: { colorCenter: 0 } });
     expect(svg).toContain(`fill="${darkTheme.neutralStrong}"`);
   });
-  it("colorSteps: 3이면 칸 진하기가 3가지, 범례도 3칸", () => {
+  it("colorSteps: 3 gives 3 cell shades and a 3-cell legend", () => {
     const html = heat([1, 2, 3, 4, 5, 6, 7, 8, 9], { colorSteps: 3 });
     expect(new Set(cellOpacity(html).map((c) => c.opacity)).size).toBe(3);
     expect(html.match(/<rect x="[\d.]+" y="3" width="12" height="9" rx="2"/g)).toHaveLength(3);
   });
-  it("캘린더도 가운데 값보다 작은 날은 회색, 큰 날은 강조색이에요", () => {
+  it("calendar also greys days below the center value and accents days above it", () => {
     const html = renderToStaticMarkup(<CalendarHeatmap data={[{ date: "2024-03-01", value: -3 }, { date: "2024-03-02", value: 5 }]} colorCenter={0} width={480} animate={false} />);
     const fills = [...html.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" rx="[\d.]+" fill="([^"]*)"/g)].map((m) => m[1]);
     expect(fills.some((f) => f.startsWith("var(--ztd-neutral-strong"))).toBe(true);

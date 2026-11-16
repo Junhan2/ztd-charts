@@ -3,10 +3,10 @@ import { MotionEngine, resample } from "../src/core/motion";
 import { contrastRatio, mixHex, parseColor } from "../src/theme/color";
 import { darkTheme, lightTheme, themeToCssVars, type ChartTheme } from "../src/theme/tokens";
 
-describe("모션 엔진", () => {
+describe("motion engine", () => {
   const mk = (to: number[], from?: number[]) => [{ key: "a", to, from, data: null }];
 
-  it("spring은 duration 안에 목표에 닿고 넘치지 않아요", () => {
+  it("spring reaches the target within duration without overshoot", () => {
     const e = new MotionEngine<null>();
     e.configure("spring", 900);
     e.hold(mk([100], [0]));
@@ -23,7 +23,7 @@ describe("모션 엔진", () => {
     expect(e.animating).toBe(false);
   });
 
-  it("중간에 목표가 바뀌면 위치와 속도가 끊기지 않아요", () => {
+  it("position and velocity stay continuous when the target changes midway", () => {
     const e = new MotionEngine<null>();
     e.configure("spring", 900);
     e.hold(mk([100], [0]));
@@ -41,7 +41,7 @@ describe("모션 엔진", () => {
     expect(Math.abs(v2 - v1)).toBeLessThan(Math.abs(v1) * 0.6 + 1);
   });
 
-  it("easeOut은 정해진 시간에 끝나요", () => {
+  it("easeOut ends at the set time", () => {
     const e = new MotionEngine<null>();
     e.configure("easeOut", 500);
     e.hold(mk([10], [0]));
@@ -52,7 +52,7 @@ describe("모션 엔진", () => {
     expect(e.get("a")![0]).toBe(10);
   });
 
-  it("지연, 새 항목(enter), 빠진 항목(exit)", () => {
+  it("delay, new items (enter), leaving items (exit)", () => {
     const e = new MotionEngine<string>();
     e.configure("easeOut", 100);
     e.hold([
@@ -70,7 +70,7 @@ describe("모션 엔진", () => {
     expect(e.get("c")![0]).toBe(5);
   });
 
-  it("sameTargets와 resample", () => {
+  it("sameTargets and resample", () => {
     const e = new MotionEngine<null>();
     e.snap(mk([1, 2]));
     expect(e.sameTargets(mk([1, 2]))).toBe(true);
@@ -79,7 +79,7 @@ describe("모션 엔진", () => {
   });
 });
 
-describe("테마 대비 (WCAG AA)", () => {
+describe("theme contrast (WCAG AA)", () => {
   const pairs = (t: ChartTheme): [string, string, string, number][] => [
     ["ink / panel", t.ink, t.panel, 4.5],
     ["muted / panel", t.muted, t.panel, 4.5],
@@ -102,11 +102,11 @@ describe("테마 대비 (WCAG AA)", () => {
         expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(min);
       });
     }
-    it(`${t.name}: 중급 배지 글자 / tint ≥ 4.5`, () => {
+    it(`${t.name}: intermediate badge text / tint ≥ 4.5`, () => {
       expect(contrastRatio(t.accentText, t.tint, t.panel)).toBeGreaterThanOrEqual(4.5);
     });
   }
-  it("dim은 패널 위 작은 글자에 AA 미달이라 글자는 muted를 써요", () => {
+  it("dim fails AA for small text on the panel, so text uses muted", () => {
     for (const t of [darkTheme, lightTheme]) {
       expect(contrastRatio(t.dim, t.panel)).toBeLessThan(4.5);
       expect(contrastRatio(t.muted, t.panel)).toBeGreaterThanOrEqual(4.5);
@@ -114,8 +114,8 @@ describe("테마 대비 (WCAG AA)", () => {
   });
 });
 
-describe("색 도구", () => {
-  it("parseColor, 대비, 섞기", () => {
+describe("color tools", () => {
+  it("parseColor, contrast, mix", () => {
     expect(parseColor("#0B8FD8")).toEqual([11, 143, 216, 1]);
     expect(parseColor("var(--ztd-accent, #fff)")).toEqual([255, 255, 255, 1]);
     expect(parseColor("rgba(11, 143, 216, 0.12)")?.[3]).toBeCloseTo(0.12);

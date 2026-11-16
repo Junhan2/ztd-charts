@@ -297,8 +297,8 @@ describe("HistogramChart", () => {
   });
 });
 
-describe("작은 눈금 표기 (차례 4)", () => {
-  it("로그 히스토그램이 0.01부터 100만까지 퍼져도 첫 x 눈금을 0이 아니라 0.01로 써요", () => {
+describe("small tick labels", () => {
+  it("a log histogram spread from 0.01 to 1 million writes its first x tick as 0.01, not 0", () => {
     const data = Array.from({ length: 33 }, (_, i) => ({ v: 10 ** (-2 + 0.25 * i) }));
     const all = texts(r(<HistogramChart data={data} value="v" log width={640} animate={false} />));
     const bottom = Math.max(...all.map((t) => t.y));

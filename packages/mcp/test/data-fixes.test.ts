@@ -21,8 +21,8 @@ const call = async (name: string, args: Record<string, unknown>) => {
   return { isError: !!r.isError, content: r.content as Content[] };
 };
 
-describe("MCP: 큰 SVG와 PNG 이모지", () => {
-  it("1 MB가 넘는 SVG는 글로 돌려주지 않고 PNG와 안내 한 줄로 대신해요", async () => {
+describe("MCP: large SVG and PNG emoji", () => {
+  it("an SVG over 1 MB is not returned as text but replaced by a PNG and a one-line note", async () => {
     const data = Array.from({ length: 12000 }, (_, i) => ({ x: (i * 7919) % 1000, y: (i * 104729) % 997 }));
     const r = await call("render_chart", { spec: { type: "scatter", data, encoding: { x: "x", y: "y" } }, format: "svg" });
     expect(r.isError).toBe(false);
@@ -32,21 +32,21 @@ describe("MCP: 큰 SVG와 PNG 이모지", () => {
     const small = await call("render_chart", { spec: { type: "scatter", data: data.slice(0, 50), encoding: { x: "x", y: "y" } }, format: "svg" });
     expect(small.content.some((c) => c.type === "text" && (c.text ?? "").startsWith("<svg"))).toBe(true);
   });
-  it("PNG에서 뺀 이모지를 경고에 같이 알려요", async () => {
+  it("reports the emoji removed from the PNG in the warning", async () => {
     const r = await call("render_chart", { spec: { type: "bar", data: [{ k: "🍎 사과", v: 4 }, { k: "배", v: 5 }], encoding: { x: "k", y: "v" } }, locale: "ko" });
     expect(r.content.find((c) => /^Size /.test(c.text ?? ""))?.text).toContain("이모지 1개를 뺐어요");
   });
 });
 
-describe("MCP: 스펙의 테마, 범례 색, 로캘", () => {
-  it("render_chart는 evil.json을 그리지 않고 검증 결과(bad_theme_value, bad_legend_color)를 돌려줘요", async () => {
+describe("MCP: spec theme, legend colors, locale", () => {
+  it("render_chart does not draw evil.json and returns the validation result (bad_theme_value, bad_legend_color)", async () => {
     const evil = { type: "pie", data: [{ label: "a", value: 1 }], card: { title: "Sales", legend: [{ label: "L", color: 'x"/><script>alert(document.domain)</script><x y="' }] }, theme: { accent: "red}</style><script>alert(2)</script><style>" } };
     const r = await call("render_chart", { spec: evil, format: "svg" });
     expect(r.isError).toBe(true);
     expect(JSON.parse(r.content[1].text!).errors.map((e: { code: string }) => e.code)).toEqual(["bad_legend_color", "bad_theme_value"]);
     expect(r.content.some((c) => c.type === "text" && /<svg/.test(c.text ?? ""))).toBe(false);
   });
-  it('validate_spec는 "ko_KR"을 받고 "" 로캘은 bad_locale', async () => {
+  it('validate_spec accepts "ko_KR" and rejects an "" locale with bad_locale', async () => {
     const spec = (locale: string) => ({ type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { locale } });
     expect(JSON.parse((await call("validate_spec", { spec: spec("ko_KR") })).content[0].text!).valid).toBe(true);
     expect(JSON.parse((await call("validate_spec", { spec: spec("") })).content[0].text!).errors[0].code).toBe("bad_locale");
@@ -56,8 +56,8 @@ describe("MCP: 스펙의 테마, 범례 색, 로캘", () => {
   });
 });
 
-describe("MCP: 데이터 주소가 내부망이면 막아요", () => {
-  it("suggest_chart와 render_chart는 기본으로 127.0.0.1을 요청 없이 막고, ZTD_CHARTS_ALLOW_PRIVATE_URLS=1이면 가져와요", async () => {
+describe("MCP: blocks data addresses on a private network", () => {
+  it("suggest_chart and render_chart block 127.0.0.1 without a request by default, and fetch it with ZTD_CHARTS_ALLOW_PRIVATE_URLS=1", async () => {
     let hits = 0;
     const http = createHttpServer((_req, res) => {
       hits++;
@@ -89,8 +89,8 @@ describe("MCP: 데이터 주소가 내부망이면 막아요", () => {
   });
 });
 
-describe("MCP: 차트 크기 한도", () => {
-  it("render_chart는 스펙의 아주 큰 height를 그리지 않고 검사 결과(out_of_range)를 돌려줘요", async () => {
+describe("MCP: chart size limit", () => {
+  it("render_chart does not draw a huge height from the spec and returns the validation result (out_of_range)", async () => {
     const r = await call("render_chart", { spec: { type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { height: 1e9 } }, format: "svg" });
     expect(r.isError).toBe(true);
     expect(r.content.map((c) => c.text ?? "").join("\n")).toContain("out_of_range");
