@@ -13,18 +13,18 @@ const KO = chartsIn("ko");
 /** A spec without options.locale. Used to compare the Korean examples and suggestions with the old values from before locale existed */
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
-describe("레지스트리", () => {
-  it("44종, 타입과 컴포넌트 이름이 겹치지 않아요", () => {
+describe("registry", () => {
+  it("44 types, with no clashing type or component names", () => {
     expect(CHARTS).toHaveLength(44);
     expect(new Set(CHARTS.map((c) => c.type)).size).toBe(44);
     expect(new Set(CHARTS.map((c) => c.component)).size).toBe(44);
   });
-  it("차트별 스키마 파일을 패키지 이름으로 불러와요 (README에 적은 경로)", () => {
+  it("loads per-chart schema files by package name (the paths in the README)", () => {
     const req = createRequire(import.meta.url);
     expect(() => req.resolve("ztd-charts/schema.json")).not.toThrow();
     for (const c of CHARTS) expect(() => req.resolve(`ztd-charts/schema/charts/${c.type}.schema.json`), c.type).not.toThrow();
   });
-  it("가벼운 META/CHANNELS가 레지스트리와 같아요 (한글 이름은 META 한 곳)", () => {
+  it("light META/CHANNELS match the registry (Korean names live only in META)", () => {
     for (const c of CHARTS) {
       expect(META[c.type]).toEqual({ component: c.component, name: c.name, nameKo: localizeDef(c, "ko").name });
       expect((CHANNELS as Record<string, unknown>)[c.type]).toBe(c.encoding);
@@ -32,7 +32,7 @@ describe("레지스트리", () => {
     expect(resolveMeta("doughnut")?.type).toBe("donut");
     expect(resolveMeta("PieChart")).toMatchObject({ type: "pie", name: "Pie chart", nameKo: "파이 차트" });
   });
-  it("기본 글은 영어예요: 이름, 설명, 채널, 옵션, 예시 카드와 데이터", () => {
+  it("default text is English: names, descriptions, channels, options, example cards and data", () => {
     for (const c of CHARTS) {
       expect(c.name, c.type).toBe(c.nameEn);
       const { options, ...rest } = c;
@@ -43,13 +43,13 @@ describe("레지스트리", () => {
     }
     for (const o of COMMON_OPTIONS) expect(o.description, o.name).not.toMatch(HANGUL);
   });
-  it("모든 예시가 검증을 통과해요 (영어, 한글)", () => {
+  it("every example passes validation (English, Korean)", () => {
     for (const c of [...CHARTS, ...KO]) {
       const r = validateSpec(c.example);
       expect(r.errors, c.type).toEqual([]);
     }
   });
-  it("모든 예시가 공개 JSON Schema(ajv 2020)도 통과해요 (영어, 한글)", () => {
+  it("every example also passes the public JSON Schema (ajv 2020) (English, Korean)", () => {
     CHARTS.forEach((c, i) => {
       const one = ajv.compile(schemaFor(c.type)!);
       for (const example of [c.example, KO[i].example]) {
@@ -59,7 +59,7 @@ describe("레지스트리", () => {
       }
     });
   });
-  it("스키마는 틀린 스펙을 거부해요", () => {
+  it("the schema rejects wrong specs", () => {
     expect(validateAll({ type: "pie" })).toBe(false);
     expect(validateAll({ type: "nope", data: [] })).toBe(false);
     expect(validateAll({ type: "bar", data: [], options: { layout: "diagonal" } })).toBe(false);
@@ -68,8 +68,8 @@ describe("레지스트리", () => {
   });
 });
 
-describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
-  it("모든 차트의 한글 글이 빠짐없어요: 이름, 설명, 채널, 옵션, 예시", () => {
+describe("Korean registry (localizeDef, chartsIn)", () => {
+  it("every chart has complete Korean text: name, description, channels, options, examples", () => {
     expect(KO).toHaveLength(CHARTS.length);
     KO.forEach((k, i) => {
       const en = CHARTS[i];
@@ -86,7 +86,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     });
     for (const o of commonOptionsIn("ko")) expect(o.description, o.name).toMatch(HANGUL);
   });
-  it('localizeDef(def, "ko")는 예전 한글 이름과 예시를 돌려줘요. 예시의 options.locale은 "ko-KR"이에요', () => {
+  it('localizeDef(def, "ko") returns the old Korean names and examples. Example options.locale is "ko-KR"', () => {
     const pie = localizeDef(CHARTS[0], "ko");
     expect(pie.name).toBe("파이 차트");
     expect(pie.nameEn).toBe("Pie chart");
@@ -98,7 +98,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     expect(localizeDef(CHARTS[0], "en")).toBe(CHARTS[0]);
     expect(chartsIn("en")).toBe(CHARTS);
   });
-  it("예시 데이터: 한글판은 영어판과 숫자, 필드, 행 수가 같아요", () => {
+  it("example data: the Korean version has the same numbers, fields and row count as the English one", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
     expect(koNames.length).toBe(41);
@@ -114,7 +114,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     }
     expect(samples.barSample.map((r) => r.team)).toEqual(["Domestic", "Overseas", "Domestic", "Overseas", "Domestic", "Overseas", "Domestic", "Overseas"]);
   });
-  it("묶음과 수준은 id, 영어, 한글 이름이 모두 있어요", () => {
+  it("groups and levels all have an id, English and Korean names", () => {
     expect(GROUPS.map((g) => g.id)).toEqual(["proportion", "trend", "comparison", "distribution", "relationship", "flow", "hierarchy", "map", "kpi"]);
     expect(LEVELS.map((l) => l.id)).toEqual(["basic", "intermediate", "advanced"]);
     for (const l of [...GROUPS, ...LEVELS]) {
@@ -127,7 +127,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
       expect(findLevel(c.level)?.id, c.type).toBe(c.level);
     }
   });
-  it("findGroup, findLevel은 id, 영어, 한글 이름을 대소문자 없이 받아요", () => {
+  it("findGroup, findLevel accept id, English and Korean names case-insensitively", () => {
     expect(findGroup("분포")?.id).toBe("distribution");
     expect(findGroup("Distribution")?.id).toBe("distribution");
     expect(findGroup("DISTRIBUTION")?.ko).toBe("분포");
@@ -138,7 +138,7 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
     expect(findGroup("없음")).toBeUndefined();
     expect(findLevel("expert")).toBeUndefined();
   });
-  it("스키마: 기본은 영어, specSchemaIn(\"ko\"), schemaForIn(type, \"ko\")면 한글 설명이에요", () => {
+  it("schema: English by default, Korean descriptions with specSchemaIn(\"ko\"), schemaForIn(type, \"ko\")", () => {
     const en = schemaFor("pie") as { title: string; description: string };
     const ko = schemaForIn("pie", "ko") as { title: string; description: string };
     expect(en.title).toBe("Pie chart");
@@ -156,17 +156,17 @@ describe("한글 레지스트리 (localizeDef, chartsIn)", () => {
   });
 });
 
-describe("validateSpec 메시지", () => {
+describe("validateSpec messages", () => {
   const codes = (spec: unknown) => {
     const r = validateSpec(spec);
     return [...r.errors.map((e) => e.code), ...r.warnings.map((w) => `!${w.code}`)];
   };
-  it("타입 오타는 비슷한 이름을 알려줘요", () => {
+  it("a type typo suggests a similar name", () => {
     const r = validateSpec({ type: "piee", data: [] });
     expect(r.errors[0].code).toBe("unknown_type");
     expect(r.errors[0].message).toContain('Did you mean "pie"?');
   });
-  it('메시지는 영어가 기본이고 { lang: "ko" }면 한글이에요. code와 path는 같아요', () => {
+  it('messages are English by default and Korean with { lang: "ko" }. code and path stay the same', () => {
     const bad = { type: "pie", data: [{ name: "a", v: "많음" }], encoding: { label: "nam", value: "v", colour: "x" }, options: { hilight: "a", height: "200" }, card: { level: 1 } };
     const en = validateSpec(bad);
     const ko = validateSpec(bad, { lang: "ko" });
@@ -181,24 +181,24 @@ describe("validateSpec 메시지", () => {
     expect(validateSpec({ type: "sankey", data: [{ a: 1 }] }, { lang: "ko" }).errors[0].message).toBe("encoding.source 값이 필요해요. 데이터 필드: a");
     expect(validateSpec({ type: "sankey", data: [{ a: 1 }] }).errors[0].message).toBe("encoding.source (Source node) is required. Data fields: a");
   });
-  it("한글 메시지의 조사는 키 이름에 따라 틀어지지 않아요", () => {
+  it("Korean messages pick the right particle whatever the key name", () => {
     const ko = validateSpec({ type: "donut", data: [{ label: "a", value: 1 }], options: { centerLabel: 1, sort: "yes" } }, { lang: "ko" });
     expect(ko.errors.map((e) => e.message)).toEqual(["options.centerLabel 값은 문자열이어야 해요(지금 number)", "options.sort 값은 true나 false여야 해요(지금 string)"]);
   });
-  it("별칭은 경고와 함께 통과", () => {
+  it("aliases pass with a warning", () => {
     expect(codes({ type: "doughnut", data: [{ label: "a", value: 1 }] })).toEqual(["!alias"]);
   });
-  it("없는 필드, 숫자 아님, 필수 채널", () => {
+  it("missing field, not a number, required channel", () => {
     const data = [{ name: "a", v: "많음" }];
     expect(codes({ type: "pie", data, encoding: { label: "nam", value: "v" } })).toEqual(expect.arrayContaining(["field_not_found", "not_numeric"]));
     expect(validateSpec({ type: "pie", data, encoding: { label: "nam", value: "v" } }).errors[0].message).toContain('"name"');
     expect(codes({ type: "sankey", data: [{ a: 1 }], encoding: {} })).toEqual(expect.arrayContaining(["missing_channel"]));
     expect(codes({ type: "sankey", data: { url: "https://x.test/a.json" } })).toEqual(expect.arrayContaining(["!missing_channel_default"]));
   });
-  it("기본 필드 이름과 같으면 encoding을 생략해도 돼요", () => {
+  it("encoding may be left out when field names match the defaults", () => {
     expect(validateSpec({ type: "pie", data: [{ label: "a", value: 1 }] }).valid).toBe(true);
   });
-  it("옵션 타입, enum, 범위, 모르는 옵션", () => {
+  it("option type, enum, range, unknown option", () => {
     const base = { type: "funnel", data: [{ label: "a", value: 1 }] };
     expect(codes({ ...base, options: { rateBase: "last" } })).toContain("bad_enum");
     expect(codes({ ...base, options: { height: "200" } })).toContain("bad_option_type");
@@ -206,13 +206,13 @@ describe("validateSpec 메시지", () => {
     const r = validateSpec({ ...base, options: { hilight: "a" } });
     expect(r.warnings[0].message).toContain('"highlight"');
   });
-  it("상자 그림 whiskers는 0~100 사이 숫자 두 개를 받아요(순서는 그릴 때 맞춰요)", () => {
+  it("box plot whiskers takes two numbers from 0 to 100 (the order is fixed when drawing)", () => {
     const box = (whiskers: unknown) => codes({ type: "box", data: [{ group: "a", value: 1 }], options: { whiskers } });
     for (const ok of [[5, 95], [0, 100], [95, 5]]) expect(box(ok)).not.toContain("bad_option_items");
     for (const bad of [[5], [5, 50, 95], [-1, 95], [5, 101], [5, "95"]]) expect(box(bad)).toContain("bad_option_items");
     expect(box("5-95")).toContain("bad_option_type");
   });
-  it("data 모양", () => {
+  it("data shape", () => {
     expect(codes({ type: "pie", data: [[1, 2]] })).toContain("bad_row");
     expect(codes({ type: "pie", data: { url: "ftp://x" } })).toContain("bad_url");
     expect(validateSpec({ type: "pie", data: { csv: "label,value\na,1" } }).valid).toBe(true);
@@ -222,26 +222,26 @@ describe("validateSpec 메시지", () => {
 
 describe("suggestCharts", () => {
   const top = (rows: Record<string, unknown>[]) => suggestCharts(rows).suggestions.map((s) => s.type);
-  it("단계 데이터 → 퍼널", () => expect(top(samples.funnelSample)[0]).toBe("funnel"));
-  it("시계열 여러 계열 → 라인", () => expect(top(samples.lineSample)[0]).toBe("line"));
-  it("계층 → 트리맵", () => expect(top(samples.treemapSample)[0]).toBe("treemap"));
-  it("source/target → 생키, 양방향이면 코드", () => {
+  it("step data → funnel", () => expect(top(samples.funnelSample)[0]).toBe("funnel"));
+  it("multi-series time series → line", () => expect(top(samples.lineSample)[0]).toBe("line"));
+  it("hierarchy → treemap", () => expect(top(samples.treemapSample)[0]).toBe("treemap"));
+  it("source/target → sankey, chord when bidirectional", () => {
     expect(top(samples.sankeySample)).toContain("sankey");
     expect(top(samples.chordSample)[0]).toBe("chord");
   });
-  it("숫자 세 개 + 이름 → 버블", () => expect(top(samples.bubbleSample)).toContain("bubble"));
-  it("부호 섞인 증감 → 폭포", () => expect(top([{ k: "시작", v: 100 }, { k: "a", v: 20 }, { k: "b", v: -15 }, { k: "c", v: 8 }])[0]).toBe("waterfall"));
-  it("값 하나 + 목표 → 게이지", () => expect(top([{ value: 73, target: 85 }])[0]).toBe("gauge"));
-  it("그룹마다 값이 많으면 분포 차트", () => expect(top(samples.boxSample).slice(0, 3)).toEqual(expect.arrayContaining(["box"])));
-  it("하루 단위 장기 데이터 → 캘린더", () => expect(top(samples.calendarSample)[0]).toBe("calendar"));
-  it("순위 필드 → 범프", () => expect(top(samples.bumpSample)[0]).toBe("bump"));
-  it("숫자 지표 다섯 개 → 평행 좌표", () => expect(top(samples.parallelSample)).toContain("parallel"));
-  it("추천 스펙은 모두 검증을 통과해요", () => {
+  it("three numbers + name → bubble", () => expect(top(samples.bubbleSample)).toContain("bubble"));
+  it("mixed-sign changes → waterfall", () => expect(top([{ k: "시작", v: 100 }, { k: "a", v: 20 }, { k: "b", v: -15 }, { k: "c", v: 8 }])[0]).toBe("waterfall"));
+  it("one value + target → gauge", () => expect(top([{ value: 73, target: 85 }])[0]).toBe("gauge"));
+  it("many values per group → distribution chart", () => expect(top(samples.boxSample).slice(0, 3)).toEqual(expect.arrayContaining(["box"])));
+  it("long daily data → calendar", () => expect(top(samples.calendarSample)[0]).toBe("calendar"));
+  it("rank field → bump", () => expect(top(samples.bumpSample)[0]).toBe("bump"));
+  it("five numeric metrics → parallel coordinates", () => expect(top(samples.parallelSample)).toContain("parallel"));
+  it("every suggested spec passes validation", () => {
     for (const rows of [samples.funnelSample, samples.lineSample, samples.treemapSample, samples.sankeySample, samples.bubbleSample, samples.boxSample]) {
       for (const s of suggestCharts(rows).suggestions) expect(validateSpec(s.spec).errors, s.type).toEqual([]);
     }
   });
-  it('한글 데이터도 같은 차트를 골라요. 이유와 카드는 영어가 기본, { lang: "ko" }면 한글', () => {
+  it('Korean data picks the same chart. Reasons and cards are English by default, Korean with { lang: "ko" }', () => {
     const pairs = [[samples.funnelSample, samples.funnelSampleKo], [samples.treemapSample, samples.treemapSampleKo], [samples.chordSample, samples.chordSampleKo], [samples.bumpSample, samples.bumpSampleKo]] as const;
     for (const [en, ko] of pairs) expect(suggestCharts(ko).suggestions.map((s) => s.type)).toEqual(suggestCharts(en).suggestions.map((s) => s.type));
     const en = suggestCharts(samples.funnelSample).suggestions;
@@ -361,7 +361,7 @@ describe("bar layout diverging", () => {
     const r = validateSpec(spec, { lang });
     return [...r.errors.map((e) => `${e.path} ${e.code}: ${e.message}`), ...r.warnings.map((w) => `!${w.path} ${w.code}: ${w.message}`)];
   };
-  it("5: negative, neutral 이름이 계열(넓은 표는 y 필드, 긴 표는 series 값)에 없으면 거절하고 비슷한 이름을 알려요", () => {
+  it("5: rejects negative, neutral names not among the series (y fields in a wide table, series values in a long one) and suggests similar names", () => {
     expect(issues({ ...wide, options: { layout: "diverging", negative: ["Disagree"], neutral: "Neutral", percent: true, sort: "positive" } })).toEqual([]);
     expect(issues({ ...long, options: { layout: "diverging", negative: ["Male"] } })).toEqual([]);
     const bad = { ...wide, options: { layout: "diverging", negative: ["Disagre"], neutral: "Netural" } };
@@ -377,12 +377,12 @@ describe("bar layout diverging", () => {
     expect(issues({ ...long, options: { layout: "diverging", negative: ["Women"] } })).toEqual(['options.negative[0] series_not_found: "Women" is not a series. Series: Male, Female']);
     expect(issues({ type: "bar", data: [{ x: "a", y: 1 }], options: { layout: "diverging", negative: ["y"] } })[0]).toBe('options.negative[0] series_not_found: "y" is not a series: this chart has one series. Set encoding.series, or y as an array of fields');
   });
-  it("neutral 계열을 negative에도 넣으면 그 계열 이름과 함께 거절해요", () => {
+  it("rejects a neutral series also listed in negative, naming that series", () => {
     const both = { ...wide, options: { layout: "diverging", negative: ["Neutral", "Disagree"], neutral: "Neutral" } };
     expect(issues(both)).toEqual(['options.negative[0] neutral_in_negative: "Neutral" is the neutral series, so it cannot also be in options.negative. Remove it from one of them']);
     expect(issues(both, "ko")).toEqual(['options.negative[0] neutral_in_negative: "Neutral" 계열은 neutral이라 options.negative에 함께 넣을 수 없어요. 한쪽에서 빼 주세요']);
   });
-  it("sort 값, diverging 밖에서 쓴 옵션, 그리지 않는 주석과 선을 알려요", () => {
+  it("reports sort values, options used outside diverging, and annotations and lines that are not drawn", () => {
     expect(issues({ ...wide, options: { sort: "both" } })).toEqual(['options.sort bad_option_type: options.sort must be true, false, "positive" or "negative"']);
     expect(issues({ ...wide, options: { sort: "positive", negative: ["Disagree"] } }, "ko")).toEqual(['!options.negative ignored_option: options.negative 옵션은 layout "diverging"에서만 써요', '!options.sort ignored_option: sort "positive" 값은 layout "diverging"에서만 써요']);
     expect(issues({ ...wide, options: { layout: "diverging", annotations: [{ type: "line", y: 5 }] } }).map((i) => i.split(":")[0])).toEqual(["!options.annotations annotations_ignored"]);
@@ -390,10 +390,10 @@ describe("bar layout diverging", () => {
   });
 });
 
-describe("options.tooltip.template (차례 3 ⑩)", () => {
+describe("options.tooltip.template", () => {
   const data = [{ m: "1월", v: 300, owner: "민지" }];
   const spec = (tooltip: unknown) => ({ type: "line", data, encoding: { x: "m", y: "v" }, options: { tooltip } });
-  it("true, false, { template }만 받아요", () => {
+  it("accepts only true, false, { template }", () => {
     for (const tooltip of [true, false, { template: "{label} · {owner}" }]) {
       expect(validateSpec(spec(tooltip)).errors, JSON.stringify(tooltip)).toEqual([]);
       expect(validateAll(spec(tooltip)), JSON.stringify(tooltip)).toBe(true);
@@ -403,13 +403,13 @@ describe("options.tooltip.template (차례 3 ⑩)", () => {
       expect(validateAll(spec(tooltip)), JSON.stringify(tooltip)).toBe(false);
     }
   });
-  it("없는 열 이름은 비슷한 열과 함께 알려요", () => {
+  it("reports unknown column names with similar columns", () => {
     const w = validateSpec(spec({ template: "{label} · 담당 {ownr}" })).warnings;
     expect(w.map((x) => x.code)).toEqual(["tooltip_field_not_found"]);
     expect(w[0].message).toContain("Did you mean {owner}?");
     expect(validateSpec(spec({ template: "{label} {value} {series} {owner}" })).warnings).toEqual([]);
   });
-  it("스키마는 툴팁 정의를 한 번 두고 차트마다 가리켜요", () => {
+  it("the schema defines the tooltip once and each chart points to it", () => {
     const s = JSON.stringify(specSchema());
     expect(specSchema().$defs).toHaveProperty("tooltip");
     expect(s.match(/"\$ref":"#\/\$defs\/tooltip"/g)).toHaveLength(CHARTS.length);
@@ -417,17 +417,17 @@ describe("options.tooltip.template (차례 3 ⑩)", () => {
   });
 });
 
-describe("card.source, note, accent (차례 2 ⑭)", () => {
+describe("card.source, note, accent", () => {
   const spec = { type: "bar", data: [{ x: "A", y: 1 }], encoding: { x: "x", y: "y" }, card: { title: "올해 매출", source: "통계청", note: "2025-10 기준", accent: "올해" } };
-  it("알려진 키이고 스키마도 받아요", () => {
+  it("are known keys and the schema accepts them", () => {
     expect(validateSpec(spec).warnings).toEqual([]);
     expect(validateAll(spec)).toBe(true);
   });
-  it("accent가 제목에 없으면 알리고, 글자가 아니면 오류예요", () => {
+  it("reports an accent missing from the title, and errors when it is not text", () => {
     expect(validateSpec({ ...spec, card: { ...spec.card, accent: "작년" } }).warnings.map((w) => w.code)).toEqual(["accent_not_in_title"]);
     expect(validateSpec({ ...spec, card: { ...spec.card, source: 3 } }).errors.map((e) => e.code)).toEqual(["bad_card_value"]);
   });
-  it("download는 true, false나 csv, svg, png 배열만 받아요", () => {
+  it("download accepts only true, false or an array of csv, svg, png", () => {
     for (const download of [true, false, ["csv"], ["png", "svg", "csv"]]) {
       const s = { ...spec, card: { ...spec.card, download } };
       expect(validateSpec(s).warnings, JSON.stringify(download)).toEqual([]);
@@ -514,10 +514,10 @@ describe("variants", () => {
   });
 });
 
-describe("로그 눈금 경고 (차례 4 ⑯)", () => {
+describe("log scale warnings", () => {
   const line = (ys: number[], options: Record<string, unknown>) => ({ type: "line", data: ys.map((v, i) => ({ m: `p${i}`, v })), encoding: { x: "m", y: "v" }, options });
   const codes = (r: { warnings: { path: string; code: string }[] }) => r.warnings.map((w) => `${w.path}:${w.code}`).sort();
-  it("0 이하 값은 개수와 행으로 알리고, 쓸 수 없는 yDomain과 fit도 알려요", () => {
+  it("reports values at or below 0 with count and rows, and unusable yDomain and fit too", () => {
     const spec = line([5, 0, -3, 40], { yScale: "log", yDomain: [0, 100] });
     const en = validateSpec(spec);
     expect(en.errors).toEqual([]);
@@ -527,18 +527,18 @@ describe("로그 눈금 경고 (차례 4 ⑯)", () => {
     expect(codes(validateSpec({ type: "scatter", data: [{ x: 1, y: 2 }, { x: 2, y: 3 }], encoding: { x: "x", y: "y" }, options: { yScale: "log", fit: "linear" } }))).toEqual(["options.fit:ignored_option"]);
     expect(validateSpec(line(Array.from({ length: 24 }, (_, i) => Math.round(120 * 1.62 ** i)), { yScale: "log" })).warnings).toEqual([]);
   });
-  it("영역과 막대는 로그 눈금이 없다고 까닭과 함께 알려요", () => {
+  it("area and bar report that they have no log scale, with the reason", () => {
     const w = validateSpec({ type: "area", data: [{ m: "a", v: 1 }, { m: "b", v: 2 }], encoding: { x: "m", y: "v" }, options: { yScale: "log" } }).warnings.find((x) => x.path === "options.yScale")!;
     expect(w.code).toBe("unknown_option");
     expect(w.message).toBe('Area chart has no option "yScale": its length from 0 is the value, so it has no log scale. Use line, scatter or bubble with yScale "log"');
   });
 });
 
-describe("범례 켜고 끄기 검사 (차례 4 ⑫)", () => {
+describe("legend toggle checks", () => {
   const CH = ["Search", "Social", "Ads", "Referral", "Direct"];
   const data = ["Jan", "Feb"].flatMap((m, k) => CH.map((ch, s) => ({ m, ch, v: 40 + s * 10 + k * 3 })));
   const line = { type: "line", data, encoding: { x: "m", y: "v", series: "ch" }, options: { highlight: "Social", hidden: ["Ads"] }, card: { title: "Visits", legend: "toggle" } };
-  it('"toggle"은 받고, 켜고 끌 수 없는 차트는 알리고, 틀린 값에는 쓸 수 있는 값을 알려요', () => {
+  it('"toggle" is accepted, charts that cannot toggle are reported, and wrong values get the usable values', () => {
     const r = validateSpec(line);
     expect(r.errors).toEqual([]);
     expect(r.warnings).toEqual([]);

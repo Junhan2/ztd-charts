@@ -85,8 +85,8 @@ function key(k: string, onChild = false) {
   return e as typeof e & KeyboardEvent<HTMLDivElement>;
 }
 
-describe("ChartFrame 키보드 (a11y)", () => {
-  it("안쪽 버튼에서 누른 Enter는 차트 onClick을 부르지 않고 막지도 않아요", () => {
+describe("ChartFrame keyboard (a11y)", () => {
+  it("Enter pressed on an inner button neither calls the chart onClick nor blocks it", () => {
     const { c, calls } = fakeCtx(1);
     const { root } = frameRoot(ChartFrame, { c });
     const fromButton = key("Enter", true);
@@ -99,7 +99,7 @@ describe("ChartFrame 키보드 (a11y)", () => {
     expect(onFrame.prevented).toBe(true);
   });
 
-  it("고른 항목이 없으면 Escape를 삼키지 않아요", () => {
+  it("does not swallow Escape when nothing is selected", () => {
     const idle = fakeCtx(null);
     const esc = key("Escape");
     frameRoot(ChartFrame, { c: idle.c }).root.props.onKeyDown(esc);
@@ -114,8 +114,8 @@ describe("ChartFrame 키보드 (a11y)", () => {
   });
 });
 
-describe("ChartFrame 숨김 글자와 설명", () => {
-  it("스크린리더 표와 알림 영역은 CSS 없이도(SSR, JS 없음) 인라인 스타일로 숨어요", () => {
+describe("ChartFrame hidden text and description", () => {
+  it("the screen reader table and live region hide with inline styles even without CSS (SSR, no JS)", () => {
     const html = renderToStaticMarkup(<BarChart data={[{ x: "A", y: 1 }, { x: "B", y: 2 }]} x="x" y="y" width={400} animate={false} />);
     const hidden = html.match(/<(span|div) class="ztd-sr"[^>]*>/g) ?? [];
     expect(hidden).toHaveLength(2);
@@ -130,7 +130,7 @@ describe("ChartFrame 숨김 글자와 설명", () => {
     }
   });
 
-  it("데이터가 없으면 extent 기본값 대신 'No data.'를 읽어요 (항목이 하나도 없는 차트 전부)", () => {
+  it("with no data, reads 'No data.' instead of the extent default (every chart with no items)", () => {
     const leaks: string[] = [];
     for (const ch of CHARTS) {
       for (const [locale, text] of [["en-US", "No data."], ["ko", "데이터가 없어요."]] as const) {
@@ -143,14 +143,14 @@ describe("ChartFrame 숨김 글자와 설명", () => {
     expect(leaks.filter((l) => !l.startsWith("gauge "))).toEqual([]);
   });
 
-  it("데이터가 없어도 직접 준 설명은 그대로 써요", () => {
+  it("a description given directly is still used with no data", () => {
     const html = renderToStaticMarkup(<BarChart data={[]} x="x" y="y" width={400} animate={false} description="Quarterly revenue" />);
     expect(html).toMatch(/<desc id="[^"]+">Quarterly revenue<\/desc>/);
   });
 });
 
-describe("ChartFrame 터치 해제 effect (perf)", () => {
-  it("렌더마다 새로 만드는 ctx 객체를 effect 의존값으로 쓰지 않아요 (리스너를 매번 다시 달지 않게)", async () => {
+describe("ChartFrame touch dismiss effect (perf)", () => {
+  it("does not use the ctx object made on each render as an effect dependency (so listeners are not reattached every time)", async () => {
     const deps: unknown[][] = [];
     vi.resetModules();
     vi.doMock("react", async (orig) => {
@@ -169,7 +169,7 @@ describe("ChartFrame 터치 해제 effect (perf)", () => {
 });
 
 describe("useChart setActive (StrictMode)", () => {
-  it("setState 갱신 함수를 두 번 돌려도 onHover는 바뀔 때 한 번만 불려요", async () => {
+  it("onHover fires once per change even when the setState updater runs twice", async () => {
     // A useState that calls the updater twice, like StrictMode
     vi.resetModules();
     vi.doMock("react", async (orig) => {
@@ -200,8 +200,8 @@ describe("useChart setActive (StrictMode)", () => {
   });
 });
 
-describe("호버 맞추기(syncId)와 호버 표시", () => {
-  it("짚은 x를 같은 syncId로 보내고, 받는 쪽은 키가 없으면 이름표로 찾아요", async () => {
+describe("hover sync (syncId) and hover display", () => {
+  it("sends the pointed x with the same syncId, and the receiver finds it by label when it has no key", async () => {
     const { joinSync, syncIndex, useSync } = await import("../src/core/sync");
     const { useChart } = await import("../src/core/useChart");
     const got: unknown[] = [];
@@ -226,7 +226,7 @@ describe("호버 맞추기(syncId)와 호버 표시", () => {
     expect(syncIndex(many.map((_, i) => `k${i}`), many, { key: "none", label: "L5" })).toBe(-1);
   });
 
-  it("묶인 차트에서 온 자리(sync)는 툴팁 없이 그리고, 동작 줄이기면 ztd-still이 붙어요", () => {
+  it("a position from a linked chart (sync) draws without a tooltip, and gets ztd-still under reduced motion", () => {
     const { c } = fakeCtx(0);
     const tip = { x: 100, y: 80, title: "L0", rows: [{ value: "1" }] };
     const m = c as unknown as { via: string; reduced: boolean };
@@ -238,14 +238,14 @@ describe("호버 맞추기(syncId)와 호버 표시", () => {
     expect(frameRoot(ChartFrame, { c, tip }).html).toContain('class="ztd-root ztd-still"');
   });
 
-  it("x축 알약은 차트 폭 안에 머물러요", () => {
+  it("x axis pill stays inside the chart width", () => {
     const html = renderToStaticMarkup(<svg>{AxisPill({ p: darkPainter, x: 2, y: 190, label: "Jan 2025", width: 400 })}</svg>);
     expect(Number(/translate\(([\d.]+)px/.exec(html)?.[1])).toBeGreaterThan(20);
     expect(html).toContain("Jan 2025");
   });
 });
 
-describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () => {
+describe("SSR hydration: CSS entrance styles (waffle, calendar)", () => {
   async function renderInBrowser(hydrated: boolean) {
     vi.resetModules();
     vi.stubGlobal("window", {});
@@ -261,7 +261,7 @@ describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () 
     ];
   }
 
-  it("반원 와플은 하이드레이트 전 첫 렌더가 서버 렌더와 글자까지 같아요", async () => {
+  it("semicircle waffle's first render before hydration matches the server render down to the text", async () => {
     const browser = (await renderInBrowser(false))[2];
     vi.resetModules();
     vi.doUnmock("../src/core/env");
@@ -273,20 +273,20 @@ describe("SSR 하이드레이션: CSS 등장 스타일 (와플, 캘린더)", () 
     expect(server).toContain("<circle");
   });
 
-  it("하이드레이트 전 첫 렌더는 서버처럼 등장 스타일이 없어요", async () => {
+  it("first render before hydration has no entrance styles, like the server", async () => {
     for (const html of await renderInBrowser(false)) {
       expect(html).not.toMatch(/style="(opacity:0|animation:ztd-)/);
     }
   });
 
-  it("하이드레이트 뒤에는 등장 스타일이 그대로 붙어요", async () => {
+  it("entrance styles are applied after hydration", async () => {
     const [waffle, calendar] = await renderInBrowser(true);
     expect(waffle).toMatch(/style="(opacity:0|animation:ztd-pop)/);
     expect(calendar).toMatch(/style="(opacity:0|animation:ztd-fade)/);
   });
 });
 
-describe("등장 시작 기준 (useViewport)", () => {
+describe("entrance start threshold (useViewport)", () => {
   // Observer result for a chart spanning h from top in a viewport of height vh.
   // The observed area shrinks by the bottom value of CHART_VIEW.rootMargin ("-8%" or "0px")
   const entryAt = (top: number, h: number, vh: number, rootMargin: string = CHART_VIEW.rootMargin) => {
@@ -298,7 +298,7 @@ describe("등장 시작 기준 (useViewport)", () => {
   };
   const shown = (top: number, h: number, vh: number) => isShown(entryAt(top, h, vh), CHART_VIEW.threshold, CHART_VIEW.enoughPx);
 
-  it("문서 카드 위쪽만 보이는 키 큰 차트도 시작해요 (1280x900에서 타일 지도, 막대 경주, 타임라인, 트리)", () => {
+  it("tall charts with only the top of the docs card visible still start (tile map, bar race, timeline, tree at 1280x900)", () => {
     // Exactly the slots that stayed empty for 7 seconds on the live site: chart top, height
     const prod = [[769.19, 515.09], [791.66, 284], [769.19, 236], [763.61, 406.5]];
     for (const [top, h] of prod) expect(shown(top, h, 900), `${top} ${h}`).toBe(true);
@@ -306,7 +306,7 @@ describe("등장 시작 기준 (useViewport)", () => {
     for (const [top, h] of prod) expect(isShown(entryAt(top, h, 900, "0px 0px -8% 0px"), 0.25), `${top} ${h}`).toBe(false);
   });
 
-  it("화면보다 훨씬 큰 차트는 96px만 보여도 시작하고, 작은 차트는 4분의 1이 보여야 해요", () => {
+  it("charts much taller than the screen start with 96px visible, small charts need a quarter visible", () => {
     expect(shown(800, 3000, 900)).toBe(true);
     expect(shown(820, 3000, 900)).toBe(false);
     expect(shown(880, 120, 900)).toBe(false);
@@ -314,15 +314,15 @@ describe("등장 시작 기준 (useViewport)", () => {
     expect(shown(950, 300, 900)).toBe(false);
   });
 
-  it("공개 useInView의 기준은 그대로예요 (비율, 또는 화면 절반)", () => {
+  it("public useInView keeps its threshold (ratio, or half the screen)", () => {
     expect(isShown(entryAt(769, 515, 900, "0px"), 0.5)).toBe(false);
     expect(isShown(entryAt(400, 3000, 900, "0px"), 0.5)).toBe(true);
   });
 });
 
-describe("축 눈금 글자 (axis)", () => {
+describe("axis tick labels (axis)", () => {
   const fmt = makeFormatter({ maximumFractionDigits: 0 }, "de-DE");
-  it("겹쳐서 전체 숫자로 바꿀 때 받은 로캘을 써요", () => {
+  it("uses the given locale when overlapping labels switch to full numbers", () => {
     expect(tickLabels([0, 0.1, 0.2, 0.3], fmt, "de-DE")).toEqual(["0", "0,1", "0,2", "0,3"]);
     expect(yAxisWidth([0, 1000.5, 2000.5], makeFormatter({ maximumFractionDigits: 0, notation: "compact" }, "de-DE"), "de-DE")).toBeGreaterThan(18);
     const svg = renderToStaticMarkup(
@@ -332,24 +332,24 @@ describe("축 눈금 글자 (axis)", () => {
     );
     expect(svg).toContain(">0,1<");
   });
-  it("로캘을 안 주면 예전처럼 en-US", () => {
+  it("falls back to en-US as before when no locale is given", () => {
     expect(tickLabels([0, 0.1], fmt)).toEqual(["0", "0.1"]);
   });
 });
 
-describe("숫자 x 라벨 (series)", () => {
-  it("작은 소수가 같은 글자로 뭉개지지 않아요", () => {
+describe("numeric x labels (series)", () => {
+  it("small decimals do not collapse into the same label", () => {
     const m = prepSeries([{ x: 0.001, y: 1 }, { x: 0.002, y: 2 }, { x: 0.25, y: 3 }], "x", "y", undefined);
     expect(m.labels).toEqual(["0.001", "0.002", "0.25"]);
   });
-  it("네 자리 정수만 있으면 연도라 자릿점이 없어요", () => {
+  it("four-digit integers alone are years and get no thousands separator", () => {
     expect(prepSeries([{ x: 2019, y: 1 }, { x: 2020, y: 2 }], "x", "y", undefined).labels).toEqual(["2019", "2020"]);
     expect(prepSeries([{ x: 2019, y: 1 }, { x: 12000, y: 2 }], "x", "y", undefined).labels).toEqual(["2,019", "12,000"]);
   });
 });
 
 describe("truncate (text)", () => {
-  it("서로게이트 쌍 가운데서 자르지 않아요", () => {
+  it("does not cut in the middle of a surrogate pair", () => {
     const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
     for (const s of ["Ab😀😀😀😀😀", "😀😀😀😀😀😀abc", "abc😀😀😀😀"]) {
       for (let w = 10; w <= 80; w += 1) expect(lone.test(truncate(s, w, 11)), `${s} @${w}`).toBe(false);
@@ -358,12 +358,12 @@ describe("truncate (text)", () => {
 });
 
 describe("fitDomain (scale)", () => {
-  it("범위를 정한 간격과 눈금 간격이 같아요: fitDomain(0, 5.5)", () => {
+  it("the domain step equals the tick step: fitDomain(0, 5.5)", () => {
     const d = fitDomain(0, 5.5);
     expect(d).toEqual([0, 6]);
     expect(scaleLinear(d, [0, 1]).ticks(4)).toEqual([0, 2, 4, 6]);
   });
-  it("위 끝은 눈금이거나, 눈금 간격의 30%보다 먼 값 + 여유예요 (0~1000 훑기)", () => {
+  it("the top is a tick, or a value more than 30% of a tick step away plus padding (0~1000 sweep)", () => {
     for (let hi = 1; hi <= 1000; hi += 0.5) {
       const [a, b] = fitDomain(0, hi, 4);
       const s = niceStep(b - a, 4);
@@ -373,13 +373,13 @@ describe("fitDomain (scale)", () => {
   });
 });
 
-describe("로그 축 범위와 눈금 (scale, 차례 4 ⑯)", () => {
+describe("log axis domain and ticks (scale)", () => {
   /** Domain (5 significant digits) and the ticks for that domain */
   const row = (lo: number, hi: number, px: number) => {
     const d = fitLogDomain(lo, hi);
     return [d.map((v) => +v.toPrecision(5)), logTicks(d[0], d[1], px)];
   };
-  it("10배마다 눈금, 좁으면 k칸마다, 넓으면 1·2·5, 한 자리 안이면 1~9나 선형 눈금", () => {
+  it("a tick per 10x, every k decades when narrow, 1·2·5 when wide, 1~9 or linear ticks within one decade", () => {
     expect(row(120, 7907270, 248)).toEqual([[100, 1e7], [100, 1e3, 1e4, 1e5, 1e6, 1e7]]);
     expect(row(120, 7907270, 168)).toEqual([[100, 1e7], [100, 1e3, 1e4, 1e5, 1e6, 1e7]]);
     expect(row(0.001, 1e6, 248)).toEqual([[0.001, 1e6], [0.001, 0.01, 0.1, 1, 10, 100, 1e3, 1e4, 1e5, 1e6]]);
@@ -390,7 +390,7 @@ describe("로그 축 범위와 눈금 (scale, 차례 4 ⑯)", () => {
     expect(row(100, 100, 248)).toEqual([[31.623, 316.23], [50, 100, 200]]);
     expect(fitLogDomain(-5, 0)).toEqual([1, 10]);
   });
-  it("로그 자는 0 이하 값을 NaN으로 (그리지 않아요)", () => {
+  it("log scale maps values at or below 0 to NaN (not drawn)", () => {
     const s = scaleLog([1, 100], [0, 200]);
     expect([s(0), s(-5)]).toEqual([NaN, NaN]);
     expect(s(10)).toBeCloseTo(100);
@@ -399,7 +399,7 @@ describe("로그 축 범위와 눈금 (scale, 차례 4 ⑯)", () => {
 });
 
 describe("timeTicks (scale)", () => {
-  it("해가 바뀌는 월 눈금은 연도를 네 자리로 써요", () => {
+  it("month ticks across a year change write the year with four digits", () => {
     const labels = timeTicks(new Date(2023, 9, 1).getTime(), new Date(2024, 5, 1).getTime(), 6).map((t) => t.label);
     expect(labels).toContain("Jan 2024");
     expect(labels.some((l) => /\b\d{2}$/.test(l) && !/\d{4}$/.test(l))).toBe(false);
@@ -407,13 +407,13 @@ describe("timeTicks (scale)", () => {
 });
 
 describe("MotionEngine", () => {
-  it("items()는 처음 들어온 순서를 지켜요", () => {
+  it("items() keeps first-seen order", () => {
     const e = new MotionEngine<null>();
     e.snap(["b", "a", "c"].map((key) => ({ key, to: [1], data: null })));
     e.update(["c", "a", "b", "d"].map((key) => ({ key, to: [2], data: null })), 0);
     expect(e.items().map((i) => i.key)).toEqual(["b", "a", "c", "d"]);
   });
-  it("spring은 먼 거리도 마지막에 눈에 띄게 건너뛰지 않아요", () => {
+  it("spring does not visibly jump at the end over long distances", () => {
     const e = new MotionEngine<null>();
     e.configure("spring", 900);
     e.snap([{ key: "a", to: [0], data: null }]);
@@ -432,7 +432,7 @@ describe("MotionEngine", () => {
 });
 
 describe("Legend", () => {
-  it("이름이 같은 항목도 key가 겹치지 않아요", () => {
+  it("items with the same name get distinct keys", () => {
     let el: ReactElement<{ children: ReactElement[] }> | null = null;
     function Probe() {
       el = Legend({ items: [{ label: "A" }, { label: "A" }, { label: "B" }] }) as ReactElement<{ children: ReactElement[] }>;
@@ -442,7 +442,7 @@ describe("Legend", () => {
     const keys = (el as unknown as ReactElement<{ children: ReactElement[] }>).props.children.map((li) => li.key);
     expect(new Set(keys).size).toBe(3);
   });
-  it("onToggle을 주면 항목이 단추예요: 누르면 그 이름을 넘기고, 하나 남은 계열은 끌 수 없어요 (차례 4 ⑫)", () => {
+  it("with onToggle, items are buttons: a click passes that name, and the last remaining series cannot be turned off", () => {
     const calls: string[] = [];
     let el: unknown = null;
     function Probe() {
@@ -507,10 +507,10 @@ describe("StatCard", () => {
   });
 });
 
-describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
+describe("pie other grouping and outside labels (pie)", () => {
   const many = Array.from({ length: 40 }, (_, i) => ({ k: `채널 ${i + 1}`, v: Math.round(1000 / Math.pow(i + 1, 1.6)) / 10 }));
 
-  it("바깥 라벨은 들어가는 만큼만 그려서 위아래로 넘치지 않아요", () => {
+  it("outside labels draw only as many as fit, so they do not overflow top or bottom", () => {
     const html = renderToStaticMarkup(<Chart spec={{ type: "pie", data: many, encoding: { label: "k", value: "v" } }} width={560} height={300} animate={false} />);
     const ys = [...html.matchAll(/<text[^>]*\sy="(-?[\d.]+)"[^>]*>[^<]*%<\/text>/g)].map((m) => +m[1]);
     expect(ys.length).toBeGreaterThan(5);
@@ -518,7 +518,7 @@ describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
     expect(Math.max(...ys)).toBeLessThanOrEqual(300);
   });
 
-  it("other는 큰 조각 n개만 두고 나머지를 기타로 묶고, 기타는 강조하지 않아요 (카드 범례도 같아요)", () => {
+  it("other keeps the n largest slices and groups the rest into Other, which is never highlighted (the card legend too)", () => {
     const spec = { type: "pie", data: many, encoding: { label: "k", value: "v" }, options: { other: 6 }, card: { legend: "auto" as const } };
     const legend = autoLegend(spec, many, "ko");
     expect(legend.map((l) => l.label)).toEqual(["채널 1", "채널 2", "채널 3", "채널 4", "채널 5", "채널 6", "기타 34개"]);
@@ -527,7 +527,7 @@ describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
     expect(renderToStaticMarkup(<Chart spec={spec} width={560} animate={false} locale="ko" />)).toContain("기타 34개");
   });
 
-  it("390px 막대: 강조된 긴 이름은 카드 안에 들어가게 줄이고, 주석 이름표는 값 라벨을 피해요", () => {
+  it("390px bar: a highlighted long name is shortened to fit in the card, and annotation labels avoid value labels", () => {
     const long = renderToStaticMarkup(<BarChart data={[{ x: "Very long category name that keeps going on and on", y: 42 }, { x: "B", y: 31 }, { x: "Short", y: 9 }]} x="x" y="y" width={390} animate={false} />);
     expect(long).not.toMatch(/<text[^>]*>Very long category name that keeps going on and on<\/text>/);
     expect(long).toMatch(/<text[^>]*>Very long[^<]*…<\/text>/);
@@ -542,7 +542,7 @@ describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
     expect(tags.flatMap((t) => values.filter((v) => hit(t, v)))).toEqual([]);
   });
 
-  it("카드 제목이 안쪽 차트의 접근 가능한 이름이 되고, ariaLabel이 있으면 그게 먼저예요", () => {
+  it("the card title becomes the inner chart's accessible name, and ariaLabel wins when present", () => {
     const bar = <BarChart data={[{ x: "A", y: 1 }, { x: "B", y: 2 }]} x="x" y="y" width={400} animate={false} />;
     const html = renderToStaticMarkup(<ChartCard title="월 매출">{bar}</ChartCard>);
     expect(html).toContain('aria-label="월 매출"');
@@ -551,7 +551,7 @@ describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
     expect(renderToStaticMarkup(bar)).toContain('aria-label="Bar chart"');
   });
 
-  it("값이 모두 빈 스파크라인(최고·최저 점)과 평행 좌표는 NaN을 내지 않고, 슬로프는 못 그린 까닭을 설명에 적어요", () => {
+  it("all-empty sparkline (max and min dots) and parallel coordinates produce no NaN, and slope explains in the description why it could not draw", () => {
     const spark = CHARTS.find((c) => c.type === "sparkline")!.example;
     const empty = { ...spark, data: (spark.data as Record<string, unknown>[]).map((r) => ({ ...r, revenue: null })) };
     expect(renderToStaticMarkup(<Chart spec={empty} width={400} animate={false} />)).not.toContain("NaN");
@@ -560,7 +560,7 @@ describe("파이 기타 묶기와 바깥 라벨 (pie)", () => {
     expect(slope).toContain("No item has a value in both the first period (2024) and the last period (2025)");
   });
 
-  it("Infinity 조각이 있어도 NaN을 내지 않아요", () => {
+  it("produces no NaN with an Infinity slice", () => {
     const html = renderToStaticMarkup(<Chart spec={{ type: "pie", data: [{ label: "a", value: 3 }, { label: "b", value: Infinity }, { label: "c", value: 2 }] }} width={400} animate={false} />);
     expect(html).not.toContain("NaN");
   });

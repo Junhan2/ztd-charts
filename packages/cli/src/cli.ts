@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { capChartSize, COMMON_OPTIONS, findGroup, findLevel, formatIssues, GROUPS, LEVELS, localizeDef, variantSpec, variantsIn } from "ztd-charts/spec";
 import { langOf } from "ztd-charts/server";
 import { getChartInfo, getChartSchema, isHttpUrl, listCharts, loadRows, reactSnippet, render, resolveType, suggest, validate, type ChartSpec } from "./api";
-import { CLI_TEXT, SCHEMA_URL, VERSION } from "./messages";
+import { CLI_TEXT, COMMANDS, SCHEMA_URL, VERSION, type CliCommand } from "./messages";
 
 /** The messages in use. main sets them from --locale */
 let t = CLI_TEXT.en;
@@ -81,6 +81,12 @@ async function main(argv0: string[]) {
   }
   if (cmd === "--version" || cmd === "-v" || cmd === "version") {
     process.stdout.write(`${VERSION}\n`);
+    return;
+  }
+  // `<command> --help` (or -h) prints that command's usage before the command runs, so init writes no files and render saves no image.
+  // An unknown command skips this and reaches the switch default, which reports it
+  if (COMMANDS.includes(cmd as CliCommand) && rest.some((a) => a === "--help" || a === "-h")) {
+    process.stdout.write(t.commandHelp(cmd as CliCommand));
     return;
   }
   const { values: f, positionals: pos } = parseArgs({

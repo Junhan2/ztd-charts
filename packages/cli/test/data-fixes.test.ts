@@ -65,8 +65,8 @@ function parseSnippet(code: string) {
   return { errors: (out.diagnostics ?? []).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")), attrs };
 }
 
-describe("reactSnippet: 따옴표, 역슬래시가 든 글도 컴파일돼요", () => {
-  it('제목의 " \\ & 줄바꿈이 깨지지 않고 값도 그대로예요', () => {
+describe("reactSnippet: text with quotes and backslashes still compiles", () => {
+  it('" \\ & and line breaks in the title do not break, and the values stay intact', () => {
     const card = { title: 'The "AI" share', takeaway: "50% \\ half", subtitle: "R&amp;D\nline 2", number: "01", level: "basic" };
     const code = reactSnippet({ type: "pie", data: [{ label: "a", value: 1 }], encoding: { label: "label", value: "value" }, options: { unit: '"', "bad key": 1 }, card } as never);
     const { errors, attrs } = parseSnippet(code);
@@ -78,8 +78,8 @@ describe("reactSnippet: 따옴표, 역슬래시가 든 글도 컴파일돼요", 
   });
 });
 
-describe("render: 검사 먼저, 주소가 든 오류", () => {
-  it("틀린 스펙이면 data.url을 가져오지 않아요", async () => {
+describe("render: validation first, errors that name the address", () => {
+  it("does not fetch data.url when the spec is invalid", async () => {
     hits = 0;
     await expect(render({ type: "line", data: { url: `${base}/ok.csv` }, encoding: { x: "month", y: "revenue" }, options: { curve: "wavy" } } as never)).rejects.toThrow(/options\.curve/);
     expect(hits).toBe(0);
@@ -87,20 +87,20 @@ describe("render: 검사 먼저, 주소가 든 오류", () => {
     expect(ok.svg).toContain("<svg");
     expect(hits).toBe(1);
   });
-  it("가져온 행으로 다시 검사해요 (없는 필드)", async () => {
+  it("validates again with the fetched rows (missing field)", async () => {
     await expect(render({ type: "line", data: { url: `${base}/ok.csv` }, encoding: { x: "month", y: "sales" } } as never)).rejects.toThrow(/encoding\.y: Field "sales"/);
   });
-  it("HTTP 오류, JSON 오류, http(s)가 아닌 주소 모두 주소를 알려 줘요", async () => {
+  it("HTTP errors, JSON errors and non-http(s) addresses all name the address", async () => {
     await expect(render({ type: "pie", data: { url: `${base}/missing.csv` } } as never)).rejects.toThrow(`Couldn't load data from ${base}/missing.csv: HTTP 404 Not Found`);
     await expect(render({ type: "pie", data: { url: `${base}/bad.json` } } as never)).rejects.toThrow(`${base}/bad.json`);
     await expect(render({ type: "pie", data: { url: "/local/data.csv" } } as never)).rejects.toThrow("Couldn't load data from /local/data.csv: only http:// and https:// addresses can be fetched");
     await expect(render({ type: "pie", data: { url: `${base}/missing.csv` } } as never, { locale: "ko" })).rejects.toThrow(`${base}/missing.csv에서 데이터를 가져오지 못했어요: HTTP 404`);
   });
-  it("20MB가 넘는 응답은 끝까지 받지 않고 멈춰요", async () => {
+  it("stops a response over 20MB without reading it to the end", async () => {
     expect(MAX_FETCH_BYTES).toBe(20 * 1024 * 1024);
     await expect(loadRows(`${base}/big`)).rejects.toThrow(`Couldn't load data from ${base}/big: the response is larger than 20 MB`);
   });
-  it("시간 한도를 넘으면 몇 초를 기다렸는지 알려 줘요", async () => {
+  it("past the time limit, says how many seconds it waited", async () => {
     vi.stubGlobal("fetch", async () => {
       throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
     });
@@ -112,8 +112,8 @@ describe("render: 검사 먼저, 주소가 든 오류", () => {
   });
 });
 
-describe("보안: allowPrivate: false는 내부망 주소를 요청 없이 막아요 (MCP 서버가 이렇게 써요)", () => {
-  it("IP 그대로, localhost, ::ffff: 꼴, 숫자 꼴 모두 막고 서버에는 요청이 가지 않아요", async () => {
+describe("security: allowPrivate: false blocks private network addresses without a request (as the MCP server uses it)", () => {
+  it("blocks plain IPs, localhost, the ::ffff: form and the numeric form, and no request reaches the server", async () => {
     const port = new URL(base).port;
     const before = hits;
     for (const url of [`${base}/ok.csv`, `http://localhost:${port}/ok.csv`, `http://[::ffff:127.0.0.1]:${port}/ok.csv`, `http://2130706433:${port}/ok.csv`]) {
@@ -123,26 +123,26 @@ describe("보안: allowPrivate: false는 내부망 주소를 요청 없이 막�
     await expect(render({ type: "pie", data: { url: `${base}/ok.csv` } } as never, { allowPrivate: false })).rejects.toThrow("private or local network");
     expect(hits).toBe(before);
   });
-  it("IPv4를 품는 IPv6 꼴(NAT64, 6to4, 옛 호환)은 안의 IPv4로 판단해요", () => {
+  it("IPv6 forms that embed IPv4 (NAT64, 6to4, old compatible) are judged by the IPv4 inside", () => {
     // Forms that embed 127.0.0.1, 169.254.169.254 and 192.168.1.1, plus local-use NAT64 and the old site-local range
     for (const a of ["::ffff:7f00:1", "::7f00:1", "64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "2002:7f00:1::", "2002:c0a8:101::", "64:ff9b:1::1", "fec0::1"]) expect(isPrivateAddress(a), a).toBe(true);
     // Forms that embed 8.8.8.8 and public IPv6 are fetched as usual (IPv6-only networks reach IPv4 sites in the 64:ff9b:: form)
     for (const a of ["8.8.8.8", "::ffff:808:808", "64:ff9b::808:808", "2002:808:808::", "2606:4700:4700::1111"]) expect(isPrivateAddress(a), a).toBe(false);
   });
-  it("기본값은 지금처럼 가져와요", async () => {
+  it("the default fetches as before", async () => {
     const before = hits;
     expect(await (await fetchUrl(`${base}/ok.csv`)).text()).toContain("2025-01,120");
     expect(hits).toBe(before + 1);
   });
 });
 
-describe("보안: evil.json (리뷰어 재현)", () => {
+describe("security: evil.json (reviewer repro)", () => {
   const evil = { type: "pie", data: [{ label: "a", value: 1 }], card: { title: "Sales", legend: [{ label: "L", color: 'x"/><script>alert(document.domain)</script><x y="' }] }, theme: { accent: "red}</style><script>alert(2)</script><style>" } };
-  it("render는 SVG, HTML을 만들지 않고 검증 오류로 멈춰요", async () => {
+  it("render makes no SVG or HTML and stops with a validation error", async () => {
     for (const format of ["svg", "html"] as const) await expect(render(evil as never, { format })).rejects.toThrow(/card\.legend\[0\]\.color[\s\S]*theme\.accent/);
   });
-  it("CLI render도 파일을 만들지 않고 실패해요", async () => {
-    if (!existsSync(CLI)) throw new Error("먼저 pnpm build로 CLI를 빌드하세요");
+  it("CLI render also fails without making a file", async () => {
+    if (!existsSync(CLI)) throw new Error("Build the CLI first with pnpm build");
     const dir = mkdtempSync(join(tmpdir(), "ztd-evil-"));
     writeFileSync(join(dir, "evil.json"), JSON.stringify(evil));
     for (const out of ["evil.svg", "evil.html"]) {
@@ -157,7 +157,7 @@ describe("보안: evil.json (리뷰어 재현)", () => {
   });
 });
 
-describe("svgToPng: 픽셀 한도", () => {
+describe("svgToPng: pixel limit", () => {
   /** Swaps resvg for a fake that only records the SVG size and zoom it receives. No large bitmap is actually made */
   const capture = async (fn: () => Promise<unknown>) => {
     const seen: { w: number; h: number; zoom: number }[] = [];
@@ -181,7 +181,7 @@ describe("svgToPng: 픽셀 한도", () => {
   };
   const pixels = (q: { w: number; h: number; zoom: number }) => q.w * q.h * q.zoom * q.zoom;
 
-  it("배율은 바깥 <svg>의 줄이지 않은 실제 크기로 정해서 크기 × 배율²이 PNG_MAX_PIXELS를 넘지 않아요", async () => {
+  it("the zoom is set from the outer <svg>'s real, unreduced size, so size × zoom² stays within PNG_MAX_PIXELS", async () => {
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="450">', 2)).toBe(2);
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1000">', 4)).toBe(4);
     // A document larger than the chart side limit (10,000) is still measured at its own size
@@ -191,14 +191,14 @@ describe("svgToPng: 픽셀 한도", () => {
     // The inner <svg>'s size is not read as the outer size
     expect(pngZoom('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9000 9000"><svg width="10" height="10"/></svg>', 2)).toBeNull();
   });
-  it("바깥 <svg> 크기를 읽지 못하면(없음, %, 0, 음수) 그리지 않고 오류예요", async () => {
+  it("when the outer <svg> size cannot be read (missing, %, 0, negative), it errors without drawing", async () => {
     for (const svg of ['<svg xmlns="http://www.w3.org/2000/svg"></svg>', '<svg width="100%" height="100%"></svg>', '<svg width="0" height="10"></svg>', '<svg width="-5" height="10"></svg>', "<g/>"]) {
       expect(pngZoom(svg, 2), svg).toBeNull();
       const seen = await capture(() => expect(svgToPng(svg, { scale: 2 })).rejects.toThrow("Couldn't read a width and height"));
       expect(seen, svg).toHaveLength(0);
     }
   });
-  it("가장 큰 작은 여러 개(24칸 한 줄씩, 패널 높이 10,000px)도 PNG는 픽셀 한도 안이에요", async () => {
+  it("even the largest small multiples (24 panels one per row, panel height 10,000px) keep the PNG within the pixel limit", async () => {
     const data = Array.from({ length: 24 }, (_, g) => [1, 2, 3].map((x) => ({ g: `g${g}`, x, y: x * (g + 1) }))).flat();
     const spec = { type: "line", data, encoding: { x: "x", y: "y" }, options: { height: 10000 }, facet: { by: "g", columns: 1 }, card: { title: "Largest facet grid", note: "n ".repeat(400) } };
     const seen = await capture(() => render(spec as never, { format: "png", width: 10000, scale: 4 }));

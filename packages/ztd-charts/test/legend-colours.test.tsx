@@ -41,8 +41,8 @@ function expectSame(make: (all: string[]) => ChartSpec, drawn: (spec: ChartSpec,
     }
 }
 
-describe("카드 범례 색 = 그린 색 (계열 5, 6개, 두 테마)", () => {
-  it("막대: 쌓은, 묶은, 100%, 막대 위 선, 작은 여러 개. 브라우저 카드 범례도 같은 색이에요", () => {
+describe("card legend color = drawn color (5 and 6 series, both themes)", () => {
+  it("bar: stacked, grouped, 100%, line over bars, small multiples. The browser card legend uses the same colors", () => {
     const one = (all: string[]) => all.map((s, i) => ({ x: "A", s, v: 10 + i, goal: 20 }));
     for (const options of [{ layout: "stacked" }, { layout: "grouped" }, { layout: "percent", highlight: "none" }]) expectSame((all) => ({ type: "bar", data: one(all), encoding: { x: "x", y: "v", series: "s" }, options }), (_s, all, _t, body) => pathFills(body).slice(0, all.length));
     expectSame((all) => ({ type: "bar", data: one(all), encoding: { x: "x", y: "v", series: "s", line: "goal" } }), (_s, all, _t, body) => pathFills(body).slice(0, all.length));
@@ -54,14 +54,14 @@ describe("카드 범례 색 = 그린 색 (계열 5, 6개, 두 테마)", () => {
     expect(swatches).toEqual(fills);
     expect(new Set(fills).size).toBe(6);
   });
-  it("영역(기본 ramp, colorMode categorical)과 colorMode categorical 라인", () => {
+  it("area (default ramp, colorMode categorical) and colorMode categorical line", () => {
     const rows = (all: string[]) => ["A", "B", "C"].flatMap((x, k) => all.map((s, i) => ({ x, s, v: 10 + i * 3 + k })));
     const areaFill = (body: string) => pathFills(body)[0];
     const lineStroke = (body: string, theme: (typeof THEMES)[number]) => tags(body, "path").filter((e) => attr(e, "fill") === "none").map((e) => attr(e, "stroke")).find((s) => painted(s) && s !== PANEL[theme]);
     for (const options of [{}, { stack: "none" }, { colorMode: "categorical" }]) expectSame((all) => ({ type: "area", data: rows(all), encoding: { x: "x", y: "v", series: "s" }, options }), (spec, all, theme) => all.map((nm) => areaFill(only(spec, nm, all, theme))));
     expectSame((all) => ({ type: "line", data: rows(all), encoding: { x: "x", y: "v", series: "s" }, options: { colorMode: "categorical" } }), (spec, all, theme) => all.map((nm) => lineStroke(only(spec, nm, all, theme), theme)));
   });
-  it("스트림: 층 순서(inside-out)와 기본 강조(합이 가장 큰 계열)까지 같아요", () => {
+  it("stream: the same down to layer order (inside-out) and default highlight (the series with the largest total)", () => {
     // Each series is a band of a different thickness, so the thickness order tells which series a layer belongs to
     const rows = (all: string[]) => ["A", "B", "C", "D"].flatMap((x) => all.map((s, i) => ({ x, s, v: 10 * (i + 1) })));
     const thick = (d: string) => {
@@ -70,19 +70,19 @@ describe("카드 범례 색 = 그린 색 (계열 5, 6개, 두 테마)", () => {
     };
     for (const options of [{}, { reorder: false }]) expectSame((all) => ({ type: "stream", data: rows(all), encoding: { x: "x", y: "v", series: "s" }, options }), (_s, all, _t, body) => tags(body, "path").filter((e) => painted(attr(e, "fill"))).map((e) => ({ f: attr(e, "fill"), t: thick(attr(e, "d")!) })).sort((a, b) => a.t - b.t).map((l) => l.f).slice(0, all.length));
   });
-  it("파이와 도넛: categorical과 강조만 칠하는 colorMode emphasis", () => {
+  it("pie and donut: categorical, and colorMode emphasis, which paints only the highlight", () => {
     for (const type of ["pie", "donut"]) for (const colorMode of [undefined, "emphasis"]) expectSame((all) => ({ type, data: all.map((label, i) => ({ label, value: 40 - i * 3 })), encoding: { label: "label", value: "value" }, options: { ...(type === "donut" && { legend: "none" }), ...(colorMode && { colorMode }) } }), (_s, all, _t, body) => pathFills(body).slice(0, all.length));
   });
-  it("와플", () => {
+  it("waffle", () => {
     expectSame((all) => ({ type: "waffle", data: all.map((label, i) => ({ label, value: 40 - i * 3 })), encoding: { label: "label", value: "value" } }), (_s, all, theme, body) => [...new Set(tags(body, "rect").map((e) => attr(e, "fill")).filter((f) => painted(f) && f !== PANEL[theme]))].slice(0, all.length));
   });
-  it("반원 와플 (점, 왼쪽 묶음부터)", () => {
+  it("semicircle waffle (dots, starting from the left group)", () => {
     expectSame((all) => ({ type: "waffle", data: all.map((label, i) => ({ label, value: 40 - i * 3 })), encoding: { label: "label", value: "value" }, options: { shape: "arc" } }), (_s, all, theme, body) => [...new Set(tags(body, "circle").map((e) => attr(e, "fill")).filter((f) => painted(f) && f !== PANEL[theme]))].slice(0, all.length));
   });
-  it("마리메코", () => {
+  it("marimekko", () => {
     expectSame((all) => ({ type: "marimekko", data: all.map((s, i) => ({ x: "A", s, v: 10 + i })), encoding: { x: "x", series: "s", value: "v" } }), (_s, all, _t, body) => pathFills(body).slice(0, all.length));
   });
-  it("계열이 있는 산점도 (점은 한 칸 옅은 단계까지 쓰는 categoricalDots)", () => {
+  it("scatter with series (dots use categoricalDots, which goes one lighter step further)", () => {
     const pts = (all: string[]) => all.flatMap((s, i) => [0, 1, 2].map((k) => ({ x: k + i, y: k * 2 + i, s })));
     const dot = (body: string, theme: (typeof THEMES)[number]) => tags(body, "circle").map((e) => attr(e, "fill")).find((f) => painted(f) && f !== PANEL[theme]);
     expectSame((all) => ({ type: "scatter", data: pts(all), encoding: { x: "x", y: "y", series: "s" } }), (spec, all, theme) => all.map((nm) => dot(only(spec, nm, all, theme), theme)));

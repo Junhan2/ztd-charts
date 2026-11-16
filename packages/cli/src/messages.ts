@@ -6,24 +6,33 @@ export const VERSION = "0.11.3";
 
 export const SCHEMA_URL = "https://unpkg.com/ztd-charts/schema/chart-spec.schema.json";
 
+/** Usage lines per command, in help order. `ztd-charts <command> --help` prints only its own entry */
+const enUsage = {
+  list: "  ztd-charts list [--group proportion] [--level basic] [--json]",
+  info: "  ztd-charts info <type> [--json]          Chart description, options, example spec, React code",
+  schema: "  ztd-charts schema [type] [--out file]    JSON Schema (all charts or one)",
+  example: `  ztd-charts example <type> [--variant id] [--out file]
+                                           Example spec JSON (a named variant with --variant)`,
+  validate: "  ztd-charts validate <spec.json> [--json]",
+  render: `  ztd-charts render <spec.json> --out chart.svg|chart.png|chart.html
+         [--width 720] [--height 240] [--theme dark|light] [--scale 2]
+         [--no-frame] [--interactive] [--font path.otf]`,
+  init: "  ztd-charts init [dir] [--type pie] [--force]",
+  suggest: "  ztd-charts suggest <data.csv|data.json|URL> [--limit 5] [--json] [--out-dir dir]",
+  snippet: "  ztd-charts snippet <spec.json>           React code for the spec",
+};
+export type CliCommand = keyof typeof enUsage;
+export const COMMANDS = Object.keys(enUsage) as CliCommand[];
+const enEvery = `Every command
+  --locale <code>   Language of messages and chart text, and number format: en (default) or ko`;
+
 const en = {
   help: `ztd-charts ${VERSION}  CLI for 44 React chart types
 
 Usage
-  ztd-charts list [--group proportion] [--level basic] [--json]
-  ztd-charts info <type> [--json]          Chart description, options, example spec, React code
-  ztd-charts schema [type] [--out file]    JSON Schema (all charts or one)
-  ztd-charts example <type> [--variant id] [--out file]
-                                           Example spec JSON (a named variant with --variant)
-  ztd-charts validate <spec.json> [--json]
-  ztd-charts render <spec.json> --out chart.svg|chart.png|chart.html
-         [--width 720] [--height 240] [--theme dark|light] [--scale 2]
-         [--no-frame] [--interactive] [--font path.otf]
-  ztd-charts init [dir] [--type pie] [--force]
-  ztd-charts suggest <data.csv|data.json|URL> [--limit 5] [--json] [--out-dir dir]
+${Object.values(enUsage).join("\n")}
 
-Every command
-  --locale <code>   Language of messages and chart text, and number format: en (default) or ko
+${enEvery}
 
 Examples
   ztd-charts init
@@ -31,6 +40,7 @@ Examples
   ztd-charts render charts/01-line.json --out line.png --theme light
   ztd-charts render charts/01-line.json --out line.svg --locale ko
 `,
+  commandHelp: (cmd: CliCommand) => `Usage\n${enUsage[cmd]}\n\n${enEvery}\n\nAll commands: ztd-charts --help\n`,
   needSpec: "Missing the spec file path",
   noFile: (f: string) => `File not found: ${f}`,
   badJson: (m: string) => `Couldn't read the JSON: ${m}`,
@@ -92,30 +102,35 @@ Examples
 
 export type CliText = typeof en;
 
+const koUsage: Record<CliCommand, string> = {
+  list: "  ztd-charts list [--group 비율] [--level 기본] [--json]",
+  info: "  ztd-charts info <type> [--json]          차트 설명, 옵션, 예시 스펙, React 코드",
+  schema: "  ztd-charts schema [type] [--out file]    JSON Schema (전체 또는 차트 하나)",
+  example: `  ztd-charts example <type> [--variant id] [--out file]
+                                           예시 스펙 JSON (--variant로 이름 붙은 변형)`,
+  validate: enUsage.validate,
+  render: enUsage.render,
+  init: enUsage.init,
+  suggest: enUsage.suggest,
+  snippet: "  ztd-charts snippet <spec.json>           스펙을 그리는 React 코드",
+};
+const koEvery = `모든 명령
+  --locale <code>   안내 문구, 차트 글자, 숫자 형식의 언어: en(기본) 또는 ko`;
+
 const ko: CliText = {
   help: `ztd-charts ${VERSION}  React 차트 44종을 위한 CLI
 
 사용법
-  ztd-charts list [--group 비율] [--level 기본] [--json]
-  ztd-charts info <type> [--json]          차트 설명, 옵션, 예시 스펙, React 코드
-  ztd-charts schema [type] [--out file]    JSON Schema (전체 또는 차트 하나)
-  ztd-charts example <type> [--variant id] [--out file]
-                                           예시 스펙 JSON (--variant로 이름 붙은 변형)
-  ztd-charts validate <spec.json> [--json]
-  ztd-charts render <spec.json> --out chart.svg|chart.png|chart.html
-         [--width 720] [--height 240] [--theme dark|light] [--scale 2]
-         [--no-frame] [--interactive] [--font path.otf]
-  ztd-charts init [dir] [--type pie] [--force]
-  ztd-charts suggest <data.csv|data.json|URL> [--limit 5] [--json] [--out-dir dir]
+${Object.values(koUsage).join("\n")}
 
-모든 명령
-  --locale <code>   안내 문구, 차트 글자, 숫자 형식의 언어: en(기본) 또는 ko
+${koEvery}
 
 예시
   ztd-charts init --locale ko
   ztd-charts suggest charts/sales.csv --out-dir charts --locale ko
   ztd-charts render charts/01-line.json --out line.png --theme light --locale ko
 `,
+  commandHelp: (cmd) => `사용법\n${koUsage[cmd]}\n\n${koEvery}\n\n모든 명령 보기: ztd-charts --help\n`,
   needSpec: "스펙 파일 경로를 넣어 주세요",
   noFile: (f) => `파일이 없어요: ${f}`,
   badJson: (m) => `JSON을 읽지 못했어요: ${m}`,

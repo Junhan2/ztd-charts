@@ -1146,34 +1146,34 @@ describe("20: lines break at missing values", () => {
   });
 });
 
-describe("툴팁 줄 수 한도", () => {
+describe("tooltip row limit", () => {
   // 12 series, 3 points each. The tooltip shows up to 8 rows and gives the number of left-out series on the last row
   const names = Array.from({ length: 12 }, (_, s) => `S${s + 1}`);
   const rows = (k = 0) => ["a", "b", "c"].flatMap((x) => names.map((s, i) => ({ x, s, y: i + 1 + k })));
   const lastRows = () => (frame().tip?.rows ?? []).slice(-2);
 
-  it("선 차트는 9번째 줄에 '외 N개'를 붙여요", () => {
+  it("line chart adds 'and N more' on the 9th row", () => {
     state.active = 1;
     r(<LineChart data={rows()} series="s" width={480} height={240} animate={false} />);
     expect(frame().tip?.rows).toHaveLength(9);
     expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
   });
 
-  it("스트림도 같아요", () => {
+  it("stream does the same", () => {
     state.active = 1;
     r(<StreamGraph data={rows()} series="s" width={480} animate={false} />);
     expect(frame().tip?.rows).toHaveLength(9);
     expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
   });
 
-  it("범프도 같아요", () => {
+  it("bump does the same", () => {
     state.active = 1;
     r(<BumpChart data={["a", "b", "c"].flatMap((x) => names.map((series, i) => ({ x, series, rank: i + 1 })))} series="series" width={480} animate={false} />);
     expect(frame().tip?.rows).toHaveLength(9);
     expect(lastRows()[1]).toEqual({ label: "and 4 more", value: "" });
   });
 
-  it("8개 이하면 줄을 더하지 않아요", () => {
+  it("adds no row with 8 series or fewer", () => {
     state.active = 1;
     r(<LineChart data={["a", "b", "c"].flatMap((x) => names.slice(0, 8).map((s, i) => ({ x, s, y: i + 1 })))} series="s" width={480} height={240} animate={false} />);
     expect(frame().tip?.rows).toHaveLength(8);
@@ -1455,10 +1455,10 @@ describe("scatter", () => {
   });
 });
 
-describe("스펙 툴팁 틀이 차트에 함수로 가요 (차례 3 ⑩)", () => {
+describe("spec tooltip template reaches the chart as a function", () => {
   const data = [{ m: "1월", v: 300, owner: "민지" }, { m: "2월", v: 340, owner: "" }];
   const spec = (tooltip: unknown): ChartSpec => ({ type: "line", data, encoding: { x: "m", y: "v" }, options: { tooltip } as never });
-  it("template이면 그 틀로 쓰는 함수, false면 그대로 false", () => {
+  it("template gives a function that writes with that template, false stays false", () => {
     r(<Chart spec={spec({ template: "{label} · 담당 {owner}" })} width={480} animate={false} />);
     const tip = frame().renderTip as (e: unknown) => ReactElement;
     expect(typeof tip).toBe("function");
@@ -1468,14 +1468,14 @@ describe("스펙 툴팁 틀이 차트에 함수로 가요 (차례 3 ⑩)", () =>
   });
 });
 
-describe("막대와 선 (차례 3 ⑪)", () => {
+describe("bar and line", () => {
   const months = Array.from({ length: 12 }, (_, i) => ({ m: `${i + 1}월`, 올해: 100 + i * 4, 작년: 70 + i * 5 }));
   const dots = (h: string) => [...h.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="3" fill="([^"]+)"/g)].map((m) => ({ cx: +m[1], cy: +m[2], fill: m[3] }));
   const linePath = (h: string) => /<path d="([^"]+)" fill="none" stroke="var\(--ztd-accent[^"]*" stroke-width="2"/.exec(h)?.[1];
   const tableRows = (h: string) => [...h.matchAll(/<tr><th scope="row">([^<]*)<\/th><td>([^<]*)<\/td><\/tr>/g)].map((m) => [m[1], m[2]]);
   const bar = (data: Record<string, unknown>[], extra: Record<string, unknown> = {}) => r(<BarChart data={data} x="m" y="올해" line="작년" width={600} animate={false} {...extra} />);
 
-  it("선 하나는 막대 칸 가운데를 지나는 강조색 선과 점이고, 막대는 회색이에요", () => {
+  it("a single line is an accent line with dots through the middle of each bar slot, and the bars are grey", () => {
     const h = bar(months);
     expect(linePath(h)).toBeDefined();
     const centers = [...h.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" fill="transparent"/g)].map((m) => +m[1] + +m[2] / 2);
@@ -1485,12 +1485,12 @@ describe("막대와 선 (차례 3 ⑪)", () => {
     expect(h).not.toMatch(/fill="var\(--ztd-accent[^"]*" stroke="none"/);
     expect(r(<BarChart data={months} x="m" y="올해" width={600} animate={false} />)).not.toBe(h);
   });
-  it("선 값으로 축 범위를 넓혀 점이 잘리지 않아요", () => {
+  it("line values widen the axis range so dots are not clipped", () => {
     const h = r(<BarChart data={[{ m: "A", 올해: 100, 작년: 200 }, { m: "B", 올해: 150, 작년: 120 }]} x="m" y="올해" line="작년" width={500} height={300} animate={false} />);
     expect(h).toMatch(/>200<\/text>/);
     expect(Math.min(...dots(h).map((p) => p.cy))).toBeGreaterThanOrEqual(8);
   });
-  it("빈 값에서 선이 끊기고, 혼자 남은 점은 점만 그려요", () => {
+  it("the line breaks at empty values, and a lone point is drawn as a dot only", () => {
     const gap = (idx: number[]) => months.map((d, i) => (idx.includes(i) ? { ...d, 작년: null } : d));
     const h = bar(gap([3, 4, 9]));
     expect(linePath(h)!.match(/M/g)).toHaveLength(3);
@@ -1499,23 +1499,23 @@ describe("막대와 선 (차례 3 ⑪)", () => {
     expect(linePath(lone)!.match(/M/g)).toHaveLength(2);
     expect(dots(lone)).toHaveLength(8);
   });
-  it("키보드는 막대를 모두 지난 뒤 선을 지나요 (숨은 표도 막대 다음 선)", () => {
+  it("keyboard visits every bar before the line (the hidden table also lists the line after the bars)", () => {
     const rows = tableRows(bar(months));
     expect(rows).toHaveLength(24);
     expect(rows[12]).toEqual(["1월 · 작년", "70"]);
   });
-  it("가로 막대와 100% 막대에는 그리지 않고 알려요", () => {
+  it("skips the line on horizontal and 100% bars and says so", () => {
     for (const extra of [{ orientation: "horizontal" }, { layout: "percent" }]) {
       expect(linePath(bar(months, extra)), JSON.stringify(extra)).toBeUndefined();
       expect(validateSpec({ type: "bar", data: months, encoding: { x: "m", y: "올해", line: "작년" }, options: extra }).warnings.map((w) => w.code), JSON.stringify(extra)).toContain("line_ignored");
     }
   });
-  it("긴 표에서는 같은 x의 선 값을 평균해요 (계열마다 되풀이한 목표가 두 배가 되지 않아요)", () => {
+  it("long tables average line values at the same x (a target repeated per series does not double)", () => {
     const long = ["1월", "2월"].flatMap((m) => ["A", "B"].map((team) => ({ m, team, v: 40, goal: 95 })));
     const rows = tableRows(r(<BarChart data={long} x="m" y="v" series="team" line="goal" width={500} height={300} animate={false} />));
     expect(rows.filter(([l]) => l.endsWith("· goal")).map(([, v]) => v)).toEqual(["95", "95"]);
   });
-  it("카드 범례는 막대(회색)와 선(강조색 선 모양)을 함께 적어요", () => {
+  it("card legend lists the bars (grey) and the line (accent line shape) together", () => {
     const spec: ChartSpec = { type: "bar", data: months, encoding: { x: "m", y: "올해", line: "작년" }, card: { title: "T", legend: "auto" } };
     expect(autoLegend(spec, months, "ko-KR")).toEqual([
       { label: "올해", color: "neutral" },
@@ -1525,18 +1525,18 @@ describe("막대와 선 (차례 3 ⑪)", () => {
     for (const s of [">올해<", ">작년<"]) expect(svg).toContain(s);
     expect(svg).toMatch(/<line [^>]*stroke-width="2"/);
   });
-  it("빈 선 목록(line: [])은 선이 없는 것과 같아요 (막대 색, 설명, 경고)", () => {
+  it("an empty line list (line: []) is the same as no line (bar colors, description, warnings)", () => {
     expect(bar(months, { line: [] })).toBe(r(<BarChart data={months} x="m" y="올해" width={600} animate={false} />));
     expect(validateSpec({ type: "bar", data: months, encoding: { x: "m", y: "올해", line: [] }, options: { orientation: "horizontal" } }).warnings.map((w) => w.code)).not.toContain("line_ignored");
   });
 });
 
-describe("로그 y축 (차례 4 ⑯)", () => {
+describe("log y axis", () => {
   const growth = Array.from({ length: 24 }, (_, i) => ({ m: `M${i + 1}`, users: Math.round(120 * 1.62 ** i) }));
   const edge = [10, 100, 0, 1000, -50, 1e6, 0.001].map((y, i) => ({ x: i + 1, y }));
   const yTicks = (h: string) => texts(h).filter((t) => t.anchor === "end").map((t) => t.text);
   const dots = (h: string) => (h.match(/<circle /g) ?? []).length;
-  it("1,000배 넘게 퍼진 값도 읽혀요: 10배마다 같은 간격의 눈금과 고르게 오르는 선", () => {
+  it("values spread over 1,000x stay readable: evenly spaced ticks per 10x and a steadily rising line", () => {
     const h = r(<LineChart data={growth} x="m" y="users" yScale="log" width={560} animate={false} />);
     expect(yTicks(h)).toEqual(["100", "1K", "10K", "100K", "1M", "10M"]);
     const pts = pairs(/<path d="(M[^"]+)" fill="none"/.exec(h)![1]);
@@ -1548,7 +1548,7 @@ describe("로그 y축 (차례 4 ⑯)", () => {
     expect(svg).not.toMatch(/NaN|Infinity/);
     expect(svg).toContain(">10M<");
   });
-  it("산점도·버블은 y가 0 이하인 점만 빼고, 그 수를 설명에 적어요", () => {
+  it("scatter and bubble drop only points with y at or below 0, and give the count in the description", () => {
     const h = r(<ScatterChart data={edge} x="x" y="y" yScale="log" width={480} height={320} animate={false} />);
     expect(dots(h)).toBe(5);
     expect(desc(h)).toContain("2 points with y at or below 0 are not shown on the log scale.");
@@ -1558,19 +1558,19 @@ describe("로그 y축 (차례 4 ⑯)", () => {
     expect(desc(r(<ScatterChart data={edge} x="x" y="y" yScale="log" locale="ko-KR" width={480} height={320} animate={false} />))).toContain("로그 눈금이라 y가 0 이하인 점 2개는 뺐어요.");
     expect(dots(r(<BubbleChart data={edge} x="x" y="y" size="x" yScale="log" width={480} height={320} animate={false} />))).toBe(5);
   });
-  it("선은 0 이하 값에서 끊기고, 그 수를 설명에 적어요", () => {
+  it("lines break at values at or below 0, and give the count in the description", () => {
     const h = r(<LineChart data={[5, 50, 0, 500, 5000].map((v, i) => ({ m: `p${i}`, v }))} x="m" y="v" yScale="log" curve="linear" width={480} animate={false} />);
     expect(/<path d="(M[^"]+)" fill="none"/.exec(h)![1].match(/M/g)).toHaveLength(2);
     expect(desc(h)).toContain("1 value at or below 0 is not shown on the log scale.");
     expect(h).not.toMatch(/NaN|Infinity/);
   });
-  it("영역 차트는 yScale이 있어도 그림이 같아요 (0부터의 길이가 값)", () => {
+  it("area chart draws the same with yScale (the length from 0 is the value)", () => {
     const data = growth.slice(0, 6);
     expect(r(<AreaChart data={data} x="m" y="users" {...({ yScale: "log" } as object)} width={480} animate={false} />)).toBe(r(<AreaChart data={data} x="m" y="users" width={480} animate={false} />));
   });
 });
 
-describe("숨긴 계열 (차례 4 ⑫)", () => {
+describe("hidden series", () => {
   const CH = ["Search", "Social", "Ads", "Referral", "Direct"];
   const five = ["Jan", "Feb", "Mar", "Apr"].flatMap((m, k) => CH.map((ch, s) => ({ m, ch, v: 40 + s * 10 + k * 3 })));
   const strokes = (h: string) => [...h.matchAll(/<path d="M[^"]*" fill="none" stroke="([^"]+)"/g)].map((m) => m[1]);
@@ -1579,7 +1579,7 @@ describe("숨긴 계열 (차례 4 ⑫)", () => {
   const barFills = (h: string) => markGroups(h).map((g) => /<path d="[^"]+" fill="([^"]+)"/.exec(g)![1]);
   const yTicks = (h: string) => texts(h).filter((t) => t.anchor === "end").map((t) => t.text);
 
-  it("숨겨도 남은 계열의 색이 그대로예요 (강조 계열을 숨기면 강조색이 없어요)", () => {
+  it("remaining series keep their colors when others are hidden (hiding the highlighted series leaves no accent)", () => {
     const full = strokes(line({ colorMode: "categorical" }));
     expect(full).toHaveLength(5);
     const accent = full.find((s) => s.includes("--ztd-accent"));
@@ -1591,7 +1591,7 @@ describe("숨긴 계열 (차례 4 ⑫)", () => {
     const fills = barFills(bar());
     expect(new Set(barFills(bar({ hidden: ["Social"] })))).toEqual(new Set(fills.filter((f) => f !== fills[1])));
   });
-  it("y축은 보이는 계열에 다시 맞추고, yDomain을 주면 그대로예요", () => {
+  it("y axis refits to the visible series, and stays as given with yDomain", () => {
     const data = ["a", "b", "c"].flatMap((m, k) => [{ m, s: "big", v: 1000 + k * 250 }, { m, s: "small", v: 10 + k * 2.5 }]);
     const draw = (extra: Record<string, unknown> = {}) => r(<LineChart data={data} x="m" y="v" series="s" width={480} height={240} animate={false} {...extra} />);
     const top = (h: string) => Math.max(...yTicks(h).map((t) => Number(t.replace(/,/g, ""))));
@@ -1599,14 +1599,14 @@ describe("숨긴 계열 (차례 4 ⑫)", () => {
     expect(top(draw({ hidden: ["big"] }))).toBeLessThan(100);
     expect(yTicks(draw({ yDomain: [0, 2000], hidden: ["big"] }))).toEqual(yTicks(draw({ yDomain: [0, 2000] })));
   });
-  it("자동 범례는 숨긴 계열을 빼고, 켜고 끄는 범례(all)는 모두 적어요", () => {
+  it("auto legend leaves out hidden series, the toggle legend (all) lists every series", () => {
     for (const type of ["line", "area", "bar"]) {
       const spec = { type, data: five, encoding: { x: "m", y: "v", series: "ch" }, options: { hidden: ["Ads"] } } as ChartSpec;
       expect(autoLegend(spec, five, "en-US").map((i) => i.label), type).toEqual(["Search", "Social", "Referral", "Direct"]);
       expect(autoLegend(spec, five, "en-US", true).map((i) => i.label), type).toEqual(CH);
     }
   });
-  it("모든 계열을 숨기면 선과 영역도 막대, 산점도처럼 빈 차트예요", () => {
+  it("hiding every series leaves line and area as empty charts, like bar and scatter", () => {
     for (const h of [line({ hidden: CH }), r(<AreaChart data={five} x="m" y="v" series="ch" hidden={CH} width={560} animate={false} />)]) {
       expect(desc(h)).toBe("No data.");
       expect(tds(h)).toEqual([]);
@@ -1614,10 +1614,10 @@ describe("숨긴 계열 (차례 4 ⑫)", () => {
   });
 });
 
-describe("기준선 값이 숫자가 아니면 (referenceLines 키 틀림)", () => {
+describe("reference line value is not a number (wrong referenceLines key)", () => {
   const rows = [{ m: "1월", v: 10 }, { m: "2월", v: 40 }, { m: "3월", v: 25 }];
   const bad = [{ value: 30, label: "기준" }] as unknown as { y: number; label?: string }[];
-  it("검사기가 기대하는 키(y)를 적은 오류를 내요 (영어, 한국어)", () => {
+  it("throws an error naming the key the validator expects (y) (English, Korean)", () => {
     const spec: ChartSpec = { type: "line", data: rows, encoding: { x: "m", y: "v" }, options: { referenceLines: bad } };
     const en = validateSpec(spec).errors.find((e) => e.code === "bad_reference_line");
     expect(en?.path).toBe("options.referenceLines[0]");
@@ -1625,7 +1625,7 @@ describe("기준선 값이 숫자가 아니면 (referenceLines 키 틀림)", () 
     expect(validateSpec(spec, { lang: "ko" }).errors.find((e) => e.code === "bad_reference_line")?.message).toContain("숫자 y가 있어야");
     expect(validateSpec({ ...spec, options: { referenceLines: [{ y: 30, label: "기준" }] } }).errors).toEqual([]);
   });
-  it("라인과 영역은 그 기준선을 건너뛰고 NaN 좌표를 쓰지 않아요", () => {
+  it("line and area skip that reference line and write no NaN coordinates", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const htmls = [
       renderToStaticMarkup(<LineChart data={rows} x="m" y="v" width={480} animate={false} referenceLines={bad} />),
@@ -1639,7 +1639,7 @@ describe("기준선 값이 숫자가 아니면 (referenceLines 키 틀림)", () 
   });
 });
 
-describe("양쪽 막대 (layout diverging)", () => {
+describe("diverging bars (layout diverging)", () => {
   const LIKERT = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"];
   const survey = [
     { q: "Support", "Strongly disagree": 16, Disagree: 30, Neutral: 22, Agree: 20, "Strongly agree": 12 },
@@ -1655,7 +1655,7 @@ describe("양쪽 막대 (layout diverging)", () => {
   const segX = (h: string) => segPaths(h).map(xBounds);
   const zeroX = (h: string) => +/<line x1="([\d.]+)" x2="\1"[^>]*stroke-width="1.5"/.exec(h)![1];
 
-  it("2: [10, -4]는 0선 오른쪽에 10, 왼쪽에 4 길이로 그려요. percent도 같은 비율(71%, 29%)이에요", () => {
+  it("2: [10, -4] draws 10 right of the zero line and 4 left of it. percent keeps the same ratio (71%, 29%)", () => {
     const data = [{ x: "Support", a: 10, b: -4 }];
     for (const percent of [false, true]) {
       const h = r(<BarChart data={data} x="x" y={["a", "b"]} layout="diverging" percent={percent} width={480} height={160} animate={false} />);
@@ -1677,7 +1677,7 @@ describe("양쪽 막대 (layout diverging)", () => {
       expect(ticks.some((t) => /[-−]/.test(t.text))).toBe(false);
     }
   });
-  it("4: 모두 양수인 만족도 줄에서 negative로 정한 두 계열은 0선 왼쪽, 보통은 0선 양쪽 반씩이에요", () => {
+  it("4: in all-positive satisfaction rows, the two series set as negative sit left of the zero line and neutral splits half on each side", () => {
     const h = likert();
     const z = zeroX(h) - 0.5;
     const row = segX(h).slice(0, 5);
@@ -1689,7 +1689,7 @@ describe("양쪽 막대 (layout diverging)", () => {
     // Length ratio from the zero line to each end: (46 + 11) : (32 + 11)
     expect((z - row[0][0]) / (row[4][1] - z)).toBeCloseTo(57 / 43, 1);
   });
-  it("키보드는 왼쪽부터, 라이브 문장과 설명은 양쪽 합계를 먼저 읽어요. 쪽 합계로 정렬해요", () => {
+  it("keyboard starts from the left, the live sentence and description read both side totals first, and sorting uses side totals", () => {
     const h = atKey(0, () => likert({ percent: true }));
     expect(liveText(h)).toBe("Support: negative 46%, positive 32%. Strongly disagree: 16 (16%) (1/10)");
     expect(tds(h).slice(0, 5)).toEqual(["Support · Strongly disagree=16 (16%)", "Support · Disagree=30 (30%)", "Support · Neutral=22 (22%)", "Support · Agree=20 (20%)", "Support · Strongly agree=12 (12%)"]);
@@ -1698,7 +1698,7 @@ describe("양쪽 막대 (layout diverging)", () => {
     expect(tds(likert({ sort: "positive" }))[0]).toMatch(/^Price/);
     expect(tds(likert({ sort: "negative" }))[0]).toMatch(/^Support/);
   });
-  it("계열을 숨기면 그쪽만 다시 쌓여요 (다른 쪽, 0선, 값 축은 그대로)", () => {
+  it("hiding a series restacks only its side (the other side, zero line and value axis stay)", () => {
     for (const percent of [false, true]) {
       const full = likert({ percent });
       const hid = likert({ percent, hidden: ["Agree"] });
@@ -1707,7 +1707,7 @@ describe("양쪽 막대 (layout diverging)", () => {
       expect(segPaths(hid)).toHaveLength(8);
     }
   });
-  it("스펙: 서버 그림은 언제나 같고, 켜고 끄는 범례가 그대로 돼요", () => {
+  it("spec: the server image is always the same and the toggle legend still works", () => {
     const spec: ChartSpec = { type: "bar", data: survey, encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral", percent: true }, card: { title: "Survey", legend: "toggle" } };
     expect(validateSpec(spec).errors).toEqual([]);
     const a = r(<Chart spec={spec} width={560} animate={false} />);
@@ -1715,7 +1715,7 @@ describe("양쪽 막대 (layout diverging)", () => {
     expect(a).toContain('aria-pressed="true"');
     expect(renderSpecToSVG(spec, { width: 560, theme: "light" })).not.toContain("NaN");
   });
-  it("기본 강조는 가장 바깥 긍정 계열이에요 (negative가 있을 때만). 정한 highlight와 범례도 그대로 따라요", () => {
+  it("default highlight is the outermost positive series (only when negative is set). A set highlight and the legend follow as well", () => {
     const fill = (h: string, k: number) => /<path d="[^"]+" fill="([^"]+)"/.exec(markGroups(h)[k])![1];
     // First row segments from the left: Strongly disagree, Disagree, Neutral, Agree, Strongly agree
     const h = likert();
@@ -1728,7 +1728,7 @@ describe("양쪽 막대 (layout diverging)", () => {
     const spec: ChartSpec = { type: "bar", data: survey, encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral" }, card: { legend: "auto" } };
     expect(autoLegend(spec, survey, "en-US").map((i) => i.color)).toEqual(["ink", expect.any(String), expect.any(String), "neutral", "accent"]);
   });
-  it("값 축은 양쪽 데이터 끝에 맞춰요: 가장 긴 두 막대가 막대 자리의 80% 넘게 쓰고, 끝 합계 글자는 잘리거나 범주 이름에 겹치지 않아요", () => {
+  it("value axis fits the data ends on both sides: the two longest bars use over 80% of the bar space, and end total labels are neither clipped nor over category names", () => {
     const KO = ["매우 불만", "불만", "보통", "만족", "매우 만족"];
     const data = ([["검색", [3, 8, 17, 44, 28]], ["결제", [4, 9, 19, 41, 27]], ["고객센터", [19, 27, 22, 21, 11]]] as const).map(([q, v]) => ({ q, ...Object.fromEntries(KO.map((k, i) => [k, v[i]])) }));
     for (const W of [280, 390, 720]) {
@@ -1745,7 +1745,7 @@ describe("양쪽 막대 (layout diverging)", () => {
       for (const t of rights) expect(t.x + textWidth(t.text, 11, 600), `${W} ${t.text}`).toBeLessThanOrEqual(W);
     }
   });
-  it("줄이 촘촘하면(60줄) 끝 합계와 조각 안 글자를 모두 빼고, 24줄이면 그대로 써요. 값은 표에 남아요", () => {
+  it("dense rows (60) drop end totals and in-segment labels, 24 rows keep them. Values stay in the table", () => {
     const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ q: `Q${i}`, a: 10 + (i % 5), b: 20, c: 5 }));
     const draw = (n: number) => r(<BarChart data={rows(n)} x="q" y={["a", "b", "c"]} layout="diverging" negative={["a"]} width={720} animate={false} />);
     const numbers = (h: string) => {
@@ -1757,7 +1757,7 @@ describe("양쪽 막대 (layout diverging)", () => {
     expect(tds(dense)[0]).toBe("Q0 · a=10");
     expect(numbers(draw(24)).length).toBeGreaterThan(24);
   });
-  it("자동 범례의 색은 계열마다 그 조각의 색과 같아요 (계열 5개, 중간 단계 섞은 색까지)", () => {
+  it("auto legend color matches each series' segment color (5 series, including blended middle steps)", () => {
     // One row, so the segments run left to right in series order: Strongly disagree, Disagree, Neutral, Agree, Strongly agree
     const spec: ChartSpec = { type: "bar", data: survey.slice(0, 1), encoding: { x: "q", y: LIKERT }, options: { layout: "diverging", negative: ["Disagree", "Strongly disagree"], neutral: "Neutral", percent: true, highlight: "Strongly agree" }, card: { title: "Survey", legend: "auto" } };
     for (const theme of ["light", "dark"] as const) {

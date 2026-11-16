@@ -17,29 +17,29 @@ import { DEFAULT_FONT, darkTheme, themeToCss } from "../src/theme/tokens";
 const codes = (spec: unknown) => validateSpec(spec).errors.map((e) => `${e.path}:${e.code}`);
 const pie = { type: "pie", data: [{ label: "a", value: 1 }] };
 
-describe("보안: 테마 값과 범례 색 (CLI, MCP의 SVG, HTML)", () => {
+describe("security: theme values and legend colors (CLI, MCP SVG, HTML)", () => {
   // The reviewer's evil.json, verbatim
   const evil = { type: "pie", data: [{ label: "a", value: 1 }], card: { title: "Sales", legend: [{ label: "L", color: 'x"/><script>alert(document.domain)</script><x y="' }] }, theme: { accent: "red}</style><script>alert(2)</script><style>" } };
 
-  it("evil.json은 검증에서 bad_theme_value, bad_legend_color로 막혀요", () => {
+  it("evil.json is blocked in validation with bad_theme_value, bad_legend_color", () => {
     expect(codes(evil)).toEqual(["card.legend[0].color:bad_legend_color", "theme.accent:bad_theme_value"]);
     expect(() => renderSpecToSVG(evil as never)).toThrow(/theme\.accent/);
     expect(() => renderSpecToHTML(evil as never)).toThrow(/card\.legend\[0\]\.color/);
   });
 
-  it("CSS 주입(; url())과 문자열, 숫자가 아닌 값도 막아요", () => {
+  it("also blocks CSS injection (; url()) and values that are neither strings nor numbers", () => {
     for (const accent of ["red;background:url(https://evil.example/t)", "url(//evil.example/t)", "image(x)", "red}", "a\\62", '"x"']) expect(codes({ ...pie, theme: { accent } })).toEqual(["theme.accent:bad_theme_value"]);
     expect(codes({ ...pie, theme: { radius: '"/><script>' } })).toEqual(["theme.radius:bad_theme_value"]);
     expect(codes({ ...pie, theme: { ink: { a: 1 } } })).toEqual(["theme.ink:bad_theme_value"]);
     expect(codes({ ...pie, card: { legend: [{ label: "L", color: 3 }] } })).toEqual(["card.legend[0].color:bad_legend_color"]);
   });
 
-  it("올바른 CSS 색, 길이, 글꼴은 그대로 받아요", () => {
+  it("accepts valid CSS colors, lengths and fonts as is", () => {
     const theme = { accent: "#0B8FD8", ink: "rgb(1 2 3 / 50%)", muted: "oklch(70% 0.1 200)", line: "rebeccapurple", panel: "var(--brand, #fff)", tint: "color-mix(in oklab, red 40%, blue)", bg: "hsl(210deg 20% 10%)", radius: 12, fontFamily: DEFAULT_FONT, monoFamily: "'Roboto Mono', monospace", name: "Brand: v2 (아침)" };
     expect(validateSpec({ ...pie, theme, card: { title: "t", legend: [{ label: "a", color: "accent" }, { label: "b", color: "#123" }] } }).errors).toEqual([]);
   });
 
-  it("검사를 거치지 않는 opts.theme도 SVG, HTML에서 이스케이프해요", () => {
+  it("opts.theme, which skips validation, is also escaped in SVG and HTML", () => {
     const pay = '"/><script>alert(1)</script><x a="';
     const svg = renderSpecToSVG({ ...pie, card: { title: "t" } } as never, { theme: { ink: pay, panel: pay, line: pay, radius: pay as never } });
     expect(svg).not.toContain("<script");
@@ -48,27 +48,27 @@ describe("보안: 테마 값과 범례 색 (CLI, MCP의 SVG, HTML)", () => {
     expect(html).not.toMatch(/<\/style><script/);
   });
 
-  it("themeToCss는 <를 CSS 이스케이프로 바꿔 </style>을 만들지 못해요", () => {
+  it("themeToCss turns < into a CSS escape so it cannot form </style>", () => {
     const css = themeToCss({ ...darkTheme, accent: "red}</style><script>" });
     expect(css).not.toContain("<");
     expect(css).toContain("\\3c /style>");
   });
 
-  it('범례 색 "constructor"는 객체 속성(함수 본문)을 꺼내지 않아요', () => {
+  it('legend color "constructor" does not read an object property (function body)', () => {
     const svg = renderSpecToSVG({ ...pie, card: { title: "t", legend: [{ label: "L", color: "constructor" }] } } as never);
     expect(svg).not.toContain("function Object");
   });
 });
 
-describe("로캘 검사와 고치기", () => {
+describe("locale check and fix", () => {
   const bar = { type: "bar", data: [{ x: "a", y: 12345 }], encoding: { x: "x", y: "y" } };
-  it('틀린 로캘("", "a b")은 bad_locale, "ko_KR"과 "en_US"는 받아요', () => {
+  it('bad locales ("", "a b") give bad_locale, "ko_KR" and "en_US" are accepted', () => {
     expect(codes({ ...bar, options: { locale: "" } })).toEqual(["options.locale:bad_locale"]);
     expect(codes({ ...bar, options: { locale: "a b" } })).toEqual(["options.locale:bad_locale"]);
     expect(codes({ ...bar, options: { locale: "ko_KR" } })).toEqual([]);
     expect(codes({ ...bar, options: { locale: "en_US" } })).toEqual([]);
   });
-  it('"ko_KR"은 ko-KR로 그려요 (RangeError 없이 한국어 글자)', () => {
+  it('"ko_KR" draws as ko-KR (Korean text, no RangeError)', () => {
     expect(specLocale({ options: { locale: "ko_KR" } })).toBe("ko-KR");
     expect(specLocale({ options: { locale: "" } })).toBeUndefined();
     const svg = renderSpecToSVG({ ...bar, options: { locale: "ko_KR" } } as never);
@@ -78,19 +78,19 @@ describe("로캘 검사와 고치기", () => {
   });
 });
 
-describe("날짜 (YYYYMMDD, 없는 날)", () => {
-  it("8자리 19000101~21001231은 날짜, 실제 ms 타임스탬프는 그대로", () => {
+describe("dates (YYYYMMDD, nonexistent days)", () => {
+  it("8 digits 19000101~21001231 are dates, real ms timestamps stay as is", () => {
     expect(toDate(20240315)?.toDateString()).toBe(new Date(2024, 2, 15).toDateString());
     expect(toDate("20240315")?.getDate()).toBe(15);
     expect(toDate(1_700_000_000_000)?.toISOString()).toBe("2023-11-14T22:13:20.000Z");
     expect(toDate(30_000_101)?.getTime()).toBe(30_000_101);
     expect(toDate(2024)?.getFullYear()).toBe(2024);
   });
-  it('없는 날("2024-02-30", "2024-13-45", 20240230)은 다음 달로 넘기지 않고 null', () => {
+  it('nonexistent days ("2024-02-30", "2024-13-45", 20240230) are null, not rolled into the next month', () => {
     for (const v of ["2024-02-30", "2024-13-45", "2024-13", "2024.02.30", 20240230, "20241301"]) expect(toDate(v)).toBeNull();
     expect(toDate("2024-02-29")?.getDate()).toBe(29);
   });
-  it("CSV의 YYYYMMDD 열로 캘린더를 그리면 1970년이 아니라 그 달이에요", () => {
+  it("a calendar drawn from a CSV YYYYMMDD column shows that month, not 1970", () => {
     const svg = renderSpecToSVG({ type: "calendar", data: { csv: "date,value\n20240301,1\n20240302,2\n20240303,3" } } as never);
     const texts = [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
     expect(texts).toContain("Mar");
@@ -98,7 +98,7 @@ describe("날짜 (YYYYMMDD, 없는 날)", () => {
   });
 });
 
-describe("날짜 표기: 점, 한국식, 분기, 영어 월 이름, 유닉스 초 (차례 2 ①)", () => {
+describe("date formats: dots, Korean style, quarters, English month names, Unix seconds", () => {
   const days = (...ds: number[]) => ds.map((d) => new Date(2024, 2, d).getTime());
   const xs = (vals: string[]) => vals.map((d, i) => ({ d, v: i + 1 }));
   const warn = (spec: unknown, lang?: "ko") => validateSpec(spec, lang ? { lang } : {}).warnings;
@@ -113,21 +113,21 @@ describe("날짜 표기: 점, 한국식, 분기, 영어 월 이름, 유닉스 �
     ["2024Q1", ["2024Q1", "2024Q2", "2024Q4"], [0, 3, 9].map((m) => new Date(2024, m, 1).getTime())],
     ["2024-03", ["2024-01", "2024-02", "2024-06"], [0, 1, 5].map((m) => new Date(2024, m, 1).getTime())],
     ["2024-03-05 14:00", ["2024-03-05 14:00", "2024-03-05 15:00", "2024-03-05 19:00"], [14, 15, 19].map((h) => new Date(2024, 2, 5, h).getTime())],
-  ])("%s 꼴은 시간 축이고 날짜만큼 벌어져요", (_, vals, want) => {
+  ])("%s form is a time axis spaced by date", (_, vals, want) => {
     const m = prepSeries(xs(vals as string[]), "d", "v", undefined);
     expect(m.type).toBe("date");
     expect(m.xnum).toEqual(want);
   });
-  it('연도가 없거나 월 이름이 아닌 글자("Marketing 2024", "Jan", "Q1", "1월")는 글자 축으로 남아요', () => {
+  it('text without a year or month name ("Marketing 2024", "Jan", "Q1", "1월") stays a text axis', () => {
     for (const vals of [["Marketing 2024", "Sales 2024"], ["Jan", "Feb"], ["Q1", "Q2"], ["1월", "2월"]]) expect(detectXType(vals)).toBe("band");
     expect(detectXType(["Mar 2024", "Apr 2024"])).toBe("date");
   });
-  it('xType "date"의 10자리 숫자는 유닉스 초예요 (13자리 ms는 그대로)', () => {
+  it('10-digit numbers with xType "date" are Unix seconds (13-digit ms stay as is)', () => {
     expect(prepSeries([{ t: 1704067200, v: 1 }, { t: 1704153600, v: 2 }], "t", "v", undefined, { xType: "date" }).xnum[0]).toBe(1704067200000);
     expect(toDate(1704067200)!.getTime()).toBe(1704067200000);
     expect(toDate(1704067200000)!.getTime()).toBe(1704067200000);
   });
-  it('일과 월이 모두 될 수 있는 "05/03/2024"는 월을 앞으로 읽고 행 번호와 함께 알려요. dayFirst나 분명한 날짜가 있으면 그 순서', () => {
+  it('"05/03/2024", which reads as day or month first, is read month first and reported with row numbers. dayFirst or an unambiguous date sets the order', () => {
     const spec = (d: string[], options = {}) => ({ type: "line", data: xs(d), encoding: { x: "d", y: "v" }, options });
     expect(prepSeries(xs(["05/03/2024", "06/03/2024"]), "d", "v", undefined).xnum).toEqual([new Date(2024, 4, 3).getTime(), new Date(2024, 5, 3).getTime()]);
     const amb = warn(spec(["05/03/2024", "06/03/2024"])).find((w) => w.code === "date_order_ambiguous");
@@ -138,58 +138,58 @@ describe("날짜 표기: 점, 한국식, 분기, 영어 월 이름, 유닉스 �
     expect(prepSeries(xs(["05/03/2024", "25/03/2024"]), "d", "v", undefined).xnum).toEqual(days(5, 25));
     expect(warn(spec(["05/03/2024", "25/03/2024"])).map((w) => w.code)).not.toContain("date_order_ambiguous");
   });
-  it("글자로 읽히던 x가 날짜가 되면 알려요 (xType을 정했거나 ISO 날짜, 막대는 조용히)", () => {
+  it("warns when an x read as text becomes a date (quiet with xType set, ISO dates and bars)", () => {
     const rows = xs(["2025.03.01", "2025.03.02", "2025.03.10"]);
     expect(warn({ type: "line", data: rows, encoding: { x: "d", y: "v" } }).map((w) => w.code)).toContain("x_read_as_date");
     expect(warn({ type: "line", data: rows, encoding: { x: "d", y: "v" }, options: { xType: "date" } }).map((w) => w.code)).not.toContain("x_read_as_date");
     expect(warn({ type: "line", data: xs(["2025-03-01", "2025-03-02"]), encoding: { x: "d", y: "v" } }).map((w) => w.code)).not.toContain("x_read_as_date");
     expect(warn({ type: "bar", data: rows, encoding: { x: "d", y: "v" } }).map((w) => w.code)).not.toContain("x_read_as_date");
   });
-  it('"2025.03.01" 꼴 선 차트는 빈 날짜만큼 간격이 벌어져요 (스펙 경로)', () => {
+  it('"2025.03.01" style line charts leave gaps for missing dates (spec path)', () => {
     const data = ["2025.03.01", "2025.03.02", "2025.03.03", "2025.03.10", "2025.03.11", "2025.03.31", "2025.04.01"].map((d, i) => ({ d, v: [120, 132, 128, 90, 95, 160, 170][i] }));
     const svg = renderSpecToSVG({ type: "line", data, encoding: { x: "d", y: "v" }, options: { dots: true, curve: "linear" } }, { width: 720 });
     const cx = [...svg.matchAll(/<circle cx="([\d.]+)" cy="[\d.]+" r="3"/g)].map((m) => +m[1]);
     expect(cx).toHaveLength(7);
     expect((cx[3] - cx[2]) / (cx[1] - cx[0])).toBeCloseTo(7, 1);
   });
-  it('캘린더도 "2024년 3월 5일" 꼴을 날짜로 받아요', () => {
+  it('calendar also accepts the "2024년 3월 5일" form as a date', () => {
     const spec = { type: "calendar", data: ["5", "6", "7"].map((d, i) => ({ day: `2024년 3월 ${d}일`, n: i + 1 })), encoding: { date: "day", value: "n" } };
     expect(validateSpec(spec).valid).toBe(true);
     const texts = [...renderSpecToSVG(spec as never).matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
     expect(texts).toContain("Mar");
   });
-  it('분기 열은 "Q1 2024", 한국어는 "2024년 1분기"로 써요', () => {
+  it('quarter columns read "Q1 2024", and "2024년 1분기" in Korean', () => {
     expect(prepSeries(xs(["2024Q1", "2024Q2", "2024Q4"]), "d", "v", undefined).labels).toEqual(["Q1 2024", "Q2 2024", "Q4 2024"]);
     expect(prepSeries(xs(["2024Q1", "2024Q2", "2024Q4"]), "d", "v", undefined, { locale: "ko-KR" }).labels).toEqual(["2024년 1분기", "2024년 2분기", "2024년 4분기"]);
   });
 });
 
-describe("숫자 포맷", () => {
-  it("minimumFractionDigits가 1보다 커도 던지지 않아요", () => {
+describe("number format", () => {
+  it("does not throw when minimumFractionDigits is above 1", () => {
     expect(formatNumber(1.5, { minimumFractionDigits: 2 })).toBe("1.50");
     expect(formatCompact(12345, { minimumFractionDigits: 2 })).toBe("12.35K");
     expect(formatCompact(12345, { locale: "ko", minimumFractionDigits: 2 })).toBe("1.23만");
     expect(makeFormatter({ minimumFractionDigits: 3 })(1)).toBe("1.000");
   });
-  it("통화 코드가 있으면 그 통화의 자릿수, 없으면 검증 오류", () => {
+  it("a currency code gives that currency's digits, a missing one is a validation error", () => {
     expect(makeFormatter({ style: "currency", currency: "USD" })(1.5)).toBe("$1.50");
     expect(formatNumber(1.5, { style: "currency", currency: "USD" })).toBe("$1.50");
     expect(codes({ type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { format: { style: "currency" } } })).toEqual(["options.format:bad_format"]);
     expect(codes({ type: "bar", data: [{ x: "a", y: 1 }], encoding: { x: "x", y: "y" }, options: { format: { style: "currency", currency: "EUR", suffix: "!" } } })).toEqual([]);
   });
-  it('formatPercent(NaN)은 "-"', () => {
+  it('formatPercent(NaN) is "-"', () => {
     expect(formatPercent(NaN)).toBe("-");
     expect(makeFormatter("ratio")(NaN)).toBe("-");
   });
 });
 
 describe("accessor", () => {
-  it("Date 범주 이름은 로컬 날짜예요 (UTC로 하루 밀리지 않아요)", () => {
+  it("Date category names are local dates (not shifted a day by UTC)", () => {
     const g = strGetter<{ d: Date }>("d", "d");
     expect(g({ d: new Date(2024, 2, 15) }, 0)).toBe("2024-03-15");
     expect(g({ d: new Date(2024, 2, 15, 23, 59) }, 0)).toBe("2024-03-15");
   });
-  it("Object.prototype의 이름은 필드가 아니고, 클래스 getter와 직접 넣은 constructor는 필드예요", () => {
+  it("Object.prototype names are not fields, class getters and an own constructor are", () => {
     class Row {
       constructor(private readonly v: number) {}
       get value() {
@@ -204,8 +204,8 @@ describe("accessor", () => {
     expect(codes({ type: "bar", data: [{ a: "x", b: 1 }], encoding: { x: "constructor", y: "b" } })).toEqual(["encoding.x:field_not_found"]);
     expect(codes({ type: "bar", data: [{ a: "x", b: 1 }], encoding: { x: "a", y: "valueOf" } })).toEqual(["encoding.y:field_not_found"]);
   });
-  it.each([["$"], ["%"], ["원"], [","], ["()"], ["1,2,3"], ["12,34"], ["1.234,56"]])("toNumber(%j)은 NaN", (s) => expect(toNumber(s)).toBeNaN());
-  it("올바른 천 단위 쉼표와 기호는 그대로 읽어요", () => {
+  it.each([["$"], ["%"], ["원"], [","], ["()"], ["1,2,3"], ["12,34"], ["1.234,56"]])("toNumber(%j) is NaN", (s) => expect(toNumber(s)).toBeNaN());
+  it("reads valid thousands commas and symbols as is", () => {
     expect(toNumber("1,234,567.5")).toBe(1234567.5);
     expect(toNumber("(1,234)")).toBe(-1234);
     expect(toNumber("-1,234원")).toBe(-1234);
@@ -214,28 +214,28 @@ describe("accessor", () => {
 });
 
 describe("CSV", () => {
-  it("머리글 a,a,a_2가 겹쳐도 열을 잃지 않아요", () => {
+  it("headers a,a,a_2 lose no column when they clash", () => {
     expect(parseCSV("a,a,a_2\n1,2,3")).toEqual([{ a: 1, a_2: 2, a_2_2: 3 }]);
     expect(parseCSV(",col1\n1,2")).toEqual([{ col1: 1, col1_2: 2 }]);
   });
-  it('따옴표 앞 공백(a, "b, c")도 따옴표 칸이에요', () => {
+  it('a quote after a space (a, "b, c") is still a quoted cell', () => {
     expect(parseCSV('name,desc\na, "b, c"')).toEqual([{ name: "a", desc: "b, c" }]);
     expect(parseCSV('a,b\n"x" , "y"', { typed: false })).toEqual([{ a: "x ", b: "y" }]);
   });
 });
 
-describe("validateSpec 행 모양", () => {
-  it("data:[null]과 highlight가 있어도 던지지 않고 bad_row", () => {
+describe("validateSpec row shape", () => {
+  it("data:[null] with highlight gives bad_row without throwing", () => {
     expect(codes({ type: "bar", data: [null], options: { highlight: "x" } })).toEqual(["data[0]:bad_row"]);
   });
-  it("data.values 행도 검사해서 경로 data.values[i]로 알려 줘요", () => {
+  it("checks data.values rows too and reports the path data.values[i]", () => {
     expect(codes({ type: "pie", data: { values: [{ label: "a", value: 1 }, 2] } })).toEqual(["data.values[1]:bad_row"]);
     expect(() => validateSpec({ type: "bar", data: { values: [null] }, encoding: { x: "a", y: "b" }, options: { highlight: "x" } })).not.toThrow();
   });
 });
 
-describe("응답 읽기", () => {
-  it("JSON content-type이면 주소에 csv가 있어도 JSON이에요", async () => {
+describe("reading responses", () => {
+  it("a JSON content-type is JSON even with csv in the URL", async () => {
     const json = () => new Response('{"rows":[{"a":1}]}', { headers: { "content-type": "application/json; charset=utf-8" } });
     expect(await readResponse(json(), "auto", "https://x.com/q?format=csv")).toEqual({ rows: [{ a: 1 }] });
     expect(await readResponse(json(), "auto", "https://x.com/api/csv")).toEqual({ rows: [{ a: 1 }] });
@@ -243,11 +243,11 @@ describe("응답 읽기", () => {
   });
 });
 
-describe("Chart, 서버 렌더", () => {
-  it("renderSpecToSVG에 { url } 데이터를 주면 resolveSpecData를 먼저 부르라고 알려 줘요", () => {
+describe("Chart, server render", () => {
+  it("renderSpecToSVG given { url } data says to call resolveSpecData first", () => {
     expect(() => renderSpecToSVG({ type: "pie", data: { url: "https://x.com/a.csv" } } as never)).toThrow(/resolveSpecData/);
   });
-  it("다시 불러오기가 한 번 실패해도 이전 데이터가 있으면 차트를 그대로 보여 줘요", async () => {
+  it("keeps showing the chart with previous data when one reload fails", async () => {
     const state = (over: object) => ({ data: [{ label: "a", value: 1 }], status: "error", loading: false, error: new Error("HTTP 500"), empty: false, updatedAt: 1, reload: () => {}, ...over });
     let st = state({});
     vi.resetModules();
@@ -268,33 +268,33 @@ describe("Chart, 서버 렌더", () => {
   });
 });
 
-describe("추천: 연도, YYYYMMDD, 1월~12월은 시간", () => {
+describe("suggest: years, YYYYMMDD and '1월' to '12월' are time", () => {
   const top = (csv: string) => {
     const r = suggestCharts(parseCSV(csv));
     return { kinds: r.profile.columns.map((c) => c.kind), first: r.suggestions[0] };
   };
-  it("연도 열(2019…)은 date, 첫 추천은 라인", () => {
+  it("a year column (2019…) is date, and the first suggestion is a line", () => {
     const r = top("year,sales\n2019,90\n2020,100\n2021,120\n2022,130\n2023,150");
     expect(r.kinds).toEqual(["date", "number"]);
     expect(r.first.type).toBe("line");
   });
-  it("YYYYMMDD 열은 date이고 라인 스펙은 xType date", () => {
+  it("a YYYYMMDD column is date and the line spec has xType date", () => {
     const r = top("date,sales\n20240301,90\n20240302,100\n20240303,120");
     expect(r.kinds).toEqual(["date", "number"]);
     expect(r.first).toMatchObject({ type: "line", spec: { options: { xType: "date" } } });
     expect(validateSpec(r.first.spec).valid).toBe(true);
   });
-  it('"1월"~"12월"은 파이가 아니라 라인', () => {
+  it('"1월" to "12월" make a line, not a pie', () => {
     const r = top("월,매출\n1월,90\n2월,100\n3월,120\n4월,110");
     expect(r.kinds[0]).toBe("date");
     expect(r.first.type).toBe("line");
   });
-  it("이름이 연도가 아닌 4자리 숫자(가격)는 그대로 숫자", () => {
+  it("4-digit numbers whose name is not a year (price) stay numbers", () => {
     expect(top("item,price\na,1500\nb,2300\nc,1800").kinds).toEqual(["category", "number"]);
   });
 });
 
-describe("추천: 열 역할 (차례 2 ⑮)", () => {
+describe("suggest: column roles", () => {
   const FIX = new URL("./fixtures/suggest/", import.meta.url);
   const rowsOf = (f: string) => parseCSV(readFileSync(new URL(f, FIX), "utf8"));
   // Same shape as round 1 cases 08 and 09 (50k and 200k rows): an index t and random-walk values a, b, c, 200 rows
@@ -326,7 +326,7 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
     ["14 huge and tiny", () => rowsOf("14-huge-tiny.csv"), { types: ["bar", "pie", "donut", "lollipop"], x: "label", yAnyOf: ["huge", "tiny"] }],
     ["15 text in number", () => rowsOf("15-text-in-number.csv"), { types: ["bar", "lollipop"], x: "label", y: ["value"] }],
   ];
-  it.each(cases)("%s: 첫 추천이 사람이 고른 배정과 같아요", (_, rows, want) => {
+  it.each(cases)("%s: the first suggestion matches the human pick", (_, rows, want) => {
     const s = suggestCharts(rows()).suggestions[0];
     if (want.none) return expect(s).toBeUndefined();
     expect(want.types).toContain(s?.type);
@@ -338,7 +338,7 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
     if (want.series !== undefined) expect(enc.series ?? null).toBe(want.series);
     expect(validateSpec(s.spec).errors).toEqual([]);
   });
-  it("달마다 채널이 하나인 표(swd): 날짜별 한 줄, 그다음 채널별 합계 막대", () => {
+  it("a table with one channel per month (swd): one line by date, then total bars by channel", () => {
     const [line, bar] = suggestCharts(rowsOf("swd.csv")).suggestions;
     expect(line).toMatchObject({ type: "line", spec: { encoding: { x: "날짜", y: "가입" } } });
     expect((line.spec.encoding as Record<string, unknown>).series).toBeUndefined();
@@ -346,7 +346,7 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
     const svg = renderSpecToSVG(bar.spec, { width: 560 });
     for (const total of ["1,296", "1,176", "982"]) expect(svg).toContain(total);
   });
-  it('항목이 많으면 큰 7개 가로 막대와 "기타", 나머지가 크면 큰 8개만', () => {
+  it('many items give the 7 largest as horizontal bars plus "Other", or only the 8 largest when the rest is large', () => {
     const many = suggestCharts(rowsOf("04-long-labels-300.csv")).suggestions[0];
     expect(many).toMatchObject({ type: "bar", spec: { options: { orientation: "horizontal" } } });
     expect(many.spec.data).toHaveLength(8);
@@ -355,7 +355,7 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
     expect(rows().at(-1)).toEqual({ item: "Other (13)", v: 13 });
     expect(rows("ko").at(-1)).toEqual({ item: "기타 13개", v: 13 });
   });
-  it("값이 줄어드는 지역 매출은 퍼널이 아니고, 시작과 끝이 없는 음수 조각은 폭포가 먼저 아니에요", () => {
+  it("shrinking regional sales are not a funnel, and negative pieces without a start and end do not suggest a waterfall first", () => {
     expect(suggestCharts(rowsOf("10-korean-krw.csv")).suggestions.map((s) => s.type)).not.toContain("funnel");
     expect(suggestCharts(rowsOf("05-pie-neg-zero.csv")).suggestions[0].type).not.toBe("waterfall");
     const wf = CHARTS.find((c) => c.type === "waterfall")!.example.data as Record<string, unknown>[];
@@ -364,7 +364,7 @@ describe("추천: 열 역할 (차례 2 ⑮)", () => {
 });
 
 describe("parseColor", () => {
-  it('"#12345g"처럼 16진수가 아닌 글자는 못 읽어요', () => {
+  it('cannot read non-hex text like "#12345g"', () => {
     expect(parseColor("#12345g")).toBeNull();
     expect(parseColor("#1234567g")).toBeNull();
     expect(parseColor("#12345f")).toEqual([0x12, 0x34, 0x5f, 1]);
@@ -467,7 +467,7 @@ describe("useChartData", () => {
       });
     });
 
-  it("가져오는 중에 enabled가 false가 되거나 소스가 null이 되면 loading에 머물지 않고 idle", async () => {
+  it("goes idle instead of staying loading when enabled turns false or the source becomes null mid-fetch", async () => {
     const { useChartData, mount } = await loadHook();
     vi.stubGlobal("fetch", fakeFetch);
     try {
@@ -488,7 +488,7 @@ describe("useChartData", () => {
     }
   });
 
-  it("Chart는 { csv } 스펙을 data 객체가 같으면 다시 읽지 않아요 (inlineRows를 useMemo)", async () => {
+  it("Chart does not reparse a { csv } spec when the data object is the same (inlineRows in useMemo)", async () => {
     let parsed = 0;
     const { mod, mount } = await withFakeReact(
       () => import("../src/charts/Chart"),
@@ -510,7 +510,7 @@ describe("useChartData", () => {
     }
   });
 
-  it("응답이 refreshMs보다 느려도 새로 고침이 앞 요청을 취소하지 않아 데이터가 와요", async () => {
+  it("data arrives even when responses are slower than refreshMs, since a refresh does not cancel the previous request", async () => {
     const { useChartData, mount } = await loadHook();
     let open = 0;
     let most = 0;
@@ -531,7 +531,7 @@ describe("useChartData", () => {
     }
   });
 
-  it("빠른 응답은 refreshMs마다 다시 불러와요", async () => {
+  it("fast responses reload every refreshMs", async () => {
     const { useChartData, mount } = await loadHook();
     let calls = 0;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => (calls++, fakeFetch(input, init)));
@@ -546,7 +546,7 @@ describe("useChartData", () => {
     }
   });
 
-  it("본문이 있는 Request도 다시 불러올 수 있어요 (매번 clone)", async () => {
+  it("a Request with a body can reload too (cloned each time)", async () => {
     const { useChartData, mount } = await loadHook();
     let calls = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -92,8 +92,8 @@ const emptyPad = (g: string) => /<polygon points="[^"]+" fill="none" stroke="[^"
 /** The hairline drawn in place of a block (y1 = y2; unlike the vertical gap lines, it has no opacity) */
 const hairline = (g: string) => /<line x1="[\d.]+" x2="[\d.]+" y1="([\d.]+)" y2="\1" stroke="[^"]+"><\/line>/.test(g);
 
-describe("skyline: 생김새 (4.14)", () => {
-  it("1: 합계가 같은 기간은 뚜껑 앞 모서리 y가 같아요 (1px 미만 조각이 섞여도, 두 시점 × 320·1200px × 7·40기간 × 최소·최대 깊이)", () => {
+describe("skyline: shape (4.14)", () => {
+  it("1: periods with the same total share the lid front edge y (even with sub-1px pieces mixed in, both viewpoints × 320·1200px × 7·40 periods × min·max depth)", () => {
     // Every period totals 1000; only the mix differs. Even periods stack in segments of 0.3 (under 1px)
     const data = (n: number) => days(n, (i) => (i % 2 ? { Input: 400, Cached: 300, Output: 200, Reasoning: 100 } : { Input: 999.4, Cached: 0.3, Output: 0.3, Reasoning: 0 }));
     for (const view of VIEWS)
@@ -108,7 +108,7 @@ describe("skyline: 생김새 (4.14)", () => {
           }
   });
 
-  it("2: 뒷줄 뚜껑 뒤 모서리는 그 값의 뒷벽 눈금선 위에 있어요 (두 시점 × 390·1200px, 14기간)", () => {
+  it("2: the back row lid's back edge sits on the back-wall gridline for its value (both viewpoints × 390·1200px, 14 periods)", () => {
     // Periods totaling 500K, 1M and 1.5M: they line up with the ticks 0, 500K, 1M, 1.5M
     const totals = [500_000, 1_000_000, 1_500_000];
     const data = days(14, (i) => {
@@ -128,7 +128,7 @@ describe("skyline: 생김새 (4.14)", () => {
       }
   });
 
-  it("3: 뒷줄 옆면은 다음 칸에 들어가지 않고, 앞줄 앞면은 같은 기간 뒷줄과 50% 넘게, 이웃 기간과 0% 겹치며, 두 줄 바닥 차가 1.5px 넘어요 (두 시점)", () => {
+  it("3: back row sides do not enter the next slot, the front row face overlaps the same period's back row by over 50% and neighbouring periods by 0%, and the two rows' bases differ by over 1.5px (both viewpoints)", () => {
     for (const view of VIEWS)
       for (const width of [320, 390, 768, 1200])
         for (const n of [7, 14, 40])
@@ -149,7 +149,7 @@ describe("skyline: 생김새 (4.14)", () => {
           }
   });
 
-  it("3b: high 시점은 앞줄 뚜껑이 칸 폭의 0.3배 넘는 타일이고, 앞줄 뚜껑 뒤 모서리와 뒷줄 바닥 사이에 바닥이 2px 넘게 보여요 (low는 0.07배 아래)", () => {
+  it("3b: at the high viewpoint front row lids are tiles over 0.3x the slot width, and over 2px of floor shows between the front lid's back edge and the back row base (low is under 0.07x)", () => {
     for (const width of [320, 390, 768, 1200])
       for (const n of [7, 14, 40]) {
         const input = { width, height: 400, back: [Array(n).fill(10)], front: [Array(n).fill(1)], n, wall: true, legendH: 24, below: 52, tickFmt: () => (v: number) => String(v) };
@@ -163,7 +163,7 @@ describe("skyline: 생김새 (4.14)", () => {
       }
   });
 
-  it("3c: 낮은 차트에서 high 깊이는 세로 자리의 40% 이하이고 눈금 글자 간격은 14px 이상이에요 (두 시점, 높이 150·200). 보통 크기는 깊이가 그대로예요", () => {
+  it("3c: in short charts high depth is at most 40% of the vertical space and tick labels are at least 14px apart (both viewpoints, heights 150·200). Normal sizes keep their depth", () => {
     const input = (width: number, height: number, view: SkylineView) => ({ width, height, back: [Array(14).fill(10)], front: [Array(14).fill(1)], n: 14, view, wall: true, legendH: 40, below: 52, tickFmt: () => (v: number) => String(v) });
     for (const view of VIEWS)
       for (const width of [260, 390])
@@ -181,7 +181,7 @@ describe("skyline: 생김새 (4.14)", () => {
     expect(L.ticks).toEqual(skylineLayout(input(520, 400, "low")).ticks);
   });
 
-  it("4: 앞줄 높이 순서가 앞줄 합계 순서와 같아요 (두 시점, 760px, 1.5px 미만 조각이 섞인 2주 데이터)", () => {
+  it("4: front row height order matches front row total order (both viewpoints, 760px, 2-week data with sub-1.5px pieces)", () => {
     for (const view of VIEWS) {
       const h = sky(twoWeeks, { width: 760, view });
       const groups = periods(h);
@@ -196,7 +196,7 @@ describe("skyline: 생김새 (4.14)", () => {
     }
   });
 
-  it("5: low는 0이 아닌 합계가 1px이 안 되면 가는 선, 0이면 아무것도 없어요. high는 1px이 안 돼도 뚜껑 타일, 0이면 점선 빈 자리예요 (390px, 14기간)", () => {
+  it("5: low draws a thin line when a nonzero total is under 1px, and nothing at 0. high draws a lid tile even under 1px, and a dashed empty slot at 0 (390px, 14 periods)", () => {
     const data = days(14, (i) => ({ Input: 600, Cached: 300, Output: 80, Reasoning: 20, Failed: i === 3 ? 0.001 : i === 5 ? 0 : 40, Retried: 0 }));
     const low = periods(sky(data, { width: 390, view: "low" }));
     expect(hairline(low[3])).toBe(true);
@@ -216,7 +216,7 @@ describe("skyline: 생김새 (4.14)", () => {
     expect(emptyPad(high[4])).toBe(false);
   });
 
-  it("6: 뒷줄 뚜껑은 모든 기간에서 같은 중립 색이고 계열 색을 쓰지 않아요 (앞줄 있음, 없음)", () => {
+  it("6: back row lids use the same neutral color in every period, never a series color (with and without a front row)", () => {
     for (const front of [FRONT, undefined]) {
       const h = sky(skylineSample, { width: 390, front });
       const groups = periods(h);
@@ -229,7 +229,7 @@ describe("skyline: 생김새 (4.14)", () => {
     }
   });
 
-  it("6b: high 앞줄 뚜껑은 계열 몫대로 왼쪽부터 accent2, accent3로 나눠요. 0인 계열은 빠지고, 앞줄 계열 강조와 low는 0.9처럼 중립 뚜껑이에요", () => {
+  it("6b: high front row lids split by series share from the left into accent2, accent3. Zero series drop out, and a front series highlight or low gives a neutral lid as in 0.9", () => {
     const data = days(4, (i) => ({ Input: 600, Cached: 300, Output: 80, Reasoning: 20, Failed: i === 3 ? 0 : 30, Retried: 10 }));
     /** accent2 and accent3 faces with a level top edge = top segments (side faces have a slanted top edge, so they are left out) */
     const parts = (g: string) =>
@@ -255,8 +255,8 @@ describe("skyline: 생김새 (4.14)", () => {
   });
 });
 
-describe("skyline: 읽기와 키보드 (4.14)", () => {
-  it("7: 툴팁 행, 라이브 영역 문장, 숨긴 표가 계열을 같은 순서(위→아래)로 읽어요", () => {
+describe("skyline: reading and keyboard (4.14)", () => {
+  it("7: tooltip rows, the live region sentence and the hidden table read series in the same order (top→bottom)", () => {
     state.active = 8;
     state.via = "keyboard";
     sky(twoWeeks, { width: 390 });
@@ -274,7 +274,7 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     expect(inOrder(f.events[8].formatted!, ["back", ...tipBack, "front", ...tipFront])).toBe(true);
   });
 
-  it("8: 자동 설명에 두 줄의 최고 기간과 비율이, 합쳤으면 합친 단위가 들어가요 (320px, 14·40기간, 앞줄 있음·없음)", () => {
+  it("8: the auto description has both rows' peak periods and ratio, and the merged unit when merged (320px, 14·40 periods, with and without a front row)", () => {
     const desc = () => frame().description;
     sky(twoWeeks, { width: 760 });
     expect(desc()).toContain("Peak period 11/5 at 1.5M");
@@ -294,7 +294,7 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     expect(desc()).toContain("이웃 기간을 2개씩 합쳤어요");
   });
 
-  it("9: ←/→/Home/End는 줄을 두고 기간만, ↑/↓는 같은 기간의 다른 줄로, 앞줄이 없으면 ↑/↓도 기간을 옮겨요. 40기간도 숨긴 표가 잘리지 않아요", () => {
+  it("9: ←/→/Home/End move only the period and keep the row, ↑/↓ move to the other row in the same period, and without a front row ↑/↓ move the period too. The hidden table is not cut at 40 periods", () => {
     for (const key of ["ArrowLeft", "ArrowRight", "Home", "End", "Escape", "Enter"]) expect(rowAfterKey(key, true), key).toBeNull();
     expect(rowAfterKey("ArrowDown", true)).toBe("front");
     expect(rowAfterKey("ArrowUp", true)).toBe("back");
@@ -324,7 +324,7 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
     expect(frame().events).toHaveLength(40);
   });
 
-  it("13: 비율 띠의 막대 높이 비가 비율 비와 같고, 뒷줄 합계 0인 기간은 막대가 없고, 띠에 눈금 글자가 있어요 (768px)", () => {
+  it("13: bar height ratios in the ratio strip match the ratios, periods with a back row total of 0 have no bar, and the strip has tick labels (768px)", () => {
     const data = days(14, (i) => ({ Input: i === 6 ? 0 : 500 + 10 * i, Cached: i === 6 ? 0 : 300, Output: i === 6 ? 0 : 150, Reasoning: i === 6 ? 0 : 50, Failed: 5 + (i % 5) * 9, Retried: i === 9 ? 160 : 4 }));
     const h = sky(data, { width: 768, frontRate: "strip" });
     const bars = [...h.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="[\d.]+" height="([\d.]+)" rx="[\d.]+" fill="([^"]+)"><\/rect>/g)].filter((m) => !m[0].includes('width="10"'));
@@ -345,13 +345,13 @@ describe("skyline: 읽기와 키보드 (4.14)", () => {
   });
 });
 
-describe("skyline: 검사 규칙과 빈 상태 (4.13)", () => {
+describe("skyline: validation rules and empty state (4.13)", () => {
   const spec = (data: Data, encoding: Record<string, string | string[]> = { x: "day", y: BACK, front: FRONT }, options: Record<string, unknown> = {}) => ({ type: "skyline", data, encoding, options });
   const codes = (s: unknown) => {
     const res = validateSpec(s);
     return [...res.errors.map((e) => e.code), ...res.warnings.map((w) => `!${w.code}`)];
   };
-  it("음수, 기간 40·120개 초과, y 없는 front, 모두 0, 앞줄 4개, depth 범위 밖을 영어와 한글로 알려 줘요", () => {
+  it("reports negatives, over 40·120 periods, front without y, all zero, 4 front series and depth out of range in English and Korean", () => {
     const ok = days(14, () => ({ Input: 4, Cached: 3, Output: 2, Reasoning: 1, Failed: 1, Retried: 1 }));
     expect(codes(spec(ok))).toEqual([]);
     expect(codes(spec(ok.map((d, i) => (i === 3 ? { ...d, Failed: -1 } : d))))).toEqual(["skyline_negative"]);
@@ -371,7 +371,7 @@ describe("skyline: 검사 규칙과 빈 상태 (4.13)", () => {
     expect(validateSpec(spec(ok, undefined, { depth: 0.05, view: "low" }), { lang: "ko" }).warnings[0].message).toContain("low 시점의 depth는 0.1~0.32예요");
   });
 
-  it("값이 모두 0이면 블록 대신 빈 상태 글을 그리고, depth는 범위 안으로 묶어요", () => {
+  it("draws empty state text instead of blocks when all values are 0, and clamps depth into range", () => {
     const zero = days(7, () => ({ Input: 0, Cached: 0, Output: 0, Reasoning: 0, Failed: 0, Retried: 0 }));
     const h = sky(zero, { width: 390 });
     expect(h).toContain(">Nothing to draw<");

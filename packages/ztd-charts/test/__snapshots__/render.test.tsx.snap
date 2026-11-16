@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`renderSpecToSVG (resvg용 독립 SVG) > 구조 스냅샷 (기하 회귀 감지) 1`] = `
+exports[`renderSpecToSVG (standalone SVG for resvg) > structure snapshot (geometry regression check) 1`] = `
 {
   "area": {
     "circles": 0,

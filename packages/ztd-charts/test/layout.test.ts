@@ -9,7 +9,7 @@ import { TAU } from "../src/core/geometry";
 import * as samples from "../src/spec/samples";
 
 describe("squarify", () => {
-  it("넓이가 값에 비례하고 상자를 꽉 채워요", () => {
+  it("area is proportional to value and fills the box", () => {
     const vals = [22, 14, 10, 14, 10, 11, 7, 7, 5];
     const rects = squarify(vals, { x: 0, y: 0, w: 400, h: 300 });
     const total = vals.reduce((a, b) => a + b, 0);
@@ -23,8 +23,8 @@ describe("squarify", () => {
   });
 });
 
-describe("계층", () => {
-  it("평평한 표(group), 경로(path), 중첩(children)", () => {
+describe("hierarchy", () => {
+  it("flat table (group), path (path), nesting (children)", () => {
     const flat = buildTree(samples.treemapSample, { group: "category", label: "product", value: "share" });
     expect(flat.value).toBe(100);
     expect(flat.children.map((c) => c.label)).toEqual(["Running shoes", "Outdoor", "Apparel", "Gear"]);
@@ -33,7 +33,7 @@ describe("계층", () => {
     const nested = buildTree([{ label: "a", children: [{ label: "b", value: 3 }, { label: "c", value: 1 }] }], {});
     expect(nested.children[0].value).toBe(4);
   });
-  it("partitionAngles는 한 바퀴를 나눠요", () => {
+  it("partitionAngles splits a full turn", () => {
     const root = buildTree(samples.sunburstSample, { group: "channel", label: "campaign", value: "spend" });
     const arcs = partitionAngles(root);
     const top = arcs.filter((a) => a.depth === 1);
@@ -45,7 +45,7 @@ describe("계층", () => {
 
 describe("sankey", () => {
   const lay = sankeyLayout([], samples.sankeySample, { width: 600, height: 300, nodeWidth: 10, nodePadding: 12 });
-  it("노드가 영역 안에 있고 겹치지 않아요", () => {
+  it("nodes stay inside the area and do not overlap", () => {
     for (const n of lay.nodes) {
       expect(n.y0).toBeGreaterThanOrEqual(-0.5);
       expect(n.y1).toBeLessThanOrEqual(300.5);
@@ -58,7 +58,7 @@ describe("sankey", () => {
       for (let i = 1; i < s.length; i++) expect(s[i].y0).toBeGreaterThanOrEqual(s[i - 1].y1 - 1e-6);
     }
   });
-  it("들어온 양과 나간 양이 같아요", () => {
+  it("inflow equals outflow", () => {
     const mid = lay.nodes.find((n) => n.id === "Product page")!;
     const inV = mid.inLinks.reduce((a, l) => a + l.value, 0);
     const outV = mid.outLinks.reduce((a, l) => a + l.value, 0);
@@ -68,7 +68,7 @@ describe("sankey", () => {
 });
 
 describe("chord", () => {
-  it("그룹 각도 합 + 틈 = 한 바퀴", () => {
+  it("group angles + gaps = a full turn", () => {
     const m = [
       [0, 5, 3],
       [2, 0, 4],
@@ -82,7 +82,7 @@ describe("chord", () => {
 });
 
 describe("stack", () => {
-  it("zero와 expand", () => {
+  it("zero and expand", () => {
     const v = [
       [1, 2],
       [3, 2],
@@ -91,7 +91,7 @@ describe("stack", () => {
     expect(stack(v, "expand").y1[1]).toEqual([100, 100]);
     expect(stack(v, "expand").y1[0]).toEqual([25, 50]);
   });
-  it("wiggle은 두께를 지키고 insideOut은 순열이에요", () => {
+  it("wiggle keeps thickness and insideOut is a permutation", () => {
     const vals = [
       [1, 4, 9, 4, 1],
       [5, 5, 5, 5, 5],
@@ -103,7 +103,7 @@ describe("stack", () => {
   });
 });
 
-describe("divergingStack (양쪽 막대)", () => {
+describe("divergingStack (diverging bars)", () => {
   /** [left length, right length] of row k */
   const sides = (s: ReturnType<typeof divergingStack>, k: number) => {
     const ends = s.y0.flatMap((row, i) => [row[k], s.y1[i][k]]);
@@ -117,7 +117,7 @@ describe("divergingStack (양쪽 막대)", () => {
     [46, 22, 9],
     [28, 8, -12],
   ];
-  it("1: 왼쪽 길이 + 오른쪽 길이 = 그 줄 절댓값 합 (percent면 100)", () => {
+  it("1: left length + right length = the row's sum of absolute values (100 with percent)", () => {
     for (const percent of [false, true]) {
       const s = divergingStack(likert, { negative: [1, 0], neutral: 2, percent });
       for (let k = 0; k < 3; k++) {
@@ -127,7 +127,7 @@ describe("divergingStack (양쪽 막대)", () => {
       }
     }
   });
-  it("2: [10, -4]는 오른쪽 10, 왼쪽 4 (percent면 71.4%, 28.6%). 음수 조각이 0 길이면 실패", () => {
+  it("2: [10, -4] is 10 right, 4 left (71.4%, 28.6% with percent). Fails if the negative piece has zero length", () => {
     for (const [percent, right, left] of [
       [false, 10, 4],
       [true, 71.43, 28.57],
@@ -139,7 +139,7 @@ describe("divergingStack (양쪽 막대)", () => {
       expect([s.neg[0], s.pos[0]]).toEqual([expect.closeTo(left, 2), expect.closeTo(right, 2)]);
     }
   });
-  it("3: 가운데 계열의 두 반쪽을 더하면 그 값이에요", () => {
+  it("3: the two halves of the middle series add up to its value", () => {
     const s = divergingStack(likert, { negative: [1, 0], neutral: 2 });
     for (let k = 0; k < 3; k++) {
       expect(-s.y0[2][k]).toBeCloseTo(s.y1[2][k], 9);
@@ -149,7 +149,7 @@ describe("divergingStack (양쪽 막대)", () => {
     expect([s.y0[1][1], s.y1[1][1], s.y1[0][1]]).toEqual([-10, -38, -60]);
     expect([s.y0[3][1], s.y1[3][1], s.y1[4][1]]).toEqual([10, 32, 40]);
   });
-  it("4: 모두 양수인 만족도 줄도 negative로 정한 두 계열은 왼쪽이에요. 숨긴 계열은 자리만 비워요", () => {
+  it("4: in all-positive satisfaction rows the two series set as negative go left too. A hidden series only leaves its place empty", () => {
     const row = [[5], [15], [20], [40], [20]];
     const s = divergingStack(row, { negative: [1, 0], neutral: 2 });
     expect(s.y1[0][0]).toBeLessThan(s.y1[1][0]);
@@ -166,21 +166,21 @@ describe("divergingStack (양쪽 막대)", () => {
   });
 });
 
-describe("통계", () => {
+describe("statistics", () => {
   it("boxStats", () => {
     const st = boxStats([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]);
     expect(st.median).toBe(5.5);
     expect(st.outliers).toEqual([100]);
     expect(st.hi).toBe(9);
   });
-  it("boxStats는 whiskers를 주면 그 백분위가 수염 끝이고, 밖의 값이 이상값이에요", () => {
+  it("boxStats with whiskers uses those percentiles as whisker ends, and values beyond them are outliers", () => {
     const st = boxStats(Array.from({ length: 100 }, (_, i) => i + 1), [5, 95]);
     expect(st.lo).toBeCloseTo(5.95, 10);
     expect(st.hi).toBeCloseTo(95.05, 10);
     expect(st.outliers).toEqual([1, 2, 3, 4, 5, 96, 97, 98, 99, 100]);
     expect(st.q1).toBe(boxStats(Array.from({ length: 100 }, (_, i) => i + 1)).q1);
   });
-  it("kde는 넓이가 1에 가까워요", () => {
+  it("kde area is close to 1", () => {
     const vals = Array.from({ length: 400 }, (_, i) => Math.sin(i) * 10 + 50);
     const xs = Array.from({ length: 400 }, (_, i) => i * 0.25);
     const d = kde(vals, xs);
@@ -188,7 +188,7 @@ describe("통계", () => {
     expect(area).toBeGreaterThan(0.95);
     expect(area).toBeLessThan(1.05);
   });
-  it("beeswarm은 원이 겹치지 않아요", () => {
+  it("beeswarm circles do not overlap", () => {
     const xs = Array.from({ length: 200 }, (_, i) => (i * 37) % 120);
     const r = 3;
     const ys = beeswarm(xs, r);
@@ -199,7 +199,7 @@ describe("통계", () => {
       }
   });
   const dense = Array.from({ length: 1500 }, (_, i) => Math.round((((Math.sin(i * 12.9898) * 43758.5453) % 1) * 50 + 50)) * 2);
-  it("beeswarm은 같은 x가 몰려도 겹치지 않아요 (두 원에 동시에 닿는 자리 포함)", () => {
+  it("beeswarm does not overlap even when many share an x (including spots touching two circles at once)", () => {
     const r = 2;
     const ys = beeswarm(dense, r);
     const d = 2 * (r + 0.6);
@@ -211,7 +211,7 @@ describe("통계", () => {
         expect(Math.hypot(dense[p] - dense[q], ys[p] - ys[q])).toBeGreaterThan(d - 1e-3);
       }
   });
-  it("beeswarm 띠가 꽉 차면 넘친 점을 한계선에 쌓지 않고 띠 안에 흩어요", () => {
+  it("when the beeswarm band is full, overflow points scatter inside the band instead of piling on the limit", () => {
     const spread = 18;
     const ys = beeswarm(dense, 2, { maxSpread: spread });
     for (const y of ys) expect(Math.abs(y)).toBeLessThanOrEqual(spread + 1e-9);
@@ -220,10 +220,10 @@ describe("통계", () => {
     expect(ys.filter((y) => y > spread / 2).length).toBeGreaterThan(100);
     expect(ys.filter((y) => y < -spread / 2).length).toBeGreaterThan(100);
   });
-  it("ranks는 같은 값을 같은 순위로", () => {
+  it("ranks gives equal values the same rank", () => {
     expect(ranks([10, 30, 30, 5])).toEqual([3, 1, 1, 4]);
   });
-  it("allocateCells는 합이 정확히 칸 수", () => {
+  it("allocateCells sums to exactly the cell count", () => {
     expect(allocateCells([33.3, 33.3, 33.4], 100).reduce((a, b) => a + b, 0)).toBe(100);
     expect(allocateCells([38, 62], 100)).toEqual([38, 62]);
   });
