@@ -1,4 +1,4 @@
-# Reference for all 44 charts
+# Reference for all 47 charts
 
 `ztd-charts info <type>` or the MCP tool `get_chart_schema` gives the same content as JSON. `?` marks an optional channel, `[]` a channel that takes several fields (wide tables).
 
@@ -576,6 +576,45 @@
 
 ```json
 {"type":"flowMap","data":[{"from":"Shanghai","to":"Los Angeles","teu":412000},{"from":"Shanghai","to":"Rotterdam","teu":268000},{"from":"Singapore","to":"Rotterdam","teu":231000}],"encoding":{"source":"from","target":"to","value":"teu"},"options":{"places":{"Shanghai":[121.47,31.23],"Singapore":[103.82,1.35],"Rotterdam":[4.48,51.92],"Los Angeles":[-118.24,34.05],"Busan":[129.08,35.18],"Dubai":[55.27,25.2],"New York":[-74.01,40.71],"Santos":[-46.33,-23.96],"Hamburg":[9.99,53.55]},"format":"compact"},"card":{"number":"44","title":"Flow map","subtitle":"Container shipments between ports (TEU)","takeaway":"Shanghai to LA is the top lane","level":"advanced"}}
+```
+
+## sparkTable · KPI table (`<SparkTable>`, Basic, KPI)
+
+- What: One row per metric: its trend, latest value, change and target side by side
+- Use when: The latest value and trend of several metrics in different units, in one table
+- Avoid when: Readers need the exact changes of one metric over time (a line chart does that)
+- encoding: label, x, value, target?
+- Chart options: metrics, better: up|down, change: period|previous|none, changeLabel, sort: none|value|change, valueBar, rowHeight, header, aggregate: sum|mean|last|count, dayFirst
+- Default highlight: none (options.highlight names rows)
+
+```json
+{"type":"sparkTable","data":[{"metric":"Revenue","week":"2026-07-06","value":171200,"target":190000},{"metric":"Revenue","week":"2026-07-13","value":174900,"target":190000},{"metric":"Revenue","week":"2026-07-20","value":173400,"target":190000}],"encoding":{"label":"metric","x":"week","value":"value","target":"target"},"options":{"metrics":{"Revenue":{"format":"currency"},"Churn rate":{"unit":"%","better":"down"},"p95 response time":{"unit":"ms","better":"down"}}},"card":{"number":"45","title":"KPI table","subtitle":"Last 12 weeks, dashed line is the target","takeaway":"Only p95 response time got worse","level":"basic"}}
+```
+
+## cohort · Cohort chart (`<CohortChart>`, Intermediate, Trend)
+
+- What: Retention by signup cohort: one row per cohort, one column per period since it started
+- Use when: Following groups that started together, such as users by signup month, to see how many are still active 1, 2, 3 ... periods later
+- Avoid when: Comparing the exact shape of two cohorts' curves (use a line chart)
+- encoding: cohort, period, value, size?
+- Chart options: valueType: auto|count|percent|ratio, show: rate|count, average, colorSteps, showValues, legend, legendLabels
+- Default highlight: none (options.highlight names a cohort)
+
+```json
+{"type":"cohort","data":[{"cohort":"2026-01","month":0,"active":1240,"size":1240},{"cohort":"2026-01","month":1,"active":707,"size":1240},{"cohort":"2026-01","month":2,"active":558,"size":1240}],"encoding":{"cohort":"cohort","period":"month","value":"active","size":"size"},"card":{"number":"46","title":"Cohort chart","subtitle":"Share of each monthly signup cohort still active, by months since signup","takeaway":"A third are still active six months in","level":"intermediate"}}
+```
+
+## horizon · Horizon chart (`<HorizonChart>`, Advanced, Trend)
+
+- What: Many time series in thin rows, each value folded into a few colored bands
+- Use when: 13 to 60 time series in the same unit on one card
+- Avoid when: 12 or fewer series (a line chart or small multiples read faster), or first-time readers have no time to read the legend
+- encoding: x, y[], series?
+- Chart options: bands, rowHeight, baseline, downColor, scale: shared|free, showValues, legend, xType: number|date|band, dayFirst, aggregate: sum|mean|last|count
+- Default highlight: none (options.highlight names a series)
+
+```json
+{"type":"horizon","data":[{"week":"2026-05-04","service":"checkout","change":8},{"week":"2026-05-04","service":"search","change":10.9},{"week":"2026-05-04","service":"cart","change":5.5}],"encoding":{"x":"week","y":"change","series":"service"},"options":{"unit":"%"},"card":{"number":"47","title":"Horizon chart","subtitle":"Year-over-year change in weekly requests by service (%)","takeaway":"Checkout grew while coupons fell below 0","level":"advanced"}}
 ```
 
 ## Common options

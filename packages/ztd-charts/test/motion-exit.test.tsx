@@ -181,3 +181,18 @@ describe("items leaving when data changes (useMotion exiting)", () => {
     expect(entered).toBe(spec.CHARTS.length);
   }, 60_000);
 });
+
+describe("turning motion on after a first drawing without it (interactive HTML taking over a server drawing)", () => {
+  it("the cohort chart, whose entrance clock is its own, counts as entered: no entrance frame and no hidden cell", async () => {
+    const { act, createRoot, Chart, spec } = mods;
+    const example = spec.CHARTS.find((d) => d.type === "cohort")!.example;
+    const container = (doc.body as FakeNode).appendChild(new FakeNode(1, "div", doc));
+    const root = createRoot(container as unknown as HTMLElement);
+    await act(async () => root.render(<Chart spec={example} width={480} animate={false} />));
+    frames.length = 0;
+    await act(async () => root.render(<Chart spec={example} width={480} />));
+    const hidden = (n: FakeNode): number => (n.style.opacity === "0" || n.style.animation ? 1 : 0) + n.childNodes.reduce((s, c) => s + hidden(c), 0);
+    expect([frames.length, hidden(container)]).toEqual([0, 0]);
+    await act(async () => root.unmount());
+  });
+});

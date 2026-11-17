@@ -9,7 +9,7 @@
 
 <p align="center">
   Animated, accessible React charts that read like a report.<br>
-  44 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+  47 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 </p>
 
 <p align="center">
@@ -87,9 +87,9 @@ import { Chart } from "ztd-charts";
 />;
 ```
 
-## 44 charts
+## 47 charts
 
-<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 44 charts in the light theme, from pie and donut to symbol map and flow map"></a>
+<a href="https://charts.ztd.app/docs/"><img src="docs/readme/gallery-en.png" width="100%" alt="All 47 charts in the light theme, from pie and donut to the KPI table, cohort chart and horizon chart"></a>
 
 | Group | Charts |
 |---|---|
@@ -97,11 +97,11 @@ import { Chart } from "ztd-charts";
 | Hierarchy | Treemap · Sunburst · Tree |
 | Flow | Funnel · Sankey · Chord |
 | Comparison | Bar · Waterfall · Pareto · Radar · Slope · Dumbbell · Lollipop · Bar race |
-| Trend | Line (range band too) · Area · Streamgraph · Sparkline · Calendar heatmap · Bump · Candlestick · Skyline · Timeline |
+| Trend | Line (range band too) · Area · Streamgraph · Sparkline · Calendar heatmap · Bump · Candlestick · Skyline · Timeline · Cohort · Horizon |
 | Distribution | Box plot (violin too) · Beeswarm · Ridgeline · Histogram |
 | Relationship | Heatmap · Bubble · Scatter · Parallel coordinates · Network |
 | Map | Tile grid map, choropleth map, symbol map, flow map |
-| KPI | Gauge · Bullet · Radial bar |
+| KPI | Gauge · Bullet · Radial bar · KPI table |
 
 Each chart has a page with a live demo, its props and copyable code in the [gallery](https://charts.ztd.app/docs/). Why each one made the cut, and what was left out, is in the [chart catalog](docs/catalog.md).
 

@@ -1,6 +1,7 @@
 import { ISO_DATE_RE, isDateText, isYear, monthOf, toDate } from "../core/format";
 import { toNumber, uniq } from "../data/accessor";
 import { localizeDef, withKoLocale } from "./localize";
+import { HORIZON_MAX_SERIES } from "./meta";
 import { getChartDef } from "./registry";
 import type { ChartSpec, Lang } from "./types";
 
@@ -45,10 +46,15 @@ const MONTH_KO = /^(1[0-2]|[1-9])월$/;
 const YMD = /^\d{8}$/;
 const RANK_RE = /(rank|순위|등수)/i;
 const STAGE_RE = /(stage|step|funnel|단계|스텝)/i;
+/** Names of a cohort column and of a period-since-start column (cohort chart) */
+const COHORT_RE = /(cohort|signup|가입)/i;
+const PERIOD_RE = /(period|month|week|day|age|경과|개월|주차)/i;
 const PARENT_RE = /^(parent|manager|reports_?to|부모|상위)/i;
 const BEFORE_RE = /(before|prev|start|이전|전|작년|기존|old)/i;
 const AFTER_RE = /(after|next|end|이후|후|올해|신규|new)/i;
 const TARGET_KPI = /(target|goal|목표)/i;
+/** Names of a column that holds metric names (one row per metric in a KPI table) */
+const METRIC_RE = /(metric|kpi|indicator|measure|지표)/i;
 /** Names of the start and end date columns of a timeline */
 const SPAN_START = /(start|begin|from|opened|시작|착수)/i;
 const SPAN_END = /(end|finish|until|due|closed|stop|끝|종료|마감)/i;
@@ -359,6 +365,41 @@ export function suggestCharts(rows: readonly Record<string, unknown>[], opts: { 
     const names = stageCols.slice(0, 6).map((c) => c.name);
     const path = names.join(" → ");
     out.push(mk("sankey", 0.78, t(`Each row runs ${path}, so a Sankey diagram shows how the amount splits at each stage`, `행마다 ${path} 순서로 이어져서 생키 다이어그램으로 단계마다 양이 나뉘는 모습을 보여 줘요`), rows, { dimensions: names, ...(v0 && { value: v0.name }) }));
+  }
+
+  // KPI table: a date, a value and a category of 2 to 60 series with several per date. A metric-like name, maximums 20 times apart or 13 to 60 series make one row per metric fit.
+  // Last, so it never moves an existing suggestion of the same score
+  const kpi = t0 && v0 ? cats.find((c) => c.distinct >= 2 && c.distinct <= 60 && perX(rows, t0.name, c.name) >= 1.5) : undefined;
+  if (kpi && t0 && v0) {
+    const named = METRIC_RE.test(kpi.name);
+    // Each row's largest value, only needed when the name does not already say metric
+    const top = new Map<string, number>();
+    for (const r of named ? [] : rows.slice(0, 5000)) {
+      const k = String(r[kpi.name]);
+      const v = Math.abs(toNumber(r[v0.name]));
+      if (v > 0) top.set(k, Math.max(top.get(k) ?? 0, v));
+    }
+    const maxes = [...top.values()];
+    const apart = maxes.length > 1 && Math.max(...maxes) >= 20 * Math.min(...maxes);
+    const [score, reason]: [number, string] = named
+      ? [0.94, t(`${kpi.name} holds separate metrics, so a KPI table shows each one's trend, latest value and change in its own row`, `${kpi.name} 열에 지표가 따로따로 있어서 지표 표로 줄마다 추세, 최근 값, 변화를 보여 줘요`)]
+      : apart
+        ? [0.9, t(`${v0.name} differs 20 times or more between ${kpi.name} values, so a KPI table gives each row its own scale`, `${kpi.name}마다 ${v0.name} 크기가 20배 넘게 달라서 지표 표로 줄마다 눈금을 따로 써요`)]
+        : [0.86, t(`${kpi.distinct} series are too many for one line chart, so a KPI table gives each its own row`, `계열이 ${kpi.distinct}개라 선 차트 하나로는 많아서 지표 표로 줄마다 하나씩 보여 줘요`)];
+    if (named || apart || kpi.distinct >= 13) out.push(mk("sparkTable", score, reason, rows, { label: kpi.name, x: t0.name, value: v0.name }));
+  }
+
+  // Cohort: a cohort column (category or date), small whole-number periods from 0 or 1 (up to 120) and a value column. Last, so it never moves an existing suggestion of the same score
+  const cohortC = cols.find((c) => (c.kind === "category" || c.kind === "date") && COHORT_RE.test(c.name));
+  const periodC = numsAll.find((c) => PERIOD_RE.test(c.name) && c.integer && (c.min === 0 || c.min === 1) && (c.max ?? Infinity) <= 120);
+  const valueC = numsAll.find((c) => c !== periodC);
+  if (cohortC && periodC && valueC)
+    out.push(mk("cohort", 0.95, t(`Each ${cohortC.name} is followed over ${periodC.name}, so a cohort chart shows how much is left at each step`, `${cohortC.name}마다 ${periodC.name}에 따라 얼마나 남는지 코호트 차트로 보여 줘요`), rows, { cohort: cohortC.name, period: periodC.name, value: valueC.name }));
+
+  // Many series: a date column, a value column and a category with 13 to 60 values attached to each date. Last, so it never moves an existing suggestion of the same score
+  if (t0 && v0) {
+    const manyC = cats.find((c) => c.distinct >= 13 && c.distinct <= HORIZON_MAX_SERIES && perX(rows, t0.name, c.name) >= 1.5);
+    if (manyC) out.push(mk("horizon", 0.84, t(`${manyC.distinct} ${manyC.name} series over ${t0.name} are too many lines for one chart, so a horizon chart folds each into a thin row`, `${t0.name}에 따른 ${manyC.name} 계열 ${manyC.distinct}개는 한 차트에 선으로 그리기에 많아서 호라이즌 차트로 줄마다 얇게 접어 보여 줘요`), rows, { x: t0.name, y: v0.name, series: manyC.name }));
   }
 
   // Keep only the highest score per type

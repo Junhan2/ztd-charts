@@ -90,7 +90,7 @@ function facetSchema(t: SchemaText): JSONSchema {
   };
 }
 
-/** Definitions of data, card, theme and tooltip. All 44 charts point to the same tooltip (writing it per chart would grow the full schema by about 24KB) */
+/** Definitions of data, card, theme and tooltip. All 47 charts point to the same tooltip (writing it per chart would grow the full schema by about 24KB) */
 function sharedDefs(t: SchemaText, common: OptionDef[]): Record<"data" | "card" | "theme" | "tooltip", JSONSchema> {
   const tip = common.find((o) => o.type === "tooltip");
   return {

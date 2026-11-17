@@ -971,3 +971,66 @@ export const flowMapKrPlaces: Record<string, [number, number]> = {
 };
 /** The same positions keyed by Korean names */
 export const flowMapKrPlacesKo = /* @__PURE__ */ relabelKeys(flowMapKrPlaces, KR_CITIES);
+
+/** 12 Mondays from 2026-07-06 as ISO dates (built in UTC, so every time zone gets the same days) */
+const WEEKS_2026 = /* @__PURE__ */ Array.from({ length: 12 }, (_, w) => new Date(Date.UTC(2026, 6, 6 + w * 7)).toISOString().slice(0, 10));
+const KPIS: [string, number, number[]][] = [
+  ["Revenue", 190000, [171200, 174900, 173400, 176800, 178100, 179900, 178600, 181300, 182000, 183500, 185100, 184200]],
+  ["Active users", 50000, [41200, 41900, 42350, 42800, 43900, 44100, 44800, 45600, 46200, 46900, 47700, 48310]],
+  ["Churn rate", 2, [2.6, 2.4, 2.5, 2.5, 2.4, 2.3, 2.4, 2.3, 2.2, 2.3, 2.2, 2.1]],
+  ["p95 response time", 300, [280, 284, 290, 288, 295, 301, 298, 305, 309, 306, 315, 312]],
+  ["NPS", 45, [36, 37, 37, 38, 39, 38, 40, 41, 40, 42, 41, 42]],
+  ["Weekly signups", 4000, [3420, 3510, 3380, 3600, 3720, 3650, 3810, 3700, 3880, 3950, 4020, 3905]],
+];
+/** Weekly product metrics in different units with their targets, one row per metric and week (the KPI table). Only p95 response time moves the wrong way */
+export const sparkTableSample = /* @__PURE__ */ KPIS.flatMap(([metric, target, values]) => values.map((value, w) => ({ metric, week: WEEKS_2026[w], value, target })));
+export const sparkTableSampleKo = /* @__PURE__ */ relabel(sparkTableSample, { Revenue: "매출", "Active users": "활성 사용자", "Churn rate": "이탈률", "p95 response time": "p95 응답 시간", "Weekly signups": "주간 가입" });
+/** Weekly revenue by country (USD) over the same 12 weeks: the KPI table's ranked variant (value bars, sort "value") */
+export const sparkTableRankedSample = /* @__PURE__ */ (
+  [
+    ["United States", 96400, 0.004],
+    ["Germany", 41800, 0.006],
+    ["Japan", 37600, -0.002],
+    ["United Kingdom", 31900, 0.005],
+    ["France", 24300, 0.003],
+    ["Brazil", 15200, 0.018],
+    ["India", 11800, 0.032],
+    ["Canada", 12600, 0.002],
+  ] as [string, number, number][]
+).flatMap(([country, base, growth], i) => WEEKS_2026.map((week, w) => ({ country, week, revenue: Math.round((base * (1 + growth) ** w * (1 + 0.015 * Math.sin(w * 1.3 + i))) / 100) * 100 })));
+
+/**
+ * names: 8 monthly signup cohorts. People still active by month since signup (month 0 is the signup month), with each cohort's size.
+ * A triangle: each later cohort has one month less so far. Newer cohorts keep slightly more people
+ */
+function cohortRows(names: readonly string[]) {
+  const sizes = [1240, 1385, 1310, 1502, 1647, 1590, 1733, 1810];
+  const kept = [100, 58, 46, 40, 37, 35, 33, 32];
+  return names.flatMap((cohort, i) =>
+    kept.slice(0, 8 - i).map((k, month) => ({ cohort, month, active: Math.round((sizes[i] * (month ? Math.round(k + i * 0.9 - ((month + i) % 3) * 0.7) : 100)) / 100), size: sizes[i] })),
+  );
+}
+/** Monthly signup cohorts (the cohort chart example). The Korean version writes the months the Korean way, "2026년 1월" */
+export const cohortSample = /* @__PURE__ */ cohortRows(["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"]);
+export const cohortSampleKo = /* @__PURE__ */ cohortRows(["2026년 1월", "2026년 2월", "2026년 3월", "2026년 4월", "2026년 5월", "2026년 6월", "2026년 7월", "2026년 8월"]);
+
+/**
+ * Horizon example: year-over-year change of weekly requests by service (%), 26 weeks from 2026-05-04.
+ * names: 12 services [checkout, search, cart, login, signup, orders, reviews, coupons, wishlist, shipping, support, notifications]
+ */
+function horizonRows(names: readonly string[]) {
+  const rnd = seeded(41);
+  // [start, change per week, seasonal swing]: checkout climbs all season, coupons slide below zero, support keeps falling, notifications spike in August
+  const shape = [[6, 0.6, 2], [10, 0.3, 1.5], [4, 0.2, 2], [1, 0, 3], [-2, 0.4, 1.5], [8, -0.1, 2], [3, 0.1, 4], [15, -0.9, 1.5], [-4, -0.2, 2], [5, 0, 6], [-6, -0.5, 1.5], [2, 0, 2]];
+  return Array.from({ length: 26 }, (_, w) =>
+    names.map((service, i) => {
+      const [a, b, amp] = shape[i];
+      const spike = i === 11 && Math.abs(w - 15) <= 1 ? 24 - Math.abs(w - 15) * 8 : 0;
+      const v = a + b * w + amp * Math.sin((w + i * 2) / 4) + spike + gauss(rnd) * 1.2;
+      // + 0 turns -0 into 0
+      return { week: new Date(Date.UTC(2026, 4, 4 + w * 7)).toISOString().slice(0, 10), service, change: Math.round(v * 10) / 10 + 0 };
+    }),
+  ).flat();
+}
+export const horizonSample = /* @__PURE__ */ horizonRows(["checkout", "search", "cart", "login", "signup", "orders", "reviews", "coupons", "wishlist", "shipping", "support", "notifications"]);
+export const horizonSampleKo = /* @__PURE__ */ horizonRows(["결제", "검색", "장바구니", "로그인", "회원가입", "주문 내역", "리뷰", "쿠폰", "찜 목록", "배송 조회", "고객센터", "알림"]);

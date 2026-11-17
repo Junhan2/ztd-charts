@@ -41,4 +41,7 @@ export const VARIANT_NAMES_KO: Record<string, Record<string, string>> = {
   choropleth: { europe: "유럽", "us-states": "미국 주", "kr-sido": "한국 시도", "custom-geojson": "직접 만든 GeoJSON" },
   symbolMap: { "by-continent": "대륙별 색", "by-country": "좌표 없이 나라 이름으로", "us-states": "미국 매장", europe: "유럽", "kr-sido": "한국" },
   flowMap: { "us-states": "미국 주 사이", europe: "유럽", "kr-sido": "한국", "no-ranking": "목록 없이" },
+  sparkTable: { "by-change": "변화가 좋은 순서", "vs-previous": "전주 대비 변화", ranked: "나라별 매출 순위" },
+  cohort: { counts: "칸에 사람 수", "no-average": "평균 행 없이", "no-values": "값 없이" },
+  horizon: { "one-band": "층 하나", "three-bands": "층 셋", "own-scale": "줄마다 자기 눈금" },
 };

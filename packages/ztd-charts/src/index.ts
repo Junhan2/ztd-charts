@@ -40,6 +40,7 @@ export { BarChart, type BarChartProps } from "./charts/bar";
 export { RadialBarChart, GaugeChart, type RadialBarChartProps, type GaugeChartProps } from "./charts/radial";
 export { BulletChart, type BulletChartProps } from "./charts/bullet";
 export { Sparkline, type SparklineProps } from "./charts/sparkline";
+export { SparkTable, type SparkTableProps, type SparkTableMetric } from "./charts/sparkTable";
 export { LiveLineChart, type LiveLineChartProps } from "./charts/live";
 export { SlopeChart, type SlopeChartProps } from "./charts/slope";
 export { DumbbellChart, type DumbbellChartProps } from "./charts/dumbbell";
@@ -64,6 +65,8 @@ export { Tree, type TreeProps } from "./charts/tree";
 export { Choropleth, type ChoroplethProps } from "./charts/choropleth";
 export { SymbolMap, type SymbolMapProps } from "./charts/symbolMap";
 export { FlowMap, type FlowMapProps } from "./charts/flowMap";
+export { CohortChart, type CohortChartProps } from "./charts/cohort";
+export { HorizonChart, type HorizonChartProps } from "./charts/horizon";
 export { type XRange } from "./core/brush";
 
 export { templateTooltip } from "./charts/tooltipTemplate";

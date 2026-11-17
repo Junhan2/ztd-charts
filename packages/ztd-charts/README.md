@@ -1,6 +1,6 @@
 # ztd charts
 
-Animated, accessible React charts that read like a report. 44 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
+Animated, accessible React charts that read like a report. 47 charts in pure SVG with no runtime dependencies, and a JSON spec your AI agent can write.
 
 [Website](https://charts.ztd.app) · [Gallery](https://charts.ztd.app/docs/) · [Docs](https://charts.ztd.app/docs/docs/) · [Example dashboards](https://charts.ztd.app/docs/examples/) · [GitHub](https://github.com/Junhan2/ztd-charts) · [한국어](https://github.com/Junhan2/ztd-charts/blob/main/README.ko.md)
 
@@ -45,11 +45,13 @@ Every chart page in the [gallery](https://charts.ztd.app/docs/) has the React co
 
 ## What's in the package
 
-- `ztd-charts`: 44 chart components, `LiveLineChart`, `ChartCard`, `ChartGrid`, `ChartFacets`, `StatCard`, `ThemeProvider`, `registerMap` and the data helpers.
+- `ztd-charts`: 47 chart components (new in 0.13.0: `SparkTable`, `CohortChart` and `HorizonChart`), `LiveLineChart`, `ChartCard`, `ChartGrid`, `ChartFacets`, `StatCard`, `ThemeProvider`, `registerMap` and the data helpers.
 - `ztd-charts/spec`: the chart registry, JSON Schema, spec validation and chart suggestions, without React. `FACET_TYPES` and `FACET_MAX` say which charts take `facet` and how many panels it draws.
 - `ztd-charts/server`: server rendering to SVG and HTML, with every built-in map already registered.
 - `ztd-charts/geo/world`, `ztd-charts/geo/us-states` and `ztd-charts/geo/kr-sido`: map boundaries, one entry point per map, so a page that draws no map loads none.
 - `ztd-charts/schema.json`: the JSON Schema for chart specs.
+
+New in 0.13.0: three charts. `SparkTable` puts one metric per row with its trend, latest value, change and target, each row on its own scale, so revenue, users and rates share one table; the change pill takes the accent only for a move in the good direction (`better: "down"` for churn or latency, or per row through `metrics`). `CohortChart` is a retention table: one row per signup cohort and one column per period since it started, each cell colored by the share still active. The first period, where everyone is still there, is gray and left out of the color scale, and the average row on top weighs each cohort by its size. `HorizonChart` fits 13 to 60 time series on one card in thin rows, folding each value into one to three color bands of the same size; values below the baseline mirror into the row in gray, and the legend on top gives each band's range. New spec aliases: `kpiTable`, `metricTable`, `sparklineTable`, `retention`, `cohortTable`, `retentionTable`, `horizonChart` and `horizonGraph`.
 
 New in 0.12.0: five options, each with its own variant in the gallery. `variant: "raincloud"` on `BoxPlot` draws each group as a half density curve, a thin box and every sample as a dot. `hull` on `ScatterChart` outlines each series with a rounded shape in its color, under the dots. `dimensions` on `SankeyChart` (`encoding.dimensions` in a spec) reads a wide table where each row is one path through 2 to 6 stage columns, so no link rows are needed. `flow: "right"` on `FunnelChart` runs the stages from left to right for low, wide cards. `centerLabels` on `BarChart` puts the row names of diverging horizontal bars in a column at the zero line, as in a population pyramid. New spec aliases: `raincloud`, `alluvial`, `parallelSets`, `butterfly`, `pyramid` and `populationPyramid`.
 

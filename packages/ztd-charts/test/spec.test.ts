@@ -14,10 +14,10 @@ const KO = chartsIn("ko");
 const noLocale = ({ options: { locale: _locale, ...options } = {}, ...spec }: ChartSpec) => ({ ...spec, options });
 
 describe("registry", () => {
-  it("44 types, with no clashing type or component names", () => {
-    expect(CHARTS).toHaveLength(44);
-    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(44);
-    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(44);
+  it("47 types, with no clashing type or component names", () => {
+    expect(CHARTS).toHaveLength(47);
+    expect(new Set(CHARTS.map((c) => c.type)).size).toBe(47);
+    expect(new Set(CHARTS.map((c) => c.component)).size).toBe(47);
   });
   it("loads per-chart schema files by package name (the paths in the README)", () => {
     const req = createRequire(import.meta.url);
@@ -101,7 +101,7 @@ describe("Korean registry (localizeDef, chartsIn)", () => {
   it("example data: the Korean version has the same numbers, fields and row count as the English one", () => {
     const all = samples as unknown as Record<string, Record<string, unknown>[]>;
     const koNames = Object.keys(all).filter((k) => k.endsWith("SampleKo"));
-    expect(koNames.length).toBe(41);
+    expect(koNames.length).toBe(44);
     // In a wide table (skyline) the field names are the series names, so the Korean version has Korean field names too.
     // For that table only the values are compared, in the same order
     const WIDE = new Set(["skylineSampleKo"]);
@@ -334,7 +334,7 @@ describe("text in number columns and duplicate x (options.aggregate)", () => {
     expect(codesOf(validateSpec({ type: "line", data: data.map((d, i) => ({ ...d, s: i === 1 ? "b" : "a" })), encoding: { x: "m", y: "r", series: "s" } }))).toEqual([]);
     expect(codesOf(validateSpec({ ...spec, options: { aggregate: "median" } }))).toEqual(["bad_enum"]);
     const owners = CHARTS.filter((c) => c.options.some((o) => o.name === "aggregate")).map((c) => c.type);
-    expect(owners).toEqual(["line", "area", "stream", "bar", "barRace"]);
+    expect(owners).toEqual(["line", "area", "stream", "bar", "barRace", "sparkTable", "horizon"]);
     for (const t of owners) expect(KO.find((k) => k.type === t)!.options.find((o) => o.name === "aggregate")!.description, t).toMatch(HANGUL);
   });
 });
@@ -507,6 +507,69 @@ describe("sankey stages (encoding.dimensions)", () => {
   });
 });
 
+describe("KPI table checks (sparkTable)", () => {
+  const base = { type: "sparkTable", encoding: { label: "metric", x: "week", value: "value" } };
+  const rows = (names: string[]) => names.flatMap((metric) => ["2026-07-06", "2026-07-13"].map((week, i) => ({ metric, week, value: i + 1 })));
+  const warnings = (spec: unknown, lang: "en" | "ko" = "en") => validateSpec(spec, { lang }).warnings;
+  const names = (n: number) => Array.from({ length: n }, (_, i) => `Metric ${i + 1}`);
+
+  it("the examples have no warnings: rows with the same week and a different metric are not duplicates, the same metric twice is", () => {
+    const def = CHARTS.find((c) => c.type === "sparkTable")!;
+    expect(warnings(def.example)).toEqual([]);
+    expect(warnings(localizeDef(def, "ko").example, "ko")).toEqual([]);
+    expect(warnings({ ...base, data: [...rows(["A"]), { metric: "A", week: "2026-07-13", value: 3 }] }).map((w) => w.code)).toEqual(["duplicate_x"]);
+    expect(warnings({ ...base, type: "kpiTable", data: rows(["A"]) }).map((w) => w.code)).toEqual(["alias"]);
+  });
+
+  it("too_many_rows past 60 rows, metric_not_found for metrics keys that are not rows, value_bar_ignored when rows use different formats or units", () => {
+    expect(warnings({ ...base, data: rows(names(60)) })).toEqual([]);
+    const many = warnings({ ...base, data: rows(names(61)) });
+    expect(many.map((w) => [w.path, w.code])).toEqual([["encoding.label", "too_many_rows"]]);
+    expect(many[0].message).toBe("61 rows: a KPI table draws the first 60, so 1 row is left out");
+    expect(warnings({ ...base, data: rows(names(61)) }, "ko")[0].message).toBe("줄이 61개예요. 지표 표는 앞의 60줄만 그려서 1줄은 빠져요");
+
+    const two = rows(["Revenue", "Churn rate"]);
+    const missing = { ...base, data: two, options: { metrics: { Revenue: { format: "currency" }, Churn: { unit: "%" } } } };
+    expect(warnings(missing).map((w) => [w.path, w.code])).toEqual([["options.metrics", "metric_not_found"]]);
+    expect(warnings(missing)[0].message).toBe('"Churn" is not a row in the data');
+    expect(warnings(missing, "ko")[0].message).toBe('"Churn" 줄이 데이터에 없어요');
+
+    const mixed = { ...base, data: two, options: { valueBar: true, metrics: { Revenue: { format: "currency" } } } };
+    expect(warnings(mixed).map((w) => [w.path, w.code])).toEqual([["options.valueBar", "value_bar_ignored"]]);
+    expect(warnings(mixed, "ko")[0].message).toMatch(HANGUL);
+    expect(warnings({ ...base, data: two, options: { valueBar: true, format: "compact" } })).toEqual([]);
+    expect(warnings({ ...base, data: two, options: { valueBar: true, metrics: { Revenue: { unit: "%" }, "Churn rate": { unit: "%" } } } })).toEqual([]);
+  });
+});
+
+describe("horizon checks", () => {
+  /** n series of 3 points each in a long table */
+  const spec = (n: number, options: Record<string, unknown> = {}) => ({ type: "horizon", data: Array.from({ length: n }, (_, i) => [0, 1, 2].map((t) => ({ t, s: `s${i + 1}`, v: t - i }))).flat(), encoding: { x: "t", y: "v", series: "s" }, options });
+  const issues = (s: unknown, lang: "en" | "ko" = "en") => {
+    const r = validateSpec(s, { lang });
+    return [...r.errors.map((e) => `E ${e.path} ${e.code}: ${e.message}`), ...r.warnings.map((w) => `W ${w.path} ${w.code}: ${w.message}`)];
+  };
+  it("bands is 1 to 3 (bad_bands from 4 and for fractions), rowHeight 12 to 48, scale shared or free", () => {
+    expect(issues(spec(12, { bands: 3, rowHeight: 48, scale: "free" }))).toEqual([]);
+    expect(issues(spec(12, { bands: 4 }))).toEqual(["E options.bands bad_bands: options.bands must be 1, 2 or 3 (got 4)"]);
+    expect(issues(spec(12, { bands: 4 }), "ko")).toEqual(["E options.bands bad_bands: options.bands 값은 1, 2, 3 중 하나여야 해요(지금 4)"]);
+    expect(issues(spec(12, { bands: 2.5 }))).toEqual(["E options.bands bad_bands: options.bands must be 1, 2 or 3 (got 2.5)"]);
+    expect(issues(spec(12, { bands: 0 }))).toEqual(["E options.bands out_of_range: options.bands must be at least 1"]);
+    expect(issues(spec(12, { rowHeight: 50 }))).toEqual(["E options.rowHeight out_of_range: options.rowHeight must be at most 48"]);
+    expect(issues(spec(12, { scale: "own" }))[0]).toMatch(/^E options.scale bad_enum/);
+  });
+  it("too_many_series over 60 and few_series at 7 or fewer, in English and Korean; a wide table counts its y fields", () => {
+    expect(issues(spec(61))).toEqual(["W encoding.series too_many_series: A horizon chart draws up to 60 series, and the data has 61, so only the first 60 are drawn"]);
+    expect(issues(spec(61), "ko")).toEqual(["W encoding.series too_many_series: 호라이즌 차트는 계열을 60개까지 그려요. 데이터에 61개가 있어서 앞의 60개만 그려요"]);
+    expect(issues(spec(7))).toEqual(["W encoding.series few_series: Only 7 series. With 7 or fewer, a line chart reads faster"]);
+    expect(issues(spec(7), "ko")).toEqual(["W encoding.series few_series: 계열이 7개뿐이에요. 7개 이하면 라인 차트가 더 빨리 읽혀요"]);
+    expect(issues(spec(8))).toEqual([]);
+    expect(issues(spec(60))).toEqual([]);
+    const wide = { type: "horizon", data: [{ t: 0, a: 1, b: 2 }, { t: 1, a: 3, b: -1 }], encoding: { x: "t", y: ["a", "b"] } };
+    expect(validateSpec(wide).warnings.map((w) => `${w.path} ${w.code}`)).toEqual(["encoding.y few_series"]);
+  });
+});
+
 describe("variants", () => {
   it("every variant is a valid spec in both languages, changes its example, and has a unique id and a Korean name", () => {
     expect(Object.values(VARIANTS).flat().length).toBeGreaterThan(60);
@@ -576,5 +639,43 @@ describe("legend toggle checks", () => {
     expect(pie.map((w) => w.code)).toEqual(["legend_toggle_ignored"]);
     expect(pie[0].message).toBe('card.legend "toggle" works on line, area, bar, scatter and timeline, so this chart draws a plain legend');
     expect(validateSpec({ ...line, card: { legend: "toggles" } }).errors.find((e) => e.code === "bad_legend")!.message).toContain('"toggle"');
+  });
+});
+
+describe("cohort checks", () => {
+  const issues = (spec: unknown, lang: "en" | "ko" = "en") => {
+    const r = validateSpec(spec, { lang });
+    return [...r.errors.map((e) => `${e.path} ${e.code}: ${e.message}`), ...r.warnings.map((w) => `!${w.path} ${w.code}: ${w.message}`)];
+  };
+  /** One list of values per monthly cohort (period 0, 1, 2 ...). With sized, the first value of each cohort goes in the size column n */
+  const cohort = (vals: number[][], options: Record<string, unknown> = {}, sized = false) => ({
+    type: "cohort",
+    data: vals.flatMap((vs, i) => vs.map((v, month) => ({ cohort: `2026-0${i + 1}`, month, v, ...(sized ? { n: vs[0] } : {}) }))),
+    encoding: { cohort: "cohort", period: "month", value: "v", ...(sized ? { size: "n" } : {}) },
+    options,
+  });
+  const retry = 'If that is wrong, set options.valueType to "count", "percent" or "ratio"';
+
+  it("says what auto read the values as when there is no size channel, and nothing with a size channel or a set valueType", () => {
+    expect(issues(cohort([[1, 0.5], [1]]))).toEqual([`!options.valueType cohort_value_type_guessed: Values are read as ratios from 0 to 1 because every value is at most 1. ${retry}`]);
+    expect(issues(cohort([[100, 52], [100]]))).toEqual([`!options.valueType cohort_value_type_guessed: Values are read as percents because every value is at most 100. ${retry}`]);
+    expect(issues(cohort([[400, 180], [350]]))).toEqual([`!options.valueType cohort_value_type_guessed: Values are read as people counts, with each cohort's first period as its size, because some values are above 100. ${retry}`]);
+    expect(issues(cohort([[400, 180], [350]]), "ko")).toEqual(['!options.valueType cohort_value_type_guessed: 100보다 큰 값이 있어 사람 수로 읽고 코호트마다 첫 기간 값을 크기로 썼어요. 다르면 options.valueType을 "count", "percent", "ratio" 중 하나로 정해 주세요']);
+    expect(issues(cohort([[100, 52], [100]], { valueType: "percent" }))).toEqual([]);
+    expect(issues(cohort([[400, 180], [350]], {}, true))).toEqual([]);
+  });
+
+  it('show "count" without people counts says the cells keep shares', () => {
+    expect(issues(cohort([[1, 0.5]], { valueType: "ratio", show: "count" }))).toEqual(['!options.show cohort_count_unknown: options.show "count" needs people counts, but the values are shares and there is no size channel, so cells show shares']);
+    expect(issues(cohort([[1, 0.5]], { valueType: "ratio", show: "count" }), "ko")).toEqual(['!options.show cohort_count_unknown: options.show "count"는 사람 수가 있어야 해요. 값이 비율이고 size 채널이 없어서 칸에 비율을 적어요']);
+    expect(issues(cohort([[1, 0.5]], { valueType: "ratio", show: "count" }, true))).toEqual([]);
+    expect(issues(cohort([[400, 180]], { valueType: "count", show: "count" }))).toEqual([]);
+  });
+
+  it("over 2,500 cells keeps the most recent cohorts that fit and says how many are left out", () => {
+    const data = Array.from({ length: 60 }, (_, i) => Array.from({ length: 50 }, (_, month) => ({ cohort: `C${i}`, month, v: 50 }))).flat();
+    const spec = { type: "cohort", data, encoding: { cohort: "cohort", period: "month", value: "v" }, options: { valueType: "percent" } };
+    expect(issues(spec)).toEqual(["!data cohort_trimmed: 3000 cells are more than 2500, so only the most recent 50 cohorts are drawn and 10 older ones are left out"]);
+    expect(issues(spec, "ko")).toEqual(["!data cohort_trimmed: 칸이 3000개라 2500칸에 들어가는 최근 코호트 50개만 그리고 이전 코호트 10개는 빼요"]);
   });
 });

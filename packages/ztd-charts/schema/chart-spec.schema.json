@@ -54,7 +54,10 @@
         "timeline",
         "tree",
         "symbolMap",
-        "flowMap"
+        "flowMap",
+        "sparkTable",
+        "cohort",
+        "horizon"
       ]
     }
   },
@@ -9371,6 +9374,709 @@
                 "auto",
                 "atlantic",
                 "pacific"
+              ]
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "KPI table",
+      "description": "One row per metric: its trend, latest value, change and target side by side. Use when: The latest value and trend of several metrics in different units, in one table. Avoid when: Readers need the exact changes of one metric over time (a line chart does that)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "sparkTable"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Row name field (one row per metric) (string)"
+            },
+            "x": {
+              "type": "string",
+              "description": "Period field (date, number or category). Every row shares the same period axis (any)"
+            },
+            "value": {
+              "type": "string",
+              "description": "Value field (number)"
+            },
+            "target": {
+              "type": "string",
+              "description": "Target field. Each row uses its last filled value (number)"
+            }
+          },
+          "required": [
+            "label",
+            "x",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "metrics": {
+              "description": "Format, unit and better per row, keyed by row name, such as { \"Churn rate\": { \"unit\": \"%\", \"better\": \"down\" } }. Rows without an entry use the shared format, unit and better",
+              "type": "object"
+            },
+            "better": {
+              "description": "\"up\" when a higher value is better, \"down\" when lower is better (churn, latency). The change pill takes the accent only for a move in the good direction",
+              "default": "up",
+              "enum": [
+                "up",
+                "down"
+              ]
+            },
+            "change": {
+              "description": "\"period\" compares the first and last value of the visible periods, \"previous\" the last value with the one before it, \"none\" hides the column",
+              "default": "period",
+              "enum": [
+                "period",
+                "previous",
+                "none"
+              ]
+            },
+            "changeLabel": {
+              "description": "Header of the change column. Default \"Change\" (\"vs. previous\" with change \"previous\")",
+              "type": "string"
+            },
+            "sort": {
+              "description": "\"none\" keeps the data order, \"value\" puts the largest latest value first, \"change\" the best change first (a fall counts as a gain for better: \"down\" rows)",
+              "default": "none",
+              "enum": [
+                "none",
+                "value",
+                "change"
+              ]
+            },
+            "valueBar": {
+              "description": "A bar beside each value, relative to the largest. Ignored when rows use different formats or units",
+              "default": false,
+              "type": "boolean"
+            },
+            "rowHeight": {
+              "description": "Row height in px",
+              "default": 32,
+              "type": "number",
+              "minimum": 24,
+              "maximum": 56
+            },
+            "header": {
+              "description": "Header row with the period range and the column names",
+              "default": true,
+              "type": "boolean"
+            },
+            "aggregate": {
+              "description": "How rows with the same x (and series) combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
+              "default": "sum",
+              "enum": [
+                "sum",
+                "mean",
+                "last",
+                "count"
+              ]
+            },
+            "dayFirst": {
+              "description": "Reads dates such as \"05/03/2024\", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads \"05.03.24\" as day.month.year",
+              "type": "boolean"
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Cohort chart",
+      "description": "Retention by signup cohort: one row per cohort, one column per period since it started. Use when: Following groups that started together, such as users by signup month, to see how many are still active 1, 2, 3 ... periods later. Avoid when: Comparing the exact shape of two cohorts' curves (use a line chart)",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "cohort"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "cohort": {
+              "type": "string",
+              "description": "Cohort: a name or a start date. Cohorts go in date order when all read as dates, otherwise in order of first appearance (any)"
+            },
+            "period": {
+              "type": "string",
+              "description": "Periods since the cohort started: 0, 1, 2 ... In number order when all are numbers (any)"
+            },
+            "value": {
+              "type": "string",
+              "description": "People still active, or the share still active (see options.valueType) (number)"
+            },
+            "size": {
+              "type": "string",
+              "description": "Cohort size. The first value of each cohort counts (number)"
+            }
+          },
+          "required": [
+            "cohort",
+            "period",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "valueType": {
+              "description": "\"count\" (people still active), \"percent\" (58) or \"ratio\" (0.58). \"auto\" reads counts when there is a size field, ratios when every value is at most 1, percents when every value is at most 100, otherwise counts with each cohort's first period as its size",
+              "default": "auto",
+              "enum": [
+                "auto",
+                "count",
+                "percent",
+                "ratio"
+              ]
+            },
+            "show": {
+              "description": "\"rate\" writes the share in each cell, \"count\" the people still active (only when counts are known). Colors always follow the share",
+              "default": "rate",
+              "enum": [
+                "rate",
+                "count"
+              ]
+            },
+            "average": {
+              "description": "Average row on top: the people still active over the cohort sizes, counting only the cohorts that reached each period (the plain mean of the shares without counts)",
+              "default": true,
+              "type": "boolean"
+            },
+            "colorSteps": {
+              "description": "Number of color steps. The legend shows each step",
+              "default": 5,
+              "type": "number",
+              "minimum": 2,
+              "maximum": 12
+            },
+            "showValues": {
+              "description": "Values in cells. \"auto\" shows them when they fit",
+              "default": "auto"
+            },
+            "legend": {
+              "description": "Show the color legend",
+              "default": true,
+              "type": "boolean"
+            },
+            "legendLabels": {
+              "description": "Names at both ends of the legend",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "height": {
+              "description": "Height in px. Without it, each chart picks a default that fits its width",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "width": {
+              "description": "Fixed width in px. Without it, the chart fits its parent",
+              "type": "number",
+              "minimum": 40,
+              "maximum": 10000
+            },
+            "highlight": {
+              "description": "Item to highlight. An index, a name, an array, or \"max\" | \"min\" | \"first\" | \"last\" | \"none\"",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              ]
+            },
+            "format": {
+              "description": "Value format. \"number\" | \"integer\" | \"percent\" (values are already percents: 42 → \"42%\") | \"ratio\" (0.42 → \"42%\") | \"compact\" | \"currency\" (KRW for Korean locales, otherwise USD; for another currency pass Intl options with currency) | \"decimal\" or Intl.NumberFormat options",
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "integer",
+                    "percent",
+                    "ratio",
+                    "compact",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "description": "Intl.NumberFormat options plus suffix and prefix"
+                }
+              ]
+            },
+            "unit": {
+              "description": "Unit appended to values. For example \"%\" or \"ms\"",
+              "type": "string"
+            },
+            "locale": {
+              "description": "Locale for numbers, dates and the text a chart writes itself (tooltips, screen reader sentences). \"ko\" or \"ko-*\" switches to Korean. Falls back to the ThemeProvider locale",
+              "default": "en-US",
+              "type": "string"
+            },
+            "animate": {
+              "description": "Entry and update animation",
+              "default": true,
+              "type": "boolean"
+            },
+            "duration": {
+              "description": "Animation length (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "easing": {
+              "description": "Motion curve",
+              "default": "spring",
+              "enum": [
+                "spring",
+                "easeOut",
+                "easeInOut",
+                "linear"
+              ]
+            },
+            "stagger": {
+              "description": "Delay between items as they enter (ms)",
+              "type": "number",
+              "minimum": 0
+            },
+            "reducedMotion": {
+              "description": "\"auto\" follows the OS setting. true always turns motion off",
+              "default": "auto"
+            },
+            "animateOnView": {
+              "description": "Play when the chart scrolls into view",
+              "default": true,
+              "type": "boolean"
+            },
+            "showLabels": {
+              "description": "Labels drawn on the chart (values and names)",
+              "default": true,
+              "type": "boolean"
+            },
+            "tooltip": {
+              "$ref": "#/$defs/tooltip"
+            },
+            "syncId": {
+              "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+              "type": "string"
+            },
+            "ariaLabel": {
+              "description": "Name for screen readers",
+              "type": "string"
+            },
+            "description": {
+              "description": "Description for screen readers. Built from the data when omitted",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "card": {
+          "$ref": "#/$defs/card"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Horizon chart",
+      "description": "Many time series in thin rows, each value folded into a few colored bands. Use when: 13 to 60 time series in the same unit on one card. Avoid when: 12 or fewer series (a line chart or small multiples read faster), or first-time readers have no time to read the legend",
+      "type": "object",
+      "required": [
+        "type",
+        "data"
+      ],
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "type": {
+          "const": "horizon"
+        },
+        "data": {
+          "$ref": "#/$defs/data"
+        },
+        "encoding": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "description": "x field (date, number or category) (any)"
+            },
+            "y": {
+              "description": "y field. An array for wide tables (number)",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "series": {
+              "type": "string",
+              "description": "Series field (long tables) (string)"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "bands": {
+              "description": "Color bands per row, 1 to 3. Default 1 when rowHeight is 24 or more, otherwise 2",
+              "type": "number",
+              "minimum": 1
+            },
+            "rowHeight": {
+              "description": "Row height in px. Default 18 up to 24 series, otherwise 14. A set height stretches the rows",
+              "type": "number",
+              "minimum": 12,
+              "maximum": 48
+            },
+            "baseline": {
+              "description": "Where the bands start. Values below it mirror into the row in downColor",
+              "default": 0,
+              "type": "number"
+            },
+            "downColor": {
+              "description": "Color below the baseline (token name or CSS color)",
+              "default": "neutralStrong",
+              "type": "string"
+            },
+            "scale": {
+              "description": "\"shared\": the same bands on every row, so rows compare. \"free\": each row fits its own values",
+              "default": "shared",
+              "enum": [
+                "shared",
+                "free"
+              ]
+            },
+            "showValues": {
+              "description": "Value column on the right: the last value, or the value at the pointed time",
+              "default": true,
+              "type": "boolean"
+            },
+            "legend": {
+              "description": "Legend on top with each band's range",
+              "default": true,
+              "type": "boolean"
+            },
+            "xType": {
+              "description": "Sets the x type yourself. Automatic when omitted: ISO dates, dotted dates such as \"2025.03.01\", Korean year-month-day dates, quarters such as \"2024Q1\" and English month names are read as dates. With \"date\", 10-digit numbers are Unix seconds",
+              "enum": [
+                "number",
+                "date",
+                "band"
+              ]
+            },
+            "dayFirst": {
+              "description": "Reads dates such as \"05/03/2024\", where either part could be the month, day first (5 March). Without it, a clear date in the column decides (25/03/2024), otherwise month first. true also reads \"05.03.24\" as day.month.year",
+              "type": "boolean"
+            },
+            "aggregate": {
+              "description": "How rows with the same x (and series) combine: \"sum\" adds them, \"mean\" averages, \"last\" keeps the last row, \"count\" counts rows",
+              "default": "sum",
+              "enum": [
+                "sum",
+                "mean",
+                "last",
+                "count"
               ]
             },
             "height": {

@@ -78,7 +78,15 @@ const CH_symbolMap: ChannelDef[] = [
   ch("group", "string", false, "Group field (one color per group)"),
 ];
 const CH_flowMap: ChannelDef[] = [ch("source", "string", true, "Start: a name in options.places or a region"), ch("target", "string", true, "End"), ch("value", "number", false, "Amount. Without it each row counts 1")];
+const CH_cohort: ChannelDef[] = [
+  ch("cohort", "any", true, "Cohort: a name or a start date. Cohorts go in date order when all read as dates, otherwise in order of first appearance"),
+  ch("period", "any", true, "Periods since the cohort started: 0, 1, 2 ... In number order when all are numbers"),
+  ch("value", "number", true, "People still active, or the share still active (see options.valueType)"),
+  ch("size", "number", false, "Cohort size. The first value of each cohort counts"),
+];
+const CH_horizon: ChannelDef[] = [ch("x", "any", true, "x field (date, number or category)"), ch("y", "number", true, "y field. An array for wide tables", { multi: true }), ch("series", "string", false, "Series field (long tables)")];
 const CH_scatter: ChannelDef[] = [ch("x", "number", true, "x value"), ch("y", "number", true, "y value"), ch("series", "string", false, "Series field (one color per series)"), ch("label", "string", false, "Name")];
+const CH_sparkTable: ChannelDef[] = [ch("label", "string", true, "Row name field (one row per metric)"), ch("x", "any", true, "Period field (date, number or category). Every row shares the same period axis"), VALUE, ch("target", "number", false, "Target field. Each row uses its last filled value")];
 
 export const CHANNELS: Record<string, ChannelDef[]> = {
   pie: CH_pie,
@@ -125,6 +133,9 @@ export const CHANNELS: Record<string, ChannelDef[]> = {
   choropleth: CH_choropleth,
   symbolMap: CH_symbolMap,
   flowMap: CH_flowMap,
+  sparkTable: CH_sparkTable,
+  cohort: CH_cohort,
+  horizon: CH_horizon,
 };
 
 /** Type -> component name, English name, Korean name. Korean names live only here (shared by localizeDef and the Korean validation messages) */
@@ -173,6 +184,9 @@ export const META: Record<string, { component: string; name: string; nameKo: str
   choropleth: { component: "Choropleth", name: "Choropleth map", nameKo: "단계구분도" },
   symbolMap: { component: "SymbolMap", name: "Symbol map", nameKo: "기호 지도" },
   flowMap: { component: "FlowMap", name: "Flow map", nameKo: "흐름 지도" },
+  sparkTable: { component: "SparkTable", name: "KPI table", nameKo: "지표 표" },
+  cohort: { component: "CohortChart", name: "Cohort chart", nameKo: "코호트 차트" },
+  horizon: { component: "HorizonChart", name: "Horizon chart", nameKo: "호라이즌 차트" },
 };
 
 /** A chart name in one language. Example: nameIn(META.pie, "ko") === "파이 차트" */
@@ -204,6 +218,9 @@ export const FACET_TYPES = ["line", "area", "bar", "scatter"];
 
 /** Maximum number of facet panels. Beyond it, only this many are drawn from the start, and the validator reports how many were left out */
 export const FACET_MAX = 24;
+
+/** Maximum number of horizon rows. Beyond it, only the first this many are drawn, and the validator reports how many series were left out */
+export const HORIZON_MAX_SERIES = 60;
 
 /** Charts that can hide series (hidden). These are also the charts whose series card.legend "toggle" turns on and off */
 export const TOGGLES = ["line", "area", "bar", "scatter", "timeline"];
@@ -291,6 +308,14 @@ export const TYPE_ALIASES: Record<string, string> = {
   odMap: "flowMap",
   alluvial: "sankey",
   parallelSets: "sankey",
+  kpiTable: "sparkTable",
+  metricTable: "sparkTable",
+  sparklineTable: "sparkTable",
+  retention: "cohort",
+  cohortTable: "cohort",
+  retentionTable: "cohort",
+  horizonChart: "horizon",
+  horizonGraph: "horizon",
 };
 
 export interface ChartMeta {
