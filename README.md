@@ -16,6 +16,7 @@
   <a href="https://www.npmjs.com/package/ztd-charts"><img src="https://img.shields.io/npm/v/ztd-charts?color=0B8FD8&label=npm" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/ztd-charts?color=0B8FD8" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/runtime%20dependencies-0-0B8FD8" alt="No runtime dependencies">
+  <a href="https://github.com/Junhan2/ztd-charts/stargazers"><img src="https://img.shields.io/github/stars/Junhan2/ztd-charts?style=flat&color=0B8FD8" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
