@@ -56,7 +56,7 @@ export const SCHEMA_TEXT_EN: SchemaText = {
   accent: "A word of the title to color with the accent color, used instead of a legend",
   download: "Download buttons in the browser: true for CSV, SVG and PNG, or a list. Not drawn in SVG, PNG or static HTML",
   legend: '"auto" builds the legend from the data. "toggle" also lets viewers click it to show and hide series in the browser (line, area, bar, scatter, and timeline groups). Images and static HTML draw it like "auto"',
-  takeaway: "Bold one-line takeaway at the bottom",
+  takeaway: "The card's conclusion about this data in one short sentence (about 40 characters; about 25 in Korean). Shown bold under the chart; longer text wraps. Not a description of the chart type.",
   level: '"basic" | "intermediate" | "advanced". The Korean "기본" | "중급" | "심화" also work',
   sample: "Marks the data as sample data",
   theme: 'Token overrides. For example { accent: "#00C2FF" }',

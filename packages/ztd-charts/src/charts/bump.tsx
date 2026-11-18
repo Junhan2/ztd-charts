@@ -70,7 +70,10 @@ export function BumpChart<T = Row>(props: BumpChartProps<T>) {
   const maxRank = Math.max(nS, ...lines.flatMap((l) => l.ranks.filter(Number.isFinite)));
   const lw = Math.min(W * 0.24, Math.max(...lines.map((l) => textWidth(l.name, 11, 800)), 20) + 16);
   const msg = MSG[c.lang];
-  const rw = Math.min(W * 0.26, Math.max(...lines.map((l) => textWidth(`${msg.rank([...l.ranks].reverse().find(Number.isFinite) ?? "")} ${l.name}`, 11, 800)), 20) + 16);
+  const endW = (l: BumpLine) => textWidth(`${msg.rank([...l.ranks].reverse().find(Number.isFinite) ?? "")} ${l.name}`, 11, 800);
+  // End names get up to 0.26 of the width; a highlighted one may take up to 0.34 so it is not shortened on narrow cards
+  const hiW = Math.max(0, ...lines.filter((l) => l.hi).map(endW)) + 16;
+  const rw = Math.min(Math.max(W * 0.26, Math.min(W * 0.34, hiW)), Math.max(...lines.map(endW), 20) + 16);
   const top = 12;
   const bottom = 24;
   const x0 = lw;

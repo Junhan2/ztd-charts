@@ -140,7 +140,7 @@
           }
         },
         "maxPoints": {
-          "description": "Above this many points, LTTB downsamples the line",
+          "description": "Above this many points, LTTB downsamples the line; stacked areas average each bucket instead",
           "type": "number"
         },
         "brush": {
@@ -340,7 +340,7 @@
           "$ref": "#/$defs/tooltip"
         },
         "syncId": {
-          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it",
+          "description": "Charts with the same syncId show the hovered x together (line, area, bar, candlestick, skyline). <ChartGrid sync> sets one for every chart inside it",
           "type": "string"
         },
         "ariaLabel": {
@@ -491,7 +491,7 @@
         },
         "takeaway": {
           "type": "string",
-          "description": "Bold one-line takeaway at the bottom"
+          "description": "The card's conclusion about this data in one short sentence (about 40 characters; about 25 in Korean). Shown bold under the chart; longer text wraps. Not a description of the chart type."
         },
         "level": {
           "type": "string",

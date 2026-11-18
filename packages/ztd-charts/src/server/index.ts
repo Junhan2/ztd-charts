@@ -79,18 +79,35 @@ function chartMarkup(spec: ChartSpec, width: number, height: number | undefined,
 }
 
 /** Wraps lines word by word to fit within max width (a longer word gets a line of its own). Kept separate because wrapLines truncates a long word (a source URL) with an ellipsis and drops the rest */
-function wrapWords(s: string, max: number, size: number): string[] {
+function wrapWords(s: string, max: number, size: number, weight?: number): string[] {
   const out: string[] = [];
   let line = "";
   for (const w of s.split(/\s+/)) {
     const next = line ? `${line} ${w}` : w;
-    if (line && textWidth(next, size) > max) {
+    if (line && textWidth(next, size, weight) > max) {
       out.push(line);
       line = w;
     } else line = next;
   }
   if (line) out.push(line);
   return out;
+}
+
+/**
+ * Like wrapWords, then narrows the width while the line count stays the same, so the lines come out even like the browser card's
+ * text-wrap: balance (Chromium balances blocks of up to six lines, so longer text keeps the greedy lines)
+ */
+function wrapBalanced(s: string, max: number, size: number, weight?: number): string[] {
+  const lines = wrapWords(s, max, size, weight);
+  if (lines.length < 2 || lines.length > 6) return lines;
+  let lo = 0;
+  let hi = max;
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2;
+    if (wrapWords(s, mid, size, weight).length > lines.length) lo = mid;
+    else hi = mid;
+  }
+  return wrapWords(s, hi, size, weight);
 }
 
 /** Inner markup and viewBox size of each chart svg (class="ztd-svg") in the markup. Small multiples have one per panel. The closing tag is found by counting pairs, nested svgs included */
@@ -284,20 +301,28 @@ export function renderSpecToSVG(spec: ChartSpec, opts: RenderOptions = {}): stri
   }
   const hasFooter = !!(card.takeaway || card.level || card.sample);
   if (hasFooter) {
-    parts.push(`<text x="${cx0 + ip}" y="${y + 17}" font-size="17" font-weight="800" letter-spacing="-0.3" fill="${T.ink}">${esc(card.takeaway ?? "")}</text>`);
+    const badge = card.level ? levelBadge(card.level, lang) : null;
+    const bw = badge ? textWidth(badge.text, 12.5, 700) + 18 : 0;
+    const sample = card.sample ? (typeof card.sample === "string" ? card.sample : CARD_TEXT[lang].sample) : "";
+    const metaW = bw + (sample ? textWidth(sample, 11.5) + (bw ? 8 : 0) : 0);
+    const text = card.takeaway ?? "";
+    // The browser card's content width (padding and border), so both renderers decide and wrap on the same width
+    const max = cw - CARD_INSET;
+    const tw = textWidth(text, 17, 800);
+    // Same rule as the browser card's flex-wrap: the badge and sample note stay beside the takeaway only when the whole takeaway fits next to them;
+    // otherwise the takeaway takes the full width (22px lines) and they move to a right-aligned row 10px below it
+    const stacked = !!metaW && !!text && tw + 10 + metaW > max;
+    const lines = tw <= max ? [text] : wrapBalanced(text, max, 17, 800);
+    lines.forEach((l, i) => parts.push(`<text x="${cx0 + ip}" y="${y + 17 + 22 * i}" font-size="17" font-weight="800" letter-spacing="-0.3" fill="${T.ink}">${esc(l)}</text>`));
+    const my = stacked ? y + 22 * lines.length + 10 : y; // top of the badge row
     let bx = cx0 + cw - ip;
-    if (card.level) {
-      const b = levelBadge(card.level, lang);
-      const bw = textWidth(b.text, 12.5, 700) + 18;
+    if (badge) {
       bx -= bw;
-      parts.push(`<rect x="${bx}" y="${y + 1}" width="${bw}" height="24" rx="8" fill="${T[b.bg]}"/><text x="${bx + bw / 2}" y="${y + 17.5}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${T[b.fg]}">${esc(b.text)}</text>`);
+      parts.push(`<rect x="${bx}" y="${my + 1}" width="${bw}" height="24" rx="8" fill="${T[badge.bg]}"/><text x="${bx + bw / 2}" y="${my + 17.5}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${T[badge.fg]}">${esc(badge.text)}</text>`);
       bx -= 8;
     }
-    if (card.sample) {
-      const t = typeof card.sample === "string" ? card.sample : CARD_TEXT[lang].sample;
-      parts.push(`<text x="${bx}" y="${y + 17}" text-anchor="end" font-size="11.5" fill="${T.muted}">${esc(t)}</text>`);
-    }
-    y += 30;
+    if (sample) parts.push(`<text x="${bx}" y="${my + 17}" text-anchor="end" font-size="11.5" fill="${T.muted}">${esc(sample)}</text>`);
+    y += stacked ? 22 * lines.length + 40 : 30 + 22 * (lines.length - 1);
   }
   y += 12;
   const ch = y - cy0;

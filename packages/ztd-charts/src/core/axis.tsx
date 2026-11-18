@@ -1,6 +1,6 @@
 import type { Painter } from "../theme/context";
 import { Txt } from "./ChartFrame";
-import { formatNumber, type ValueFormatter } from "./format";
+import { formatNumber, type TickFormatter, type ValueFormatter } from "./format";
 import { textWidth, truncate } from "./text";
 
 export const AXIS_FONT = 10.5;
@@ -13,6 +13,10 @@ export function tickLabels(ticks: readonly number[], fmt: ValueFormatter, locale
   let step = Infinity;
   for (let i = 1; i < ticks.length; i++) step = Math.min(step, Math.abs(ticks[i] - ticks[i - 1]));
   const digits = step > 0 && Number.isFinite(step) ? Math.min(20, Math.max(2, Math.ceil(-Math.log10(step) - 1e-9))) : 2;
+  // Keep the format (%, currency, prefix and suffix) with more decimals when it has such a version and that separates the labels
+  const more = (fmt as TickFormatter).withDigits?.(digits);
+  const kept = more ? ticks.map(more) : null;
+  if (kept && new Set(kept).size === kept.length) return kept;
   return ticks.map((t) => formatNumber(t, { locale, maximumFractionDigits: digits }));
 }
 

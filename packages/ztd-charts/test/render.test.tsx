@@ -9,6 +9,7 @@ import { downloadFields } from "../src/spec/meta";
 import { templateTooltip } from "../src/charts/tooltipTemplate";
 import { renderSpecToHTML, renderSpecToSVG } from "../src/server";
 import { CHARTS, VARIANTS, variantSpec } from "../src/spec";
+import { textWidth } from "../src/core/text";
 import { ThemeProvider } from "../src/theme/context";
 import { lightTheme } from "../src/theme/tokens";
 
@@ -105,6 +106,52 @@ describe("card source line and title accent", () => {
     const withLine = renderSpecToSVG(spec, { width: 560 });
     expect(withLine).toContain("Source: 통계청 · 2025-10 기준");
     expect(height(withLine) - height(renderSpecToSVG({ ...base, card: { title: "T" } }, { width: 560 }))).toBe(27);
+  });
+  describe("server card footer: the badge row stays beside a takeaway that fits next to it, and otherwise moves below it", () => {
+    const meta = { level: "intermediate", sample: true };
+    const card = (width: number, takeaway?: string, extra: object = meta) => renderSpecToSVG({ ...base, card: { title: "T", ...(takeaway ? { takeaway } : {}), ...extra } }, { width, theme: "light" });
+    const read = (svg: string) => {
+      const frame = /<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" rx="[\d.]+" fill="[^"]+" stroke=/.exec(svg)!;
+      const badge = /<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="24" rx="8"/.exec(svg);
+      return {
+        cx0: +frame[1] - 0.5,
+        cw: +frame[2] + 1,
+        height: Number(/height="([\d.]+)"/.exec(svg)![1]),
+        lines: [...svg.matchAll(/<text x="[\d.]+" y="([\d.]+)" font-size="17" font-weight="800"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ y: +m[1], text: m[2] })),
+        badge: badge ? { x: +badge[1], y: +badge[2], w: +badge[3] } : null,
+      };
+    };
+    it("fits beside: one line, the badge on the same row, and the footer adds 30px as before", () => {
+      const c = read(card(720, "Up 12%"));
+      expect(c.lines.map((l) => l.text)).toEqual(["Up 12%"]);
+      expect(c.badge!.y).toBe(c.lines[0].y - 16);
+      expect(c.height - read(renderSpecToSVG({ ...base, card: { title: "T" } }, { width: 720, theme: "light" })).height).toBe(30);
+    });
+    it("does not fit beside: full-width lines, the badge row 10px under them at the right edge, and the footer grows 22px a line plus 10px", () => {
+      const takeaway = "Overseas stocks made 86% of the return";
+      for (const width of [300, 390]) {
+        const c = read(card(width, takeaway));
+        const last = c.lines.at(-1)!;
+        expect(c.lines.map((l) => l.text).join(" "), `${width}`).toBe(takeaway);
+        expect(c.lines.length, `${width}`).toBeLessThanOrEqual(2);
+        for (const l of c.lines) expect(textWidth(l.text, 17, 800), `${width} ${l.text}`).toBeLessThanOrEqual(c.cw - 42);
+        // The last line box ends 5px under its baseline, then the 10px gap; the badge rect starts 1px into its row
+        expect(c.badge!.y, `${width}`).toBe(last.y + 5 + 10 + 1);
+        expect(c.badge!.x + c.badge!.w, `${width}`).toBe(c.cx0 + c.cw - 20);
+        // Against a footer of the badge row alone (30px, the same as one line beside the badge)
+        expect(c.height - read(card(width)).height, `${width}`).toBe(22 * c.lines.length + 10);
+      }
+      expect(read(card(720, takeaway)).lines).toHaveLength(1);
+    });
+    it("wraps into even lines like the browser's text-wrap: balance, and without a badge or sample note adds no badge row", () => {
+      const takeaway = "Every month beats the one before, and the forecast keeps the streak going";
+      // Filling each line greedily would leave "going" alone on the third line
+      expect(read(card(390, takeaway, { level: "basic" })).lines.map((l) => l.text)).toEqual(["Every month beats the one", "before, and the forecast", "keeps the streak going"]);
+      const plain = read(card(300, takeaway, {}));
+      expect(plain.badge).toBeNull();
+      for (const l of plain.lines) expect(textWidth(l.text, 17, 800)).toBeLessThanOrEqual(plain.cw - 42);
+      expect(plain.height - read(card(300, "Up 12%", {})).height).toBe(22 * (plain.lines.length - 1));
+    });
   });
   it("only the accent word in the title is accent colored, and the chart name is the title as is", () => {
     const spec = { ...base, card: { title: "올해 매출이 가장 커요", accent: "올해" } };
@@ -225,6 +272,23 @@ describe("components", () => {
       </ChartCard>,
     );
     for (const s of ["01", "Pie chart", "By device", "Mobile", "Two to four items", ">Intermediate<", "Sample data", 'aria-label="Replay animation"', 'aria-label="Legend"']) expect(html).toContain(s);
+  });
+  it("ChartCard footer wraps, so the badge row drops below a takeaway that does not fit beside it (right-aligned), and without a badge or sample note only the takeaway is there", () => {
+    const footer = (el: React.ReactElement) => /<footer[^>]*>.*<\/footer>/s.exec(ssr(el))![0];
+    const withMeta = footer(
+      <ChartCard title="T" takeaway="Up 12%" level="basic" sample>
+        <div />
+      </ChartCard>,
+    );
+    expect(withMeta).toMatch(/^<footer style="display:flex;flex-wrap:wrap/);
+    expect(withMeta).toMatch(/<span style="display:inline-flex;[^"]*margin-left:auto">/);
+    expect(
+      footer(
+        <ChartCard title="T" takeaway="Up 12%">
+          <div />
+        </ChartCard>,
+      ),
+    ).toMatch(/^<footer[^>]*><span[^>]*>Up 12%<\/span><\/footer>$/);
   });
   it("ChartGrid keeps its column count and collapses when narrow", () => {
     expect(ssr(<ChartGrid columns={3} />)).toContain("repeat(auto-fill, minmax(min(100%, max(320px, calc((100% - 32px) / 3 - 0.5px))), 1fr))");

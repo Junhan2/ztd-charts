@@ -83,7 +83,8 @@ export function ParallelCoordinates<T = Row>(props: ParallelCoordinatesProps<T>)
   const doms = useMemo(() => dims.map((_, j) => fitDomain(...extent(rows.map((r) => r.vals[j])), 4, { zero: false, pad: 0.02 })), [dims, rows]);
   const fmts = useMemo(() => dims.map((k) => makeFormatter(props.formats?.[k], c.locale)), [dims, props.formats, c.locale]);
   const hi = useMemo(() => resolveHighlight(props.highlight, rows.map((r) => r.d), rows.map((r) => r.label), rows.map((r) => r.vals[0] ?? 0), "first"), [rows, props.highlight]);
-  const labelR = Math.min(W * 0.18, Math.max(...rows.filter((r) => hi.has(r.i)).map((r) => textWidth(r.label, 11, 800)), 0) + 14);
+  // Room for the highlighted names on the right: up to 0.26 of the width, so a README gallery card (231px) does not shorten them
+  const labelR = Math.min(W * 0.26, Math.max(...rows.filter((r) => hi.has(r.i)).map((r) => textWidth(r.label, 11, 800)), 0) + 14);
   const bottom = 18;
   const dimName = (k: string) => props.dimensionLabels?.[k] ?? k;
   const nameW = dims.map((k) => textWidth(dimName(k), 11, 700));

@@ -1,6 +1,6 @@
 # QA report
 
-Generated 2026-11-16 16:20 UTC · Target: production build (`vite build` + `vite preview`) · Browser: Chromium 156.0.8078.4 (Playwright headless shell)
+Generated 2026-11-18 05:45 UTC · Target: production build (`vite build` + `vite preview`) · Browser: Chromium 156.0.8078.4 (Playwright headless shell)
 
 This report collects the numbers measured with Playwright, Vitest and size-limit.
 
@@ -19,9 +19,9 @@ This report collects the numbers measured with Playwright, Vitest and size-limit
 | Text contrast (SVG + HTML) | 15,650 checked, 0 below target, lowest 3.1:1 | WCAG AA 4.5:1 (3:1 for large text) | Pass |
 | Animation fps (47 charts, 1× CPU) | lowest 60 fps, 0 long tasks | 60 fps, no task over 50ms | Pass |
 | Animation fps (4× CPU slowdown) | lowest 60 fps | for reference (close to a mid-range phone) | - |
-| 10k-point stress (16 charts) | first render up to 44.4ms, replay at least 60 fps, hover p95 up to 3.3ms | | see the table |
-| Bundle size (one chart, Brotli) | 11.9 to 26.3 KB, everything 197.3 KB | size-limit budgets | Pass |
-| Unit tests (Vitest) | 973/973 passed | all | Pass |
+| 10k-point stress (16 charts) | first render up to 65.4ms, replay at least 59.4 fps, hover p95 up to 9.6ms | | see the table |
+| Bundle size (one chart, Brotli) | 11.9 to 26.4 KB, everything 197.5 KB | size-limit budgets | Pass |
+| Unit tests (Vitest) | 983/983 passed | all | Pass |
 | Type check | 5 projects | 0 errors | Pass |
 | Lint (ESLint) | 0 errors, 0 warnings | 0 errors | Pass |
 | Accessibility (axe, 6 pages × 2 themes) | 0 violating nodes | 0 | Pass |
@@ -124,76 +124,76 @@ Lowest contrast on the 228 example dashboard cards: 4.8:1.
 
 ## 5. Animation performance
 
-Baseline (no animation): 60 fps, frame interval p95 16.8ms. This means headless Chromium paints at 60 Hz.
+Baseline (no animation): 60 fps, frame interval p95 16.7ms. This means headless Chromium paints at 60 Hz.
 
 1.6 seconds after pressing replay on a chart page (one chart moving):
 
 | Chart | fps 1× | p95 ms | max ms | dropped frames | long tasks | LoAF max ms | fps 4× | p95 ms 4× | long tasks 4× |
 |---|---|---|---|---|---|---|---|---|---|
-| Pie chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Donut chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Funnel chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Waffle chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Treemap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Sunburst | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Waterfall chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Pareto chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Marimekko chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Pie chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Donut chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Funnel chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
+| Waffle chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Treemap | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Sunburst | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Waterfall chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Pareto chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Marimekko chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Heatmap | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Radar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Radar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Bubble chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Line chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Area chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Line chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Area chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Streamgraph | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Bar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Radial bar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Gauge | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Bullet chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Sparkline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Slope chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bar chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Radial bar chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Gauge | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bullet chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
+| Sparkline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Slope chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
 | Dumbbell chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Lollipop chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Beeswarm | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| Ridgeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Lollipop chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Beeswarm | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Ridgeline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Sankey diagram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Chord diagram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Calendar heatmap | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
-| Bump chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Box / violin plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| Parallel coordinates | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Candlestick chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Segmented bar | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Skyline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Histogram | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Chord diagram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Calendar heatmap | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Bump chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Box / violin plot | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Parallel coordinates | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Candlestick chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Segmented bar | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
+| Skyline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Histogram | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 | Scatter plot | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Tile grid map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Choropleth map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Bar race | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Network | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Timeline | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Tree | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
-| Symbol map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Flow map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.7 | 0 |
-| KPI table | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Cohort chart | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
-| Horizon chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Tile grid map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Choropleth map | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Bar race | 60 | 16.7 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Network | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Timeline | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Tree | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Symbol map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
+| Flow map | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| KPI table | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60.6 | 16.8 | 0 |
+| Cohort chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.7 | 0 |
+| Horizon chart | 60 | 16.8 | 16.8 | 0 | 0 | 0 | 60 | 16.8 | 0 |
 
 Several charts moving at once:
 
 | Scene | CPU | fps | p95 ms | max ms | dropped frames | long tasks |
 |---|---|---|---|---|---|---|
-| Gallery, replay all: 2 columns, 4 charts on screen | 1× | 59.5 | 16.8 | 33.4 | 1 | 0 |
-| Gallery, replay all: 2 columns, 4 charts on screen | 4× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Gallery, replay all: 2 columns, 4 charts on screen | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Gallery, replay all: 2 columns, 4 charts on screen | 4× | 59.5 | 16.8 | 33.3 | 1 | 0 |
 | Gallery, replay all: 3 columns, 6 charts on screen | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| Gallery, replay all: 3 columns, 6 charts on screen | 4× | 59.5 | 16.8 | 33.3 | 1 | 0 |
-| Examples, entrance on scroll: marketing | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Gallery, replay all: 3 columns, 6 charts on screen | 4× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: marketing | 1× | 59.4 | 16.7 | 33.4 | 1 | 0 |
 | Examples, entrance on scroll: portfolio | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
-| Examples, entrance on scroll: retention | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
-| Examples, entrance on scroll: ops | 1× | 59.4 | 16.8 | 33.4 | 1 | 0 |
-| Examples, entrance on scroll: marketing | 4× | 53.8 | 16.8 | 100 | 3 | 3 (max 68ms) |
-| Examples, entrance on scroll: portfolio | 4× | 55.7 | 33.3 | 33.4 | 7 | 0 |
-| Examples, entrance on scroll: retention | 4× | 53.8 | 33.3 | 66.7 | 8 | 0 |
-| Examples, entrance on scroll: ops | 4× | 46.9 | 33.3 | 166.6 | 8 | 3 (max 145ms) |
+| Examples, entrance on scroll: retention | 1× | 60 | 16.7 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: ops | 1× | 60 | 16.8 | 16.8 | 0 | 0 |
+| Examples, entrance on scroll: marketing | 4× | 55.1 | 16.8 | 100 | 2 | 2 (max 65ms) |
+| Examples, entrance on scroll: portfolio | 4× | 58.8 | 16.8 | 50 | 1 | 0 |
+| Examples, entrance on scroll: retention | 4× | 57.5 | 16.8 | 83.3 | 1 | 1 (max 51ms) |
+| Examples, entrance on scroll: ops | 4× | 52.5 | 16.8 | 133.3 | 2 | 3 (max 110ms) |
 
 ## 6. 10k-point stress
 
@@ -201,38 +201,38 @@ The `/qa/stress/?type=...` page. First render runs from mounting the chart compo
 
 | Chart | Rows | CPU | Drawing | Data generation ms | First render ms | Loading long tasks | Replay fps | Replay p95 ms | Hover p50 ms | Hover p95 ms | DOM nodes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Line chart | 10,000 | 1× | SVG | 3.6 | 33.8 | 0 | 60 | 16.8 | 1.9 | 3.3 | 228 |
-| Area chart | 10,000 | 1× | SVG | 0.7 | 28.1 | 0 | 60 | 16.7 | 1.4 | 2.7 | 226 |
-| Sparkline | 10,000 | 1× | SVG | 0.5 | 24.2 | 0 | 60 | 16.8 | 1.4 | 1.8 | 202 |
-| Bubble chart | 10,000 | 1× | Canvas | 0.9 | 28.1 | 0 | 60 | 16.7 | 0.8 | 1.5 | 217 |
-| Scatter plot | 10,000 | 1× | Canvas | 0.9 | 34.2 | 0 | 60 | 16.8 | 0.7 | 2.4 | 226 |
-| Heatmap | 10,000 | 1× | Canvas | 0.4 | 28.1 | 0 | 60 | 16.8 | 0.8 | 0.9 | 259 |
-| Beeswarm | 10,000 | 1× | Canvas | 0.6 | 29.6 | 0 | 60 | 16.8 | 0.7 | 1.3 | 240 |
-| Parallel coordinates | 10,000 | 1× | Canvas | 1.6 | 44.4 | 0 | 60 | 16.7 | 0.8 | 1.2 | 218 |
-| Calendar heatmap | 10,000 | 1× | Canvas | 1.6 | 43.1 | 0 | 60 | 16.7 | 1 | 1.4 | 640 |
-| Box / violin plot | 10,000 | 1× | SVG | 0.5 | 29.3 | 0 | 60 | 16.7 | 0 | 0 | 150 |
-| Ridgeline | 10,000 | 1× | SVG | 0.8 | 28 | 0 | 60 | 16.8 | 0.6 | 0.8 | 113 |
-| Streamgraph | 10,000 | 1× | SVG | 0.6 | 28 | 0 | 60 | 16.8 | 1.9 | 2.2 | 212 |
-| Sankey diagram | 10,000 | 1× | SVG | 2.3 | 26.8 | 0 | 60 | 16.8 | 0 | 0 | 414 |
-| KPI table | 6,240 | 1× | SVG | 2.9 | 25.7 | 0 | 60 | 16.7 | 1.6 | 2 | 1,098 |
-| Cohort chart | 1,275 | 1× | SVG | 0.4 | 33.3 | 0 | 60 | 16.8 | 1.8 | 2.9 | 2,927 |
-| Horizon chart | 25,000 | 1× | SVG | 2.3 | 31.8 | 0 | 60 | 16.7 | 1.2 | 1.5 | 919 |
-| Line chart | 10,000 | 4× | SVG | 16.1 | 126.6 | 1 (max 98) | 58.8 | 16.8 | 10.1 | 11.5 | 228 |
-| Area chart | 10,000 | 4× | SVG | 3.2 | 71.8 | 0 | 60 | 16.8 | 7 | 8.9 | 226 |
-| Sparkline | 10,000 | 4× | SVG | 1.3 | 66.5 | 0 | 60 | 16.7 | 6.7 | 7.9 | 202 |
-| Bubble chart | 10,000 | 4× | Canvas | 4 | 62.2 | 0 | 53.8 | 33.3 | 3.3 | 6.7 | 217 |
-| Scatter plot | 10,000 | 4× | Canvas | 3.5 | 143.4 | 1 (max 119) | 53.2 | 33.3 | 3.5 | 9.7 | 226 |
-| Heatmap | 10,000 | 4× | Canvas | 5 | 75.7 | 1 (max 50) | 60 | 16.8 | 3.5 | 4.8 | 259 |
-| Beeswarm | 10,000 | 4× | Canvas | 1.6 | 111.9 | 1 (max 79) | 47 | 33.4 | 4 | 6.5 | 240 |
-| Parallel coordinates | 10,000 | 4× | Canvas | 5.2 | 240.4 | 2 (max 142) | 60 | 16.7 | 4.3 | 7 | 218 |
-| Calendar heatmap | 10,000 | 4× | Canvas | 7.8 | 219.9 | 2 (max 110) | 59.4 | 16.7 | 4.8 | 7.2 | 640 |
-| Box / violin plot | 10,000 | 4× | SVG | 7.1 | 103.2 | 1 (max 67) | 60 | 16.7 | 0 | 0 | 150 |
-| Ridgeline | 10,000 | 4× | SVG | 3.8 | 77.4 | 1 (max 53) | 60 | 16.7 | 3.1 | 3.7 | 113 |
-| Streamgraph | 10,000 | 4× | SVG | 1.5 | 81.5 | 0 | 60 | 16.7 | 7.8 | 9.1 | 212 |
-| Sankey diagram | 10,000 | 4× | SVG | 8.4 | 71.2 | 0 | 60 | 16.7 | 0 | 0 | 414 |
-| KPI table | 6,240 | 4× | SVG | 11.9 | 113.6 | 2 (max 58) | 60 | 16.7 | 7 | 15.2 | 1,098 |
-| Cohort chart | 1,275 | 4× | SVG | 2.6 | 137.1 | 2 (max 68) | 48.2 | 49.9 | 8.3 | 13.1 | 2,927 |
-| Horizon chart | 25,000 | 4× | SVG | 8.2 | 140.4 | 1 (max 100) | 60 | 16.8 | 5.5 | 6.7 | 919 |
+| Line chart | 10,000 | 1× | SVG | 3.9 | 48.2 | 0 | 60 | 16.7 | 3.4 | 6.5 | 228 |
+| Area chart | 10,000 | 1× | SVG | 0.7 | 30.3 | 0 | 60 | 16.7 | 2.8 | 4.4 | 226 |
+| Sparkline | 10,000 | 1× | SVG | 0.6 | 29.4 | 0 | 60 | 16.8 | 2.7 | 4 | 202 |
+| Bubble chart | 10,000 | 1× | Canvas | 1 | 31 | 0 | 60 | 16.7 | 1.7 | 4 | 217 |
+| Scatter plot | 10,000 | 1× | Canvas | 1 | 52.7 | 0 | 60 | 16.7 | 2 | 5.8 | 226 |
+| Heatmap | 10,000 | 1× | Canvas | 0.4 | 25.1 | 0 | 60 | 16.8 | 1.7 | 2.2 | 259 |
+| Beeswarm | 10,000 | 1× | Canvas | 0.6 | 42.5 | 0 | 60 | 16.8 | 1.7 | 2.3 | 240 |
+| Parallel coordinates | 10,000 | 1× | Canvas | 2.2 | 65.4 | 0 | 60 | 16.8 | 1.2 | 2.7 | 218 |
+| Calendar heatmap | 10,000 | 1× | Canvas | 2 | 59 | 0 | 60 | 16.8 | 2 | 3.8 | 640 |
+| Box / violin plot | 10,000 | 1× | SVG | 0.5 | 33.1 | 0 | 60 | 16.8 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 1× | SVG | 0.8 | 21.4 | 0 | 60 | 16.8 | 0.9 | 1 | 113 |
+| Streamgraph | 10,000 | 1× | SVG | 0.6 | 25.6 | 0 | 60 | 16.8 | 2.3 | 5.3 | 212 |
+| Sankey diagram | 10,000 | 1× | SVG | 2.3 | 26.3 | 0 | 60 | 16.7 | 0 | 0 | 414 |
+| KPI table | 6,240 | 1× | SVG | 3.3 | 32.5 | 0 | 60 | 16.8 | 1.5 | 2.5 | 1,098 |
+| Cohort chart | 1,275 | 1× | SVG | 0.3 | 40.6 | 0 | 59.4 | 16.8 | 2.1 | 9.6 | 2,927 |
+| Horizon chart | 25,000 | 1× | SVG | 1.2 | 52 | 0 | 60 | 16.8 | 1.2 | 2.3 | 919 |
+| Line chart | 10,000 | 4× | SVG | 17.5 | 101.7 | 1 (max 78) | 60 | 16.8 | 7.7 | 9.6 | 228 |
+| Area chart | 10,000 | 4× | SVG | 3.5 | 60.5 | 0 | 60 | 16.7 | 5.9 | 7.1 | 226 |
+| Sparkline | 10,000 | 4× | SVG | 2.1 | 64.5 | 0 | 60 | 16.7 | 4.4 | 5.6 | 202 |
+| Bubble chart | 10,000 | 4× | Canvas | 3.4 | 57.1 | 0 | 55.7 | 33.3 | 1.8 | 4.5 | 217 |
+| Scatter plot | 10,000 | 4× | Canvas | 3.5 | 120.4 | 1 (max 101) | 56.3 | 33.3 | 2.6 | 9.2 | 226 |
+| Heatmap | 10,000 | 4× | Canvas | 4.1 | 69.7 | 0 | 60 | 16.8 | 3.2 | 4 | 259 |
+| Beeswarm | 10,000 | 4× | Canvas | 2.7 | 105.6 | 1 (max 74) | 51.3 | 33.4 | 3.6 | 6 | 240 |
+| Parallel coordinates | 10,000 | 4× | Canvas | 7.1 | 203.7 | 2 (max 116) | 60 | 16.8 | 4.1 | 5.2 | 218 |
+| Calendar heatmap | 10,000 | 4× | Canvas | 6.2 | 195.7 | 2 (max 97) | 59.4 | 16.8 | 4.8 | 7.5 | 640 |
+| Box / violin plot | 10,000 | 4× | SVG | 1.8 | 92.1 | 1 (max 56) | 60 | 16.8 | 0 | 0 | 150 |
+| Ridgeline | 10,000 | 4× | SVG | 2.5 | 79.6 | 1 (max 54) | 60 | 16.7 | 1.7 | 2.8 | 113 |
+| Streamgraph | 10,000 | 4× | SVG | 3.4 | 75.3 | 0 | 60 | 16.8 | 7.9 | 9.2 | 212 |
+| Sankey diagram | 10,000 | 4× | SVG | 10.5 | 68.2 | 0 | 60 | 16.7 | 0 | 0 | 414 |
+| KPI table | 6,240 | 4× | SVG | 13.3 | 128.3 | 2 (max 65) | 60 | 16.8 | 6.7 | 13.1 | 1,098 |
+| Cohort chart | 1,275 | 4× | SVG | 1.7 | 168.6 | 2 (max 86) | 48.2 | 50 | 8.1 | 10.4 | 2,927 |
+| Horizon chart | 25,000 | 4× | SVG | 3.5 | 126.6 | 1 (max 92) | 60 | 16.7 | 4.3 | 6.2 | 919 |
 
 ## 7. Bundle size
 
@@ -246,65 +246,65 @@ size-limit (KB (Brotli, size-limit + rolldown, react external)). Each row bundle
 | `WaffleChart` | 15.2 |
 | `Treemap` | 12.8 |
 | `SunburstChart` | 13.3 |
-| `WaterfallChart` | 13.5 |
+| `WaterfallChart` | 13.6 |
 | `ParetoChart` | 13.8 |
-| `MarimekkoChart` | 13.1 |
+| `MarimekkoChart` | 13.2 |
 | `Heatmap` | 14.3 |
 | `RadarChart` | 13.7 |
-| `BubbleChart` | 16.7 |
-| `LineChart` | 26.3 |
-| `AreaChart` | 26.3 |
-| `StreamGraph` | 16.5 |
-| `BarChart` | 22.1 |
+| `BubbleChart` | 16.8 |
+| `LineChart` | 26.4 |
+| `AreaChart` | 26.4 |
+| `StreamGraph` | 16.6 |
+| `BarChart` | 22.2 |
 | `RadialBarChart` | 11.9 |
 | `GaugeChart` | 12 |
 | `BulletChart` | 12.7 |
 | `Sparkline` | 14.6 |
 | `SlopeChart` | 12.8 |
 | `DumbbellChart` | 12.3 |
-| `LollipopChart` | 13.1 |
+| `LollipopChart` | 13.2 |
 | `BeeswarmChart` | 14.1 |
 | `RidgelineChart` | 13 |
 | `SankeyChart` | 14.6 |
 | `ChordChart` | 12.6 |
 | `CalendarHeatmap` | 15.1 |
 | `BumpChart` | 14.6 |
-| `BoxPlot` | 14.9 |
+| `BoxPlot` | 15.1 |
 | `ParallelCoordinates` | 13.6 |
-| `CandlestickChart` | 20.2 |
+| `CandlestickChart` | 20.3 |
 | `SegmentedBar` | 12.5 |
-| `SkylineChart` | 19.4 |
-| `HistogramChart` | 18.3 |
-| `ScatterChart` | 23.2 |
+| `SkylineChart` | 19.5 |
+| `HistogramChart` | 18.5 |
+| `ScatterChart` | 23.3 |
 | `TileMap` | 15.9 |
 | `Choropleth` | 19 |
 | `SymbolMap` | 20.4 |
 | `FlowMap` | 21.1 |
 | `Tree` | 17 |
-| `Timeline` | 20.8 |
+| `Timeline` | 20.9 |
 | `BarRace` | 17.9 |
 | `NetworkChart` | 15.9 |
 | `SparkTable` | 15.9 |
 | `CohortChart` | 13.6 |
-| `HorizonChart` | 17.6 |
+| `HorizonChart` | 17.7 |
 | `StatCard` | 15.2 |
-| `LiveLineChart` | 13.7 |
+| `LiveLineChart` | 13.8 |
 | Map: world (ztd-charts/geo/world) | 24.8 |
 | Map: us-states (ztd-charts/geo/us-states) | 10.7 |
 | Map: kr-sido (ztd-charts/geo/kr-sido) | 5.2 |
 | ChartCard + ChartGrid + ThemeProvider | 5.5 |
 | useChartData + parseCSV | 2.9 |
-| Chart (spec renderer, all charts) | 149.7 |
-| Everything (index.js) | 197.3 |
-| spec: validateSpec + specSchema | 59 |
-| Interactive HTML code (React + AreaChart) | 100.8 |
+| Chart (spec renderer, all charts) | 149.9 |
+| Everything (index.js) | 197.5 |
+| spec: validateSpec + specSchema | 59.2 |
+| Interactive HTML code (React + AreaChart) | 101 |
 
 ## 8. Tests, types, lint
 
-- Vitest: 973/973 passed in 234 files. By project: cli 39, mcp 20, landing 1, docs 16, ztd-charts 897.
+- Vitest: 983/983 passed in 237 files. By project: cli 39, mcp 20, landing 5, docs 16, ztd-charts 903.
   - Data helpers (parseCSV quotes, line breaks, BOM, delimiters, currency and percent, fromRows, fromObjects, melt, normalizeData, LTTB), Korean number units (10⁴, 10⁸, 10¹²), scales and time ticks, estimated text widths against measured ones, layouts (squarify, Sankey flow conservation, chord, stack, KDE area of 1, no beeswarm overlap), the motion engine (springs settle with no overshoot, the speed stays continuous when the target changes mid-way, enter/exit), theme contrast (22 token pairs at AA), spec validation messages, the public schemas cross-checked with ajv 2020, suggestions, SSR of 47 charts × 2 themes, empty data, CLI end-to-end tests (including data.url rendered from a local HTTP server), and the 5 MCP tools (in-memory transport and real stdio)
 - Type check: 5 projects, pass.
-- ESLint: 314 files, 0 errors, 0 warnings.
+- ESLint: 320 files, 0 errors, 0 warnings.
 
 ## 9. Accessibility
 

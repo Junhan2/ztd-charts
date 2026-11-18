@@ -17,7 +17,7 @@ The common props are the same for every chart.
 | `onHover`, `onClick`, `tooltip`, `showLabels` | Interaction |
 | `ariaLabel`, `description`, `theme`, `className`, `style` | Accessibility, styling |
 
-Large data is handled for you. Line, area and sparkline reduce points with LTTB, while scatter (1,500 or more), heatmap (2,500 cells or more), beeswarm (2,000 or more), parallel coordinates (1,500 lines or more) and calendar (4,000 days or more) draw on canvas. Axes and labels stay SVG.
+Large data is handled for you. Line, area and sparkline reduce points with LTTB (stacked areas and the stream graph average each bucket instead, because their layers share one x), while scatter (1,500 or more), heatmap (2,500 cells or more), beeswarm (2,000 or more), parallel coordinates (1,500 lines or more) and calendar (4,000 days or more) draw on canvas. Axes and labels stay SVG.
 
 ## Cards and grid
 

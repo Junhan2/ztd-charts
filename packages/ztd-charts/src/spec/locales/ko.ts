@@ -33,7 +33,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "강조 조각(기본은 가장 큰 조각)만 강조색으로, 나머지는 무채색으로 칠해서 메시지가 분명해요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { colorMode: "항목마다 다른 무채색(categorical) 또는 강조 조각만 색(emphasis)", sort: "큰 값부터 정렬", startAngle: "시작 각도(도). 0이 12시", labelMode: "조각 라벨에 보일 내용", other: '큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요' },
-    example: { data: S.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { subtitle: "기기별 매출 비중", takeaway: "2~4개 항목만", legend: "auto" } },
+    example: { data: S.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { subtitle: "기기별 매출 비중", takeaway: "모바일이 매출의 72%", legend: "auto" } },
   },
   donut: {
     summary: "가운데에 합계를 둔 비중 차트",
@@ -42,7 +42,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "등장할 때 가운데 숫자가 0부터 올라가서 합계가 먼저 눈에 들어와요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { innerRadius: "안쪽 반지름 비율", centerValue: '가운데 숫자: "total" | "highlight" | 숫자 | null(없음)', centerLabel: "가운데 숫자 아래 설명", legend: "범례 위치", sort: "큰 값부터 정렬", other: '큰 조각 n개만 두고 나머지를 "기타" 한 조각으로 묶어요. 기타는 강조하지 않아요' },
-    example: { data: S.donutSampleKo, encoding: { label: "type", value: "count" }, options: { centerLabel: "전환(건)" }, card: { subtitle: "전환 유형별 비중", takeaway: "가운데에 총합" } },
+    example: { data: S.donutSampleKo, encoding: { label: "type", value: "count" }, options: { centerLabel: "전환(건)" }, card: { subtitle: "전환 유형별 비중", takeaway: "구매가 절반을 넘어요" } },
   },
   funnel: {
     summary: "단계를 지날 때마다 줄어드는 양과 전환율",
@@ -51,7 +51,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "전환율이 가장 낮은 단계를 자동으로 강조해서 어디서 이탈하는지 바로 보여요.",
     channels: { label: "단계 이름", value: "단계 인원" },
     options: { showRates: "오른쪽에 전환율 표시", rateBase: "전환율 기준", rateLabel: '전환율 열 제목. 한국어 로캘의 기본값은 "전 단계 대비"', flow: '단계 방향. "right"는 단계마다 열을 왼쪽에서 오른쪽으로 세우고, 전 단계 대비 전환율을 막대 사이 띠 위에 적어요(rateBase가 "first"면 인원 아래에). 열이 막대와 전환율을 담기에 좁으면 "down"으로 그려요' },
-    example: { data: S.funnelSampleKo, encoding: { label: "stage", value: "users" }, card: { subtitle: "단계별 사용자(명)", takeaway: "단계별 이탈" } },
+    example: { data: S.funnelSampleKo, encoding: { label: "stage", value: "users" }, card: { subtitle: "단계별 사용자(명)", takeaway: "상품 조회에서 장바구니로 갈 때 가장 많이 빠져요" } },
   },
   waffle: {
     summary: "100칸 격자로 보는 비율, 또는 점 하나가 한 단위인 반원(좌석 차트)",
@@ -69,7 +69,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
       summaryLabel: "큰 숫자 아래 설명",
       summaryNote: "둘째 줄 설명",
     },
-    example: { data: S.waffleSampleKo, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "신규 고객", summaryNote: "재구매 62명" }, card: { subtitle: "고객 100명 중", takeaway: "100칸으로 보는 비율", legend: "auto" } },
+    example: { data: S.waffleSampleKo, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "신규 고객", summaryNote: "재구매 62명" }, card: { subtitle: "고객 100명 중", takeaway: "고객 100명 중 38명이 신규", legend: "auto" } },
   },
   treemap: {
     summary: "넓이로 보는 계층 구조의 비율",
@@ -78,7 +78,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "squarified 배치로 칸이 정사각형에 가까워서 라벨이 잘 들어가요.",
     channels: { label: "잎(가장 아래 단계) 이름", value: "값 필드", group: "상위 그룹 필드" },
     options: { path: "여러 단계 경로 필드 목록", labelMode: "칸 라벨에 보일 내용", sort: "큰 값부터 정렬" },
-    example: { data: S.treemapSampleKo, encoding: { group: "category", label: "product", value: "share" }, card: { subtitle: "카테고리별 상품 매출 비중", takeaway: "계층의 비율" } },
+    example: { data: S.treemapSampleKo, encoding: { group: "category", label: "product", value: "share" }, card: { subtitle: "카테고리별 상품 매출 비중", takeaway: "러닝화가 매출의 46%" } },
   },
   sunburst: {
     summary: "원형으로 그린 계층",
@@ -87,7 +87,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "안쪽 고리부터 차례로 펼쳐지며 등장해서 계층을 단계별로 읽을 수 있어요.",
     channels: { label: "잎 이름", value: "값 필드", group: "상위 그룹 필드" },
     options: { path: "여러 단계 경로 필드 목록", sort: "큰 값부터 정렬", hole: "가운데 구멍 비율" },
-    example: { data: S.sunburstSampleKo, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "전체 상품" }, card: { subtitle: "채널별, 캠페인별 광고비 비중", takeaway: "원형으로 그린 계층" } },
+    example: { data: S.sunburstSampleKo, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "전체 상품" }, card: { subtitle: "채널별, 캠페인별 광고비 비중", takeaway: "전체 상품 캠페인이 광고비의 25%" } },
   },
   waterfall: {
     summary: "시작값에서 끝값까지 증감 요인 분해",
@@ -96,7 +96,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "막대가 왼쪽부터 차례로 이어져서 어디서 늘고 줄었는지 보여요.",
     channels: { label: "항목 이름 필드", value: "증감 값(합계 행은 생략 가능)", type: '"total"이면 합계 막대' },
     options: { startTotal: "첫 행을 시작 합계로", endTotal: "끝에 누적 합계 막대. 문자열이면 이름", connectors: "막대 사이 연결선" },
-    example: { data: S.waterfallSampleKo, encoding: { label: "item", value: "amount", type: "kind" }, card: { subtitle: "9~10월 매출 변화(만 원)", takeaway: "증감 요인 분해", legend: [{ label: "증가", color: "neutral" }, { label: "감소", color: "neutralStrong" }] } },
+    example: { data: S.waterfallSampleKo, encoding: { label: "item", value: "amount", type: "kind" }, card: { subtitle: "9~10월 매출 변화(만 원)", takeaway: "신규 고객이 10월 증가를 이끌었어요", legend: [{ label: "증가", color: "neutral" }, { label: "감소", color: "neutralStrong" }] } },
   },
   pareto: {
     summary: "큰 값부터 놓은 막대와 누적 비율 선",
@@ -105,7 +105,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "막대가 나온 뒤 누적선이 그려지고, 기준선(기본 80%)과 만나는 점을 표시해요.",
     channels: { label: "항목 이름 필드", value: "값 필드" },
     options: { threshold: "기준선(%)", sort: "큰 값부터 정렬", rankLabels: 'x 라벨을 "1위, 2위…"로' },
-    example: { data: S.paretoSampleKo, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { subtitle: "키워드별 광고비 비중(%)", takeaway: "상위 20%가 80%?", legend: [{ label: "비중", color: "neutral" }, { label: "누적", color: "ink", shape: "line" }] } },
+    example: { data: S.paretoSampleKo, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { subtitle: "키워드별 광고비 비중(%)", takeaway: "상위 2개 키워드가 79%", legend: [{ label: "비중", color: "neutral" }, { label: "누적", color: "ink", shape: "line" }] } },
   },
   marimekko: {
     summary: "폭(열 비중)과 높이(열 안 비중)로 함께 보는 두 비율",
@@ -114,7 +114,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "열이 아래에서 차올라서 두 비율을 한 번에 읽을 수 있어요.",
     channels: { x: "열(가로 구분) 필드", series: "쌓는 계열 필드", value: "값 필드" },
     options: {},
-    example: { data: S.marimekkoSampleKo, encoding: { x: "channel", series: "device", value: "sales" }, card: { subtitle: "채널 매출, 기기 구성(%)", takeaway: "폭과 높이로 두 비율", legend: "auto" } },
+    example: { data: S.marimekkoSampleKo, encoding: { x: "channel", series: "device", value: "sales" }, card: { subtitle: "채널 매출, 기기 구성(%)", takeaway: "SNS 매출의 88%가 모바일", legend: "auto" } },
   },
   heatmap: {
     summary: "두 범주가 만나는 칸의 값을 색 진하기로 나타낸 격자",
@@ -141,7 +141,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     why: "점이 많으면 캔버스로 전환하고 격자 색인으로 가장 가까운 점을 바로 찾아 1만 점에서도 호버가 부드러워요.",
     channels: { x: "x 값", y: "y 값", size: "원 크기", label: "이름" },
     options: { sizeRange: "반지름 범위(px)", xLabel: "x축 이름", yLabel: "y축 이름", zero: "축에 0 포함", maxLabels: "점 라벨 최대 개수", canvasThreshold: "점이 이보다 많으면 캔버스로 그려요", xFormat: "x 값 포맷", yScale: Y_SCALE },
-    example: { data: S.bubbleSampleKo, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC(원)", yLabel: "ROAS(%)" }, card: { subtitle: "캠페인별 CPC, ROAS, 광고비", takeaway: "큰 원이 효율도 좋을까요?" } },
+    example: { data: S.bubbleSampleKo, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC(원)", yLabel: "ROAS(%)" }, card: { subtitle: "캠페인별 CPC, ROAS, 광고비", takeaway: "가장 많이 쓴 일반 검색은 효율이 낮아요" } },
   },
   line: {
     summary: "시간에 따른 변화",
@@ -158,7 +158,7 @@ export const KO_CHARTS: Record<string, ChartTextKo> = {
     avoidWhen: "계열 하나하나의 정확한 값이 중요할 때",
     why: "바닥에서 차오르며 등장해서 쌓이는 구성을 한눈에 볼 수 있어요.",
     channels: { x: "x 필드", y: "y 필드. 넓은 표에서는 배열", series: "계열 필드", lower: '범위 띠의 아래 경계(stack "none"일 때만). 넓은 표에서는 y와 같은 순서의 배열', upper: "범위 띠의 위 경계. lower와 같은 꼴" },
-    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', stack: "쌓기 방식", curve: "선 모양", xType: X_TYPE, dayFirst: DAY_FIRST, zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요", hidden: HIDDEN },
+    options: { aggregate: '같은 x(와 계열)의 행을 합치는 방법: "sum" 더하기, "mean" 평균, "last" 마지막 행, "count" 행 수', stack: "쌓기 방식", curve: "선 모양", xType: X_TYPE, dayFirst: DAY_FIRST, zero: "y축에 0 포함", endLabels: "오른쪽 끝 계열 이름표", yDomain: "y 범위 고정", maxPoints: "점이 이보다 많으면 LTTB로 줄여요. 쌓은 영역은 구간 평균으로 줄여요", brush: '끌어서 구간 고르기. true면 등락과 최고, 최저를 보여 주고 "zoom"이면 그 구간으로 확대(키보드: Shift+화살표, Enter)', annotations: "주석: 목표 구간, 기간, 기준선, 사건, 예측, 추세선, 주말 음영. [{ type, x, y, from, label }]", signColors: '강조 계열을 baseline 위아래 색으로 나눠요(손익, 증감). stack "none"일 때만', baseline: "signColors를 나누는 값", downColor: "baseline 아래 색(토큰 이름이나 CSS 색)", bandFrom: '범위 띠를 그리기 시작하는 곳. "forecast"면 예측 주석부터', outside: "범위 띠 밖으로 나간 점을 표시하고 설명에 그 수를 적어요", connectNulls: "빠진 값(null, NaN, 그 x에 행이 없음)을 건너 선을 이어요. 기본은 그 자리에서 선과 면이 끊기고, 혼자 남은 점은 점으로 그려요. 쌓은 영역에는 상관없어요", hidden: HIDDEN },
     example: { data: S.areaSampleKo, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "SNS" }, card: { subtitle: "채널별 월 유입(천 명)", takeaway: "SNS 몫이 가장 빨리 커져요", legend: "auto" } },
   },
   stream: {
@@ -605,7 +605,7 @@ export const KO_COMMON_OPTIONS: Record<string, string> = {
   animateOnView: "화면에 들어올 때 재생",
   showLabels: "차트 위 라벨(값, 이름) 표시",
   tooltip: '툴팁 표시. { template: "{label} · {value} · 담당 {owner}" }처럼 쓰면 내용을 바꿔요: {label}, {value}, {series}나 그 행의 다른 열. \\n마다 줄을 바꾸고, 값이 없는 칸이 든 줄은 빼요',
-  syncId: "같은 syncId인 차트끼리 짚은 x를 함께 보여 줘요(라인, 영역, 막대, 캔들스틱). <ChartGrid sync>는 안의 차트에 하나씩 정해 줘요",
+  syncId: "같은 syncId인 차트끼리 짚은 x를 함께 보여 줘요(라인, 영역, 막대, 캔들스틱, 스카이라인). <ChartGrid sync>는 안의 차트에 하나씩 정해 줘요",
   ariaLabel: "스크린 리더용 이름",
   description: "스크린 리더용 설명. 없으면 데이터로 만들어요",
 };
@@ -626,7 +626,7 @@ export const SCHEMA_TEXT_KO: SchemaText = {
   accent: "강조색으로 칠할 제목 속 단어. 범례 대신 써요",
   download: "브라우저의 내려받기 단추: true면 CSV, SVG, PNG, 또는 고른 목록. SVG, PNG, 정적 HTML에는 그리지 않아요",
   legend: '"auto"면 데이터로 범례를 만들어요. "toggle"이면 브라우저에서 범례를 눌러 계열을 켜고 꺼요(line, area, bar, scatter, timeline의 묶음). 이미지와 정적 HTML에서는 "auto"와 같아요',
-  takeaway: "아래 굵은 한 줄 요약",
+  takeaway: "이 데이터에서 읽히는 결론 한 문장(영어 약 40자, 한국어 약 25자). 차트 아래 굵게 보이고 길면 줄을 바꿔요. 차트 종류 설명은 넣지 않아요",
   level: '"basic" | "intermediate" | "advanced". 예전 한글 값 "기본" | "중급" | "심화"도 돼요',
   sample: "예시 데이터 표시",
   theme: '토큰 덮어쓰기. 예: { accent: "#00C2FF" }',

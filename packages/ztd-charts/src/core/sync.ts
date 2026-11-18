@@ -35,7 +35,7 @@ export function syncIndex(keys: readonly string[], labels: readonly string[], at
 }
 
 /**
- * Called by charts with an x (line, area, bar, candlestick). Pointed positions are exchanged only with a syncId or ChartGrid sync.
+ * Called by charts with an x (line, area, bar, candlestick, skyline). Pointed positions are exchanged only with a syncId or ChartGrid sync.
  * keys and labels follow the events index order. This code ships only with the charts that call it (other charts' size is unchanged)
  */
 export function useSync<T>(c: ChartCtx<T>, syncId: string | undefined, keys: readonly string[], labels: readonly string[]): void {

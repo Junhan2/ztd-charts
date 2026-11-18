@@ -80,7 +80,7 @@ afterAll(() => server?.close());
 
 describe("ztd-charts CLI", () => {
   it("--version, help (English by default, Korean with --locale ko)", async () => {
-    expect((await run("--version")).out.trim()).toBe("0.13.0");
+    expect((await run("--version")).out.trim()).toBe("0.13.1");
     expect((await run("help")).out).toContain("ztd-charts render");
     expect((await run("help")).out).toContain("--locale <code>");
     expect((await run("--locale", "ko", "help")).out).toContain("사용법");

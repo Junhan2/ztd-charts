@@ -64,7 +64,7 @@ export interface ChartCtx<T> {
   description?: string;
   /** Reduced motion is on. Hover transitions jump instead of gliding */
   reduced: boolean;
-  /** Function that tells linked charts when the pointed position changes. Filled in by useSync (line, area, bar, candlestick) */
+  /** Function that tells linked charts when the pointed position changes. Filled in by useSync (line, area, bar, candlestick, skyline) */
   publish: { current: ((i: number | null) => void) | null };
   /** Receives the position pointed at in another linked chart. Leaves things as they are while selecting with the keyboard */
   applySync: (i: number | null) => void;
