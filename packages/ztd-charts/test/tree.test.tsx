@@ -194,6 +194,36 @@ describe("Tree", () => {
       expect(names(h)).toContain("Child 250");
       expect(names(h).length).toBeLessThan(200);
     }
+    // A short card with many highlighted leaves (the README gallery card): a leaf name that would cover another name is dropped, the root and the branches never are
+    const many = { Orders: ["Checkout", "Cart checkout", "One-tap pay", "Order history"], Subscriptions: ["Start subscription", "Renewal", "Cancel and refund"], Account: ["Payment methods", "Receipts"] };
+    for (const [width, height] of [
+      [480, 150],
+      [231, 150],
+      [480, 200],
+    ]) {
+      const h = sample({ width, height, highlight: Object.values(many).flat() });
+      expect(clashes(h), `${width}x${height}`).toEqual([]);
+      const shown = names(h);
+      const bare = (s: string) => s.replace(/…$/, "");
+      const has = (name: string, list = shown) => list.some((s) => name.startsWith(bare(s)));
+      const top = ["Payments API", ...Object.keys(many)];
+      for (const name of top) expect(has(name), `${width}x${height} ${name}`).toBe(true);
+      // A shortened name that could also be the root's or a branch's ("Payme…", "Orde…") does not count as a leaf
+      const leafNames = shown.filter((s) => !top.some((name) => name.startsWith(bare(s))));
+      for (const [branch, leaves] of Object.entries(many)) expect(leaves.some((name) => has(name, leafNames)), `${width}x${height} a leaf of ${branch}`).toBe(true);
+    }
+    // A radial leaf has one position along its spoke, so a highlighted leaf keeps its name even when the root or a branch name crosses it
+    // (dropping it left the highlighted dot unnamed while an unhighlighted neighbour got a name, which read as the highlighted one)
+    const upper = ["Payments API", ...new Set(treeSample.map((r) => r.service))];
+    for (const [width, height, leaf] of [
+      [480, 200, "Wishlist"],
+      [480, 150, "Receipts"],
+      [231, 150, "Order history"],
+    ] as const) {
+      const bold = [...sample({ layout: "radial", width, height, highlight: leaf }).matchAll(/font-weight="700"[^>]*>([^<]+)<\/text>/g)].map((m) => m[1].replace(/…$/, ""));
+      const own = bold.filter((s) => !upper.some((name) => name.startsWith(s)));
+      expect(own.some((s) => leaf.startsWith(s)), `${width}x${height} ${leaf}: ${bold.join(" | ")}`).toBe(true);
+    }
     // A group of only spaces counts as no group; a label of only spaces is treated like an empty one, "#" plus the row number (the chart and the validator agree)
     const blank = draw([{ g: "Orders", l: "Checkout" }, { g: "  ", l: "Loose" }, { g: "Orders", l: "   " }], { group: "g", label: "l" });
     expect(names(blank)).toEqual(["All", "Orders", "Checkout", "#3", "Loose"]);

@@ -7,7 +7,7 @@ import { ChartCard, Legend } from "../src/components/ChartCard";
 import { StatCard } from "../src/components/StatCard";
 import { AxisPill, GridY, tickLabels, yAxisWidth } from "../src/core/axis";
 import { ChartFrame, type ChartFrameProps } from "../src/core/ChartFrame";
-import { makeFormatter } from "../src/core/format";
+import { makeFormatter, makeTickFormatter } from "../src/core/format";
 import { CHART_VIEW, isShown } from "../src/core/hooks";
 import { MotionEngine } from "../src/core/motion";
 import { fitDomain, fitLogDomain, logTicks, niceStep, scaleLinear, scaleLog, timeTicks } from "../src/core/scale";
@@ -334,6 +334,18 @@ describe("axis tick labels (axis)", () => {
   });
   it("falls back to en-US as before when no locale is given", () => {
     expect(tickLabels([0, 0.1], fmt)).toEqual(["0", "0.1"]);
+  });
+  it("keeps the format (percent, ratio, currency, prefix and suffix) when overlapping labels need more decimals", () => {
+    expect(tickLabels([10.2, 10.4, 10.6, 10.8], makeTickFormatter("percent"))).toEqual(["10.2%", "10.4%", "10.6%", "10.8%"]);
+    expect(tickLabels([0.102, 0.104, 0.106, 0.108], makeTickFormatter("ratio"))).toEqual(["10.2%", "10.4%", "10.6%", "10.8%"]);
+    expect(tickLabels([1.081, 1.082, 1.083, 1.084], makeTickFormatter("currency"))).toEqual(["$1.081", "$1.082", "$1.083", "$1.084"]);
+    expect(tickLabels([100.2, 100.4, 100.6, 100.8], makeTickFormatter({ suffix: "ms", maximumFractionDigits: 0 }))).toEqual(["100.2ms", "100.4ms", "100.6ms", "100.8ms"]);
+    // An object format keeps its own locale; compact and a null format (from JSON) still switch to full numbers
+    expect(tickLabels([0, 0.1], makeTickFormatter({ maximumFractionDigits: 0 }, "de-DE"))).toEqual(["0", "0,1"]);
+    expect(tickLabels([1_200_000, 1_205_000, 1_210_000], makeTickFormatter("compact"))).toEqual(["1,200,000", "1,205,000", "1,210,000"]);
+    expect(tickLabels([0.11, 0.12], makeTickFormatter(null as never))).toEqual(["0.11", "0.12"]);
+    // roundingIncrement switches to full numbers as before instead of throwing (Intl wants equal minimum and maximum decimals with it)
+    expect(tickLabels([0, 2, 4, 6], makeTickFormatter({ roundingIncrement: 5, maximumFractionDigits: 0 }))).toEqual(["0", "2", "4", "6"]);
   });
 });
 

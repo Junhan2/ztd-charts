@@ -187,7 +187,7 @@ export interface ChartCardProps {
   replayLabel?: string;
   /** Right side of the title row */
   actions?: ReactNode;
-  /** One-line summary below */
+  /** Summary sentence below the chart. The level badge and sample note sit beside it when the whole sentence fits on one line next to them; otherwise they move to a row below it */
   takeaway?: ReactNode;
   /** Source line under the chart. Follows "Source: " (Korean "출처: ") */
   source?: ReactNode;
@@ -249,12 +249,16 @@ export function ChartCard(props: ChartCardProps) {
     ) : null;
   const footer =
     props.takeaway !== undefined || props.level || props.sample ? (
-      <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }}>
+      <footer style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }}>
         <span style={{ fontSize: 17, fontWeight: 800, color: p.paint("ink"), letterSpacing: -0.3, lineHeight: 1.3, minWidth: 0 }}>{props.takeaway}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "none" }}>
-          {props.sample ? <span style={{ fontSize: 11.5, color: p.paint("muted"), whiteSpace: "nowrap" }}>{typeof props.sample === "string" ? props.sample : text.sample}</span> : null}
-          {props.level ? <Badge level={props.level} theme={props.theme} locale={props.locale} /> : null}
-        </span>
+        {/* Wraps to its own right-aligned row when the whole takeaway does not fit beside it. Rendered only when it has content,
+            since an empty span would wrap too and leave a blank row under a long takeaway */}
+        {props.sample || props.level ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "none", marginLeft: "auto" }}>
+            {props.sample ? <span style={{ fontSize: 11.5, color: p.paint("muted"), whiteSpace: "nowrap" }}>{typeof props.sample === "string" ? props.sample : text.sample}</span> : null}
+            {props.level ? <Badge level={props.level} theme={props.theme} locale={props.locale} /> : null}
+          </span>
+        ) : null}
       </footer>
     ) : null;
   return (

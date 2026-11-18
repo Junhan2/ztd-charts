@@ -390,8 +390,10 @@ export function Tree<T = Row>(props: TreeProps<T>) {
     return [...level(Math.min(geo.ring * 1.6, 160)), { pose: { x: px, y: py, rot, anchor: right ? "end" : "start" }, room: geo.ring - n.dot - 5 - inner }];
   };
 
-  // Picking names: the highlighted path first (always kept), then the root, then shallow levels first. For each position, first check whether the full name fits without overlap,
-  // and if not, try again with a shortened name. Names that overlap placed names or leave the card are dropped (the highlighted path is kept at its first position, shortened if needed)
+  // Picking names: the highlighted path first, then the root, then shallow levels first. For each position, first check whether the full name fits without overlap,
+  // and if not, try again with a shortened name. Names that overlap placed names or leave the card are dropped. The highlighted path is kept at its least crowded position,
+  // shortened if needed, except a highlighted leaf whose every position covers another name (many highlighted leaves in a short card): stacked names are unreadable anyway.
+  // That exception is horizontal only: a radial leaf has one position along its spoke, so dropping it would leave the highlighted dot unnamed while an unhighlighted neighbour gets a name
   const labels = useMemo(() => {
     const out = new Map<TreeNode<T>, Placed>();
     if (!c.showLabels) return out;
@@ -414,6 +416,8 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       const ey = Math.abs(b.uy) * b.hw + Math.abs(b.ux) * b.hh;
       return b.cx - ex < -1 || b.cx + ex > W + 1 || b.cy - ey < -1 || b.cy + ey > H + 1;
     };
+    // Placed name boxes (the grid also holds the dots)
+    const named = new Set<OBB>();
     // Add the dots (with the ring for collapsed branches) first too, so names do not cover them
     for (const n of list) {
       const r = n.dot + (n.nd.children.length && !n.open ? 3 : 0) + 1;
@@ -436,8 +440,10 @@ export function Tree<T = Row>(props: TreeProps<T>) {
           const box = boxOf(cands[k].pose, textWidth(text, size, weight), size);
           if (!outside(box) && !hits(box)) pick = { k, text, box };
         }
-      // The highlighted path is always kept: try the full name and progressively shorter names at each position, and keep the one with the fewest overlapping boxes (names, dots), then the longest
+      // The highlighted path: try the full name and progressively shorter names at each position, and keep the one with the fewest overlapping boxes (names, dots), then the longest.
+      // In a horizontal tree a leaf skips positions that cover another name; the root, the branches and radial leaves take one anyway
       if (!pick && n.path) {
+        const mayDrop = !radial && !n.nd.children.length;
         let best = Infinity;
         cands.forEach((cand, k) => {
           for (const f of [1, 0.75, 0.55, 0.4]) {
@@ -445,6 +451,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
             const box = boxOf(cand.pose, textWidth(text, size, weight), size);
             const seen = new Set<OBB>();
             cells(box, (key) => void grid.get(key)?.forEach((o) => obbOverlap(o, box) && seen.add(o)));
+            if (mayDrop && [...seen].some((o) => named.has(o))) continue;
             const cost = seen.size * 1000 + (outside(box) ? 2000 : 0) - text.length;
             if (cost < best) [best, pick] = [cost, { k, text, box }];
           }
@@ -453,6 +460,7 @@ export function Tree<T = Row>(props: TreeProps<T>) {
       if (!pick) continue;
       const box = pick.box;
       cells(box, (k) => void (grid.get(k) ?? grid.set(k, []).get(k)!).push(box));
+      named.add(box);
       out.set(n.nd, { text: pick.text, size, weight, k: pick.k });
     }
     return out;

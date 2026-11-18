@@ -66,7 +66,7 @@ Channels, options and an example for every chart are in [references/charts.md](r
   "data": [{ "stage": "Visit", "users": 10000 }, { "stage": "Purchase", "users": 760 }],
   "encoding": { "label": "stage", "value": "users" },
   "options": { "unit": " users" },
-  "card": { "number": "03", "title": "Funnel chart", "subtitle": "Users by stage", "takeaway": "Drop-off by stage", "level": "basic" }
+  "card": { "number": "03", "title": "Funnel chart", "subtitle": "Users by stage", "takeaway": "7.6% of visitors make a purchase", "level": "basic" }
 }
 ```
 

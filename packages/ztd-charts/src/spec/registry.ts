@@ -19,7 +19,7 @@ export const COMMON_OPTIONS: OptionDef[] = [
   { name: "animateOnView", type: "boolean", default: true, description: "Play when the chart scrolls into view" },
   { name: "showLabels", type: "boolean", default: true, description: "Labels drawn on the chart (values and names)" },
   { name: "tooltip", type: "tooltip", default: true, description: "Show tooltips. { template: \"{label} · {value} · owner {owner}\" } writes them: {label}, {value}, {series} or any other column of the row. \\n starts a new line, and a line with an empty value is left out" },
-  { name: "syncId", type: "string", description: "Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it" },
+  { name: "syncId", type: "string", description: "Charts with the same syncId show the hovered x together (line, area, bar, candlestick, skyline). <ChartGrid sync> sets one for every chart inside it" },
   { name: "ariaLabel", type: "string", description: "Name for screen readers" },
   { name: "description", type: "string", description: "Description for screen readers. Built from the data when omitted" },
 ];
@@ -73,7 +73,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "More than 4 items, or values close to each other (bars are more accurate)",
     why: "Only the highlighted slice (the largest by default) gets the accent color and the rest stay neutral, so one share carries the message.",
     options: [op("colorMode", "enum", "A gray step per item (categorical) or color only the highlight (emphasis)", { enum: ["categorical", "emphasis"], default: "categorical" }), op("sort", "boolean", "Sort largest first", { default: false }), op("startAngle", "number", "Start angle in degrees. 0 is 12 o'clock", { default: 0 }), op("labelMode", "enum", "What slice labels show", { enum: ["percent", "value", "label", "none"], default: "percent" }), OTHER],
-    example: { data: S.pieSample, encoding: { label: "device", value: "sales" }, options: { highlight: "Mobile" }, card: { subtitle: "Sales share by device", takeaway: "Only 2 to 4 items", legend: "auto" } },
+    example: { data: S.pieSample, encoding: { label: "device", value: "sales" }, options: { highlight: "Mobile" }, card: { subtitle: "Sales share by device", takeaway: "Mobile makes 72% of sales", legend: "auto" } },
   },
   {
     type: "donut",
@@ -84,7 +84,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "More than 6 items",
     why: "The center number counts up as the chart enters, so the total reads first.",
     options: [op("innerRadius", "number", "Inner radius ratio", { default: 0.62, min: 0.2, max: 0.9 }), op("centerValue", "any", 'Number in the center: "total" | "highlight" | a number | null (none)', { default: "total" }), op("centerLabel", "string", "Caption under the center number"), op("legend", "enum", "Legend position", { enum: ["auto", "right", "bottom", "none"], default: "auto" }), op("sort", "boolean", "Sort largest first", { default: false }), OTHER],
-    example: { data: S.donutSample, encoding: { label: "type", value: "count" }, options: { centerLabel: "Conversions" }, card: { subtitle: "Share by conversion type", takeaway: "Total in the center" } },
+    example: { data: S.donutSample, encoding: { label: "type", value: "count" }, options: { centerLabel: "Conversions" }, card: { subtitle: "Share by conversion type", takeaway: "Purchases are over half" } },
   },
   {
     type: "funnel",
@@ -95,7 +95,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "The steps have no order, or values grow from step to step",
     why: "Highlights the stage with the lowest conversion rate, so you see where users drop off.",
     options: [op("showRates", "boolean", "Show conversion rates on the right", { default: true }), op("rateBase", "enum", "Base for the conversion rate", { enum: ["previous", "first"], default: "previous" }), op("rateLabel", "string", 'Title of the rate column. "전 단계 대비" by default in Korean locales', { default: "vs. previous" }), op("flow", "enum", 'Stage direction. "right" puts each stage in a column from left to right, with each rate vs. the previous stage on the band between bars (with rateBase "first", under each count). A column too narrow for its bar and rate draws "down"', { enum: ["down", "right"], default: "down" })],
-    example: { data: S.funnelSample, encoding: { label: "stage", value: "users" }, card: { subtitle: "Users by stage", takeaway: "Drop-off by stage" } },
+    example: { data: S.funnelSample, encoding: { label: "stage", value: "users" }, card: { subtitle: "Users by stage", takeaway: "Most drop between product view and cart" } },
   },
   {
     type: "waffle",
@@ -115,7 +115,7 @@ const ENTRIES: ChartEntry[] = [
       op("summaryLabel", "string", "Caption under the big number"),
       op("summaryNote", "string", "Second caption line"),
     ],
-    example: { data: S.waffleSample, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "New customers", summaryNote: "62 returning" }, card: { subtitle: "Out of 100 customers", takeaway: "Percent as 100 cells", legend: "auto" } },
+    example: { data: S.waffleSample, encoding: { label: "segment", value: "customers" }, options: { summaryLabel: "New customers", summaryNote: "62 returning" }, card: { subtitle: "Out of 100 customers", takeaway: "38 in 100 customers are new", legend: "auto" } },
   },
   {
     type: "treemap",
@@ -126,7 +126,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "Exact size comparison matters",
     why: "The squarified layout keeps cells close to square, so labels fit.",
     options: [op("path", "array", "Field list for multi-level paths", { items: "string" }), op("labelMode", "enum", "What cell labels show", { enum: ["both", "name", "value", "none"], default: "both" }), op("sort", "boolean", "Sort largest first", { default: true })],
-    example: { data: S.treemapSample, encoding: { group: "category", label: "product", value: "share" }, card: { subtitle: "Product sales share by category", takeaway: "Shares within a hierarchy" } },
+    example: { data: S.treemapSample, encoding: { group: "category", label: "product", value: "share" }, card: { subtitle: "Product sales share by category", takeaway: "Running shoes are 46% of sales" } },
   },
   {
     type: "sunburst",
@@ -137,7 +137,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "4 or more levels, or more than 20 leaves",
     why: "Rings open from the inside out as the chart enters, so the hierarchy reads level by level.",
     options: [op("path", "array", "Field list for multi-level paths", { items: "string" }), op("sort", "boolean", "Sort largest first", { default: false }), op("hole", "number", "Center hole ratio", { default: 0.3, min: 0, max: 0.8 })],
-    example: { data: S.sunburstSample, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "All products" }, card: { subtitle: "Ad spend share by channel and campaign", takeaway: "A hierarchy in rings" } },
+    example: { data: S.sunburstSample, encoding: { group: "channel", label: "campaign", value: "spend" }, options: { highlight: "All products" }, card: { subtitle: "Ad spend share by channel and campaign", takeaway: "All products campaign takes 25% of spend" } },
   },
   {
     type: "waterfall",
@@ -148,7 +148,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "More than 12 drivers",
     why: "Bars connect one by one from the left, showing where the value rose and fell.",
     options: [op("startTotal", "boolean", "Treat the first row as the starting total", { default: true }), op("endTotal", "any", "Running total bar at the end. A string sets its name"), op("connectors", "boolean", "Lines between bars", { default: true })],
-    example: { data: S.waterfallSample, encoding: { label: "item", value: "amount", type: "kind" }, card: { subtitle: "Revenue from Sep to Oct (10k KRW)", takeaway: "What drove the change", legend: [{ label: "Increase", color: "neutral" }, { label: "Decrease", color: "neutralStrong" }] } },
+    example: { data: S.waterfallSample, encoding: { label: "item", value: "amount", type: "kind" }, card: { subtitle: "Revenue from Sep to Oct (10k KRW)", takeaway: "New customers drove the rise to Oct", legend: [{ label: "Increase", color: "neutral" }, { label: "Decrease", color: "neutralStrong" }] } },
   },
   {
     type: "pareto",
@@ -159,7 +159,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "The item order means something (time order, for example)",
     why: "After the bars, the cumulative line draws in and marks where it crosses the threshold (80% by default).",
     options: [op("threshold", "number", "Reference line (%)", { default: 80, min: 1, max: 100 }), op("sort", "boolean", "Sort largest first", { default: true }), op("rankLabels", "boolean", "Show ranks instead of names as x labels", { default: false })],
-    example: { data: S.paretoSample, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { subtitle: "Ad spend share by keyword (%)", takeaway: "Do the top 20% make 80%?", legend: [{ label: "Share", color: "neutral" }, { label: "Cumulative", color: "ink", shape: "line" }] } },
+    example: { data: S.paretoSample, encoding: { label: "keyword", value: "spend" }, options: { rankLabels: true }, card: { subtitle: "Ad spend share by keyword (%)", takeaway: "The top 2 keywords take 79%", legend: [{ label: "Share", color: "neutral" }, { label: "Cumulative", color: "ink", shape: "line" }] } },
   },
   {
     type: "marimekko",
@@ -170,7 +170,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "More than 6 columns or more than 4 series",
     why: "Columns fill from the bottom, so both shares read at once.",
     options: [],
-    example: { data: S.marimekkoSample, encoding: { x: "channel", series: "device", value: "sales" }, card: { subtitle: "Channel sales and device mix (%)", takeaway: "Two shares in width and height", legend: "auto" } },
+    example: { data: S.marimekkoSample, encoding: { x: "channel", series: "device", value: "sales" }, card: { subtitle: "Channel sales and device mix (%)", takeaway: "Social sales are 88% mobile", legend: "auto" } },
   },
   {
     type: "heatmap",
@@ -205,7 +205,7 @@ const ENTRIES: ChartEntry[] = [
     avoidWhen: "Dots overlap and sizes get hard to compare",
     why: "With many dots it switches to canvas and finds the nearest dot through a grid index, so hover stays smooth even at 10k dots.",
     options: [op("sizeRange", "array", "Radius range (px)", { items: "number" }), op("xLabel", "string", "x axis title"), op("yLabel", "string", "y axis title"), op("zero", "boolean", "Include 0 on the axes", { default: false }), op("maxLabels", "number", "Maximum number of dot labels", { default: 6 }), op("canvasThreshold", "number", "Dot count that switches to canvas", { default: 1500 }), op("xFormat", "format", "x value format"), Y_SCALE],
-    example: { data: S.bubbleSample, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC (KRW)", yLabel: "ROAS (%)" }, card: { subtitle: "CPC, ROAS and spend by campaign", takeaway: "Are the big circles efficient too?" } },
+    example: { data: S.bubbleSample, encoding: { x: "cpc", y: "roas", size: "spend", label: "campaign" }, options: { xLabel: "CPC (KRW)", yLabel: "ROAS (%)" }, card: { subtitle: "CPC, ROAS and spend by campaign", takeaway: "The biggest spender has below-median ROAS" } },
     canvasAbove: 1500,
     scalable: true,
   },
@@ -229,7 +229,7 @@ const ENTRIES: ChartEntry[] = [
     useWhen: "Seeing how each channel's traffic changes within the total",
     avoidWhen: "The exact value of each series matters",
     why: "Areas rise from the baseline as the chart enters, which shows the stacking at a glance.",
-    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, DAY_FIRST, AGGREGATE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS, HIDDEN],
+    options: [op("stack", "enum", "Stacking mode", { enum: ["none", "stacked", "percent"] }), CURVE, XTYPE, DAY_FIRST, AGGREGATE, op("zero", "boolean", "Include 0 on the y axis", { default: true }), op("endLabels", "boolean", "Series name tags at the right end"), op("yDomain", "array", "Fixed y range", { items: "number" }), op("maxPoints", "number", "Above this many points, LTTB downsamples the line; stacked areas average each bucket instead"), BRUSH, ANNOTATIONS, ...SIGN.map((o) => (o.name === "signColors" ? { ...o, description: `${o.description}. Only with stack "none"` } : o)), BAND_FROM, OUTSIDE, CONNECT_NULLS, HIDDEN],
     example: { data: S.areaSample, encoding: { x: "month", y: "visits", series: "channel" }, options: { highlight: "Social" }, card: { subtitle: "Monthly visits by channel (thousands)", takeaway: "Social's share grows the fastest", legend: "auto" } },
     scalable: true,
   },

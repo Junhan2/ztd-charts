@@ -455,6 +455,18 @@ describe("16: edge layouts", () => {
     }
   });
 
+  it("parallel coordinates and bump keep the highlighted name whole at README gallery width (231px), in both languages", () => {
+    for (const type of ["parallel", "bump"])
+      for (const lang of ["en", "ko"]) {
+        const def = CHARTS.find((d) => d.type === type)!;
+        const ex = lang === "ko" ? localizeDef(def, "ko").example : def.example;
+        const h = r(<Chart spec={{ ...ex, card: undefined } as ChartSpec} width={231} animate={false} />);
+        const bold = [...h.matchAll(/<text [^>]*font-weight="800"[^>]*>([^<]*)<\/text>/g)].map((m) => decode(m[1]));
+        expect(bold.length, `${type} ${lang}`).toBeGreaterThan(0);
+        expect(bold.filter((t) => t.endsWith("…")), `${type} ${lang}`).toEqual([]);
+      }
+  });
+
   it("ridgeline with overlap 0 and one group has no NaN", () => {
     const h = r(<RidgelineChart data={[1, 2, 3].map((value) => ({ group: "a", value }))} overlap={0} width={400} animate={false} />);
     expect(h).not.toContain("NaN");

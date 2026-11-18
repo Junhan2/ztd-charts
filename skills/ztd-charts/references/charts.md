@@ -12,7 +12,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"pie","data":[{"device":"Mobile","sales":72},{"device":"Desktop","sales":23},{"device":"Tablet","sales":5}],"encoding":{"label":"device","value":"sales"},"options":{"highlight":"Mobile"},"card":{"number":"01","title":"Pie chart","subtitle":"Sales share by device","takeaway":"Only 2 to 4 items","level":"basic","legend":"auto"}}
+{"type":"pie","data":[{"device":"Mobile","sales":72},{"device":"Desktop","sales":23},{"device":"Tablet","sales":5}],"encoding":{"label":"device","value":"sales"},"options":{"highlight":"Mobile"},"card":{"number":"01","title":"Pie chart","subtitle":"Sales share by device","takeaway":"Mobile makes 72% of sales","level":"basic","legend":"auto"}}
 ```
 
 ## donut · Donut chart (`<DonutChart>`, Basic, Proportion)
@@ -25,7 +25,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"donut","data":[{"type":"Purchase","count":719},{"type":"Sign-up","count":260},{"type":"Inquiry","count":161}],"encoding":{"label":"type","value":"count"},"options":{"centerLabel":"Conversions"},"card":{"number":"02","title":"Donut chart","subtitle":"Share by conversion type","takeaway":"Total in the center","level":"basic"}}
+{"type":"donut","data":[{"type":"Purchase","count":719},{"type":"Sign-up","count":260},{"type":"Inquiry","count":161}],"encoding":{"label":"type","value":"count"},"options":{"centerLabel":"Conversions"},"card":{"number":"02","title":"Donut chart","subtitle":"Share by conversion type","takeaway":"Purchases are over half","level":"basic"}}
 ```
 
 ## funnel · Funnel chart (`<FunnelChart>`, Basic, Flow)
@@ -38,7 +38,7 @@
 - Default highlight: the stage with the lowest conversion
 
 ```json
-{"type":"funnel","data":[{"stage":"Visit","users":10000},{"stage":"Product view","users":6200},{"stage":"Cart","users":1900}],"encoding":{"label":"stage","value":"users"},"card":{"number":"03","title":"Funnel chart","subtitle":"Users by stage","takeaway":"Drop-off by stage","level":"basic"}}
+{"type":"funnel","data":[{"stage":"Visit","users":10000},{"stage":"Product view","users":6200},{"stage":"Cart","users":1900}],"encoding":{"label":"stage","value":"users"},"card":{"number":"03","title":"Funnel chart","subtitle":"Users by stage","takeaway":"Most drop between product view and cart","level":"basic"}}
 ```
 
 ## waffle · Waffle chart (`<WaffleChart>`, Intermediate, Proportion)
@@ -51,7 +51,7 @@
 - Default highlight: the first series or item
 
 ```json
-{"type":"waffle","data":[{"segment":"New","customers":38},{"segment":"Returning","customers":62}],"encoding":{"label":"segment","value":"customers"},"options":{"summaryLabel":"New customers","summaryNote":"62 returning"},"card":{"number":"04","title":"Waffle chart","subtitle":"Out of 100 customers","takeaway":"Percent as 100 cells","level":"intermediate","legend":"auto"}}
+{"type":"waffle","data":[{"segment":"New","customers":38},{"segment":"Returning","customers":62}],"encoding":{"label":"segment","value":"customers"},"options":{"summaryLabel":"New customers","summaryNote":"62 returning"},"card":{"number":"04","title":"Waffle chart","subtitle":"Out of 100 customers","takeaway":"38 in 100 customers are new","level":"intermediate","legend":"auto"}}
 ```
 
 ## treemap · Treemap (`<Treemap>`, Intermediate, Hierarchy)
@@ -64,7 +64,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"treemap","data":[{"category":"Running shoes","product":"Cushion Run","share":22},{"category":"Running shoes","product":"Race X","share":14},{"category":"Running shoes","product":"Daily Run","share":10}],"encoding":{"group":"category","label":"product","value":"share"},"card":{"number":"05","title":"Treemap","subtitle":"Product sales share by category","takeaway":"Shares within a hierarchy","level":"intermediate"}}
+{"type":"treemap","data":[{"category":"Running shoes","product":"Cushion Run","share":22},{"category":"Running shoes","product":"Race X","share":14},{"category":"Running shoes","product":"Daily Run","share":10}],"encoding":{"group":"category","label":"product","value":"share"},"card":{"number":"05","title":"Treemap","subtitle":"Product sales share by category","takeaway":"Running shoes are 46% of sales","level":"intermediate"}}
 ```
 
 ## sunburst · Sunburst (`<SunburstChart>`, Intermediate, Hierarchy)
@@ -77,7 +77,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"sunburst","data":[{"channel":"Search","campaign":"Brand","spend":18},{"channel":"Search","campaign":"Generic","spend":30},{"channel":"PMax","campaign":"All products","spend":25}],"encoding":{"group":"channel","label":"campaign","value":"spend"},"options":{"highlight":"All products"},"card":{"number":"06","title":"Sunburst","subtitle":"Ad spend share by channel and campaign","takeaway":"A hierarchy in rings","level":"intermediate"}}
+{"type":"sunburst","data":[{"channel":"Search","campaign":"Brand","spend":18},{"channel":"Search","campaign":"Generic","spend":30},{"channel":"PMax","campaign":"All products","spend":25}],"encoding":{"group":"channel","label":"campaign","value":"spend"},"options":{"highlight":"All products"},"card":{"number":"06","title":"Sunburst","subtitle":"Ad spend share by channel and campaign","takeaway":"All products campaign takes 25% of spend","level":"intermediate"}}
 ```
 
 ## waterfall · Waterfall chart (`<WaterfallChart>`, Intermediate, Comparison)
@@ -90,7 +90,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"waterfall","data":[{"item":"Sep","amount":3200,"kind":"total"},{"item":"New","amount":1100},{"item":"Repeat","amount":450}],"encoding":{"label":"item","value":"amount","type":"kind"},"card":{"number":"07","title":"Waterfall chart","subtitle":"Revenue from Sep to Oct (10k KRW)","takeaway":"What drove the change","level":"intermediate","legend":[{"label":"Increase","color":"neutral"},{"label":"Decrease","color":"neutralStrong"}]}}
+{"type":"waterfall","data":[{"item":"Sep","amount":3200,"kind":"total"},{"item":"New","amount":1100},{"item":"Repeat","amount":450}],"encoding":{"label":"item","value":"amount","type":"kind"},"card":{"number":"07","title":"Waterfall chart","subtitle":"Revenue from Sep to Oct (10k KRW)","takeaway":"New customers drove the rise to Oct","level":"intermediate","legend":[{"label":"Increase","color":"neutral"},{"label":"Decrease","color":"neutralStrong"}]}}
 ```
 
 ## pareto · Pareto chart (`<ParetoChart>`, Intermediate, Comparison)
@@ -103,7 +103,7 @@
 - Default highlight: the items before the cumulative line reaches the threshold
 
 ```json
-{"type":"pareto","data":[{"keyword":"running shoes","spend":54},{"keyword":"marathon shoes","spend":25},{"keyword":"best sneakers","spend":7}],"encoding":{"label":"keyword","value":"spend"},"options":{"rankLabels":true},"card":{"number":"08","title":"Pareto chart","subtitle":"Ad spend share by keyword (%)","takeaway":"Do the top 20% make 80%?","level":"intermediate","legend":[{"label":"Share","color":"neutral"},{"label":"Cumulative","color":"ink","shape":"line"}]}}
+{"type":"pareto","data":[{"keyword":"running shoes","spend":54},{"keyword":"marathon shoes","spend":25},{"keyword":"best sneakers","spend":7}],"encoding":{"label":"keyword","value":"spend"},"options":{"rankLabels":true},"card":{"number":"08","title":"Pareto chart","subtitle":"Ad spend share by keyword (%)","takeaway":"The top 2 keywords take 79%","level":"intermediate","legend":[{"label":"Share","color":"neutral"},{"label":"Cumulative","color":"ink","shape":"line"}]}}
 ```
 
 ## marimekko · Marimekko chart (`<MarimekkoChart>`, Advanced, Proportion)
@@ -116,7 +116,7 @@
 - Default highlight: the first series or item
 
 ```json
-{"type":"marimekko","data":[{"channel":"Search","device":"Mobile","sales":26.1},{"channel":"Search","device":"Desktop","sales":16.2},{"channel":"Search","device":"Tablet","sales":2.7}],"encoding":{"x":"channel","series":"device","value":"sales"},"card":{"number":"09","title":"Marimekko chart","subtitle":"Channel sales and device mix (%)","takeaway":"Two shares in width and height","level":"advanced","legend":"auto"}}
+{"type":"marimekko","data":[{"channel":"Search","device":"Mobile","sales":26.1},{"channel":"Search","device":"Desktop","sales":16.2},{"channel":"Search","device":"Tablet","sales":2.7}],"encoding":{"x":"channel","series":"device","value":"sales"},"card":{"number":"09","title":"Marimekko chart","subtitle":"Channel sales and device mix (%)","takeaway":"Social sales are 88% mobile","level":"advanced","legend":"auto"}}
 ```
 
 ## heatmap · Heatmap (`<Heatmap>`, Intermediate, Relationship)
@@ -155,7 +155,7 @@
 - Default highlight: the largest value
 
 ```json
-{"type":"bubble","data":[{"campaign":"Brand search","cpc":420,"roas":680,"spend":1800},{"campaign":"Generic search","cpc":780,"roas":310,"spend":4200},{"campaign":"PMax all","cpc":560,"roas":520,"spend":3600}],"encoding":{"x":"cpc","y":"roas","size":"spend","label":"campaign"},"options":{"xLabel":"CPC (KRW)","yLabel":"ROAS (%)"},"card":{"number":"12","title":"Bubble chart","subtitle":"CPC, ROAS and spend by campaign","takeaway":"Are the big circles efficient too?","level":"intermediate"}}
+{"type":"bubble","data":[{"campaign":"Brand search","cpc":420,"roas":680,"spend":1800},{"campaign":"Generic search","cpc":780,"roas":310,"spend":4200},{"campaign":"PMax all","cpc":560,"roas":520,"spend":3600}],"encoding":{"x":"cpc","y":"roas","size":"spend","label":"campaign"},"options":{"xLabel":"CPC (KRW)","yLabel":"ROAS (%)"},"card":{"number":"12","title":"Bubble chart","subtitle":"CPC, ROAS and spend by campaign","takeaway":"The biggest spender has below-median ROAS","level":"intermediate"}}
 ```
 
 ## line · Line chart (`<LineChart>`, Basic, Trend)
@@ -633,6 +633,6 @@
 - `animateOnView` (boolean, default true): Play when the chart scrolls into view
 - `showLabels` (boolean, default true): Labels drawn on the chart (values and names)
 - `tooltip` (tooltip, default true): Show tooltips. { template: "{label} · {value} · owner {owner}" } writes them: {label}, {value}, {series} or any other column of the row. \n starts a new line, and a line with an empty value is left out
-- `syncId` (string): Charts with the same syncId show the hovered x together (line, area, bar, candlestick). <ChartGrid sync> sets one for every chart inside it
+- `syncId` (string): Charts with the same syncId show the hovered x together (line, area, bar, candlestick, skyline). <ChartGrid sync> sets one for every chart inside it
 - `ariaLabel` (string): Name for screen readers
 - `description` (string): Description for screen readers. Built from the data when omitted

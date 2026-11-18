@@ -119,7 +119,7 @@ function perX(rows: readonly Record<string, unknown>[], x: string, c: string): n
 
 function mk(type: string, score: number, reason: string, rows: readonly Record<string, unknown>[], encoding: Record<string, string | string[]>, options?: Record<string, unknown>): Suggestion {
   const def = getChartDef(type)!;
-  return { type, name: def.name, score: Math.round(score * 100) / 100, reason, spec: { type, data: rows.slice(0, 5000) as Record<string, unknown>[], encoding, ...(options ? { options } : {}), card: { title: def.name, takeaway: def.summary, level: def.level } } };
+  return { type, name: def.name, score: Math.round(score * 100) / 100, reason, spec: { type, data: rows.slice(0, 5000) as Record<string, unknown>[], encoding, ...(options ? { options } : {}), card: { title: def.name, level: def.level } } };
 }
 
 /**
@@ -140,11 +140,11 @@ function topBars(rows: readonly Record<string, unknown>[], label: string, value:
   return mk("bar", 0.88, reason, data, { x: label, y: value }, { orientation: "horizontal" });
 }
 
-/** One suggestion's chart name, card title and summary in that language. A Korean spec also gets options.locale "ko-KR" */
+/** One suggestion's chart name and card title in that language. A Korean spec also gets options.locale "ko-KR" */
 function inLang(s: Suggestion, lang: Lang): Suggestion {
   if (lang === "en") return s;
   const def = localizeDef(getChartDef(s.type)!, lang);
-  return { ...s, name: def.name, spec: withKoLocale({ ...s.spec, card: { ...s.spec.card, title: def.name, takeaway: def.summary } }) };
+  return { ...s, name: def.name, spec: withKoLocale({ ...s.spec, card: { ...s.spec.card, title: def.name } }) };
 }
 
 /**

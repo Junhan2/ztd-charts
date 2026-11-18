@@ -118,9 +118,24 @@ export function makeFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOC
   }
 }
 
+/** A tick formatter that can also print the same format with more decimals, for tick labels that collide ("10.2%" instead of "10%") */
+export type TickFormatter = ValueFormatter & { withDigits?: (digits: number) => ValueFormatter };
+
+/**
+ * The same format with up to d decimals: Intl options with prefix and suffix, currency, percent and ratio (trailing zeros drop). Others fall back to full numbers,
+ * and so do Intl options with roundingIncrement (Intl throws unless its minimum and maximum decimals are equal)
+ */
+function withDigits(spec: FormatSpec, locale: string): TickFormatter["withDigits"] {
+  const o = spec === "currency" ? currencyOptions(locale) : spec;
+  if (o && typeof o === "object") return o.roundingIncrement ? undefined : (d) => makeFormatter({ ...o, maximumFractionDigits: Math.max(d, o.minimumFractionDigits ?? 0) }, locale);
+  const m = spec === "ratio" ? 100 : spec === "percent" ? 1 : 0;
+  return m ? (d) => (v) => formatPercent(v * m, { locale, maximumFractionDigits: d }) : undefined;
+}
+
 /** For axis ticks: large numbers in compact form */
-export function makeTickFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOCALE, maxAbs = 0): ValueFormatter {
-  if (spec !== undefined) return makeFormatter(spec, locale);
+export function makeTickFormatter(spec: FormatSpec | undefined, locale = DEFAULT_LOCALE, maxAbs = 0): TickFormatter {
+  if (typeof spec === "function") return spec;
+  if (spec !== undefined) return Object.assign(makeFormatter(spec, locale), { withDigits: withDigits(spec, locale) });
   // Compact notation has one decimal place, so ticks below 0.05 become "0". Such values get two significant digits (log axis)
   if (maxAbs >= 1e5) return (v) => (isTiny(v) ? formatTiny(v, locale) : formatCompact(v, { locale }));
   return (v) => formatNumber(v, { locale });

@@ -25,12 +25,12 @@ import { Chart, ChartCard, PieChart } from "ztd-charts";
 const data = [{"device":"Mobile","sales":72},{"device":"Desktop","sales":23},{"device":"Tablet","sales":5}];
 
 // A component. Encoding channels are props with the same name
-<ChartCard number="01" title="Pie chart" subtitle="Sales share by device" takeaway="Only 2 to 4 items" level="basic">
+<ChartCard number="01" title="Pie chart" subtitle="Sales share by device" takeaway="Mobile makes 72% of sales" level="basic">
   <PieChart data={data} label="device" value="sales" highlight="Mobile" />
 </ChartCard>
 
 // The same chart from a JSON spec, card included
-<Chart spec={{"type":"pie","data":[{"device":"Mobile","sales":72},{"device":"Desktop","sales":23},{"device":"Tablet","sales":5}],"encoding":{"label":"device","value":"sales"},"options":{"highlight":"Mobile"},"card":{"number":"01","title":"Pie chart","subtitle":"Sales share by device","takeaway":"Only 2 to 4 items","level":"basic","legend":"auto"}}} />
+<Chart spec={{"type":"pie","data":[{"device":"Mobile","sales":72},{"device":"Desktop","sales":23},{"device":"Tablet","sales":5}],"encoding":{"label":"device","value":"sales"},"options":{"highlight":"Mobile"},"card":{"number":"01","title":"Pie chart","subtitle":"Sales share by device","takeaway":"Mobile makes 72% of sales","level":"basic","legend":"auto"}}} />
 ```
 
 Channels whose prop name differs: gauge value -> valueKey, gauge target -> targetKey.
@@ -113,7 +113,7 @@ Charts (type, component, English name, Korean name, level):
 - cohort (<CohortChart>, Cohort chart, 코호트 차트, intermediate): Retention by signup cohort: one row per cohort, one column per period since it started. encoding: cohort, period, value, size?. use: Following groups that started together, such as users by signup month, to see how many are still active 1, 2, 3 ... periods later. avoid: Comparing the exact shape of two cohorts' curves (use a line chart).
 - horizon (<HorizonChart>, Horizon chart, 호라이즌 차트, advanced): Many time series in thin rows, each value folded into a few colored bands. encoding: x, y[], series?. use: 13 to 60 time series in the same unit on one card. avoid: 12 or fewer series (a line chart or small multiples read faster), or first-time readers have no time to read the legend.
 
-Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.91 KB, DonutChart 13.96 KB, FunnelChart 12.79 KB, WaffleChart 15.16 KB, Treemap 12.84 KB, SunburstChart 13.26 KB, WaterfallChart 13.48 KB, ParetoChart 13.76 KB, MarimekkoChart 13.14 KB, Heatmap 14.27 KB, RadarChart 13.74 KB, BubbleChart 16.69 KB, LineChart 26.25 KB, AreaChart 26.25 KB, StreamGraph 16.53 KB, BarChart 22.06 KB, RadialBarChart 11.89 KB, GaugeChart 12.03 KB, BulletChart 12.71 KB, Sparkline 14.56 KB, SlopeChart 12.83 KB, DumbbellChart 12.33 KB, LollipopChart 13.13 KB, BeeswarmChart 14.14 KB, RidgelineChart 13.02 KB, SankeyChart 14.62 KB, ChordChart 12.6 KB, CalendarHeatmap 15.09 KB, BumpChart 14.55 KB, BoxPlot 14.92 KB, ParallelCoordinates 13.61 KB, CandlestickChart 20.21 KB, SegmentedBar 12.54 KB, SkylineChart 19.38 KB, HistogramChart 18.34 KB, ScatterChart 23.19 KB, TileMap 15.88 KB, Choropleth 19.04 KB, SymbolMap 20.35 KB, FlowMap 21.08 KB, Tree 16.97 KB, Timeline 20.78 KB, BarRace 17.85 KB, NetworkChart 15.94 KB, SparkTable 15.88 KB, CohortChart 13.57 KB, HorizonChart 17.6 KB, StatCard 15.22 KB, LiveLineChart 13.67 KB
+Bundle size per chart (Brotli by size-limit, one import including the shared core, React excluded): PieChart 13.91 KB, DonutChart 13.96 KB, FunnelChart 12.79 KB, WaffleChart 15.16 KB, Treemap 12.84 KB, SunburstChart 13.26 KB, WaterfallChart 13.61 KB, ParetoChart 13.82 KB, MarimekkoChart 13.18 KB, Heatmap 14.27 KB, RadarChart 13.74 KB, BubbleChart 16.78 KB, LineChart 26.38 KB, AreaChart 26.37 KB, StreamGraph 16.62 KB, BarChart 22.19 KB, RadialBarChart 11.89 KB, GaugeChart 12.03 KB, BulletChart 12.71 KB, Sparkline 14.56 KB, SlopeChart 12.83 KB, DumbbellChart 12.33 KB, LollipopChart 13.2 KB, BeeswarmChart 14.14 KB, RidgelineChart 13.02 KB, SankeyChart 14.62 KB, ChordChart 12.6 KB, CalendarHeatmap 15.09 KB, BumpChart 14.61 KB, BoxPlot 15.1 KB, ParallelCoordinates 13.63 KB, CandlestickChart 20.3 KB, SegmentedBar 12.54 KB, SkylineChart 19.46 KB, HistogramChart 18.54 KB, ScatterChart 23.33 KB, TileMap 15.88 KB, Choropleth 19.04 KB, SymbolMap 20.35 KB, FlowMap 21.08 KB, Tree 17.02 KB, Timeline 20.86 KB, BarRace 17.85 KB, NetworkChart 15.94 KB, SparkTable 15.88 KB, CohortChart 13.57 KB, HorizonChart 17.67 KB, StatCard 15.22 KB, LiveLineChart 13.79 KB
 
 ## Docs
 

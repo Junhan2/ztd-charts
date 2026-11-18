@@ -91,7 +91,7 @@ describe("Korean registry (localizeDef, chartsIn)", () => {
     expect(pie.name).toBe("파이 차트");
     expect(pie.nameEn).toBe("Pie chart");
     for (const k of KO) expect(k.example.options?.locale, k.type).toBe("ko-KR");
-    expect(noLocale(pie.example)).toEqual({ type: "pie", data: samples.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { number: "01", title: "파이 차트", subtitle: "기기별 매출 비중", takeaway: "2~4개 항목만", level: "기본", legend: "auto" } });
+    expect(noLocale(pie.example)).toEqual({ type: "pie", data: samples.pieSampleKo, encoding: { label: "device", value: "sales" }, options: { highlight: "모바일" }, card: { number: "01", title: "파이 차트", subtitle: "기기별 매출 비중", takeaway: "모바일이 매출의 72%", level: "기본", legend: "auto" } });
     const bar = KO.find((c) => c.type === "bar")!;
     expect(bar.example.data).toBe(samples.barSampleKo);
     expect(noLocale(bar.example).options).toEqual({ layout: "stacked", highlight: "해외" });
@@ -249,8 +249,10 @@ describe("suggestCharts", () => {
     expect(ko.map((s) => [s.type, s.score])).toEqual(en.map((s) => [s.type, s.score]));
     expect(en[0]).toMatchObject({ name: "Funnel chart", spec: { card: { title: "Funnel chart", level: "basic" } } });
     expect(ko[0]).toMatchObject({ name: "퍼널 차트", spec: { card: { title: "퍼널 차트", level: "basic" } } });
-    for (const s of en) expect(`${s.reason} ${s.spec.card?.takeaway}`, s.type).not.toMatch(HANGUL);
-    for (const s of ko) expect(`${s.reason} ${s.spec.card?.takeaway}`, s.type).toMatch(HANGUL);
+    for (const s of en) expect(`${s.reason} ${s.spec.card?.title}`, s.type).not.toMatch(HANGUL);
+    for (const s of ko) expect(`${s.reason} ${s.spec.card?.title}`, s.type).toMatch(HANGUL);
+    // The takeaway is the card's conclusion, so a suggestion leaves it to the writer instead of filling in the chart type's description
+    for (const s of [...en, ...ko]) expect(s.spec.card?.takeaway, s.type).toBeUndefined();
     // Only the Korean suggested specs set options.locale "ko-KR"
     for (const s of en) expect(s.spec.options?.locale, s.type).toBeUndefined();
     for (const s of ko) expect(s.spec.options?.locale, s.type).toBe("ko-KR");
